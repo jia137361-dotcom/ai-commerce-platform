@@ -15,6 +15,7 @@ type CreateDraftProductBody = {
   image_url?: string
   design_image_url?: string
   tags?: string[]
+  category_ids?: string[]
   price?: number | string
   variants?: unknown[]
   source?: "manual" | "ai"
@@ -67,6 +68,7 @@ export const POST = async (
     design_image_url: body.design_image_url ?? body.image_url ?? null,
     image_url: body.image_url ?? body.design_image_url ?? null,
     tags: Array.isArray(body.tags) ? body.tags : [],
+    category_ids: Array.isArray(body.category_ids) ? body.category_ids : [],
     price,
     variants: Array.isArray(body.variants) ? body.variants : [],
     metadata: body.metadata ?? {}

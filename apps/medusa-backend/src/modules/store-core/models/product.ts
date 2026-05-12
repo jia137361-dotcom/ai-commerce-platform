@@ -14,6 +14,7 @@ const Product = model.define("mc_product", {
   tags: model.array().nullable(),
   price: model.float().nullable(),
   variants: model.json().nullable(),
+  category_ids: model.array().nullable(),
   metadata: model.json().nullable()
 })
 
