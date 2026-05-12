@@ -38,9 +38,22 @@ export const normalizeProduct = (product: any) => ({
   tags: product.tags ?? [],
   price: product.price,
   variants: product.variants ?? [],
+  category_ids: product.category_ids ?? [],
   metadata: product.metadata ?? {},
   created_at: product.created_at,
   updated_at: product.updated_at
+})
+
+export const normalizeCategory = (category: any) => ({
+  category_id: category.id,
+  store_id: category.store_id,
+  name: category.name,
+  slug: category.slug,
+  description: category.description,
+  parent_id: category.parent_id,
+  sort_order: category.sort_order,
+  created_at: category.created_at,
+  updated_at: category.updated_at
 })
 
 export const requireText = (value: unknown) => {
