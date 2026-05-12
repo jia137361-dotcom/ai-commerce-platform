@@ -1,243 +1,215 @@
-# AI Commerce Platform — API Reference (开发 1: 商品 & 店铺)
+# AI Commerce Platform API Reference
 
 Base URL: `http://localhost:9000`
 
-## Store Context (多店隔离)
+This document covers the current Development 1 scope: store-aware products, product categories, and store settings.
 
-所有接口都通过 `resolveCurrentStore(req)` 获取当前店铺上下文，不写死单店。
+## Store Context
 
-解析优先级:
-1. **Header**: `X-Store-Id: <store_id>`
-2. **Host**: `localhost` 映射到 `DEFAULT_STORE_ID`
-3. **Default**: 环境变量 `DEFAULT_STORE_ID`（默认 `default_store`）
+All APIs resolve the active store through `resolveCurrentStore(req)`.
 
-调试接口: `GET /store-context`
+Resolution priority:
 
----
+1. `X-Store-Id` request header
+2. Host/domain mapping
+3. `DEFAULT_STORE_ID`, defaulting to `default_store`
 
-## Admin 接口
+Debug endpoint:
 
-### 店铺设置
+```http
+GET /store-context
+```
+
+## Admin APIs
+
+### Store Settings
 
 #### `GET /admin/store-settings`
 
-获取当前店铺的 settings。
-
-**Response:**
-```json
-{
-  "store_id": "default_store",
-  "brand_name": "My Store",
-  "logo_url": "...",
-  "support_email": "help@example.com",
-  "seo_title": "...",
-  "seo_description": "...",
-  "metadata": {}
-}
-```
+Returns settings for the current store.
 
 #### `PUT /admin/store-settings`
 
-创建或更新店铺设置（upsert）。
+Creates or updates settings for the current store.
 
-**Body:**
+Request body:
+
 ```json
 {
   "brand_name": "My Store",
-  "logo_url": "https://...",
+  "logo_url": "https://example.com/logo.png",
   "support_email": "help@example.com",
-  "seo_title": "My Store Title",
+  "seo_title": "My Store",
   "seo_description": "Store description for SEO",
   "metadata": {}
 }
 ```
 
----
-
-### 商品
+### Products
 
 #### `POST /admin/products/draft`
 
-创建商品草稿。
+Creates a draft product for the current store. The body may include `store_id`; if omitted, the current store context is used.
 
-**Body:**
+Request body:
+
 ```json
 {
-  "title": "Product Name",
-  "description": "Optional description",
-  "price": 99.00,
+  "title": "Summer Beach T-shirt",
+  "description": "A clean summer beach inspired t-shirt.",
+  "price": 29.99,
   "source": "manual",
-  "image_url": "https://...",
-  "design_image_url": "https://...",
-  "tags": ["tag1", "tag2"],
-  "category_ids": ["cat_abc", "cat_xyz"],
+  "image_url": "https://cdn.example.com/product.png",
+  "design_image_url": "https://cdn.example.com/design.png",
+  "tags": ["summer", "beach", "t-shirt"],
+  "category_ids": ["cat_123"],
   "variants": [],
   "metadata": {}
 }
 ```
 
-**必填:** `title`, `price`
+Required fields:
 
-**Response:** `201 Created`
+- `title`
+- `price`
+
+AI-generated product draft example:
+
 ```json
 {
-  "product_id": "prod_xxx",
+  "title": "Summer Beach T-shirt",
+  "description": "A clean summer beach inspired t-shirt.",
+  "price": 29.99,
+  "source": "ai",
+  "ai_job_id": "job_123",
+  "prompt": "Generate a summer beach style t-shirt",
+  "design_image_url": "https://cdn.example.com/design.png",
+  "tags": ["summer", "beach"],
+  "category_ids": ["cat_123"],
+  "variants": []
+}
+```
+
+Response:
+
+```json
+{
+  "product_id": "prod_123",
   "store_id": "default_store",
   "status": "draft",
   "product": {
-    "product_id": "prod_xxx",
+    "product_id": "prod_123",
     "store_id": "default_store",
-    "title": "Product Name",
+    "title": "Summer Beach T-shirt",
     "status": "draft",
     "source": "manual",
-    "tags": ["tag1", "tag2"],
-    "category_ids": ["cat_abc", "cat_xyz"],
-    "price": 99.00,
+    "category_ids": ["cat_123"],
+    "tags": ["summer", "beach", "t-shirt"],
+    "price": 29.99,
     "variants": [],
-    "metadata": {},
-    "created_at": "...",
-    "updated_at": "..."
+    "metadata": {}
   }
 }
 ```
 
 #### `POST /admin/products/:product_id/publish`
 
-发布商品草稿（draft → published）。
+Publishes a draft product. The product must belong to the current store.
 
-**Response:**
+Response:
+
 ```json
 {
-  "product_id": "prod_xxx",
+  "product_id": "prod_123",
   "store_id": "default_store",
   "status": "published",
-  "product": { ... }
+  "product": {}
 }
 ```
 
----
-
-### 商品分类
+### Product Categories
 
 #### `POST /admin/product-categories`
 
-创建商品分类。
+Creates a product category for the current store.
 
-**Body:**
+Request body:
+
 ```json
 {
   "name": "T-Shirts",
   "description": "All t-shirt products",
-  "parent_id": null,
-  "sort_order": 0
+  "parent_id": null
 }
 ```
 
-**必填:** `name`（slug 自动生成）
+Notes:
 
-**Response:** `201 Created`
+- `name` is required.
+- `slug` is generated from `name`.
+- `sort_order` defaults to `0` and is not accepted in the create request yet.
+
+Response:
+
 ```json
 {
-  "category_id": "cat_xxx",
+  "category_id": "cat_123",
   "store_id": "default_store",
   "category": {
-    "category_id": "cat_xxx",
+    "category_id": "cat_123",
     "store_id": "default_store",
     "name": "T-Shirts",
     "slug": "t-shirts",
     "description": "All t-shirt products",
     "parent_id": null,
-    "sort_order": 0,
-    "created_at": "...",
-    "updated_at": "..."
+    "sort_order": 0
   }
 }
 ```
 
 #### `GET /admin/product-categories`
 
-获取当前店铺的所有分类。
+Lists product categories for the current store.
 
-**Response:**
-```json
-{
-  "store_id": "default_store",
-  "count": 2,
-  "categories": [
-    {
-      "category_id": "cat_xxx",
-      "store_id": "default_store",
-      "name": "T-Shirts",
-      "slug": "t-shirts",
-      "description": "...",
-      "parent_id": null,
-      "sort_order": 0,
-      "created_at": "...",
-      "updated_at": "..."
-    }
-  ]
-}
-```
+Response:
 
----
-
-## Store (前端/public) 接口
-
-### `GET /store/products`
-
-获取当前店铺已发布的商品列表。
-
-**Response:**
 ```json
 {
   "store_id": "default_store",
   "count": 1,
-  "products": [
-    {
-      "product_id": "prod_xxx",
-      "store_id": "default_store",
-      "title": "Product Name",
-      "status": "published",
-      "price": 99.00,
-      "category_ids": ["cat_abc"],
-      "tags": ["tag1"],
-      "...": "..."
-    }
-  ]
-}
-```
-
-### `GET /store/products/:product_id`
-
-获取单个已发布商品详情。
-
-### `GET /store/settings`
-
-获取当前店铺的公开设置。
-
-### `GET /store/product-categories`
-
-获取当前店铺的分类列表。
-
-**Response:**
-```json
-{
-  "store_id": "default_store",
-  "count": 2,
   "categories": [
     {
-      "category_id": "cat_xxx",
+      "category_id": "cat_123",
+      "store_id": "default_store",
       "name": "T-Shirts",
       "slug": "t-shirts",
+      "description": "All t-shirt products",
+      "parent_id": null,
       "sort_order": 0
     }
   ]
 }
 ```
 
----
+## Storefront APIs
 
-## 错误响应格式
+### `GET /store/products`
+
+Lists published products for the current store only.
+
+### `GET /store/products/:product_id`
+
+Returns one published product for the current store only.
+
+### `GET /store/settings`
+
+Returns public store settings for the current store.
+
+### `GET /store/product-categories`
+
+Lists product categories for the current store.
+
+## Error Format
 
 ```json
 {
@@ -248,16 +220,25 @@ Base URL: `http://localhost:9000`
 }
 ```
 
-错误码: `STORE_NOT_FOUND`, `PRODUCT_NOT_FOUND`, `PRODUCT_STORE_MISMATCH`, `VALIDATION_ERROR`
+Common error codes:
 
----
+- `STORE_NOT_FOUND`
+- `PRODUCT_NOT_FOUND`
+- `PRODUCT_STORE_MISMATCH`
+- `VALIDATION_ERROR`
 
-## 多店测试
+## Store Isolation Checks
 
-```shell
-# 默认店铺
-curl http://localhost:9000/store/products
+Default store request:
 
-# test_store 店铺
-curl -H "X-Store-Id: test_store" http://localhost:9000/store/products
+```powershell
+curl.exe http://localhost:9000/store/products
 ```
+
+Specific store request:
+
+```powershell
+curl.exe -H "X-Store-Id: test_store" http://localhost:9000/store/products
+```
+
+Expected behavior: each request only returns products and categories for the resolved store.
