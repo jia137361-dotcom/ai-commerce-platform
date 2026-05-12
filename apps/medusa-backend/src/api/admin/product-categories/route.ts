@@ -11,7 +11,6 @@ type CreateProductCategoryBody = {
   name?: string
   description?: string
   parent_id?: string | null
-  sort_order?: number
 }
 
 export const POST = async (
@@ -41,8 +40,7 @@ export const POST = async (
     name,
     slug,
     description: body.description ?? null,
-    parent_id: body.parent_id ?? null,
-    sort_order: typeof body.sort_order === "number" ? body.sort_order : 0
+    parent_id: body.parent_id ?? null
   })
 
   return res.status(201).json({
