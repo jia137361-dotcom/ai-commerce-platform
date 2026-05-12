@@ -12,6 +12,7 @@
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
+    "@medusajs/admin-sdk": "^2.15.0",
     "@medusajs/framework": "^2.14.2",
     "@medusajs/medusa": "^2.14.2",
     "@medusajs/utils": "^2.14.2"
