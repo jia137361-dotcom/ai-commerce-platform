@@ -35,6 +35,36 @@ export const POST = async (
 
   const slug = name.toLowerCase().replace(/\s+/g, "-")
 
+  const existingCategories = await storeCoreService.listProductCategories({
+    store_id: storeId,
+    slug
+  })
+
+  if (existingCategories.length) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "category name already exists in current store"
+    )
+  }
+
+  if (body.parent_id) {
+    const parentCategories = await storeCoreService.listProductCategories({
+      id: body.parent_id,
+      store_id: storeId
+    })
+
+    if (!parentCategories.length) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "parent_id must belong to current store"
+      )
+    }
+  }
+
   const category = await storeCoreService.createProductCategories({
     store_id: storeId,
     name,

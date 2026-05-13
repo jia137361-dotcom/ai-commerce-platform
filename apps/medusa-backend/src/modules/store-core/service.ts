@@ -5,6 +5,7 @@ import DomainBinding from "./models/domain-binding"
 import StoreSetting from "./models/store-setting"
 import Product from "./models/product"
 import ProductCategory from "./models/product-category"
+import PlatformProduct from "./models/platform-product"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -12,7 +13,8 @@ class StoreCoreModuleService extends MedusaService({
   DomainBinding,
   StoreSetting,
   Product,
-  ProductCategory
+  ProductCategory,
+  PlatformProduct
 }) {}
 
 export default StoreCoreModuleService
