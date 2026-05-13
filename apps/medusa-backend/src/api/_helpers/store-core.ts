@@ -33,10 +33,13 @@ export const normalizeProduct = (product: any) => ({
   source: product.source,
   ai_job_id: product.ai_job_id,
   prompt: product.prompt,
+  platform_product_id: product.platform_product_id,
+  supplier_product_id: product.supplier_product_id,
   design_image_url: product.design_image_url,
   image_url: product.image_url,
   tags: product.tags ?? [],
   price: product.price,
+  cost: product.cost,
   variants: product.variants ?? [],
   category_ids: product.category_ids ?? [],
   metadata: product.metadata ?? {},
@@ -54,6 +57,22 @@ export const normalizeCategory = (category: any) => ({
   sort_order: category.sort_order,
   created_at: category.created_at,
   updated_at: category.updated_at
+})
+
+export const normalizePlatformProduct = (platformProduct: any) => ({
+  platform_product_id: platformProduct.id,
+  title: platformProduct.title,
+  category: platformProduct.category,
+  description: platformProduct.description,
+  base_cost: platformProduct.base_cost,
+  supplier: platformProduct.supplier,
+  supplier_product_id: platformProduct.supplier_product_id,
+  available_colors: platformProduct.available_colors ?? [],
+  available_sizes: platformProduct.available_sizes ?? [],
+  print_area: platformProduct.print_area ?? {},
+  status: platformProduct.status,
+  created_at: platformProduct.created_at,
+  updated_at: platformProduct.updated_at
 })
 
 export const requireText = (value: unknown) => {

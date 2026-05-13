@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:9000`
 
-This document covers the current Development 1 scope: store-aware products, product categories, and store settings.
+This document covers the current Development 1 scope: store-aware products, platform products, product categories, and store settings.
 
 ## Store Context
 
@@ -51,13 +51,19 @@ Request body:
 
 Creates a draft product for the current store. The body may include `store_id`; if omitted, the current store context is used.
 
+If `platform_product_id` is provided, it must reference an active platform product. When `supplier_product_id` or `cost` is omitted, the draft inherits those values from the platform product.
+
 Request body:
 
 ```json
 {
+  "store_id": "default_store",
+  "platform_product_id": "pp_tshirt",
   "title": "Summer Beach T-shirt",
   "description": "A clean summer beach inspired t-shirt.",
   "price": 29.99,
+  "cost": 8.5,
+  "supplier_product_id": "supplier_tshirt",
   "source": "manual",
   "image_url": "https://cdn.example.com/product.png",
   "design_image_url": "https://cdn.example.com/design.png",
@@ -100,12 +106,15 @@ Response:
   "product": {
     "product_id": "prod_123",
     "store_id": "default_store",
+    "platform_product_id": "pp_tshirt",
+    "supplier_product_id": "supplier_tshirt",
     "title": "Summer Beach T-shirt",
     "status": "draft",
     "source": "manual",
     "category_ids": ["cat_123"],
     "tags": ["summer", "beach", "t-shirt"],
     "price": 29.99,
+    "cost": 8.5,
     "variants": [],
     "metadata": {}
   }
@@ -124,6 +133,45 @@ Response:
   "store_id": "default_store",
   "status": "published",
   "product": {}
+}
+```
+
+### Platform Products
+
+Platform products are global base products provided by the platform. They are not bound to a store. Store products may reference them through `platform_product_id`.
+
+Relationship:
+
+- `mc_platform_product.id` -> `mc_product.platform_product_id`
+- One platform product can be used by many store products.
+- Store products still require `store_id`.
+
+#### `GET /admin/platform-products`
+
+Lists active platform products.
+
+Response:
+
+```json
+{
+  "count": 6,
+  "platform_products": [
+    {
+      "platform_product_id": "pp_tshirt",
+      "title": "T-shirt",
+      "category": "Apparel",
+      "description": "Classic printable cotton t-shirt.",
+      "base_cost": 8.5,
+      "supplier": "default_supplier",
+      "supplier_product_id": "supplier_tshirt",
+      "available_colors": ["white", "black", "navy"],
+      "available_sizes": ["S", "M", "L", "XL"],
+      "print_area": {
+        "front": "12x16in"
+      },
+      "status": "active"
+    }
+  ]
 }
 ```
 
@@ -210,6 +258,10 @@ Returns public store settings for the current store.
 ### `GET /store/product-categories`
 
 Lists product categories for the current store.
+
+### `GET /store/platform-products`
+
+Lists active platform products available for product creation and AI product generation.
 
 ## Error Format
 
