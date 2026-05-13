@@ -148,6 +148,8 @@ Notes:
 - `name` is required.
 - `slug` is generated from `name`.
 - `sort_order` defaults to `0` and is not accepted in the create request yet.
+- Category slugs must be unique within the current store.
+- `parent_id`, when provided, must belong to the current store.
 
 Response:
 
@@ -242,3 +244,8 @@ curl.exe -H "X-Store-Id: test_store" http://localhost:9000/store/products
 ```
 
 Expected behavior: each request only returns products and categories for the resolved store.
+
+Category isolation checks:
+
+- Product draft `category_ids` must belong to the current store.
+- Category `parent_id` must belong to the current store.

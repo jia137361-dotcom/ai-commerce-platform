@@ -57,6 +57,24 @@ export const POST = async (
     return sendError(res, 404, "STORE_NOT_FOUND", "Store not found")
   }
 
+  const categoryIds = Array.isArray(body.category_ids) ? body.category_ids : []
+
+  if (categoryIds.length) {
+    const categories = await storeCoreService.listProductCategories({
+      id: categoryIds,
+      store_id: storeId
+    })
+
+    if (categories.length !== categoryIds.length) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "category_ids must belong to current store"
+      )
+    }
+  }
+
   const product = await storeCoreService.createProducts({
     store_id: storeId,
     title,
@@ -68,7 +86,7 @@ export const POST = async (
     design_image_url: body.design_image_url ?? body.image_url ?? null,
     image_url: body.image_url ?? body.design_image_url ?? null,
     tags: Array.isArray(body.tags) ? body.tags : [],
-    category_ids: Array.isArray(body.category_ids) ? body.category_ids : [],
+    category_ids: categoryIds,
     price,
     variants: Array.isArray(body.variants) ? body.variants : [],
     metadata: body.metadata ?? {}
