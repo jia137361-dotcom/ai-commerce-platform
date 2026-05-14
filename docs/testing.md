@@ -133,6 +133,40 @@ export ADMIN_TOKEN="<token>"
 
 Get `PUBLISHABLE_API_KEY` from Medusa Admin. The current seed script does not create one.
 
+## Postman Store Isolation Collection
+
+Import this collection into Postman:
+
+```text
+postman/ai-commerce-store-isolation.postman_collection.json
+```
+
+Create or select a Postman environment with these variables:
+
+| Variable | Example |
+| --- | --- |
+| `base_url` | `http://localhost:9000` |
+| `publishable_api_key` | `<publishable_api_key>` |
+| `admin_token` | `<admin_bearer_token>` |
+| `default_store_id` | `default_store` |
+| `test_store_id` | `test_store` |
+
+Run the collection in order. It mirrors `scripts/smoke-store-isolation.sh` and creates uniquely named categories/products using a collection-level smoke run id.
+
+The collection covers:
+
+- Health and store-context checks.
+- Missing publishable API key rejection.
+- Admin bearer-token auth check.
+- Category creation in both stores.
+- Product category isolation.
+- Draft product creation in both stores.
+- Product publishing in the correct store.
+- Product list isolation.
+- Cross-store publish rejection.
+- Cross-store `category_ids` rejection.
+- Cross-store product detail blocking.
+
 Troubleshooting:
 
 - If product draft creation fails because `platform_product_id`, `supplier_product_id`, or another recently added product column is missing, run migrations with `npm --workspace apps/medusa-backend run db:migrate`.
