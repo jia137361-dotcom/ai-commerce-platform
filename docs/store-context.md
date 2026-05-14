@@ -97,3 +97,18 @@ Store-aware APIs should follow these rules:
 - Prefer selectors that include both resource id and `store_id` for store-owned resources.
 - Treat admin `body.store_id` overrides as a risk until explicit access rules exist.
 - Add tests when store-aware behavior changes.
+
+## Routes Expected To Use Store Context
+
+Current Phase 1 routes expected to scope data by the resolved store include:
+
+- Storefront products.
+- Storefront product categories.
+- Storefront store settings.
+- Admin product draft creation and publishing.
+- Admin product category listing and creation.
+- Admin store settings reads and writes.
+
+Future cart, order, checkout, and payment routes should also bind data to the resolved store context.
+
+For local testing, `X-Store-Id` is the practical mechanism for switching between `default_store` and `test_store`. `DEFAULT_STORE_ID` remains the fallback when no header is supplied. Domain binding records are reserved for future host/domain routing; production multi-domain isolation should not be assumed until that lookup is implemented and tested.

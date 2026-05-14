@@ -33,6 +33,55 @@ Required coverage:
 - `GET /store/products/{product_id}` returns a current-store published product.
 - `GET /store/products/{product_id}` returns `PRODUCT_NOT_FOUND` when the product belongs to another store.
 - Draft products are not returned by storefront product APIs.
+- Product draft creation accepts current-store `category_ids`.
+- Product draft creation rejects `category_ids` from another store with `VALIDATION_ERROR`.
+
+## Product Category Isolation Tests
+
+Required coverage:
+
+- `GET /store/product-categories` only returns categories for the resolved store.
+- `GET /admin/product-categories` only returns categories for the resolved store.
+- `POST /admin/product-categories` creates a category in the resolved store.
+- `POST /admin/product-categories` returns `STORE_NOT_FOUND` when the resolved store does not exist.
+- `POST /admin/product-categories` returns `VALIDATION_ERROR` when `name` is missing.
+- `POST /admin/product-categories` returns `VALIDATION_ERROR` when the generated slug already exists in the current store.
+- `POST /admin/product-categories` returns `VALIDATION_ERROR` when `parent_id` belongs to another store.
+- Product draft `category_ids` ownership validation should remain an automated regression test.
+
+## Publishable API Key Smoke Tests
+
+Current smoke expectations:
+
+- `GET /health` should pass without `x-publishable-api-key`.
+- `GET /store-context` should pass without `x-publishable-api-key`.
+- `GET /store-context` with `X-Store-Id: test_store` should return `test_store` with `source: "header"`.
+- `GET /store/products` should require `x-publishable-api-key`.
+- `GET /store/product-categories` should require `x-publishable-api-key`.
+
+Placeholder curl examples:
+
+```bash
+curl -i http://localhost:9000/health
+
+curl -i http://localhost:9000/store-context
+
+curl -i \
+  -H "X-Store-Id: test_store" \
+  http://localhost:9000/store-context
+
+curl -i \
+  -H "x-publishable-api-key: <publishable_api_key>" \
+  -H "X-Store-Id: test_store" \
+  http://localhost:9000/store/products
+
+curl -i \
+  -H "x-publishable-api-key: <publishable_api_key>" \
+  -H "X-Store-Id: test_store" \
+  http://localhost:9000/store/product-categories
+```
+
+TODO: Decide whether the backend seed should create a local publishable API key, or whether docs should instruct developers to create one through Medusa Admin.
 
 ## Store Settings Isolation Tests
 
@@ -65,6 +114,14 @@ Current behavior to document in tests before changing:
 - `PUT /admin/store-settings` returns `STORE_NOT_FOUND` for a missing body-selected store.
 
 Risk to keep visible: admin draft product creation and admin store settings updates may allow `body.store_id` to override request context. This is a known Phase 1 cross-store risk. Do not silently change it without a dedicated behavior-change PR and updated API docs.
+
+## Unknown Store Behavior Tests
+
+Required coverage:
+
+- Storefront product and category list routes with an unknown `X-Store-Id` return empty scoped results unless route behavior changes.
+- Admin category creation validates the resolved store and returns `STORE_NOT_FOUND`.
+- Admin product draft and store settings writes validate the selected store and return `STORE_NOT_FOUND`.
 
 ## Future Cart And Order Isolation Tests
 
