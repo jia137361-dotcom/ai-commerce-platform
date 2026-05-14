@@ -132,6 +132,8 @@ Publishes a draft product. The product must belong to the current store.
 
 Bridge caveat: this is an explicit-link bridge. `medusa_product_id` and `medusa_variant_id` must be real native Medusa ids when provided; the backend does not fake native products or variants. A published custom product is cart-addable only when `medusa_variant_id` is present.
 
+When `medusa_variant_id` is present, publish validates that the native Medusa variant exists. If native variant or native product metadata includes `store_id`, it must match the current store. The response `product` includes `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
+
 Response:
 
 ```json

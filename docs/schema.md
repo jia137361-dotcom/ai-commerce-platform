@@ -30,3 +30,4 @@ Bridge caveats:
 - `is_cart_addable` is an API response field, not a stored column. It is true only when the custom product is published and has `medusa_variant_id`.
 - Do not fake Medusa ids. Bridge ids must refer to real native Medusa records when used.
 - `variants` remains custom JSON and should not be passed to cart line-item APIs as if it were a Medusa variant.
+- Publish-time validation checks that `medusa_variant_id` exists. If native product or variant metadata contains `store_id`, it must match the current store.
