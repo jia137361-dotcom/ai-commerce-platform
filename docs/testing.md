@@ -83,6 +83,61 @@ curl -i \
 
 TODO: Decide whether the backend seed should create a local publishable API key, or whether docs should instruct developers to create one through Medusa Admin.
 
+## Local Smoke Test Script
+
+Developer 3 can run the local store isolation smoke test with:
+
+```bash
+export BASE_URL="http://localhost:9000"
+export PUBLISHABLE_API_KEY="<publishable_api_key>"
+export ADMIN_TOKEN="<admin_bearer_token>"
+export DEFAULT_STORE_ID="default_store"
+export TEST_STORE_ID="test_store"
+
+./scripts/smoke-store-isolation.sh
+```
+
+The script uses `curl` and `jq`, creates uniquely named smoke-test categories and products, publishes products in both seeded stores, then checks positive and negative store isolation behavior.
+
+Required environment variables:
+
+- `PUBLISHABLE_API_KEY`: Medusa publishable API key for Store API requests.
+- `ADMIN_TOKEN`: bearer token for Admin API requests.
+
+Optional environment variables:
+
+- `BASE_URL`: defaults to `http://localhost:9000`.
+- `DEFAULT_STORE_ID`: defaults to `default_store`.
+- `TEST_STORE_ID`: defaults to `test_store`.
+
+Create an admin user locally if one does not exist:
+
+```bash
+cd apps/medusa-backend
+npx medusa user -e admin@example.com -p supersecret
+```
+
+Get `ADMIN_TOKEN`:
+
+```bash
+curl -sS -X POST http://localhost:9000/auth/user/emailpass \
+  -H "Content-Type: application/json" \
+  --data '{"email":"admin@example.com","password":"supersecret"}'
+```
+
+Copy the returned token and export it:
+
+```bash
+export ADMIN_TOKEN="<token>"
+```
+
+Get `PUBLISHABLE_API_KEY` from Medusa Admin. The current seed script does not create one.
+
+Troubleshooting:
+
+- If product draft creation fails because `platform_product_id`, `supplier_product_id`, or another recently added product column is missing, run migrations with `npm --workspace apps/medusa-backend run db:migrate`.
+- `POST /admin/product-categories` accepts `name` and `description`; `slug` and `sort_order` are generated or defaulted by the backend.
+
 ## Store Settings Isolation Tests
 
 Required coverage:
