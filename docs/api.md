@@ -64,6 +64,8 @@ Request body:
   "price": 29.99,
   "cost": 8.5,
   "supplier_product_id": "supplier_tshirt",
+  "medusa_product_id": "prod_01HV_NATIVE",
+  "medusa_variant_id": "variant_01HV_NATIVE",
   "source": "manual",
   "image_url": "https://cdn.example.com/product.png",
   "design_image_url": "https://cdn.example.com/design.png",
@@ -108,6 +110,9 @@ Response:
     "store_id": "default_store",
     "platform_product_id": "pp_tshirt",
     "supplier_product_id": "supplier_tshirt",
+    "medusa_product_id": null,
+    "medusa_variant_id": null,
+    "is_cart_addable": false,
     "title": "Summer Beach T-shirt",
     "status": "draft",
     "source": "manual",
@@ -124,6 +129,8 @@ Response:
 #### `POST /admin/products/:product_id/publish`
 
 Publishes a draft product. The product must belong to the current store.
+
+Bridge caveat: this is an explicit-link bridge. `medusa_product_id` and `medusa_variant_id` must be real native Medusa ids when provided; the backend does not fake native products or variants. A published custom product is cart-addable only when `medusa_variant_id` is present.
 
 Response:
 
@@ -246,6 +253,21 @@ Response:
 ### `GET /store/products`
 
 Lists published products for the current store only.
+
+Product responses include the custom store-core product plus bridge fields:
+
+```json
+{
+  "product_id": "prod_123",
+  "store_id": "default_store",
+  "status": "published",
+  "medusa_product_id": "prod_01HV_NATIVE",
+  "medusa_variant_id": "variant_01HV_NATIVE",
+  "is_cart_addable": true
+}
+```
+
+`is_cart_addable` is `true` only when the product is published and `medusa_variant_id` is present.
 
 ### `GET /store/products/:product_id`
 

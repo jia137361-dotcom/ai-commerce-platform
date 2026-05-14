@@ -611,6 +611,38 @@
           "enumItems": [],
           "mappedType": "text"
         },
+        "medusa_product_id": {
+          "name": "medusa_product_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "medusa_variant_id": {
+          "name": "medusa_variant_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
         "design_image_url": {
           "name": "design_image_url",
           "type": "text",
@@ -809,6 +841,24 @@
           "constraint": true,
           "primary": true,
           "unique": true
+        },
+        {
+          "keyName": "IDX_mc_product_medusa_product_id",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_mc_product_medusa_product_id\" ON \"mc_product\" (\"medusa_product_id\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_mc_product_medusa_variant_id",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_mc_product_medusa_variant_id\" ON \"mc_product\" (\"medusa_variant_id\") WHERE deleted_at IS NULL"
         }
       ],
       "checks": [],

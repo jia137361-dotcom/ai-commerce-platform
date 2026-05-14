@@ -35,6 +35,12 @@ export const normalizeProduct = (product: Record<string, unknown>) => ({
   prompt: product.prompt,
   platform_product_id: product.platform_product_id,
   supplier_product_id: product.supplier_product_id,
+  medusa_product_id: product.medusa_product_id,
+  medusa_variant_id: product.medusa_variant_id,
+  is_cart_addable:
+    product.status === "published" &&
+    typeof product.medusa_variant_id === "string" &&
+    product.medusa_variant_id.length > 0,
   design_image_url: product.design_image_url,
   image_url: product.image_url,
   tags: product.tags ?? [],
