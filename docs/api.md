@@ -332,9 +332,16 @@ Category isolation checks:
 
 - `POST /store/carts` — create cart (writes `metadata.store_id`).
 - `GET /store/carts/{id}` — cart detail; requires same store as cart.
-- `POST /store/carts/{id}/line-items` — add line item.
+- `POST /store/carts/{id}/line-items` — add line item. Accepts either `variant_id` for a native Medusa variant linked to a published `mc_product`, or `product_id` for a published store-core product that has `medusa_variant_id`.
 - `PUT` / `DELETE /store/carts/{id}/line-items/{line_id}` — update quantity / remove.
 - `POST /store/carts/{id}/complete` — runs Medusa `completeCartWorkflow`; optional body `{ "payment_provider_id": "pp_stripe_stripe" }` (default `pp_system_default`). Order `metadata` includes `payment_status`, `fulfillment_status`, and `store_id` from cart.
+
+Cart bridge behavior:
+
+- `product_id` is translated to `mc_product.medusa_variant_id`.
+- The custom product must be published and belong to the cart store.
+- Direct `variant_id` requests reverse-check a linked published `mc_product`.
+- Cross-store adds return `CART_STORE_MISMATCH`.
 
 ### Store — Buyer order lookup
 

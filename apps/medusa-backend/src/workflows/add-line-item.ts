@@ -8,6 +8,8 @@ import {
 import { Modules } from "@medusajs/framework/utils"
 import { addToCartWorkflow } from "@medusajs/medusa/core-flows"
 import { CartStoreMismatchError } from "../lib/cart-store-error"
+import { STORE_CORE_MODULE } from "../modules/store-core"
+import type StoreCoreModuleService from "../modules/store-core/service"
 
 export type AddLineItemWorkflowInput = {
   cart_id: string
@@ -30,11 +32,17 @@ function readProductStoreId(product: Record<string, unknown> | null | undefined)
   return readStoreIdFromMetadata(meta)
 }
 
+function readProductStatus(product: Record<string, unknown> | null | undefined): string | undefined {
+  const status = product?.status
+  return typeof status === "string" ? status : undefined
+}
+
 const addLineItemStep = createStep(
   "add-line-item-step",
   async (input: AddLineItemWorkflowInput, { container }: { container: MedusaContainer }) => {
     const cartModule = container.resolve(Modules.CART)
     const productModule = container.resolve(Modules.PRODUCT)
+    const storeCoreService = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
 
     const cart = await cartModule.retrieveCart(input.cart_id)
     const cartStoreId = readStoreIdFromMetadata(cart.metadata)
@@ -45,9 +53,32 @@ const addLineItemStep = createStep(
 
     const product = variant?.product as Record<string, unknown> | undefined
     const productStoreId = readProductStoreId(product)
+    const variantStoreId = readStoreIdFromMetadata(
+      variant?.metadata as Record<string, unknown> | null | undefined
+    )
 
-    if (productStoreId && cartStoreId && productStoreId !== cartStoreId) {
+    if (
+      (productStoreId && cartStoreId && productStoreId !== cartStoreId) ||
+      (variantStoreId && cartStoreId && variantStoreId !== cartStoreId)
+    ) {
       throw new CartStoreMismatchError()
+    }
+
+    const linkedProducts = await storeCoreService.listProducts({
+      medusa_variant_id: input.variant_id,
+    })
+    const linkedProduct = linkedProducts[0] as Record<string, unknown> | undefined
+
+    if (!linkedProduct) {
+      throw new Error("variant_id must be linked to a store-core product")
+    }
+
+    if (cartStoreId && linkedProduct.store_id !== cartStoreId) {
+      throw new CartStoreMismatchError()
+    }
+
+    if (readProductStatus(linkedProduct) !== "published") {
+      throw new Error("Product must be published")
     }
 
     await addToCartWorkflow(container).run({
