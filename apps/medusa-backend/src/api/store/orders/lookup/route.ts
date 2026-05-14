@@ -11,9 +11,10 @@ import {
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const email = (req.query?.email as string | undefined)?.trim().toLowerCase()
-    const displayIdRaw = req.query?.display_id as string | undefined
+    const displayIdRaw =
+      (req.query?.display_id as string | undefined) ?? (req.query?.order_number as string | undefined)
     if (!email || !displayIdRaw) {
-      return res.status(400).json({ error: "email and display_id are required" })
+      return res.status(400).json({ error: "email and display_id (or order_number) are required" })
     }
     const display_id = Number(displayIdRaw)
     if (!Number.isFinite(display_id)) {
@@ -38,6 +39,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     res.status(200).json({
       order_id: match.id,
       display_id: match.display_id,
+      order_number: match.display_id,
       email: match.email,
       store_id: readOrderStoreId(match),
       payment_status: (match.metadata as Record<string, unknown> | null)?.[ORDER_META_PAYMENT_STATUS] ?? null,

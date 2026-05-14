@@ -5,6 +5,7 @@ import { PaymentEvents } from "@medusajs/utils"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../modules/fulfillment-orders/service"
 import { markOrderPaidAndFulfillmentWaiting } from "../lib/sync-order-paid-fulfillment"
+import { tryRegisterWebhookDedupe } from "../lib/webhook-dedupe"
 
 async function resolveOrderIdFromPayment(
   container: MedusaContainer,
@@ -36,6 +37,13 @@ export default async function paymentCapturedSyncHandler({
   if (!orderId) {
     return
   }
+
+  const dedupeKey = `payment.captured:${data.id}`
+  const firstTime = await tryRegisterWebhookDedupe(container, dedupeKey, "payment.captured")
+  if (!firstTime) {
+    return
+  }
+
   await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment.captured_event")
 }
 

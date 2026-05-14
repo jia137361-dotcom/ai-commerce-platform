@@ -33,6 +33,9 @@ export default defineConfig({
       resolve: "./src/modules/store-core"
     },
     {
+      resolve: "./src/modules/webhook-events"
+    },
+    {
       resolve: "./src/modules/fulfillment-orders"
     },
     {

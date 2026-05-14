@@ -301,3 +301,50 @@ Category isolation checks:
 
 - Product draft `category_ids` must belong to the current store.
 - Category `parent_id` must belong to the current store.
+
+## Development 2 — Cart, Orders, Fulfillment (CitiGoo)
+
+### Store — Cart
+
+- `POST /store/carts` — create cart (writes `metadata.store_id`).
+- `GET /store/carts/{id}` — cart detail; requires same store as cart.
+- `POST /store/carts/{id}/line-items` — add line item.
+- `PUT` / `DELETE /store/carts/{id}/line-items/{line_id}` — update quantity / remove.
+- `POST /store/carts/{id}/complete` — runs Medusa `completeCartWorkflow`; optional body `{ "payment_provider_id": "pp_stripe_stripe" }` (default `pp_system_default`). Order `metadata` includes `payment_status`, `fulfillment_status`, and `store_id` from cart.
+
+### Store — Buyer order lookup
+
+- `GET /store/orders/lookup?email=&display_id=` or `?email=&order_number=` — same store scope via `X-Store-Id`.
+- `GET /store/orders/{id}/tracking?email=` — latest fulfillment + shipments; validates email matches order.
+
+### Admin — Orders & fulfillment
+
+- `GET /admin/orders` — orders for current store (`X-Store-Id`); includes `fulfillment_order` and `latest_shipment`.
+- `POST /admin/orders/{order_id}/push-fulfillment` — requires `metadata.payment_status === paid`; upserts `fulfillment_order` to `pushed` and sets `fulfillment_status` to `pushed`.
+- `POST /admin/orders/{order_id}/mock-shipment` — creates `shipment`, marks fulfillment fulfilled, sets `fulfillment_status` to `shipped`.
+- `GET /admin/fulfillment-orders` — list fulfillment rows for store.
+- `POST /admin/fulfillment-orders/{id}/mock-push` — legacy shortcut (by fulfillment order id).
+
+### Stripe
+
+When `STRIPE_API_KEY` is set, configure Stripe webhooks to Medusa’s handler, for example:
+
+`POST {base_url}/hooks/payment/stripe_stripe`
+
+Subscriber `payment.captured` updates order to `paid` / `waiting` with dedupe on `payment.captured:{payment_id}`.
+
+### Migrations
+
+After model changes, from `apps/medusa-backend`:
+
+```bash
+npx medusa db:generate store_core
+npx medusa db:generate webhook_events
+npx medusa db:generate fulfillment_orders
+npx medusa db:generate shipments
+npx medusa db:migrate
+```
+
+### Postman
+
+Import `postman/CitiGoo-Medusa.postman_collection.json` and set `base_url`, `store_id`, `cart_id`, `order_id`.

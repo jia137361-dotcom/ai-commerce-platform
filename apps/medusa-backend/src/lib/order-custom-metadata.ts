@@ -4,4 +4,4 @@ export const ORDER_META_PAYMENT_STATUS = "payment_status"
 export const ORDER_META_FULFILLMENT_STATUS = "fulfillment_status"
 
 export type OrderPaymentStatus = "pending" | "paid"
-export type OrderFulfillmentStatus = "none" | "waiting" | "shipped"
+export type OrderFulfillmentStatus = "none" | "waiting" | "pushed" | "shipped"

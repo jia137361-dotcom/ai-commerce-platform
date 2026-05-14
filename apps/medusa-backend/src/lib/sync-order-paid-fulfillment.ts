@@ -38,7 +38,7 @@ export async function markOrderPaidAndFulfillmentWaiting(
   const order = await orderModule.retrieveOrder(orderId)
   const meta = mergeMeta(order.metadata as Record<string, unknown> | null, {})
 
-  if (meta[ORDER_META_PAYMENT_STATUS] === "paid" && meta[ORDER_META_FULFILLMENT_STATUS] === "waiting") {
+  if (meta[ORDER_META_PAYMENT_STATUS] === "paid") {
     return
   }
 
@@ -83,6 +83,7 @@ export async function seedFulfillmentOrderIfMissing(
     order_id: input.orderId,
     store_id: input.storeId,
     payment_collection_id: input.paymentCollectionId,
+    supplier: "mock",
     status: "pending_capture",
   })
 }
