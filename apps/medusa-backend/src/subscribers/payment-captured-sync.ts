@@ -1,0 +1,44 @@
+import type { SubscriberArgs, SubscriberConfig } from "@medusajs/framework"
+import type { MedusaContainer } from "@medusajs/framework/types"
+import { Modules } from "@medusajs/framework/utils"
+import { PaymentEvents } from "@medusajs/utils"
+import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
+import type FulfillmentOrdersModuleService from "../modules/fulfillment-orders/service"
+import { markOrderPaidAndFulfillmentWaiting } from "../lib/sync-order-paid-fulfillment"
+
+async function resolveOrderIdFromPayment(
+  container: MedusaContainer,
+  paymentId: string
+): Promise<string | null> {
+  const paymentModule = container.resolve(Modules.PAYMENT) as {
+    retrievePayment: (
+      id: string,
+      config?: { relations?: string[] }
+    ) => Promise<{ payment_collection_id?: string | null }>
+  }
+  const payment = await paymentModule.retrievePayment(paymentId, {
+    relations: ["payment_collection"],
+  })
+  const pcId = payment.payment_collection_id
+  if (!pcId) {
+    return null
+  }
+  const foService = container.resolve(FULFILLMENT_ORDERS_MODULE) as FulfillmentOrdersModuleService
+  const rows = await foService.listFulfillmentOrders({ payment_collection_id: [pcId] })
+  return rows[0]?.order_id ?? null
+}
+
+export default async function paymentCapturedSyncHandler({
+  event: { data },
+  container,
+}: SubscriberArgs<{ id: string }>) {
+  const orderId = await resolveOrderIdFromPayment(container, data.id)
+  if (!orderId) {
+    return
+  }
+  await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment.captured_event")
+}
+
+export const config: SubscriberConfig = {
+  event: PaymentEvents.CAPTURED,
+}
