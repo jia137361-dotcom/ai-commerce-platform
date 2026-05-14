@@ -207,6 +207,12 @@ Response:
 
 Creates a product category for the current store.
 
+Required headers:
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+```
+
 Store context behavior:
 
 - Uses the resolved current store.
@@ -218,18 +224,18 @@ Request body:
 ```json
 {
   "name": "T-Shirts",
-  "description": "All t-shirt products",
-  "parent_id": null
+  "description": "All t-shirt products"
 }
 ```
 
 Notes:
 
 - `name` is required.
+- `description` is optional.
 - `slug` is generated from `name`.
 - `sort_order` defaults to `0` and is not accepted in the create request yet.
 - Category slugs must be unique within the current store.
-- `parent_id`, when provided, must belong to the current store.
+- `parent_id` is supported by the route, but local smoke tests should use `name` and `description` only. When provided, `parent_id` must belong to the current store.
 
 Response:
 
@@ -259,6 +265,12 @@ Errors:
 #### `GET /admin/product-categories`
 
 Lists product categories for the current store.
+
+Required headers:
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+```
 
 Store context behavior:
 
