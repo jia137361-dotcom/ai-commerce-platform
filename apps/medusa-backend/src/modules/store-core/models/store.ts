@@ -1,6 +1,6 @@
 import { model } from "@medusajs/framework/utils"
 
-const Store = model.define("store", {
+const Store = model.define("mc_store", {
   id: model.id().primaryKey(),
   owner_user_id: model.text().nullable(),
   name: model.text(),

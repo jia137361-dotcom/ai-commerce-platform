@@ -12,6 +12,7 @@
     "test": "npx jest -c jest.config.cjs --passWithNoTests"
   },
   "dependencies": {
+    "@medusajs/admin-sdk": "^2.15.0",
     "@medusajs/framework": "^2.14.2",
     "@medusajs/medusa": "^2.14.2",
     "@medusajs/payment-stripe": "^2.14.2",
@@ -30,4 +31,3 @@
     "typescript": "^5.8.3"
   }
 }
-
