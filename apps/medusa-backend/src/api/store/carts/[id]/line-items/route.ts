@@ -31,10 +31,10 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const cart = await cartModule.retrieveCart(cart_id)
     assertCartBelongsToCurrentStore(req, cart)
     const cartStoreId = readCartStoreId(cart)
+    const storeCoreService = getStoreCoreService(req)
     let variant_id = body.variant_id
 
     if (body.product_id) {
-      const storeCoreService = getStoreCoreService(req)
       const products = await storeCoreService.listProducts({ id: body.product_id })
       const product = products[0]
 
@@ -69,6 +69,33 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             message: "Product is not cart-addable",
           },
         })
+      }
+    } else if (variant_id) {
+      const linkedProducts = await storeCoreService.listProducts({
+        medusa_variant_id: variant_id,
+      })
+      const linkedProduct = linkedProducts[0]
+
+      if (!linkedProduct) {
+        return res.status(400).json({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "variant_id must be linked to a store-core product",
+          },
+        })
+      }
+
+      if (linkedProduct.status !== "published") {
+        return res.status(400).json({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Product must be published",
+          },
+        })
+      }
+
+      if (linkedProduct.store_id !== cartStoreId) {
+        throw new CartStoreMismatchError()
       }
     }
 

@@ -283,21 +283,21 @@ if [[ -n "$DEFAULT_MEDUSA_VARIANT_ID" && -n "$TEST_MEDUSA_VARIANT_ID" ]]; then
   expect_status 200 "publish test bridge product"
   assert_json --arg variant "$TEST_MEDUSA_VARIANT_ID" '.product.medusa_variant_id == $variant and .product.is_cart_addable == true' "test bridge product should be cart-addable"
 
-  request POST "/store/carts" "{}" "${store_default_headers[@]}"
+  request POST "/store/carts" "$(jq -n --arg region_id "$DEFAULT_REGION_ID" --arg currency_code "${DEFAULT_CURRENCY_CODE:-eur}" '{region_id: $region_id, currency_code: $currency_code}')" "${store_default_headers[@]}"
   expect_status 200 "POST /store/carts default store"
   default_cart_id="$(json_get '.cart_id')"
 
-  request POST "/store/carts" "{}" "${store_test_headers[@]}"
+  request POST "/store/carts" "$(jq -n --arg region_id "$DEFAULT_REGION_ID" --arg currency_code "${DEFAULT_CURRENCY_CODE:-eur}" '{region_id: $region_id, currency_code: $currency_code}')" "${store_test_headers[@]}"
   expect_status 200 "POST /store/carts test store"
   test_cart_id="$(json_get '.cart_id')"
 
-  request POST "/store/carts/$default_cart_id/line-items" "$(jq -n --arg product_id "$default_bridge_product_id" '{product_id: $product_id, quantity: 1}')" "${store_default_headers[@]}"
+  request POST "/store/carts/$default_cart_id/line-items" "$(jq -n --arg variant_id "$DEFAULT_MEDUSA_VARIANT_ID" '{variant_id: $variant_id, quantity: 1}')" "${store_default_headers[@]}"
   expect_status 200 "add default bridge product to default cart"
 
   request POST "/store/carts/$test_cart_id/line-items" "$(jq -n --arg variant_id "$TEST_MEDUSA_VARIANT_ID" '{variant_id: $variant_id, quantity: 1}')" "${store_test_headers[@]}"
   expect_status 200 "add test bridge variant to test cart"
 
-  request POST "/store/carts/$default_cart_id/line-items" "$(jq -n --arg product_id "$test_bridge_product_id" '{product_id: $product_id, quantity: 1}')" "${store_default_headers[@]}"
+  request POST "/store/carts/$default_cart_id/line-items" "$(jq -n --arg variant_id "$TEST_MEDUSA_VARIANT_ID" '{variant_id: $variant_id, quantity: 1}')" "${store_default_headers[@]}"
   expect_status 400 "cross-store bridge product add"
   assert_json '.error.code == "CART_STORE_MISMATCH"' "cross-store product add should return CART_STORE_MISMATCH"
 
