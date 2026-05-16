@@ -16,6 +16,8 @@ type CreateDraftProductBody = {
   design_image_url?: string
   platform_product_id?: string | null
   supplier_product_id?: string | null
+  medusa_product_id?: string | null
+  medusa_variant_id?: string | null
   tags?: string[]
   category_ids?: string[]
   price?: number | string
@@ -118,13 +120,18 @@ export const POST = async (
     prompt: body.prompt ?? null,
     platform_product_id: platformProductId,
     supplier_product_id: inheritedSupplierProductId,
+    medusa_product_id: requireText(body.medusa_product_id),
+    medusa_variant_id: requireText(body.medusa_variant_id),
     design_image_url: body.design_image_url ?? body.image_url ?? null,
     image_url: body.image_url ?? body.design_image_url ?? null,
-    tags: Array.isArray(body.tags) ? body.tags : [],
+    tags: (Array.isArray(body.tags) ? body.tags : []) as string[],
     category_ids: categoryIds,
     price,
     cost: inheritedCost,
-    variants: Array.isArray(body.variants) ? body.variants : [],
+    variants: (Array.isArray(body.variants) ? body.variants : []) as unknown as Record<
+      string,
+      unknown
+    >,
     metadata: body.metadata ?? {}
   })
 
@@ -132,7 +139,6 @@ export const POST = async (
     product_id: product.id,
     store_id: product.store_id,
     status: product.status,
-    product: normalizeProduct(product)
+    product: normalizeProduct(product as unknown as Record<string, unknown>)
   })
 }
-
