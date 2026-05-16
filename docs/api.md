@@ -64,8 +64,8 @@ Request body:
   "price": 29.99,
   "cost": 8.5,
   "supplier_product_id": "supplier_tshirt",
-  "medusa_product_id": "prod_01HV_NATIVE",
-  "medusa_variant_id": "variant_01HV_NATIVE",
+  "medusa_product_id": "prod_medusa_123",
+  "medusa_variant_id": "variant_medusa_123",
   "source": "manual",
   "image_url": "https://cdn.example.com/product.png",
   "design_image_url": "https://cdn.example.com/design.png",
@@ -110,8 +110,8 @@ Response:
     "store_id": "default_store",
     "platform_product_id": "pp_tshirt",
     "supplier_product_id": "supplier_tshirt",
-    "medusa_product_id": null,
-    "medusa_variant_id": null,
+    "medusa_product_id": "prod_medusa_123",
+    "medusa_variant_id": "variant_medusa_123",
     "is_cart_addable": false,
     "title": "Summer Beach T-shirt",
     "status": "draft",
@@ -129,10 +129,6 @@ Response:
 #### `POST /admin/products/:product_id/publish`
 
 Publishes a draft product. The product must belong to the current store.
-
-Bridge caveat: this is an explicit-link bridge. `medusa_product_id` and `medusa_variant_id` must be real native Medusa ids when provided; the backend does not fake native products or variants. A published custom product is cart-addable only when `medusa_variant_id` is present.
-
-When `medusa_variant_id` is present, publish validates that the native Medusa variant exists. If native variant or native product metadata includes `store_id`, it must match the current store. The response `product` includes `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
 
 Response:
 
@@ -254,26 +250,11 @@ Response:
 
 ### `GET /store/products`
 
-Lists published products for the current store only.
-
-Product responses include the custom store-core product plus bridge fields:
-
-```json
-{
-  "product_id": "prod_123",
-  "store_id": "default_store",
-  "status": "published",
-  "medusa_product_id": "prod_01HV_NATIVE",
-  "medusa_variant_id": "variant_01HV_NATIVE",
-  "is_cart_addable": true
-}
-```
-
-`is_cart_addable` is `true` only when the product is published and `medusa_variant_id` is present.
+Lists published products for the current store only. Storefront products expose `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable` for the cart bridge. Buyers add products to cart with `variant_id = medusa_variant_id`, not `product_id` or `mc_product.id`.
 
 ### `GET /store/products/:product_id`
 
-Returns one published product for the current store only.
+Returns one published product for the current store only. `is_cart_addable` is `true` only when the product is published and has `medusa_variant_id`.
 
 ### `GET /store/settings`
 
@@ -325,57 +306,3 @@ Category isolation checks:
 
 - Product draft `category_ids` must belong to the current store.
 - Category `parent_id` must belong to the current store.
-
-## Development 2 — Cart, Orders, Fulfillment (CitiGoo)
-
-### Store — Cart
-
-- `POST /store/carts` — create cart (writes `metadata.store_id`).
-- `GET /store/carts/{id}` — cart detail; requires same store as cart.
-- `POST /store/carts/{id}/line-items` — add line item. Accepts either `variant_id` for a native Medusa variant linked to a published `mc_product`, or `product_id` for a published store-core product that has `medusa_variant_id`.
-- `PUT` / `DELETE /store/carts/{id}/line-items/{line_id}` — update quantity / remove.
-- `POST /store/carts/{id}/complete` — runs Medusa `completeCartWorkflow`; optional body `{ "payment_provider_id": "pp_stripe_stripe" }` (default `pp_system_default`). Order `metadata` includes `payment_status`, `fulfillment_status`, and `store_id` from cart.
-
-Cart bridge behavior:
-
-- `product_id` is translated to `mc_product.medusa_variant_id`.
-- The custom product must be published and belong to the cart store.
-- Direct `variant_id` requests reverse-check a linked published `mc_product`.
-- Cross-store adds return `CART_STORE_MISMATCH`.
-
-### Store — Buyer order lookup
-
-- `GET /store/orders/lookup?email=&display_id=` or `?email=&order_number=` — same store scope via `X-Store-Id`.
-- `GET /store/orders/{id}/tracking?email=` — latest fulfillment + shipments; validates email matches order.
-
-### Admin — Orders & fulfillment
-
-- `GET /admin/orders` — orders for current store (`X-Store-Id`); includes `fulfillment_order` and `latest_shipment`.
-- `POST /admin/orders/{order_id}/push-fulfillment` — requires `metadata.payment_status === paid`; upserts `fulfillment_order` to `pushed` and sets `fulfillment_status` to `pushed`.
-- `POST /admin/orders/{order_id}/mock-shipment` — creates `shipment`, marks fulfillment fulfilled, sets `fulfillment_status` to `shipped`.
-- `GET /admin/fulfillment-orders` — list fulfillment rows for store.
-- `POST /admin/fulfillment-orders/{id}/mock-push` — legacy shortcut (by fulfillment order id).
-
-### Stripe
-
-When `STRIPE_API_KEY` is set, configure Stripe webhooks to Medusa’s handler, for example:
-
-`POST {base_url}/hooks/payment/stripe_stripe`
-
-Subscriber `payment.captured` updates order to `paid` / `waiting` with dedupe on `payment.captured:{payment_id}`.
-
-### Migrations
-
-After model changes, from `apps/medusa-backend`:
-
-```bash
-npx medusa db:generate store_core
-npx medusa db:generate webhook_events
-npx medusa db:generate fulfillment_orders
-npx medusa db:generate shipments
-npx medusa db:migrate
-```
-
-### Postman
-
-Import `postman/CitiGoo-Medusa.postman_collection.json` and set `base_url`, `store_id`, `cart_id`, `order_id`.

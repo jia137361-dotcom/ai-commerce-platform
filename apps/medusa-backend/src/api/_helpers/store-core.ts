@@ -1,13 +1,13 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { STORE_CORE_MODULE } from "../../modules/store-core"
-import type StoreCoreModuleService from "../../modules/store-core/service"
+import StoreCoreModuleService from "../../modules/store-core/service"
 import { ErrorCodes } from "../../lib/errors"
 
 export type ProductStatus = "draft" | "published" | "unpublished" | "archived"
 export type ProductSource = "manual" | "ai"
 
-export function getStoreCoreService(req: MedusaRequest): StoreCoreModuleService {
-  return req.scope.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+export const getStoreCoreService = (req: MedusaRequest) => {
+  return req.scope.resolve<StoreCoreModuleService>(STORE_CORE_MODULE) as any
 }
 
 export const sendError = (
@@ -19,12 +19,12 @@ export const sendError = (
   return res.status(status).json({
     error: {
       code: ErrorCodes[code],
-      message,
-    },
+      message
+    }
   })
 }
 
-export const normalizeProduct = (product: Record<string, unknown>) => ({
+export const normalizeProduct = (product: any) => ({
   product_id: product.id,
   store_id: product.store_id,
   title: product.title,
@@ -37,10 +37,7 @@ export const normalizeProduct = (product: Record<string, unknown>) => ({
   supplier_product_id: product.supplier_product_id,
   medusa_product_id: product.medusa_product_id,
   medusa_variant_id: product.medusa_variant_id,
-  is_cart_addable:
-    product.status === "published" &&
-    typeof product.medusa_variant_id === "string" &&
-    product.medusa_variant_id.length > 0,
+  is_cart_addable: product.status === "published" && Boolean(product.medusa_variant_id),
   design_image_url: product.design_image_url,
   image_url: product.image_url,
   tags: product.tags ?? [],
@@ -50,10 +47,10 @@ export const normalizeProduct = (product: Record<string, unknown>) => ({
   category_ids: product.category_ids ?? [],
   metadata: product.metadata ?? {},
   created_at: product.created_at,
-  updated_at: product.updated_at,
+  updated_at: product.updated_at
 })
 
-export const normalizeCategory = (category: Record<string, unknown>) => ({
+export const normalizeCategory = (category: any) => ({
   category_id: category.id,
   store_id: category.store_id,
   name: category.name,
@@ -62,10 +59,10 @@ export const normalizeCategory = (category: Record<string, unknown>) => ({
   parent_id: category.parent_id,
   sort_order: category.sort_order,
   created_at: category.created_at,
-  updated_at: category.updated_at,
+  updated_at: category.updated_at
 })
 
-export const normalizePlatformProduct = (platformProduct: Record<string, unknown>) => ({
+export const normalizePlatformProduct = (platformProduct: any) => ({
   platform_product_id: platformProduct.id,
   title: platformProduct.title,
   category: platformProduct.category,
@@ -78,7 +75,7 @@ export const normalizePlatformProduct = (platformProduct: Record<string, unknown
   print_area: platformProduct.print_area ?? {},
   status: platformProduct.status,
   created_at: platformProduct.created_at,
-  updated_at: platformProduct.updated_at,
+  updated_at: platformProduct.updated_at
 })
 
 export const requireText = (value: unknown) => {
@@ -94,3 +91,4 @@ export const parseOptionalNumber = (value: unknown) => {
 
   return Number.isFinite(parsed) ? parsed : undefined
 }
+

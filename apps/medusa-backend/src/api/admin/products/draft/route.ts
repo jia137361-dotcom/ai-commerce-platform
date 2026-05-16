@@ -60,6 +60,8 @@ export const POST = async (
   const context = resolveCurrentStore(req)
   const storeId = requireText(body.store_id) ?? context.store_id
   const platformProductId = requireText(body.platform_product_id)
+  const medusaProductId = requireText(body.medusa_product_id)
+  const medusaVariantId = requireText(body.medusa_variant_id)
   const storeCoreService = getStoreCoreService(req)
 
   const stores = await storeCoreService.listStores({ id: storeId })
@@ -120,18 +122,15 @@ export const POST = async (
     prompt: body.prompt ?? null,
     platform_product_id: platformProductId,
     supplier_product_id: inheritedSupplierProductId,
-    medusa_product_id: requireText(body.medusa_product_id),
-    medusa_variant_id: requireText(body.medusa_variant_id),
+    medusa_product_id: medusaProductId,
+    medusa_variant_id: medusaVariantId,
     design_image_url: body.design_image_url ?? body.image_url ?? null,
     image_url: body.image_url ?? body.design_image_url ?? null,
-    tags: (Array.isArray(body.tags) ? body.tags : []) as string[],
+    tags: Array.isArray(body.tags) ? body.tags : [],
     category_ids: categoryIds,
     price,
     cost: inheritedCost,
-    variants: (Array.isArray(body.variants) ? body.variants : []) as unknown as Record<
-      string,
-      unknown
-    >,
+    variants: Array.isArray(body.variants) ? body.variants : [],
     metadata: body.metadata ?? {}
   })
 
@@ -139,6 +138,7 @@ export const POST = async (
     product_id: product.id,
     store_id: product.store_id,
     status: product.status,
-    product: normalizeProduct(product as unknown as Record<string, unknown>)
+    product: normalizeProduct(product)
   })
 }
+
