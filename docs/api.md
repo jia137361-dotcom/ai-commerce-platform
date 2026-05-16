@@ -64,6 +64,8 @@ Request body:
   "price": 29.99,
   "cost": 8.5,
   "supplier_product_id": "supplier_tshirt",
+  "medusa_product_id": "prod_medusa_123",
+  "medusa_variant_id": "variant_medusa_123",
   "source": "manual",
   "image_url": "https://cdn.example.com/product.png",
   "design_image_url": "https://cdn.example.com/design.png",
@@ -108,6 +110,9 @@ Response:
     "store_id": "default_store",
     "platform_product_id": "pp_tshirt",
     "supplier_product_id": "supplier_tshirt",
+    "medusa_product_id": "prod_medusa_123",
+    "medusa_variant_id": "variant_medusa_123",
+    "is_cart_addable": false,
     "title": "Summer Beach T-shirt",
     "status": "draft",
     "source": "manual",
@@ -245,11 +250,11 @@ Response:
 
 ### `GET /store/products`
 
-Lists published products for the current store only.
+Lists published products for the current store only. Storefront products expose `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable` for the cart bridge. Buyers add products to cart with `variant_id = medusa_variant_id`, not `product_id` or `mc_product.id`.
 
 ### `GET /store/products/:product_id`
 
-Returns one published product for the current store only.
+Returns one published product for the current store only. `is_cart_addable` is `true` only when the product is published and has `medusa_variant_id`.
 
 ### `GET /store/settings`
 
