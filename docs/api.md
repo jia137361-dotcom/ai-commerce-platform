@@ -319,6 +319,21 @@ curl -i \
   http://localhost:9000/store/products
 ```
 
+Response products include the Phase 1 cart bridge fields:
+
+```json
+{
+  "product_id": "prod_123",
+  "store_id": "test_store",
+  "status": "published",
+  "medusa_product_id": "prod_01HV_NATIVE",
+  "medusa_variant_id": "variant_01HV_NATIVE",
+  "is_cart_addable": true
+}
+```
+
+`is_cart_addable` is `true` only when the store-core product is published and has `medusa_variant_id`.
+
 ### `GET /store/products/:product_id`
 
 Returns one published product for the current store only.
@@ -337,6 +352,30 @@ curl -i \
   -H "X-Store-Id: test_store" \
   http://localhost:9000/store/products/prod_123
 ```
+
+The `product` response uses the same store-core shape as the list route and includes `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
+
+### `POST /store/carts/:id/line-items`
+
+Adds a native Medusa variant to a cart.
+
+Request body:
+
+```json
+{
+  "variant_id": "variant_01HV_NATIVE",
+  "quantity": 1
+}
+```
+
+Phase 1 product-to-cart bridge behavior:
+
+- Frontend must read `medusa_variant_id` from `/store/products` or `/store/products/:product_id` and send it as `variant_id`.
+- `product_id` and `mc_product.id` are not supported add-to-cart inputs.
+- The backend reverse-checks `mc_product.medusa_variant_id == variant_id`.
+- The linked `mc_product` must be published and belong to the cart store.
+- Cross-store variant adds return `CART_STORE_MISMATCH`.
+- Products without `medusa_variant_id` return `is_cart_addable: false` and should not show an enabled add-to-cart action.
 
 ### `GET /store/settings`
 

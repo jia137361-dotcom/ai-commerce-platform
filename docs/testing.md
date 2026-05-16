@@ -109,6 +109,30 @@ Optional environment variables:
 - `BASE_URL`: defaults to `http://localhost:9000`.
 - `DEFAULT_STORE_ID`: defaults to `default_store`.
 - `TEST_STORE_ID`: defaults to `test_store`.
+- `DEFAULT_MEDUSA_PRODUCT_ID`: native Medusa product id used for default-store bridge checks.
+- `DEFAULT_MEDUSA_VARIANT_ID`: native Medusa variant id used for default-store cart checks.
+- `TEST_MEDUSA_PRODUCT_ID`: native Medusa product id used for test-store bridge checks.
+- `TEST_MEDUSA_VARIANT_ID`: native Medusa variant id used for test-store cart checks.
+
+## Phase 1 Product-To-Cart Bridge Tests
+
+Required environment:
+
+- `PUBLISHABLE_API_KEY` or local alias `PAK`.
+- `ADMIN_TOKEN`.
+- `DEFAULT_MEDUSA_PRODUCT_ID`.
+- `DEFAULT_MEDUSA_VARIANT_ID`.
+- `TEST_MEDUSA_PRODUCT_ID`.
+- `TEST_MEDUSA_VARIANT_ID`.
+
+Expected behavior:
+
+- `/store/products` and `/store/products/{product_id}` return `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
+- Products without `medusa_variant_id` return `is_cart_addable: false`.
+- Products with a valid `medusa_variant_id` return `is_cart_addable: true`.
+- Same-store cart line-item adds use native `variant_id` and succeed.
+- Cross-store variant adds return `CART_STORE_MISMATCH`.
+- `product_id` / `mc_product.id` add-to-cart is not supported in Phase 1.
 
 Create an admin user locally if one does not exist:
 

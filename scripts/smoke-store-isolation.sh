@@ -6,6 +6,13 @@ DEFAULT_STORE_ID="${DEFAULT_STORE_ID:-default_store}"
 TEST_STORE_ID="${TEST_STORE_ID:-test_store}"
 PUBLISHABLE_API_KEY="${PUBLISHABLE_API_KEY:-}"
 ADMIN_TOKEN="${ADMIN_TOKEN:-}"
+DEFAULT_MEDUSA_PRODUCT_ID="${DEFAULT_MEDUSA_PRODUCT_ID:-}"
+DEFAULT_MEDUSA_VARIANT_ID="${DEFAULT_MEDUSA_VARIANT_ID:-}"
+TEST_MEDUSA_PRODUCT_ID="${TEST_MEDUSA_PRODUCT_ID:-}"
+TEST_MEDUSA_VARIANT_ID="${TEST_MEDUSA_VARIANT_ID:-}"
+DEFAULT_REGION_ID="${DEFAULT_REGION_ID:-}"
+TEST_REGION_ID="${TEST_REGION_ID:-$DEFAULT_REGION_ID}"
+CART_CURRENCY_CODE="${CART_CURRENCY_CODE:-eur}"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -246,20 +253,44 @@ request GET "/store/products" "" "${store_default_headers[@]}"
 expect_status 200 "GET /store/products default store"
 assert_json --arg store "$DEFAULT_STORE_ID" --arg own "$default_product_id" --arg other "$test_product_id" '
   .store_id == $store
-  and any(.products[]?; .product_id == $own and .store_id == $store)
+  and any(.products[]?; .product_id == $own and .store_id == $store and .medusa_product_id == null and .medusa_variant_id == null and .is_cart_addable == false)
   and all(.products[]?; .store_id == $store)
   and all(.products[]?; .product_id != $other)
-' "default product list should include only default-store products"
+' "default product list should include non-cart-addable default product and only default-store products"
+
+info "13a. Storefront default product detail returns store-core product fields"
+request GET "/store/products/$default_product_id" "" "${store_default_headers[@]}"
+expect_status 200 "GET /store/products/:product_id default store"
+assert_json --arg id "$default_product_id" --arg store "$DEFAULT_STORE_ID" '
+  .product.product_id == $id
+  and .product.store_id == $store
+  and .product.status == "published"
+  and .product.medusa_product_id == null
+  and .product.medusa_variant_id == null
+  and .product.is_cart_addable == false
+' "default product detail should return non-cart-addable store-core product"
 
 info "14. Storefront products for test store are isolated"
 request GET "/store/products" "" "${store_test_headers[@]}"
 expect_status 200 "GET /store/products test store"
 assert_json --arg store "$TEST_STORE_ID" --arg own "$test_product_id" --arg other "$default_product_id" '
   .store_id == $store
-  and any(.products[]?; .product_id == $own and .store_id == $store)
+  and any(.products[]?; .product_id == $own and .store_id == $store and .medusa_product_id == null and .medusa_variant_id == null and .is_cart_addable == false)
   and all(.products[]?; .store_id == $store)
   and all(.products[]?; .product_id != $other)
-' "test product list should include only test-store products"
+' "test product list should include non-cart-addable test product and only test-store products"
+
+info "14a. Storefront test product detail returns store-core product fields"
+request GET "/store/products/$test_product_id" "" "${store_test_headers[@]}"
+expect_status 200 "GET /store/products/:product_id test store"
+assert_json --arg id "$test_product_id" --arg store "$TEST_STORE_ID" '
+  .product.product_id == $id
+  and .product.store_id == $store
+  and .product.status == "published"
+  and .product.medusa_product_id == null
+  and .product.medusa_variant_id == null
+  and .product.is_cart_addable == false
+' "test product detail should return non-cart-addable store-core product"
 
 info "15. Cross-store publish is rejected"
 request POST "/admin/products/$default_product_id/publish" "{}" "${admin_header[@]}" -H "X-Store-Id: $TEST_STORE_ID"
@@ -281,5 +312,108 @@ info "17. Product detail cross-store access is blocked"
 request GET "/store/products/$default_product_id" "" "${store_test_headers[@]}"
 expect_status 404 "cross-store product detail"
 assert_json '(.error.code == "PRODUCT_NOT_FOUND") or (.type == "not_found")' "cross-store product detail should return not found"
+
+if [[ -n "$DEFAULT_MEDUSA_VARIANT_ID" && -n "$TEST_MEDUSA_VARIANT_ID" ]]; then
+  info "18. Product-to-cart bridge checks using variant_id only"
+
+  default_bridge_body="$(
+    jq -n \
+      --arg title "Smoke Default Bridge Product $RUN_ID" \
+      --arg category "$default_category_id" \
+      --arg medusa_product_id "$DEFAULT_MEDUSA_PRODUCT_ID" \
+      --arg medusa_variant_id "$DEFAULT_MEDUSA_VARIANT_ID" \
+      '{
+        title: $title,
+        description: "Bridge product for default store",
+        price: 44.44,
+        source: "manual",
+        category_ids: [$category],
+        tags: ["dev3-smoke", "bridge"],
+        variants: [],
+        medusa_product_id: (if $medusa_product_id == "" then null else $medusa_product_id end),
+        medusa_variant_id: $medusa_variant_id,
+        metadata: {smoke: true, bridge: true}
+      }'
+  )"
+  request POST "/admin/products/draft" "$default_bridge_body" "${admin_header[@]}" -H "X-Store-Id: $DEFAULT_STORE_ID"
+  expect_status 201 "POST /admin/products/draft default bridge product"
+  default_bridge_product_id="$(json_get '.product_id')"
+
+  test_bridge_body="$(
+    jq -n \
+      --arg title "Smoke Test Bridge Product $RUN_ID" \
+      --arg category "$test_category_id" \
+      --arg medusa_product_id "$TEST_MEDUSA_PRODUCT_ID" \
+      --arg medusa_variant_id "$TEST_MEDUSA_VARIANT_ID" \
+      '{
+        title: $title,
+        description: "Bridge product for test store",
+        price: 55.55,
+        source: "manual",
+        category_ids: [$category],
+        tags: ["dev3-smoke", "bridge"],
+        variants: [],
+        medusa_product_id: (if $medusa_product_id == "" then null else $medusa_product_id end),
+        medusa_variant_id: $medusa_variant_id,
+        metadata: {smoke: true, bridge: true}
+      }'
+  )"
+  request POST "/admin/products/draft" "$test_bridge_body" "${admin_header[@]}" -H "X-Store-Id: $TEST_STORE_ID"
+  expect_status 201 "POST /admin/products/draft test bridge product"
+  test_bridge_product_id="$(json_get '.product_id')"
+
+  request POST "/admin/products/$default_bridge_product_id/publish" "{}" "${admin_header[@]}" -H "X-Store-Id: $DEFAULT_STORE_ID"
+  expect_status 200 "publish default bridge product"
+  assert_json --arg variant "$DEFAULT_MEDUSA_VARIANT_ID" '.product.medusa_variant_id == $variant and .product.is_cart_addable == true' "default bridge product should be cart-addable"
+
+  request POST "/admin/products/$test_bridge_product_id/publish" "{}" "${admin_header[@]}" -H "X-Store-Id: $TEST_STORE_ID"
+  expect_status 200 "publish test bridge product"
+  assert_json --arg variant "$TEST_MEDUSA_VARIANT_ID" '.product.medusa_variant_id == $variant and .product.is_cart_addable == true' "test bridge product should be cart-addable"
+
+  request GET "/store/products" "" "${store_default_headers[@]}"
+  expect_status 200 "GET /store/products default store bridge"
+  assert_json --arg id "$default_bridge_product_id" --arg product "$DEFAULT_MEDUSA_PRODUCT_ID" --arg variant "$DEFAULT_MEDUSA_VARIANT_ID" '
+    any(.products[]?; .product_id == $id and .medusa_product_id == (if $product == "" then null else $product end) and .medusa_variant_id == $variant and .is_cart_addable == true)
+  ' "default product list should expose bridge fields"
+
+  request GET "/store/products/$default_bridge_product_id" "" "${store_default_headers[@]}"
+  expect_status 200 "GET /store/products/:product_id default bridge"
+  assert_json --arg id "$default_bridge_product_id" --arg variant "$DEFAULT_MEDUSA_VARIANT_ID" '
+    .product.product_id == $id
+    and .product.medusa_variant_id == $variant
+    and .product.is_cart_addable == true
+  ' "default product detail should expose cart-addable bridge fields"
+
+  request GET "/store/products/$test_bridge_product_id" "" "${store_test_headers[@]}"
+  expect_status 200 "GET /store/products/:product_id test bridge"
+  assert_json --arg id "$test_bridge_product_id" --arg variant "$TEST_MEDUSA_VARIANT_ID" '
+    .product.product_id == $id
+    and .product.medusa_variant_id == $variant
+    and .product.is_cart_addable == true
+  ' "test product detail should expose cart-addable bridge fields"
+
+  default_cart_body="$(jq -n --arg region "$DEFAULT_REGION_ID" --arg currency "$CART_CURRENCY_CODE" '{currency_code: $currency} + (if $region == "" then {} else {region_id: $region} end)')"
+  test_cart_body="$(jq -n --arg region "$TEST_REGION_ID" --arg currency "$CART_CURRENCY_CODE" '{currency_code: $currency} + (if $region == "" then {} else {region_id: $region} end)')"
+
+  request POST "/store/carts" "$default_cart_body" "${store_default_headers[@]}"
+  expect_status 200 "POST /store/carts default store"
+  default_cart_id="$(json_get '.cart_id')"
+
+  request POST "/store/carts" "$test_cart_body" "${store_test_headers[@]}"
+  expect_status 200 "POST /store/carts test store"
+  test_cart_id="$(json_get '.cart_id')"
+
+  request POST "/store/carts/$default_cart_id/line-items" "$(jq -n --arg variant_id "$DEFAULT_MEDUSA_VARIANT_ID" '{variant_id: $variant_id, quantity: 1}')" "${store_default_headers[@]}"
+  expect_status 200 "add default bridge variant to default cart"
+
+  request POST "/store/carts/$test_cart_id/line-items" "$(jq -n --arg variant_id "$TEST_MEDUSA_VARIANT_ID" '{variant_id: $variant_id, quantity: 1}')" "${store_test_headers[@]}"
+  expect_status 200 "add test bridge variant to test cart"
+
+  request POST "/store/carts/$default_cart_id/line-items" "$(jq -n --arg variant_id "$TEST_MEDUSA_VARIANT_ID" '{variant_id: $variant_id, quantity: 1}')" "${store_default_headers[@]}"
+  expect_status 400 "cross-store bridge variant add"
+  assert_json '.error.code == "CART_STORE_MISMATCH" and .error.message == "Product does not belong to current store"' "cross-store variant add should return CART_STORE_MISMATCH"
+else
+  info "18. Skipping product-to-cart bridge checks. Set DEFAULT_MEDUSA_VARIANT_ID and TEST_MEDUSA_VARIANT_ID to real native Medusa variants to enable them."
+fi
 
 info "All store isolation smoke tests passed."

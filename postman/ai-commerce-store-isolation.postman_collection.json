@@ -25,11 +25,66 @@
     }
   ],
   "variable": [
-    { "key": "smoke_run_id", "value": "" },
-    { "key": "default_category_id", "value": "" },
-    { "key": "test_category_id", "value": "" },
-    { "key": "default_product_id", "value": "" },
-    { "key": "test_product_id", "value": "" }
+    {
+      "key": "smoke_run_id",
+      "value": ""
+    },
+    {
+      "key": "default_category_id",
+      "value": ""
+    },
+    {
+      "key": "test_category_id",
+      "value": ""
+    },
+    {
+      "key": "default_product_id",
+      "value": ""
+    },
+    {
+      "key": "test_product_id",
+      "value": ""
+    },
+    {
+      "key": "default_medusa_product_id",
+      "value": ""
+    },
+    {
+      "key": "default_medusa_variant_id",
+      "value": ""
+    },
+    {
+      "key": "test_medusa_product_id",
+      "value": ""
+    },
+    {
+      "key": "test_medusa_variant_id",
+      "value": ""
+    },
+    {
+      "key": "default_bridge_product_id",
+      "value": ""
+    },
+    {
+      "key": "test_bridge_product_id",
+      "value": ""
+    },
+    {
+      "key": "default_cart_id",
+      "value": ""
+    },
+    {
+      "key": "test_cart_id",
+      "value": ""
+    },
+    {
+      "key": "default_region_id",
+      "value": ""
+    },
+    {
+      "key": "cart_currency_code",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -77,7 +132,10 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
         "url": "{{base_url}}/store-context"
       },
@@ -123,7 +181,10 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          }
         ],
         "url": "{{base_url}}/admin/users/me"
       },
@@ -145,9 +206,18 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{default_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -182,9 +252,18 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -219,8 +298,14 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "x-publishable-api-key", "value": "{{publishable_api_key}}" },
-          { "key": "X-Store-Id", "value": "{{default_store_id}}" }
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
         ],
         "url": "{{base_url}}/store/product-categories"
       },
@@ -249,8 +334,14 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "x-publishable-api-key", "value": "{{publishable_api_key}}" },
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
         "url": "{{base_url}}/store/product-categories"
       },
@@ -279,9 +370,18 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{default_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -310,9 +410,18 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -341,11 +450,23 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{default_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
         ],
-        "body": { "mode": "raw", "raw": "{}" },
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
         "url": "{{base_url}}/admin/products/{{default_product_id}}/publish"
       },
       "event": [
@@ -370,11 +491,23 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
-        "body": { "mode": "raw", "raw": "{}" },
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
         "url": "{{base_url}}/admin/products/{{test_product_id}}/publish"
       },
       "event": [
@@ -399,8 +532,14 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "x-publishable-api-key", "value": "{{publishable_api_key}}" },
-          { "key": "X-Store-Id", "value": "{{default_store_id}}" }
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
         ],
         "url": "{{base_url}}/store/products"
       },
@@ -418,7 +557,50 @@
               "pm.test('store_id matches default store', () => pm.expect(json.store_id).to.eql(store));",
               "pm.test('includes default smoke product', () => pm.expect(json.products.some((p) => p.product_id === own && p.store_id === store)).to.eql(true));",
               "pm.test('all products belong to default store', () => pm.expect(json.products.every((p) => p.store_id === store)).to.eql(true));",
-              "pm.test('does not include test smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));"
+              "pm.test('does not include test smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));",
+              "pm.test('default product exposes bridge fields and is not cart-addable', () => {",
+              "  const p = json.products.find((p) => p.product_id === own);",
+              "  pm.expect(p).to.be.an('object');",
+              "  pm.expect(p).to.have.property('medusa_product_id');",
+              "  pm.expect(p).to.have.property('medusa_variant_id');",
+              "  pm.expect(p.is_cart_addable).to.eql(false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13a Storefront default product detail includes bridge fields",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products/{{default_product_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('detail returns store-core product fields', () => {",
+              "  pm.expect(json.product.product_id).to.eql(pm.collectionVariables.get('default_product_id'));",
+              "  pm.expect(json.product.store_id).to.eql(pm.environment.get('default_store_id'));",
+              "  pm.expect(json.product).to.have.property('medusa_product_id');",
+              "  pm.expect(json.product).to.have.property('medusa_variant_id');",
+              "  pm.expect(json.product.is_cart_addable).to.eql(false);",
+              "});"
             ]
           }
         }
@@ -429,8 +611,14 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "x-publishable-api-key", "value": "{{publishable_api_key}}" },
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
         "url": "{{base_url}}/store/products"
       },
@@ -448,7 +636,50 @@
               "pm.test('store_id matches test store', () => pm.expect(json.store_id).to.eql(store));",
               "pm.test('includes test smoke product', () => pm.expect(json.products.some((p) => p.product_id === own && p.store_id === store)).to.eql(true));",
               "pm.test('all products belong to test store', () => pm.expect(json.products.every((p) => p.store_id === store)).to.eql(true));",
-              "pm.test('does not include default smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));"
+              "pm.test('does not include default smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));",
+              "pm.test('test product exposes bridge fields and is not cart-addable', () => {",
+              "  const p = json.products.find((p) => p.product_id === own);",
+              "  pm.expect(p).to.be.an('object');",
+              "  pm.expect(p).to.have.property('medusa_product_id');",
+              "  pm.expect(p).to.have.property('medusa_variant_id');",
+              "  pm.expect(p.is_cart_addable).to.eql(false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14a Storefront test product detail includes bridge fields",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products/{{test_product_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('detail returns store-core product fields', () => {",
+              "  pm.expect(json.product.product_id).to.eql(pm.collectionVariables.get('test_product_id'));",
+              "  pm.expect(json.product.store_id).to.eql(pm.environment.get('test_store_id'));",
+              "  pm.expect(json.product).to.have.property('medusa_product_id');",
+              "  pm.expect(json.product).to.have.property('medusa_variant_id');",
+              "  pm.expect(json.product.is_cart_addable).to.eql(false);",
+              "});"
             ]
           }
         }
@@ -459,11 +690,23 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
-        "body": { "mode": "raw", "raw": "{}" },
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
         "url": "{{base_url}}/admin/products/{{default_product_id}}/publish"
       },
       "event": [
@@ -485,9 +728,18 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Store-Id", "value": "{{default_store_id}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -515,8 +767,14 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "x-publishable-api-key", "value": "{{publishable_api_key}}" },
-          { "key": "X-Store-Id", "value": "{{test_store_id}}" }
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
         ],
         "url": "{{base_url}}/store/products/{{default_product_id}}"
       },
@@ -529,6 +787,376 @@
               "pm.test('status is 404', () => pm.response.to.have.status(404));",
               "const json = pm.response.json();",
               "pm.test('error is not found', () => pm.expect((json.error && json.error.code) || json.type).to.match(/PRODUCT_NOT_FOUND|not_found/));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18a Create default bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/draft",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Smoke Default Bridge Product {{smoke_run_id}}\",\n  \"description\": \"Bridge product for default store\",\n  \"price\": 44.44,\n  \"source\": \"manual\",\n  \"category_ids\": [\n    \"{{default_category_id}}\"\n  ],\n  \"tags\": [\n    \"dev3-smoke\",\n    \"bridge\"\n  ],\n  \"variants\": [],\n  \"medusa_product_id\": \"{{default_medusa_product_id}}\",\n  \"medusa_variant_id\": \"{{default_medusa_variant_id}}\",\n  \"metadata\": {\n    \"smoke\": true,\n    \"bridge\": true\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const json = pm.response.json();",
+              "  pm.collectionVariables.set('default_bridge_product_id', json.product_id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18b Create test bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/draft",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Smoke Test Bridge Product {{smoke_run_id}}\",\n  \"description\": \"Bridge product for test store\",\n  \"price\": 55.55,\n  \"source\": \"manual\",\n  \"category_ids\": [\n    \"{{test_category_id}}\"\n  ],\n  \"tags\": [\n    \"dev3-smoke\",\n    \"bridge\"\n  ],\n  \"variants\": [],\n  \"medusa_product_id\": \"{{test_medusa_product_id}}\",\n  \"medusa_variant_id\": \"{{test_medusa_variant_id}}\",\n  \"metadata\": {\n    \"smoke\": true,\n    \"bridge\": true\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const json = pm.response.json();",
+              "  pm.collectionVariables.set('test_bridge_product_id', json.product_id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18c Publish default bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/{{default_bridge_product_id}}/publish",
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('default bridge is cart-addable', () => { pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('default_medusa_variant_id')); pm.expect(json.product.is_cart_addable).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18d Publish test bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/{{test_bridge_product_id}}/publish",
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('test bridge is cart-addable', () => { pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('test_medusa_variant_id')); pm.expect(json.product.is_cart_addable).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18e Default bridge detail is cart-addable",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products/{{default_bridge_product_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('detail exposes medusa variant', () => { pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('default_medusa_variant_id')); pm.expect(json.product.is_cart_addable).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18f Create default cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"region_id\": \"{{default_region_id}}\",\n  \"currency_code\": \"eur\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json(); pm.collectionVariables.set('default_cart_id', json.cart_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18g Create test cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"region_id\": \"{{default_region_id}}\",\n  \"currency_code\": \"eur\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json(); pm.collectionVariables.set('test_cart_id', json.cart_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18h Add default variant to default cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts/{{default_cart_id}}/line-items",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variant_id\": \"{{default_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18i Add test variant to test cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts/{{test_cart_id}}/line-items",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variant_id\": \"{{test_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18j Cross-store variant add is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts/{{default_cart_id}}/line-items",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variant_id\": \"{{test_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 400', () => pm.response.to.have.status(400));",
+              "const json = pm.response.json();",
+              "pm.test('returns CART_STORE_MISMATCH', () => { pm.expect(json.error.code).to.eql('CART_STORE_MISMATCH'); });"
             ]
           }
         }

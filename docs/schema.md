@@ -101,6 +101,8 @@ Fields:
 | `prompt` | text, nullable | AI prompt or generation context. |
 | `platform_product_id` | text, nullable | Optional reference to a global platform product. |
 | `supplier_product_id` | text, nullable | Supplier product id, either provided directly or inherited from a platform product. |
+| `medusa_product_id` | text, nullable | Explicit bridge to a native Medusa product. |
+| `medusa_variant_id` | text, nullable | Explicit bridge to the native Medusa variant used for cart line items. |
 | `design_image_url` | text, nullable | Design image URL. |
 | `image_url` | text, nullable | Product image URL. |
 | `tags` | text array, nullable | Product tags. |
@@ -110,6 +112,12 @@ Fields:
 | `category_ids` | text array, nullable | Product category ids assigned to the product. |
 | `metadata` | json, nullable | Flexible product metadata. |
 
+API-derived fields:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `is_cart_addable` | boolean | Computed in API responses. True only when `status` is `published` and `medusa_variant_id` is present. Not a database column. |
+
 Indexes currently include `store_id` and `store_id/status` for store-aware queries.
 
 Category caveats:
@@ -117,6 +125,8 @@ Category caveats:
 - `category_ids` are currently stored as an array on `Product`, not as a relational join table.
 - Draft product creation currently validates that provided `category_ids` belong to the selected product store.
 - Keep a regression test for cross-store category ids so future changes do not weaken this isolation.
+- Products without `medusa_variant_id` are catalog-visible after publish, but are not cart-addable.
+- Cart line items use native Medusa `variant_id`, sourced from `mc_product.medusa_variant_id`.
 
 ## ProductCategory
 
