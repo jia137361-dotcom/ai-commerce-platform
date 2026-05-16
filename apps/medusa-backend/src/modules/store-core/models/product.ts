@@ -11,6 +11,8 @@ const Product = model.define("mc_product", {
   prompt: model.text().nullable(),
   platform_product_id: model.text().nullable(),
   supplier_product_id: model.text().nullable(),
+  medusa_product_id: model.text().nullable(),
+  medusa_variant_id: model.text().nullable(),
   design_image_url: model.text().nullable(),
   image_url: model.text().nullable(),
   tags: model.array().nullable(),
