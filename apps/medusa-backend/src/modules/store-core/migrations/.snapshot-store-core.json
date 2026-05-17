@@ -850,6 +850,24 @@
           "constraint": true,
           "primary": true,
           "unique": true
+        },
+        {
+          "keyName": "IDX_mc_product_medusa_product_id",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_mc_product_medusa_product_id\" ON \"mc_product\" (\"medusa_product_id\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_mc_product_medusa_variant_id",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_mc_product_medusa_variant_id\" ON \"mc_product\" (\"medusa_variant_id\") WHERE deleted_at IS NULL"
         }
       ],
       "checks": [],

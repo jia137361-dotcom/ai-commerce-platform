@@ -1,0 +1,1166 @@
+{
+  "info": {
+    "_postman_id": "54f82807-9f8b-4af8-b842-dev3-store-isolation",
+    "name": "AI Commerce Store Isolation Smoke Tests",
+    "description": "Local Developer 3 smoke tests for store context, publishable API key behavior, admin auth, product category isolation, product isolation, and cross-store negative cases.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.info.requestName && pm.info.requestName.startsWith('01 ')) {",
+          "  pm.collectionVariables.set('smoke_run_id', `${Date.now()}-${Math.floor(Math.random() * 100000)}`);",
+          "}",
+          "if (!pm.collectionVariables.get('smoke_run_id')) {",
+          "  pm.collectionVariables.set('smoke_run_id', `${Date.now()}-${Math.floor(Math.random() * 100000)}`);",
+          "}",
+          "if (!pm.environment.get('base_url')) { pm.environment.set('base_url', 'http://localhost:9000'); }",
+          "if (!pm.environment.get('default_store_id')) { pm.environment.set('default_store_id', 'default_store'); }",
+          "if (!pm.environment.get('test_store_id')) { pm.environment.set('test_store_id', 'test_store'); }"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "smoke_run_id",
+      "value": ""
+    },
+    {
+      "key": "default_category_id",
+      "value": ""
+    },
+    {
+      "key": "test_category_id",
+      "value": ""
+    },
+    {
+      "key": "default_product_id",
+      "value": ""
+    },
+    {
+      "key": "test_product_id",
+      "value": ""
+    },
+    {
+      "key": "default_medusa_product_id",
+      "value": ""
+    },
+    {
+      "key": "default_medusa_variant_id",
+      "value": ""
+    },
+    {
+      "key": "test_medusa_product_id",
+      "value": ""
+    },
+    {
+      "key": "test_medusa_variant_id",
+      "value": ""
+    },
+    {
+      "key": "default_bridge_product_id",
+      "value": ""
+    },
+    {
+      "key": "test_bridge_product_id",
+      "value": ""
+    },
+    {
+      "key": "default_cart_id",
+      "value": ""
+    },
+    {
+      "key": "test_cart_id",
+      "value": ""
+    },
+    {
+      "key": "default_region_id",
+      "value": ""
+    },
+    {
+      "key": "cart_currency_code",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Health returns 200",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Store context returns a store id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/store-context"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('store_id is present', () => pm.expect(json.store_context.store_id).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Store context resolves test store from header",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store-context"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('store_id matches test store', () => pm.expect(json.store_context.store_id).to.eql(pm.environment.get('test_store_id')));",
+              "pm.test('source is header', () => pm.expect(json.store_context.source).to.eql('header'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Store products without publishable key is blocked",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/store/products"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is blocked non-2xx', () => pm.expect(pm.response.code).to.not.be.within(200, 299));",
+              "const json = pm.response.json();",
+              "const text = `${json.message || ''} ${json.type || ''}`;",
+              "pm.test('response mentions publishable API key', () => pm.expect(text.toLowerCase()).to.match(/publishable|api key|not_allowed/));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Admin users me with bearer token returns 200",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/users/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin token is configured', () => pm.expect(pm.environment.get('admin_token')).to.be.a('string').and.not.empty);",
+              "pm.test('status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Create default store category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Smoke Default Category {{smoke_run_id}}\",\n  \"description\": \"Dev3 smoke category for default store\"\n}"
+        },
+        "url": "{{base_url}}/admin/product-categories"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('default_category_id', json.category_id);",
+              "pm.test('category belongs to default store', () => {",
+              "  pm.expect(json.store_id).to.eql(pm.environment.get('default_store_id'));",
+              "  pm.expect(json.category.store_id).to.eql(pm.environment.get('default_store_id'));",
+              "});",
+              "pm.test('response includes slug and sort_order', () => {",
+              "  pm.expect(json.category.slug).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.category.sort_order).to.eql(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Create test store category",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Smoke Test Category {{smoke_run_id}}\",\n  \"description\": \"Dev3 smoke category for test store\"\n}"
+        },
+        "url": "{{base_url}}/admin/product-categories"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('test_category_id', json.category_id);",
+              "pm.test('category belongs to test store', () => {",
+              "  pm.expect(json.store_id).to.eql(pm.environment.get('test_store_id'));",
+              "  pm.expect(json.category.store_id).to.eql(pm.environment.get('test_store_id'));",
+              "});",
+              "pm.test('response includes slug and sort_order', () => {",
+              "  pm.expect(json.category.slug).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.category.sort_order).to.eql(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Storefront default category isolation",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/product-categories"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "const store = pm.environment.get('default_store_id');",
+              "const own = pm.collectionVariables.get('default_category_id');",
+              "const other = pm.collectionVariables.get('test_category_id');",
+              "pm.test('store_id matches default store', () => pm.expect(json.store_id).to.eql(store));",
+              "pm.test('includes default smoke category', () => pm.expect(json.categories.some((c) => c.category_id === own && c.store_id === store)).to.eql(true));",
+              "pm.test('all categories belong to default store', () => pm.expect(json.categories.every((c) => c.store_id === store)).to.eql(true));",
+              "pm.test('does not include test smoke category', () => pm.expect(json.categories.some((c) => c.category_id === other)).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Storefront test category isolation",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/product-categories"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "const store = pm.environment.get('test_store_id');",
+              "const own = pm.collectionVariables.get('test_category_id');",
+              "const other = pm.collectionVariables.get('default_category_id');",
+              "pm.test('store_id matches test store', () => pm.expect(json.store_id).to.eql(store));",
+              "pm.test('includes test smoke category', () => pm.expect(json.categories.some((c) => c.category_id === own && c.store_id === store)).to.eql(true));",
+              "pm.test('all categories belong to test store', () => pm.expect(json.categories.every((c) => c.store_id === store)).to.eql(true));",
+              "pm.test('does not include default smoke category', () => pm.expect(json.categories.some((c) => c.category_id === other)).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Create default store draft product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Smoke Default Product {{smoke_run_id}}\",\n  \"description\": \"Dev3 smoke product for default store\",\n  \"price\": 11.11,\n  \"source\": \"manual\",\n  \"category_ids\": [\"{{default_category_id}}\"],\n  \"tags\": [\"dev3-smoke\"],\n  \"variants\": [],\n  \"metadata\": {\"smoke\": true}\n}"
+        },
+        "url": "{{base_url}}/admin/products/draft"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('default_product_id', json.product_id);",
+              "pm.test('product belongs to default store', () => pm.expect(json.store_id).to.eql(pm.environment.get('default_store_id')));",
+              "pm.test('product includes default category', () => pm.expect(json.product.category_ids).to.include(pm.collectionVariables.get('default_category_id')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Create test store draft product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Smoke Test Product {{smoke_run_id}}\",\n  \"description\": \"Dev3 smoke product for test store\",\n  \"price\": 22.22,\n  \"source\": \"manual\",\n  \"category_ids\": [\"{{test_category_id}}\"],\n  \"tags\": [\"dev3-smoke\"],\n  \"variants\": [],\n  \"metadata\": {\"smoke\": true}\n}"
+        },
+        "url": "{{base_url}}/admin/products/draft"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('test_product_id', json.product_id);",
+              "pm.test('product belongs to test store', () => pm.expect(json.store_id).to.eql(pm.environment.get('test_store_id')));",
+              "pm.test('product includes test category', () => pm.expect(json.product.category_ids).to.include(pm.collectionVariables.get('test_category_id')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12a Publish default store product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": "{{base_url}}/admin/products/{{default_product_id}}/publish"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('published in default store', () => {",
+              "  pm.expect(json.store_id).to.eql(pm.environment.get('default_store_id'));",
+              "  pm.expect(json.status).to.eql('published');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12b Publish test store product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": "{{base_url}}/admin/products/{{test_product_id}}/publish"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('published in test store', () => {",
+              "  pm.expect(json.store_id).to.eql(pm.environment.get('test_store_id'));",
+              "  pm.expect(json.status).to.eql('published');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Storefront default product isolation",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "const store = pm.environment.get('default_store_id');",
+              "const own = pm.collectionVariables.get('default_product_id');",
+              "const other = pm.collectionVariables.get('test_product_id');",
+              "pm.test('store_id matches default store', () => pm.expect(json.store_id).to.eql(store));",
+              "pm.test('includes default smoke product', () => pm.expect(json.products.some((p) => p.product_id === own && p.store_id === store)).to.eql(true));",
+              "pm.test('all products belong to default store', () => pm.expect(json.products.every((p) => p.store_id === store)).to.eql(true));",
+              "pm.test('does not include test smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));",
+              "pm.test('default product exposes bridge fields and is not cart-addable', () => {",
+              "  const p = json.products.find((p) => p.product_id === own);",
+              "  pm.expect(p).to.be.an('object');",
+              "  pm.expect(p).to.have.property('medusa_product_id');",
+              "  pm.expect(p).to.have.property('medusa_variant_id');",
+              "  pm.expect(p.is_cart_addable).to.eql(false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13a Storefront default product detail includes bridge fields",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products/{{default_product_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('detail returns store-core product fields', () => {",
+              "  pm.expect(json.product.product_id).to.eql(pm.collectionVariables.get('default_product_id'));",
+              "  pm.expect(json.product.store_id).to.eql(pm.environment.get('default_store_id'));",
+              "  pm.expect(json.product).to.have.property('medusa_product_id');",
+              "  pm.expect(json.product).to.have.property('medusa_variant_id');",
+              "  pm.expect(json.product.is_cart_addable).to.eql(false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Storefront test product isolation",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "const store = pm.environment.get('test_store_id');",
+              "const own = pm.collectionVariables.get('test_product_id');",
+              "const other = pm.collectionVariables.get('default_product_id');",
+              "pm.test('store_id matches test store', () => pm.expect(json.store_id).to.eql(store));",
+              "pm.test('includes test smoke product', () => pm.expect(json.products.some((p) => p.product_id === own && p.store_id === store)).to.eql(true));",
+              "pm.test('all products belong to test store', () => pm.expect(json.products.every((p) => p.store_id === store)).to.eql(true));",
+              "pm.test('does not include default smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));",
+              "pm.test('test product exposes bridge fields and is not cart-addable', () => {",
+              "  const p = json.products.find((p) => p.product_id === own);",
+              "  pm.expect(p).to.be.an('object');",
+              "  pm.expect(p).to.have.property('medusa_product_id');",
+              "  pm.expect(p).to.have.property('medusa_variant_id');",
+              "  pm.expect(p.is_cart_addable).to.eql(false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14a Storefront test product detail includes bridge fields",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products/{{test_product_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('detail returns store-core product fields', () => {",
+              "  pm.expect(json.product.product_id).to.eql(pm.collectionVariables.get('test_product_id'));",
+              "  pm.expect(json.product.store_id).to.eql(pm.environment.get('test_store_id'));",
+              "  pm.expect(json.product).to.have.property('medusa_product_id');",
+              "  pm.expect(json.product).to.have.property('medusa_variant_id');",
+              "  pm.expect(json.product.is_cart_addable).to.eql(false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Cross-store publish is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": "{{base_url}}/admin/products/{{default_product_id}}/publish"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 403', () => pm.response.to.have.status(403));",
+              "const json = pm.response.json();",
+              "pm.test('error is PRODUCT_STORE_MISMATCH', () => pm.expect(json.error.code).to.eql('PRODUCT_STORE_MISMATCH'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Cross-store category_ids are rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Smoke Bad Category Product {{smoke_run_id}}\",\n  \"description\": \"Should fail due to cross-store category id\",\n  \"price\": 33.33,\n  \"source\": \"manual\",\n  \"category_ids\": [\"{{test_category_id}}\"],\n  \"tags\": [\"dev3-smoke\"],\n  \"variants\": [],\n  \"metadata\": {\"smoke\": true, \"expected_failure\": true}\n}"
+        },
+        "url": "{{base_url}}/admin/products/draft"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 400', () => pm.response.to.have.status(400));",
+              "const json = pm.response.json();",
+              "pm.test('error is VALIDATION_ERROR', () => pm.expect(json.error.code).to.eql('VALIDATION_ERROR'));",
+              "pm.test('message mentions category ownership', () => pm.expect(json.error.message.toLowerCase()).to.match(/category_ids.*current store|belong/));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 Cross-store product detail is blocked",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products/{{default_product_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 404', () => pm.response.to.have.status(404));",
+              "const json = pm.response.json();",
+              "pm.test('error is not found', () => pm.expect((json.error && json.error.code) || json.type).to.match(/PRODUCT_NOT_FOUND|not_found/));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18a Create default bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/draft",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Smoke Default Bridge Product {{smoke_run_id}}\",\n  \"description\": \"Bridge product for default store\",\n  \"price\": 44.44,\n  \"source\": \"manual\",\n  \"category_ids\": [\n    \"{{default_category_id}}\"\n  ],\n  \"tags\": [\n    \"dev3-smoke\",\n    \"bridge\"\n  ],\n  \"variants\": [],\n  \"medusa_product_id\": \"{{default_medusa_product_id}}\",\n  \"medusa_variant_id\": \"{{default_medusa_variant_id}}\",\n  \"metadata\": {\n    \"smoke\": true,\n    \"bridge\": true\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const json = pm.response.json();",
+              "  pm.collectionVariables.set('default_bridge_product_id', json.product_id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18b Create test bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/draft",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Smoke Test Bridge Product {{smoke_run_id}}\",\n  \"description\": \"Bridge product for test store\",\n  \"price\": 55.55,\n  \"source\": \"manual\",\n  \"category_ids\": [\n    \"{{test_category_id}}\"\n  ],\n  \"tags\": [\n    \"dev3-smoke\",\n    \"bridge\"\n  ],\n  \"variants\": [],\n  \"medusa_product_id\": \"{{test_medusa_product_id}}\",\n  \"medusa_variant_id\": \"{{test_medusa_variant_id}}\",\n  \"metadata\": {\n    \"smoke\": true,\n    \"bridge\": true\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const json = pm.response.json();",
+              "  pm.collectionVariables.set('test_bridge_product_id', json.product_id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18c Publish default bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/{{default_bridge_product_id}}/publish",
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('default bridge is cart-addable', () => { pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('default_medusa_variant_id')); pm.expect(json.product.is_cart_addable).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18d Publish test bridge product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/admin/products/{{test_bridge_product_id}}/publish",
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('test bridge is cart-addable', () => { pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('test_medusa_variant_id')); pm.expect(json.product.is_cart_addable).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18e Default bridge detail is cart-addable",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          }
+        ],
+        "url": "{{base_url}}/store/products/{{default_bridge_product_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('detail exposes medusa variant', () => { pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('default_medusa_variant_id')); pm.expect(json.product.is_cart_addable).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18f Create default cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"region_id\": \"{{default_region_id}}\",\n  \"currency_code\": \"eur\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json(); pm.collectionVariables.set('default_cart_id', json.cart_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18g Create test cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"region_id\": \"{{default_region_id}}\",\n  \"currency_code\": \"eur\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json(); pm.collectionVariables.set('test_cart_id', json.cart_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18h Add default variant to default cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts/{{default_cart_id}}/line-items",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variant_id\": \"{{default_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18i Add test variant to test cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{test_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts/{{test_cart_id}}/line-items",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variant_id\": \"{{test_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18j Cross-store variant add is rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-publishable-api-key",
+            "value": "{{publishable_api_key}}"
+          },
+          {
+            "key": "X-Store-Id",
+            "value": "{{default_store_id}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/store/carts/{{default_cart_id}}/line-items",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variant_id\": \"{{test_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 400', () => pm.response.to.have.status(400));",
+              "const json = pm.response.json();",
+              "pm.test('returns CART_STORE_MISMATCH', () => { pm.expect(json.error.code).to.eql('CART_STORE_MISMATCH'); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

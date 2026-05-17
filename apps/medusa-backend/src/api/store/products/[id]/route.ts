@@ -7,7 +7,7 @@ import {
 } from "../../../_helpers/store-core"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
-  const { product_id: productId } = req.params
+  const productId = (req.params.id ?? req.params.product_id) as string
   const { store_id: storeId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
 
@@ -27,4 +27,3 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     product: normalizeProduct(product)
   })
 }
-
