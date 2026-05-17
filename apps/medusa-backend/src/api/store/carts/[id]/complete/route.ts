@@ -1,5 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { completeCartWorkflow } from "@medusajs/medusa/core-flows"
 import { assertCartBelongsToCurrentStore, readCartStoreId } from "../../../../../lib/assert-cart-store"
 import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
@@ -7,6 +7,7 @@ import {
   ensureCartPaymentReady,
   type CartWithPaymentCollection,
 } from "../../../../../lib/ensure-cart-payment-ready"
+import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import {
   markOrderPaidAndFulfillmentWaiting,
   providerDefersPaidUntilCapture,
@@ -25,7 +26,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const cartModule = req.scope.resolve(Modules.CART)
     const cart = (await cartModule.retrieveCart(cartId, {
-      relations: ["items", "payment_collection", "payment_collection.payment_sessions"],
+      relations: ["items"],
     })) as CartWithPaymentCollection
 
     assertCartBelongsToCurrentStore(req, cart)
@@ -43,10 +44,13 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const orderId = result.id as string
 
-    const cartAfter = (await cartModule.retrieveCart(cartId, {
-      relations: ["payment_collection"],
-    })) as CartWithPaymentCollection
-    const paymentCollectionId = cartAfter.payment_collection?.id ?? null
+    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: cartPaymentRows } = (await query.graph({
+      entity: "cart",
+      fields: ["payment_collection.id"],
+      filters: { id: cartId },
+    })) as { data: Array<{ payment_collection?: { id?: string } | null }> }
+    const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
     await setOrderPostCompletePendingMetadata(req.scope, orderId)
     await seedFulfillmentOrderIfMissing(req.scope, {
@@ -78,8 +82,13 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         error: { code: error.code, message: error.message },
       })
     }
-    const message = error instanceof Error ? error.message : "Unknown error"
+    const message = readWorkflowErrorMessage(error)
     console.error("完成购物车失败:", error)
-    res.status(400).json({ error: message })
+    res.status(400).json({
+      error: {
+        code: "CART_COMPLETE_ERROR",
+        message,
+      },
+    })
   }
 }

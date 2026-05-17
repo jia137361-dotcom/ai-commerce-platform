@@ -8,6 +8,7 @@ import {
 import { Modules } from "@medusajs/framework/utils"
 import { addToCartWorkflow } from "@medusajs/medusa/core-flows"
 import { CartStoreMismatchError } from "../lib/cart-store-error"
+import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 
@@ -80,6 +81,16 @@ const addLineItemStep = createStep(
     if (readProductStatus(linkedProduct) !== "published") {
       throw new Error("Product must be published")
     }
+
+    const linkedPrice =
+      typeof linkedProduct.price === "number" && linkedProduct.price > 0
+        ? linkedProduct.price
+        : 19.99
+    await ensureVariantHasPriceSet(container, {
+      variantId: input.variant_id,
+      amount: Math.round(linkedPrice * 100),
+      currencyCode: cart.currency_code || "usd",
+    })
 
     await addToCartWorkflow(container).run({
       input: {

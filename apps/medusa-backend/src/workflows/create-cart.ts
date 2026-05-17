@@ -6,6 +6,7 @@ import {
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
 import { Modules } from "@medusajs/framework/utils"
+import { resolveDefaultRegionId } from "../lib/resolve-default-region"
 
 export type CreateCartWorkflowInput = {
   store_id: string
@@ -18,10 +19,13 @@ const createCartStep = createStep(
   "create-cart-step",
   async (input: CreateCartWorkflowInput, { container }: { container: MedusaContainer }) => {
     const cartModule = container.resolve(Modules.CART)
+    const currencyCode = input.currency_code || "usd"
+    const regionId =
+      input.region_id ?? (await resolveDefaultRegionId(container, currencyCode))
 
     const cart = await cartModule.createCarts({
-      currency_code: input.currency_code || "usd",
-      region_id: input.region_id,
+      currency_code: currencyCode,
+      region_id: regionId,
       email: input.customer_email,
       metadata: {
         store_id: input.store_id,

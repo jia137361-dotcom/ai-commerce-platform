@@ -3,6 +3,7 @@ import { Modules } from "@medusajs/framework/utils"
 import { assertCartBelongsToCurrentStore, readCartStoreId } from "../../../../../lib/assert-cart-store"
 import addLineItemWorkflow from "../../../../../workflows/add-line-item"
 import { CartStoreAccessError, CartStoreMismatchError } from "../../../../../lib/cart-store-error"
+import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import { getStoreCoreService } from "../../../../_helpers/store-core"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
@@ -86,8 +87,13 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         error: { code: error.code, message: error.message },
       })
     }
-    const message = error instanceof Error ? error.message : "Unknown error"
+    const message = readWorkflowErrorMessage(error)
     console.error("加入购物车商品失败:", error)
-    res.status(400).json({ error: message })
+    res.status(400).json({
+      error: {
+        code: "CART_LINE_ITEM_ERROR",
+        message,
+      },
+    })
   }
 }

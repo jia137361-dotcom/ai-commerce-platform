@@ -1,6 +1,6 @@
 import type { CartDTO } from "@medusajs/types"
 import type { MedusaContainer } from "@medusajs/framework/types"
-import { Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import {
   createPaymentCollectionForCartWorkflow,
   createPaymentSessionsWorkflow,
@@ -13,18 +13,40 @@ const PROCESSABLE_STATUSES = new Set([
   "captured",
 ])
 
-export type CartWithPaymentCollection = CartDTO & {
-  payment_collection?: {
-    id?: string
-    payment_sessions?: Array<{ status?: string; provider_id?: string }>
-  } | null
+type PaymentSessionRow = { status?: string; provider_id?: string }
+
+async function readCartPaymentCollectionId(
+  container: MedusaContainer,
+  cartId: string
+): Promise<string | null> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = (await query.graph({
+    entity: "cart",
+    fields: ["id", "payment_collection.id"],
+    filters: { id: cartId },
+  })) as { data: Array<{ payment_collection?: { id?: string } | null }> }
+
+  return data[0]?.payment_collection?.id ?? null
+}
+
+async function listPaymentSessions(
+  container: MedusaContainer,
+  paymentCollectionId: string
+): Promise<PaymentSessionRow[]> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = (await query.graph({
+    entity: "payment_session",
+    fields: ["id", "status", "provider_id"],
+    filters: { payment_collection_id: paymentCollectionId },
+  })) as { data: PaymentSessionRow[] }
+
+  return data
 }
 
 function hasProcessableSessionForProvider(
-  cart: CartWithPaymentCollection,
+  sessions: PaymentSessionRow[],
   providerId: string
 ): boolean {
-  const sessions = cart.payment_collection?.payment_sessions ?? []
   return sessions.some(
     (s) =>
       typeof s.status === "string" &&
@@ -43,27 +65,35 @@ export async function ensureCartPaymentReady(
 ): Promise<void> {
   const cartModule = container.resolve(Modules.CART)
 
-  let cart = (await cartModule.retrieveCart(cartId, {
-    relations: ["payment_collection", "payment_collection.payment_sessions"],
-  })) as CartWithPaymentCollection
+  let paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
 
-  if (!cart.payment_collection?.id) {
+  if (!paymentCollectionId) {
     await createPaymentCollectionForCartWorkflow(container).run({
       input: { cart_id: cartId },
     })
-    cart = (await cartModule.retrieveCart(cartId, {
-      relations: ["payment_collection", "payment_collection.payment_sessions"],
-    })) as CartWithPaymentCollection
+    paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
   }
 
-  if (!hasProcessableSessionForProvider(cart, providerId)) {
-    await createPaymentSessionsWorkflow(container).run({
-      input: {
-        payment_collection_id: cart.payment_collection!.id!,
-        provider_id: providerId,
-        customer_id: cart.customer_id ?? undefined,
-        context: {},
-      },
-    })
+  if (!paymentCollectionId) {
+    throw new Error("Failed to create payment collection for cart")
   }
+
+  const sessions = await listPaymentSessions(container, paymentCollectionId)
+  if (hasProcessableSessionForProvider(sessions, providerId)) {
+    return
+  }
+
+  const cart = await cartModule.retrieveCart(cartId)
+  await createPaymentSessionsWorkflow(container).run({
+    input: {
+      payment_collection_id: paymentCollectionId,
+      provider_id: providerId,
+      customer_id: cart.customer_id ?? undefined,
+      context: {},
+    },
+  })
+}
+
+export type CartWithPaymentCollection = CartDTO & {
+  payment_collection?: { id?: string } | null
 }
