@@ -1,5 +1,5 @@
-import type { ExecArgs } from "@medusajs/framework/types"
-import { Modules } from "@medusajs/framework/utils"
+import type { ExecArgs, MedusaContainer } from "@medusajs/framework/types"
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { createProductsWorkflow } from "@medusajs/medusa/core-flows"
 import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
 import { resolveDefaultRegionId } from "../lib/resolve-default-region"
@@ -11,10 +11,26 @@ const TEST_STORE_ID = "test_store"
 const VARIANT_PRICE_AMOUNT = 1999
 const VARIANT_PRICE_CURRENCY = "usd"
 
-export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
-  const productModule = container.resolve(Modules.PRODUCT) as {
-    listProducts: (f?: object) => Promise<Array<{ id: string; variants?: Array<{ id: string }> }>>
+async function findNativeProductAndVariantByHandle(
+  container: MedusaContainer,
+  handle: string
+): Promise<{ productId: string; variantId: string } | null> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = (await query.graph({
+    entity: "product",
+    fields: ["id", "variants.id"],
+    filters: { handle },
+  })) as { data: Array<{ id: string; variants?: Array<{ id?: string }> }> }
+
+  const row = data[0]
+  const variantId = row?.variants?.[0]?.id
+  if (row?.id && variantId) {
+    return { productId: row.id, variantId }
   }
+  return null
+}
+
+export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
   const storeCore = container.resolve<StoreCoreModuleService>(STORE_CORE_MODULE)
   const regionId = await resolveDefaultRegionId(container, VARIANT_PRICE_CURRENCY)
 
@@ -23,16 +39,14 @@ export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
     title: string,
     storeId: string
   ): Promise<{ productId: string; variantId: string }> {
-    const existing = await productModule.listProducts({ handle: [handle] } as object)
-    if (existing[0]?.variants?.[0]?.id) {
-      const productId = existing[0].id
-      const variantId = existing[0].variants[0].id
+    const existing = await findNativeProductAndVariantByHandle(container, handle)
+    if (existing) {
       await ensureVariantHasPriceSet(container, {
-        variantId,
+        variantId: existing.variantId,
         amount: VARIANT_PRICE_AMOUNT,
         currencyCode: VARIANT_PRICE_CURRENCY,
       })
-      return { productId, variantId }
+      return existing
     }
 
     const { result } = await createProductsWorkflow(container).run({

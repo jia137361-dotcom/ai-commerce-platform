@@ -3,8 +3,10 @@ import { Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../lib/store-context"
 import { readOrderStoreId } from "../../../lib/order-store-context"
 import {
-  ORDER_META_FULFILLMENT_STATUS,
   ORDER_META_PAYMENT_STATUS,
+  readOrderFulfillmentStatusMeta,
+  toMedusaAdminOrderFulfillmentStatus,
+  toMedusaAdminOrderPaymentStatus,
 } from "../../../lib/order-custom-metadata"
 import { FULFILLMENT_ORDERS_MODULE } from "../../../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../../../modules/fulfillment-orders/service"
@@ -43,15 +45,22 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
               })[0]
             : null
 
+        const mcFulfillment = readOrderFulfillmentStatusMeta(
+          o.metadata as Record<string, unknown> | null
+        )
+        const meta = o.metadata as Record<string, unknown> | null
+        const mcPayment = meta?.[ORDER_META_PAYMENT_STATUS] ?? null
+
         return {
           id: o.id,
           display_id: o.display_id,
           email: o.email,
           created_at: o.created_at,
           currency_code: o.currency_code,
-          payment_status: (o.metadata as Record<string, unknown> | null)?.[ORDER_META_PAYMENT_STATUS] ?? null,
-          fulfillment_status:
-            (o.metadata as Record<string, unknown> | null)?.[ORDER_META_FULFILLMENT_STATUS] ?? null,
+          payment_status: toMedusaAdminOrderPaymentStatus(mcPayment),
+          mc_payment_status: mcPayment ?? null,
+          fulfillment_status: toMedusaAdminOrderFulfillmentStatus(mcFulfillment),
+          mc_fulfillment_status: mcFulfillment ?? null,
           fulfillment_order: fo,
           latest_shipment: latestShipment,
         }

@@ -7,6 +7,7 @@ import { OrderStoreAccessError } from "../../../../../lib/order-store-error"
 import {
   ORDER_META_FULFILLMENT_STATUS,
   ORDER_META_PAYMENT_STATUS,
+  normalizeOrderMetadata,
 } from "../../../../../lib/order-custom-metadata"
 import { FULFILLMENT_ORDERS_MODULE } from "../../../../../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../../../../../modules/fulfillment-orders/service"
@@ -47,7 +48,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         failed_reason: null,
       })
       const meta = {
-        ...(order.metadata ?? {}),
+        ...normalizeOrderMetadata(order.metadata as Record<string, unknown> | null),
         [ORDER_META_FULFILLMENT_STATUS]: "pushed",
       }
       await orderModule.updateOrders(orderId, { metadata: meta })
@@ -67,7 +68,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     })
 
     const meta = {
-      ...(order.metadata ?? {}),
+      ...normalizeOrderMetadata(order.metadata as Record<string, unknown> | null),
       [ORDER_META_FULFILLMENT_STATUS]: "pushed",
     }
     await orderModule.updateOrders(orderId, { metadata: meta })

@@ -3,8 +3,8 @@ import { Modules } from "@medusajs/framework/utils"
 import { assertOrderBelongsToCurrentStore, readOrderStoreId } from "../../../../../lib/order-store-context"
 import { OrderStoreAccessError } from "../../../../../lib/order-store-error"
 import {
-  ORDER_META_FULFILLMENT_STATUS,
   ORDER_META_PAYMENT_STATUS,
+  readOrderFulfillmentStatusMeta,
 } from "../../../../../lib/order-custom-metadata"
 import { FULFILLMENT_ORDERS_MODULE } from "../../../../../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../../../../../modules/fulfillment-orders/service"
@@ -42,8 +42,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       order_id: order.id,
       store_id: readOrderStoreId(order),
       payment_status: (order.metadata as Record<string, unknown> | null)?.[ORDER_META_PAYMENT_STATUS] ?? null,
-      fulfillment_status:
-        (order.metadata as Record<string, unknown> | null)?.[ORDER_META_FULFILLMENT_STATUS] ?? null,
+      fulfillment_status: readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null),
       fulfillment_order: fo,
       shipments,
     })

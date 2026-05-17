@@ -5,6 +5,7 @@ import type FulfillmentOrdersModuleService from "../modules/fulfillment-orders/s
 import {
   ORDER_META_FULFILLMENT_STATUS,
   ORDER_META_PAYMENT_STATUS,
+  normalizeOrderMetadata,
   type OrderFulfillmentStatus,
   type OrderPaymentStatus,
 } from "./order-custom-metadata"
@@ -36,7 +37,7 @@ export async function markOrderPaidAndFulfillmentWaiting(
   const foService = container.resolve(FULFILLMENT_ORDERS_MODULE) as FulfillmentOrdersModuleService
 
   const order = await orderModule.retrieveOrder(orderId)
-  const meta = mergeMeta(order.metadata as Record<string, unknown> | null, {})
+  const meta = normalizeOrderMetadata(order.metadata as Record<string, unknown> | null)
 
   if (meta[ORDER_META_PAYMENT_STATUS] === "paid") {
     return
@@ -94,7 +95,7 @@ export async function setOrderPostCompletePendingMetadata(
 ): Promise<void> {
   const orderModule = container.resolve(Modules.ORDER)
   const order = await orderModule.retrieveOrder(orderId)
-  const meta = mergeMeta(order.metadata as Record<string, unknown> | null, {
+  const meta = mergeMeta(normalizeOrderMetadata(order.metadata as Record<string, unknown> | null), {
     [ORDER_META_PAYMENT_STATUS]: "pending" satisfies OrderPaymentStatus,
     [ORDER_META_FULFILLMENT_STATUS]: "none" satisfies OrderFulfillmentStatus,
   })

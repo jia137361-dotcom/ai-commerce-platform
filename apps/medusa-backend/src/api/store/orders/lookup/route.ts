@@ -4,8 +4,8 @@ import { resolveCurrentStore } from "../../../../lib/store-context"
 import { assertOrderBelongsToCurrentStore, readOrderStoreId } from "../../../../lib/order-store-context"
 import { OrderStoreAccessError } from "../../../../lib/order-store-error"
 import {
-  ORDER_META_FULFILLMENT_STATUS,
   ORDER_META_PAYMENT_STATUS,
+  readOrderFulfillmentStatusMeta,
 } from "../../../../lib/order-custom-metadata"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
@@ -43,8 +43,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       email: match.email,
       store_id: readOrderStoreId(match),
       payment_status: (match.metadata as Record<string, unknown> | null)?.[ORDER_META_PAYMENT_STATUS] ?? null,
-      fulfillment_status:
-        (match.metadata as Record<string, unknown> | null)?.[ORDER_META_FULFILLMENT_STATUS] ?? null,
+      fulfillment_status: readOrderFulfillmentStatusMeta(match.metadata as Record<string, unknown> | null),
       created_at: match.created_at,
     })
   } catch (error: unknown) {

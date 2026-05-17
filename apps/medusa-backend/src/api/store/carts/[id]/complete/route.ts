@@ -15,6 +15,7 @@ import {
   setOrderPostCompletePendingMetadata,
   syncPaidIfPaymentAlreadyCaptured,
 } from "../../../../../lib/sync-order-paid-fulfillment"
+import { readOrderFulfillmentStatusMeta } from "../../../../../lib/order-custom-metadata"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 
@@ -73,7 +74,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       store_id: storeId,
       payment_provider_id: providerId,
       payment_status: (order.metadata as Record<string, unknown> | null)?.payment_status ?? null,
-      fulfillment_status: (order.metadata as Record<string, unknown> | null)?.fulfillment_status ?? null,
+      fulfillment_status: readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null),
       order,
     })
   } catch (error: unknown) {

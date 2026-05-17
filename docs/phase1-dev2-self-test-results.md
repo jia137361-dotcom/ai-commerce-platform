@@ -1,6 +1,6 @@
 # Phase 1 Dev2 自测结果
 
-- 时间: 2026-05-17T01:07:28Z
+- 时间: 2026-05-17T15:10:07Z
 - BASE_URL: http://localhost:9000
 
 
@@ -12,7 +12,7 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
 ```json
 {
   "store_id": "default_store",
-  "count": 2,
+  "count": 1,
   "products": [
     {
       "product_id": "prod_phase1_default",
@@ -43,31 +43,6 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
       },
       "created_at": "2026-05-16T18:11:43.786Z",
       "updated_at": "2026-05-16T18:11:43.786Z"
-    },
-    {
-      "product_id": "prod_mc_phase1_def",
-      "store_id": "default_store",
-      "title": "Phase1 Default MC",
-      "description": null,
-      "status": "published",
-      "source": "manual",
-      "ai_job_id": null,
-      "prompt": null,
-      "platform_product_id": null,
-      "supplier_product_id": null,
-      "medusa_product_id": "prod_phase1_def",
-      "medusa_variant_id": "variant_phase1_def",
-      "is_cart_addable": true,
-      "design_image_url": null,
-      "image_url": null,
-      "tags": [],
-      "price": 19.99,
-      "cost": 8.5,
-      "variants": [],
-      "category_ids": [],
-      "metadata": {},
-      "created_at": "2026-05-16T17:55:41.089Z",
-      "updated_at": "2026-05-16T17:55:41.089Z"
     }
   ]
 }
@@ -79,9 +54,9 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
 
 ```json
 {
-  "cart_id": "cart_01KRSQJK72ZWSZDGNMYF9MQ8NS",
+  "cart_id": "cart_01KRV7SHRTSY826N03Z3FY1J7N",
   "store_id": "default_store",
-  "id": "cart_01KRSQJK72ZWSZDGNMYF9MQ8NS",
+  "id": "cart_01KRV7SHRTSY826N03Z3FY1J7N",
   "region_id": "reg_phase1_us",
   "customer_id": null,
   "sales_channel_id": null,
@@ -94,8 +69,8 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
   "completed_at": null,
   "shipping_address": null,
   "billing_address": null,
-  "created_at": "2026-05-17T01:07:28.099Z",
-  "updated_at": "2026-05-17T01:07:28.099Z",
+  "created_at": "2026-05-17T15:10:07.643Z",
+  "updated_at": "2026-05-17T15:10:07.643Z",
   "deleted_at": null,
   "items": [],
   "credit_lines": [],
@@ -104,17 +79,17 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
   "billing_address_id": null
 }
 ```
-- cart_id (default): `cart_01KRSQJK72ZWSZDGNMYF9MQ8NS`
+- cart_id (default): `cart_01KRV7SHRTSY826N03Z3FY1J7N`
 
 ## 步骤 3：加购与跨店隔离
 
 ### 3.1 同店加购 — HTTP 200
 ```json
 {
-  "cart_id": "cart_01KRSQJK72ZWSZDGNMYF9MQ8NS",
+  "cart_id": "cart_01KRV7SHRTSY826N03Z3FY1J7N",
   "store_id": "default_store",
   "line_item": {
-    "id": "cali_01KRSQJK95R2350HXQ9PTK7MSP",
+    "id": "cali_01KRV7SHWPEDDR7SCW4B23E2PN",
     "title": "Phase1 Default Bridge Product",
     "subtitle": "Default",
     "thumbnail": null,
@@ -138,14 +113,14 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
     "is_tax_inclusive": false,
     "is_custom_price": false,
     "metadata": {},
-    "cart_id": "cart_01KRSQJK72ZWSZDGNMYF9MQ8NS",
+    "cart_id": "cart_01KRV7SHRTSY826N03Z3FY1J7N",
     "raw_compare_at_unit_price": null,
     "raw_unit_price": {
       "value": "1999",
       "precision": 20
     },
-    "created_at": "2026-05-17T01:07:28.165Z",
-    "updated_at": "2026-05-17T01:07:28.165Z",
+    "created_at": "2026-05-17T15:10:07.766Z",
+    "updated_at": "2026-05-17T15:10:07.766Z",
     "deleted_at": null,
     "compare_at_unit_price": null,
     "unit_price": 1999
@@ -167,14 +142,14 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
 ### complete — HTTP 200
 ```json
 {
-  "order_id": "order_01KRSQJKDTM9NHR0HWHPXGAX3W",
+  "order_id": "order_01KRV7SJ4YADN437KCN1DCMAN5",
   "store_id": "default_store",
   "payment_provider_id": "pp_system_default",
   "payment_status": "paid",
   "fulfillment_status": "waiting",
   "order": {
-    "id": "order_01KRSQJKDTM9NHR0HWHPXGAX3W",
-    "display_id": 2,
+    "id": "order_01KRV7SJ4YADN437KCN1DCMAN5",
+    "display_id": 3,
     "custom_display_id": null,
     "region_id": "reg_phase1_us",
     "customer_id": null,
@@ -189,22 +164,72 @@ curl -s "http://localhost:9000/store/products" -H x-publishable-api-key: pk_57ab
     "metadata": {
       "store_id": "default_store",
       "payment_status": "paid",
-      "fulfillment_status": "waiting",
-      "payment_confirmed_at": "2026-05-17T01:07:28.377Z",
+      "payment_confirmed_at": "2026-05-17T15:10:08.140Z",
+      "mc_fulfillment_status": "waiting",
       "payment_confirmed_source": "non_stripe_provider_after_complete"
     },
     "canceled_at": null,
     "shipping_address": null,
     "billing_address": null,
-    "created_at": "2026-05-17T01:07:28.314Z",
-    "updated_at": "2026-05-17T01:07:28.378Z",
+    "created_at": "2026-05-17T15:10:08.032Z",
+    "updated_at": "2026-05-17T15:10:08.141Z",
     "deleted_at": null
   }
 }
 ```
-- order_id: `order_01KRSQJKDTM9NHR0HWHPXGAX3W`
+- order_id: `order_01KRV7SJ4YADN437KCN1DCMAN5`
 - payment_status: `paid`
 - fulfillment_status: `waiting`
+
+## 步骤 6：Admin 推履约 / mock 物流
+
+### push-fulfillment — HTTP 200
+```json
+{
+  "order_id": "order_01KRV7SJ4YADN437KCN1DCMAN5",
+  "store_id": "default_store",
+  "fulfillment_order": {
+    "id": "01KRV7SJ88J4NKG7EPR1HHZE15",
+    "order_id": "order_01KRV7SJ4YADN437KCN1DCMAN5",
+    "store_id": "default_store",
+    "payment_collection_id": "pay_col_01KRV7SJ2HDC1AG7WWMZ7MNZQT",
+    "supplier": "mock",
+    "supplier_order_id": "MOCK-SUP-b59eecfa",
+    "payload": {
+      "note": "mock_push"
+    },
+    "pushed_at": "2026-05-17T15:10:08.216Z",
+    "failed_reason": null,
+    "status": "pushed",
+    "created_at": "2026-05-17T15:10:08.136Z",
+    "updated_at": "2026-05-17T15:10:08.218Z",
+    "deleted_at": null
+  }
+}
+```
+### mock-shipment — HTTP 200
+```json
+{
+  "order_id": "order_01KRV7SJ4YADN437KCN1DCMAN5",
+  "store_id": "default_store",
+  "fulfillment_order_id": "01KRV7SJ88J4NKG7EPR1HHZE15",
+  "shipment": {
+    "id": "01KRV7SJC4GJRJXA7W5CT206FR",
+    "store_id": "default_store",
+    "order_id": "order_01KRV7SJ4YADN437KCN1DCMAN5",
+    "fulfillment_order_id": "01KRV7SJ88J4NKG7EPR1HHZE15",
+    "carrier": "mock",
+    "tracking_number": "MOCK-001",
+    "tracking_url": "https://example.com/track/MOCK-001",
+    "shipped_at": "2026-05-17T15:10:08.259Z",
+    "delivered_at": null,
+    "status": "shipped",
+    "created_at": "2026-05-17T15:10:08.260Z",
+    "updated_at": "2026-05-17T15:10:08.260Z",
+    "deleted_at": null
+  }
+}
+```
 
 ## 步骤 7：test_store 交叉隔离
 

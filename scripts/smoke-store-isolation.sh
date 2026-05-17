@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# 与 phase1-dev2-self-test.sh 一致：自动加载仓库根 .env；父进程已 export 的变量优先
+_INHERIT_PUBLISHABLE="${PUBLISHABLE_API_KEY-}"
+_INHERIT_ADMIN="${ADMIN_TOKEN-}"
+if [[ -f "$REPO_ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/.env"
+  set +a
+fi
+[[ -n "${_INHERIT_PUBLISHABLE}" ]] && PUBLISHABLE_API_KEY="$_INHERIT_PUBLISHABLE"
+[[ -n "${_INHERIT_ADMIN}" ]] && ADMIN_TOKEN="$_INHERIT_ADMIN"
+
 BASE_URL="${BASE_URL:-http://localhost:9000}"
 DEFAULT_STORE_ID="${DEFAULT_STORE_ID:-default_store}"
 TEST_STORE_ID="${TEST_STORE_ID:-test_store}"
@@ -28,30 +42,25 @@ need_command() {
 }
 
 if [[ -z "$PUBLISHABLE_API_KEY" ]]; then
-  cat >&2 <<'EOF'
+  cat >&2 <<EOF
 ERROR: PUBLISHABLE_API_KEY is required.
 
-Create or copy a local Medusa publishable API key from Admin, then run:
+Put it in repo root .env (see .env.example), or run:
   export PUBLISHABLE_API_KEY="<publishable_api_key>"
+
+Searched .env at: $REPO_ROOT/.env
 EOF
   exit 1
 fi
 
 if [[ -z "$ADMIN_TOKEN" ]]; then
-  cat >&2 <<'EOF'
+  cat >&2 <<EOF
 ERROR: ADMIN_TOKEN is required.
 
-Create an admin user if needed:
-  cd apps/medusa-backend
-  npx medusa user -e admin@example.com -p supersecret
+Put it in repo root .env, or obtain a token and export ADMIN_TOKEN.
+See scripts/smoke-store-isolation.sh header comments.
 
-Then obtain a token:
-  curl -sS -X POST "$BASE_URL/auth/user/emailpass" \
-    -H "Content-Type: application/json" \
-    --data '{"email":"admin@example.com","password":"supersecret"}'
-
-Export the returned token:
-  export ADMIN_TOKEN="<token>"
+Searched .env at: $REPO_ROOT/.env
 EOF
   exit 1
 fi

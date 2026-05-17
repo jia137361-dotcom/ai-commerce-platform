@@ -2,7 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { randomBytes } from "node:crypto"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
-import { ORDER_META_FULFILLMENT_STATUS } from "../../../../../lib/order-custom-metadata"
+import { ORDER_META_FULFILLMENT_STATUS, normalizeOrderMetadata } from "../../../../../lib/order-custom-metadata"
 import { FULFILLMENT_ORDERS_MODULE } from "../../../../../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../../../../../modules/fulfillment-orders/service"
 import { SHIPMENTS_MODULE } from "../../../../../modules/shipments"
@@ -50,7 +50,10 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     })
 
     const order = await orderModule.retrieveOrder(fo.order_id)
-    const meta = { ...(order.metadata ?? {}), [ORDER_META_FULFILLMENT_STATUS]: "shipped" }
+    const meta = {
+      ...normalizeOrderMetadata(order.metadata as Record<string, unknown> | null),
+      [ORDER_META_FULFILLMENT_STATUS]: "shipped",
+    }
     await orderModule.updateOrders(fo.order_id, { metadata: meta })
 
     res.status(200).json({

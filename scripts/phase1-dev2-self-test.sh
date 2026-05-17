@@ -2,6 +2,20 @@
 # Phase 1 Dev2 full transaction loop + store isolation (curl smoke).
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# 父进程已 export 的变量优先于 .env（与常见 dotenv 行为一致）
+_INHERIT_PUBLISHABLE="${PUBLISHABLE_API_KEY-}"
+_INHERIT_ADMIN="${ADMIN_TOKEN-}"
+if [[ -f "$REPO_ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/.env"
+  set +a
+fi
+[[ -n "${_INHERIT_PUBLISHABLE}" ]] && PUBLISHABLE_API_KEY="$_INHERIT_PUBLISHABLE"
+[[ -n "${_INHERIT_ADMIN}" ]] && ADMIN_TOKEN="$_INHERIT_ADMIN"
+
 BASE_URL="${BASE_URL:-http://localhost:9000}"
 PUBLISHABLE_API_KEY="${PUBLISHABLE_API_KEY:-}"
 ADMIN_TOKEN="${ADMIN_TOKEN:-}"
@@ -12,6 +26,10 @@ RESULTS_FILE="${RESULTS_FILE:-docs/phase1-dev2-self-test-results.md}"
 if [[ -z "$PUBLISHABLE_API_KEY" ]]; then
   echo "Set PUBLISHABLE_API_KEY (from api_key table or Admin)." >&2
   exit 1
+fi
+
+if [[ -z "$ADMIN_TOKEN" ]]; then
+  echo "提示：未设置 ADMIN_TOKEN 时将跳过步骤 6（push-fulfillment / mock-shipment）；获取方式见 docs/phase1-dev2-self-test.md。" >&2
 fi
 
 STORE_HDR=(-H "x-publishable-api-key: $PUBLISHABLE_API_KEY")
@@ -95,23 +113,34 @@ log '```json'
 echo "$ADD_BAD_BODY" | jq . 2>/dev/null | tee -a "$RESULTS_FILE" || echo "$ADD_BAD_BODY" | tee -a "$RESULTS_FILE"
 log '```'
 
+ORDER_ID=""
+PAY_STATUS=""
+FULFILL_STATUS=""
+COMPLETE_CODE=""
+COMPLETE_BODY="{}"
+
 section "步骤 4–5：complete 下单"
-COMPLETE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/store/carts/$CART_DEFAULT/complete" \
-  -H "Content-Type: application/json" \
-  "${DEFAULT_HDR[@]}" \
-  -d '{"payment_provider_id":"pp_system_default"}')
-COMPLETE_BODY=$(echo "$COMPLETE" | sed '$d')
-COMPLETE_CODE=$(echo "$COMPLETE" | tail -1)
-log "### complete — HTTP ${COMPLETE_CODE}"
-log '```json'
-echo "$COMPLETE_BODY" | jq . | tee -a "$RESULTS_FILE"
-log '```'
-ORDER_ID=$(echo "$COMPLETE_BODY" | jq -r '.order_id // empty')
-PAY_STATUS=$(echo "$COMPLETE_BODY" | jq -r '.payment_status // empty')
-FULFILL_STATUS=$(echo "$COMPLETE_BODY" | jq -r '.fulfillment_status // empty')
-log "- order_id: \`$ORDER_ID\`"
-log "- payment_status: \`$PAY_STATUS\`"
-log "- fulfillment_status: \`$FULFILL_STATUS\`"
+if [[ "${ADD_OK_CODE}" != "200" ]]; then
+  log "> **跳过**：同店加购未成功（HTTP ${ADD_OK_CODE}）。空车调用 complete 易产生误导性 payment 报错；请先确保已执行 bootstrap（\`npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts\`）且 variant 具备 Medusa 价格链路。"
+  COMPLETE_CODE="skipped"
+else
+  COMPLETE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/store/carts/$CART_DEFAULT/complete" \
+    -H "Content-Type: application/json" \
+    "${DEFAULT_HDR[@]}" \
+    -d '{"payment_provider_id":"pp_system_default"}')
+  COMPLETE_BODY=$(echo "$COMPLETE" | sed '$d')
+  COMPLETE_CODE=$(echo "$COMPLETE" | tail -1)
+  log "### complete — HTTP ${COMPLETE_CODE}"
+  log '```json'
+  echo "$COMPLETE_BODY" | jq . | tee -a "$RESULTS_FILE"
+  log '```'
+  ORDER_ID=$(echo "$COMPLETE_BODY" | jq -r '.order_id // empty')
+  PAY_STATUS=$(echo "$COMPLETE_BODY" | jq -r '.payment_status // empty')
+  FULFILL_STATUS=$(echo "$COMPLETE_BODY" | jq -r '.fulfillment_status // empty')
+  log "- order_id: \`$ORDER_ID\`"
+  log "- payment_status: \`$PAY_STATUS\`"
+  log "- fulfillment_status: \`$FULFILL_STATUS\`"
+fi
 
 if [[ -n "$ADMIN_TOKEN" && -n "$ORDER_ID" ]]; then
   section "步骤 6：Admin 推履约 / mock 物流"
@@ -132,6 +161,9 @@ if [[ -n "$ADMIN_TOKEN" && -n "$ORDER_ID" ]]; then
   log '```json'
   echo "$SHIP" | sed '$d' | jq . | tee -a "$RESULTS_FILE"
   log '```'
+elif [[ -n "$ORDER_ID" && -z "$ADMIN_TOKEN" ]]; then
+  section "步骤 6：Admin 推履约 / mock 物流"
+  log "> **跳过**：未设置 \`ADMIN_TOKEN\`。可对管理员账号执行 \`POST $BASE_URL/auth/user/emailpass\` 取得 JWT 后重跑本脚本。"
 fi
 
 section "步骤 7：test_store 交叉隔离"
@@ -159,7 +191,13 @@ section "测试通过 Checklist"
 [[ "${ADD_OK_CODE}" == "200" ]] && log "- [x] 同店加购 200" || log "- [ ] 同店加购 200 (实际 ${ADD_OK_CODE})"
 echo "$ADD_BAD_BODY" | jq -e '.error.code == "CART_STORE_MISMATCH"' >/dev/null 2>&1 \
   && log "- [x] 跨店加购 CART_STORE_MISMATCH" || log "- [ ] 跨店加购 CART_STORE_MISMATCH"
-[[ "${COMPLETE_CODE}" == "200" && -n "${ORDER_ID}" ]] && log "- [x] complete 生成订单" || log "- [ ] complete 生成订单"
+if [[ "${COMPLETE_CODE}" == "skipped" ]]; then
+  log "- [ ] complete 生成订单（已跳过：加购未成功）"
+elif [[ "${COMPLETE_CODE}" == "200" && -n "${ORDER_ID}" ]]; then
+  log "- [x] complete 生成订单"
+else
+  log "- [ ] complete 生成订单 (HTTP ${COMPLETE_CODE})"
+fi
 [[ "${PAY_STATUS}" == "paid" ]] && log "- [x] payment_status=paid (pp_system_default)" || log "- [ ] payment_status=paid (实际: ${PAY_STATUS})"
 [[ "${FULFILL_STATUS}" == "waiting" || "${FULFILL_STATUS}" == "pushed" || "${FULFILL_STATUS}" == "shipped" ]] \
   && log "- [x] fulfillment 已进入 waiting/pushed/shipped" || log "- [ ] fulfillment 状态 (实际: ${FULFILL_STATUS})"

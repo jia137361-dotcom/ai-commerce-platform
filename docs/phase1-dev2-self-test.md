@@ -34,7 +34,7 @@ Content-Type: application/json
 
 ```bash
 cd apps/medusa-backend
-DATABASE_URL=postgres://medusa:medusa@localhost:5433/ai_commerce \
+DATABASE_URL=postgres://medusa:medusa@localhost:5432/ai_commerce \
 REDIS_URL=redis://localhost:6379 \
 npm run seed
 ```
@@ -43,33 +43,48 @@ npm run seed
 
 ```bash
 cd apps/medusa-backend
-DATABASE_URL=postgres://medusa:medusa@localhost:5433/ai_commerce \
+DATABASE_URL=postgres://medusa:medusa@localhost:5432/ai_commerce \
 REDIS_URL=redis://localhost:6379 \
 npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
 ```
 
 脚本会输出 `default_store` / `test_store` 的 `medusa_variant_id`，记为 `VARIANT_DEFAULT`、`VARIANT_TEST`。
 
-3. **Admin Token**（可选，用于推履约 / mock 物流）：
+3. **Admin Token**（**仅步骤 6**：推履约 / mock 物流；不加也能跑通加购与 complete）：
 
 ```bash
 curl -sS -X POST "http://localhost:9000/auth/user/emailpass" \
   -H "Content-Type: application/json" \
   -d '{"email":"<你的管理员邮箱>","password":"<密码>"}'
-# 导出 ADMIN_TOKEN=<返回的 token>
+# 响应 JSON 里的 token 写入环境变量或根目录 .env，见下。
 ```
+
+**`ADMIN_TOKEN` 放哪里**
+
+| 方式 | 说明 |
+|------|------|
+| **根目录 `.env`** | 增加一行 `ADMIN_TOKEN=eyJ...`（与 `DATABASE_URL` 同级）。`bash scripts/phase1-dev2-self-test.sh` 会**自动 `source` 该文件**。 |
+| **当前终端** | 先 `export ADMIN_TOKEN='eyJ...'` 再跑脚本：**会覆盖**根目录 `.env` 里同名变量。 |
 
 4. **一键跑测并写结果**（需已 bootstrap 出 variant）：
 
 ```bash
+# 二选一：把 PUBLISHABLE_API_KEY（及可选的 ADMIN_TOKEN）写进仓库根 .env，或：
 export PUBLISHABLE_API_KEY="<pk_...>"
-export ADMIN_TOKEN="<可选>"
+export ADMIN_TOKEN="<可选，跑步骤 6 时必填>"
+
 bash scripts/phase1-dev2-self-test.sh
 # 结果：docs/phase1-dev2-self-test-results.md
 ```
 
----
+**两个测试分别依赖什么**
 
+| 测试内容 | 依赖 |
+|----------|------|
+| **Store：加购 + complete** | `PUBLISHABLE_API_KEY` + 已执行 **bootstrap**（原生 variant + 价格链路），**不要**只靠 SQL 插 variant。与 `ADMIN_TOKEN` **无关**。 |
+| **Admin：推履约 / mock 物流（步骤 6）** | `ADMIN_TOKEN`（管理员 JWT）。未设置则脚本跳过步骤 6，并在 stderr 提示。 |
+
+---
 ## 步骤 1：获取测试商品
 
 ```bash
