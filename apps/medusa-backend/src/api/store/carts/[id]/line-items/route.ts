@@ -5,24 +5,19 @@ import addLineItemWorkflow from "../../../../../workflows/add-line-item"
 import { CartStoreAccessError, CartStoreMismatchError } from "../../../../../lib/cart-store-error"
 import { getStoreCoreService } from "../../../../_helpers/store-core"
 
-const readString = (value: unknown) => {
-  return typeof value === "string" && value.length > 0 ? value : null
-}
-
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const cart_id = req.params.id as string
     const body = (req.body || {}) as {
-      product_id?: string
       variant_id?: string
       quantity?: number
     }
 
-    if (!body.product_id && !body.variant_id) {
+    if (!body.variant_id) {
       return res.status(400).json({
         error: {
           code: "VALIDATION_ERROR",
-          message: "product_id or variant_id is required",
+          message: "variant_id is required",
         },
       })
     }
@@ -32,71 +27,32 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     assertCartBelongsToCurrentStore(req, cart)
     const cartStoreId = readCartStoreId(cart)
     const storeCoreService = getStoreCoreService(req)
-    let variant_id = body.variant_id
+    const variant_id = body.variant_id
+    const linkedProducts = await storeCoreService.listProducts({
+      medusa_variant_id: variant_id,
+    })
+    const linkedProduct = linkedProducts[0]
 
-    if (body.product_id) {
-      const products = await storeCoreService.listProducts({ id: body.product_id })
-      const product = products[0]
-
-      if (!product) {
-        return res.status(404).json({
-          error: {
-            code: "PRODUCT_NOT_FOUND",
-            message: "Product not found",
-          },
-        })
-      }
-
-      if (product.store_id !== cartStoreId) {
-        throw new CartStoreMismatchError()
-      }
-
-      if (product.status !== "published") {
-        return res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Product must be published",
-          },
-        })
-      }
-
-      variant_id = readString(product.medusa_variant_id) ?? undefined
-
-      if (!variant_id) {
-        return res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Product is not cart-addable",
-          },
-        })
-      }
-    } else if (variant_id) {
-      const linkedProducts = await storeCoreService.listProducts({
-        medusa_variant_id: variant_id,
+    if (!linkedProduct) {
+      return res.status(400).json({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "variant_id must be linked to a store-core product",
+        },
       })
-      const linkedProduct = linkedProducts[0]
+    }
 
-      if (!linkedProduct) {
-        return res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "variant_id must be linked to a store-core product",
-          },
-        })
-      }
+    if (linkedProduct.status !== "published") {
+      return res.status(400).json({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Product must be published",
+        },
+      })
+    }
 
-      if (linkedProduct.status !== "published") {
-        return res.status(400).json({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Product must be published",
-          },
-        })
-      }
-
-      if (linkedProduct.store_id !== cartStoreId) {
-        throw new CartStoreMismatchError()
-      }
+    if (linkedProduct.store_id !== cartStoreId) {
+      throw new CartStoreMismatchError()
     }
 
     const { result } = await addLineItemWorkflow(req.scope).run({
