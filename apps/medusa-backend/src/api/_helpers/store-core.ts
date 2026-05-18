@@ -33,12 +33,16 @@ export const normalizeProduct = (product: any) => ({
   source: product.source,
   ai_job_id: product.ai_job_id,
   prompt: product.prompt,
+  supplier_id: product.supplier_id,
   platform_product_id: product.platform_product_id,
   supplier_product_id: product.supplier_product_id,
+  supplier_variant_id: product.supplier_variant_id,
   medusa_product_id: product.medusa_product_id,
   medusa_variant_id: product.medusa_variant_id,
   is_cart_addable: product.status === "published" && Boolean(product.medusa_variant_id),
   design_image_url: product.design_image_url,
+  mockup_image_url: product.mockup_image_url,
+  print_file_url: product.print_file_url,
   image_url: product.image_url,
   tags: product.tags ?? [],
   price: product.price,
@@ -76,6 +80,69 @@ export const normalizePlatformProduct = (platformProduct: any) => ({
   status: platformProduct.status,
   created_at: platformProduct.created_at,
   updated_at: platformProduct.updated_at
+})
+
+export const normalizeSupplierProduct = (supplierProduct: any) => ({
+  supplier_product_id: supplierProduct.id,
+  supplier_id: supplierProduct.supplier_id,
+  external_supplier_product_id: supplierProduct.supplier_product_id,
+  platform_product_id: supplierProduct.platform_product_id,
+  name: supplierProduct.name,
+  category: supplierProduct.category,
+  base_cost: supplierProduct.base_cost,
+  currency: supplierProduct.currency,
+  status: supplierProduct.status,
+  raw_json: supplierProduct.raw_json ?? {},
+  created_at: supplierProduct.created_at,
+  updated_at: supplierProduct.updated_at
+})
+
+export const normalizeSupplierProductVariant = (variant: any) => ({
+  supplier_variant_id: variant.id,
+  supplier_product_id: variant.supplier_product_id,
+  external_supplier_variant_id: variant.supplier_variant_id,
+  color: variant.color,
+  size: variant.size,
+  sku: variant.sku,
+  cost: variant.cost,
+  stock_status: variant.stock_status,
+  raw_json: variant.raw_json ?? {},
+  created_at: variant.created_at,
+  updated_at: variant.updated_at
+})
+
+export const normalizeSupplierPrintSpec = (spec: any) => ({
+  print_spec_id: spec.id,
+  supplier_product_id: spec.supplier_product_id,
+  supplier_variant_id: spec.supplier_variant_id,
+  print_position: spec.print_position,
+  print_file_width: spec.print_file_width,
+  print_file_height: spec.print_file_height,
+  dpi: spec.dpi,
+  accepted_formats: spec.accepted_formats ?? [],
+  background_required: spec.background_required,
+  safe_margin: spec.safe_margin,
+  bleed: spec.bleed,
+  color_mode: spec.color_mode,
+  status: spec.status,
+  created_at: spec.created_at,
+  updated_at: spec.updated_at
+})
+
+export const normalizePlatformDesignTemplate = (template: any) => ({
+  template_id: template.id,
+  platform_product_id: template.platform_product_id,
+  name: template.name,
+  canvas_width: template.canvas_width,
+  canvas_height: template.canvas_height,
+  design_area_x: template.design_area_x,
+  design_area_y: template.design_area_y,
+  design_area_width: template.design_area_width,
+  design_area_height: template.design_area_height,
+  preview_background_url: template.preview_background_url,
+  status: template.status,
+  created_at: template.created_at,
+  updated_at: template.updated_at
 })
 
 export const requireText = (value: unknown) => {

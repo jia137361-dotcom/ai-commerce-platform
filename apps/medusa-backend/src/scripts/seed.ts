@@ -17,6 +17,70 @@ type PlatformProductSeed = {
   status: "active" | "inactive" | "archived"
 }
 
+type SupplierSeed = {
+  id: string
+  code: string
+  name: string
+  country: string
+  status: "active" | "inactive" | "archived"
+  raw_json: Record<string, unknown>
+}
+
+type SupplierProductSeed = {
+  id: string
+  supplier_id: string
+  supplier_product_id: string
+  platform_product_id: string
+  name: string
+  category: string
+  base_cost: number
+  currency: string
+  status: "active" | "inactive" | "archived"
+  raw_json: Record<string, unknown>
+}
+
+type SupplierProductVariantSeed = {
+  id: string
+  supplier_product_id: string
+  supplier_variant_id: string
+  color: string
+  size: string
+  sku: string
+  cost: number
+  stock_status: "in_stock" | "out_of_stock" | "unknown"
+  raw_json: Record<string, unknown>
+}
+
+type SupplierPrintSpecSeed = {
+  id: string
+  supplier_product_id: string
+  supplier_variant_id: string | null
+  print_position: string
+  print_file_width: number
+  print_file_height: number
+  dpi: number
+  accepted_formats: string[]
+  background_required: boolean
+  safe_margin: number
+  bleed: number
+  color_mode: string
+  status: "active" | "inactive" | "archived"
+}
+
+type PlatformDesignTemplateSeed = {
+  id: string
+  platform_product_id: string
+  name: string
+  canvas_width: number
+  canvas_height: number
+  design_area_x: number
+  design_area_y: number
+  design_area_width: number
+  design_area_height: number
+  preview_background_url: string
+  status: "active" | "inactive" | "archived"
+}
+
 const platformProducts: PlatformProductSeed[] = [
   {
     id: "pp_tshirt",
@@ -98,6 +162,102 @@ const platformProducts: PlatformProductSeed[] = [
   }
 ]
 
+const suppliers: SupplierSeed[] = [
+  {
+    id: "sup_citigoo_mock",
+    code: "citigoo_mock",
+    name: "CitiGoo Mock Supplier",
+    country: "US",
+    status: "active",
+    raw_json: {
+      phase: "2A",
+      note: "Mock supplier for default_store AI product generation"
+    }
+  }
+]
+
+const supplierProducts: SupplierProductSeed[] = [
+  {
+    id: "sp_tshirt",
+    supplier_id: "sup_citigoo_mock",
+    supplier_product_id: "mock_tshirt_001",
+    platform_product_id: "pp_tshirt",
+    name: "Mock Cotton T-shirt",
+    category: "apparel",
+    base_cost: 8.5,
+    currency: "usd",
+    status: "active",
+    raw_json: {
+      printable: true,
+      supported_positions: ["front"]
+    }
+  }
+]
+
+const supplierProductVariants: SupplierProductVariantSeed[] = ["black", "white"].flatMap(
+  (color) =>
+    ["S", "M", "L", "XL"].map((size) => ({
+      id: `spv_tshirt_${color}_${size.toLowerCase()}`,
+      supplier_product_id: "sp_tshirt",
+      supplier_variant_id: `mock_tshirt_${color}_${size.toLowerCase()}`,
+      color,
+      size,
+      sku: `MOCK-TSHIRT-${color.toUpperCase()}-${size}`,
+      cost: 8.5,
+      stock_status: "in_stock" as const,
+      raw_json: {
+        phase: "2A",
+        print_position: "front"
+      }
+    }))
+)
+
+const supplierPrintSpecs: SupplierPrintSpecSeed[] = [
+  {
+    id: "sps_tshirt_front_png",
+    supplier_product_id: "sp_tshirt",
+    supplier_variant_id: null,
+    print_position: "front",
+    print_file_width: 4500,
+    print_file_height: 5400,
+    dpi: 300,
+    accepted_formats: ["png"],
+    background_required: false,
+    safe_margin: 120,
+    bleed: 0,
+    color_mode: "RGB",
+    status: "active"
+  }
+]
+
+const platformDesignTemplates: PlatformDesignTemplateSeed[] = [
+  {
+    id: "pdt_tshirt_front",
+    platform_product_id: "pp_tshirt",
+    name: "T-shirt Front Print",
+    canvas_width: 4500,
+    canvas_height: 5400,
+    design_area_x: 450,
+    design_area_y: 420,
+    design_area_width: 3600,
+    design_area_height: 4200,
+    preview_background_url: "https://cdn.example.com/mockups/tshirt-front.png",
+    status: "active"
+  }
+]
+
+const createMissing = async <T extends { id: string }>(
+  existingIds: Set<string>,
+  items: T[],
+  create: (items: T[]) => Promise<unknown>
+) => {
+  const missing = items.filter((item) => !existingIds.has(item.id))
+
+  if (missing.length) {
+    await create(missing)
+  }
+}
+
 export default async function seedStoreCore({ container }: ExecArgs) {
   const storeCoreService = container.resolve<StoreCoreModuleService>(STORE_CORE_MODULE)
 
@@ -131,11 +291,54 @@ export default async function seedStoreCore({ container }: ExecArgs) {
   const existingPlatformProductIds = new Set(
     existingPlatformProducts.map((product) => product.id)
   )
-  const missingPlatformProducts = platformProducts.filter(
-    (product) => !existingPlatformProductIds.has(product.id)
+  await createMissing(existingPlatformProductIds, platformProducts, (items) =>
+    storeCoreService.createPlatformProducts(items)
   )
 
-  if (missingPlatformProducts.length) {
-    await storeCoreService.createPlatformProducts([...missingPlatformProducts])
-  }
+  const existingSuppliers = await storeCoreService.listSuppliers({
+    id: suppliers.map((supplier) => supplier.id)
+  })
+  await createMissing(
+    new Set(existingSuppliers.map((supplier) => supplier.id)),
+    suppliers,
+    (items) => storeCoreService.createSuppliers(items)
+  )
+
+  const existingSupplierProducts = await storeCoreService.listSupplierProducts({
+    id: supplierProducts.map((product) => product.id)
+  })
+  await createMissing(
+    new Set(existingSupplierProducts.map((product) => product.id)),
+    supplierProducts,
+    (items) => storeCoreService.createSupplierProducts(items)
+  )
+
+  const existingSupplierProductVariants =
+    await storeCoreService.listSupplierProductVariants({
+      id: supplierProductVariants.map((variant) => variant.id)
+    })
+  await createMissing(
+    new Set(existingSupplierProductVariants.map((variant) => variant.id)),
+    supplierProductVariants,
+    (items) => storeCoreService.createSupplierProductVariants(items)
+  )
+
+  const existingSupplierPrintSpecs = await storeCoreService.listSupplierPrintSpecs({
+    id: supplierPrintSpecs.map((spec) => spec.id)
+  })
+  await createMissing(
+    new Set(existingSupplierPrintSpecs.map((spec) => spec.id)),
+    supplierPrintSpecs,
+    (items) => storeCoreService.createSupplierPrintSpecs(items)
+  )
+
+  const existingPlatformDesignTemplates =
+    await storeCoreService.listPlatformDesignTemplates({
+      id: platformDesignTemplates.map((template) => template.id)
+    })
+  await createMissing(
+    new Set(existingPlatformDesignTemplates.map((template) => template.id)),
+    platformDesignTemplates,
+    (items) => storeCoreService.createPlatformDesignTemplates(items)
+  )
 }
