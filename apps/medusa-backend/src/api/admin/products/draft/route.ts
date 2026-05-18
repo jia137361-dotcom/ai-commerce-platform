@@ -14,8 +14,11 @@ type CreateDraftProductBody = {
   description?: string
   image_url?: string
   design_image_url?: string
+  mockup_image_url?: string
+  print_file_url?: string
   platform_product_id?: string | null
   supplier_product_id?: string | null
+  supplier_variant_id?: string | null
   medusa_product_id?: string | null
   medusa_variant_id?: string | null
   tags?: string[]
@@ -26,6 +29,7 @@ type CreateDraftProductBody = {
   source?: "manual" | "ai"
   ai_job_id?: string | null
   prompt?: string | null
+  supplier_id?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -60,6 +64,9 @@ export const POST = async (
   const context = resolveCurrentStore(req)
   const storeId = requireText(body.store_id) ?? context.store_id
   const platformProductId = requireText(body.platform_product_id)
+  const supplierId = requireText(body.supplier_id)
+  const supplierProductId = requireText(body.supplier_product_id)
+  const supplierVariantId = requireText(body.supplier_variant_id)
   const medusaProductId = requireText(body.medusa_product_id)
   const medusaVariantId = requireText(body.medusa_variant_id)
   const storeCoreService = getStoreCoreService(req)
@@ -89,6 +96,8 @@ export const POST = async (
   }
 
   let platformProduct: any = null
+  let supplierProduct: any = null
+  let supplierVariant: any = null
 
   if (platformProductId) {
     const platformProducts = await storeCoreService.listPlatformProducts({
@@ -108,9 +117,94 @@ export const POST = async (
     }
   }
 
+  if (supplierId) {
+    const suppliers = await storeCoreService.listSuppliers({
+      id: supplierId,
+      status: "active"
+    })
+
+    if (!suppliers.length) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "supplier_id must reference an active supplier"
+      )
+    }
+  }
+
+  if (supplierProductId) {
+    const supplierProducts = await storeCoreService.listSupplierProducts({
+      id: supplierProductId,
+      status: "active"
+    })
+
+    supplierProduct = supplierProducts[0]
+
+    if (!supplierProduct) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "supplier_product_id must reference an active supplier product"
+      )
+    }
+
+    if (supplierId && supplierProduct.supplier_id !== supplierId) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "supplier_product_id must belong to supplier_id"
+      )
+    }
+
+    if (
+      platformProductId &&
+      supplierProduct.platform_product_id !== platformProductId
+    ) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "supplier_product_id must belong to platform_product_id"
+      )
+    }
+  }
+
+  if (supplierVariantId) {
+    const supplierVariants = await storeCoreService.listSupplierProductVariants({
+      id: supplierVariantId
+    })
+
+    supplierVariant = supplierVariants[0]
+
+    if (!supplierVariant) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "supplier_variant_id must reference a supplier product variant"
+      )
+    }
+
+    if (
+      supplierProductId &&
+      supplierVariant.supplier_product_id !== supplierProductId
+    ) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "supplier_variant_id must belong to supplier_product_id"
+      )
+    }
+  }
+
   const inheritedSupplierProductId =
-    body.supplier_product_id ?? platformProduct?.supplier_product_id ?? null
-  const inheritedCost = cost ?? platformProduct?.base_cost ?? null
+    supplierProductId ?? platformProduct?.supplier_product_id ?? null
+  const inheritedCost =
+    cost ?? supplierVariant?.cost ?? supplierProduct?.base_cost ?? platformProduct?.base_cost ?? null
 
   const product = await storeCoreService.createProducts({
     store_id: storeId,
@@ -120,11 +214,15 @@ export const POST = async (
     source,
     ai_job_id: body.ai_job_id ?? null,
     prompt: body.prompt ?? null,
+    supplier_id: supplierId ?? supplierProduct?.supplier_id ?? null,
     platform_product_id: platformProductId,
     supplier_product_id: inheritedSupplierProductId,
+    supplier_variant_id: supplierVariantId,
     medusa_product_id: medusaProductId,
     medusa_variant_id: medusaVariantId,
     design_image_url: body.design_image_url ?? body.image_url ?? null,
+    mockup_image_url: body.mockup_image_url ?? null,
+    print_file_url: body.print_file_url ?? null,
     image_url: body.image_url ?? body.design_image_url ?? null,
     tags: Array.isArray(body.tags) ? body.tags : [],
     category_ids: categoryIds,

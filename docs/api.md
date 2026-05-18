@@ -64,11 +64,15 @@ Request body:
   "price": 29.99,
   "cost": 8.5,
   "supplier_product_id": "supplier_tshirt",
+  "supplier_id": "sup_citigoo_mock",
+  "supplier_variant_id": "spv_tshirt_black_m",
   "medusa_product_id": "prod_medusa_123",
   "medusa_variant_id": "variant_medusa_123",
   "source": "manual",
   "image_url": "https://cdn.example.com/product.png",
   "design_image_url": "https://cdn.example.com/design.png",
+  "mockup_image_url": "https://cdn.example.com/mockup.png",
+  "print_file_url": "https://cdn.example.com/print-file.png",
   "tags": ["summer", "beach", "t-shirt"],
   "category_ids": ["cat_123"],
   "variants": [],
@@ -110,6 +114,8 @@ Response:
     "store_id": "default_store",
     "platform_product_id": "pp_tshirt",
     "supplier_product_id": "supplier_tshirt",
+    "supplier_id": "sup_citigoo_mock",
+    "supplier_variant_id": "spv_tshirt_black_m",
     "medusa_product_id": "prod_medusa_123",
     "medusa_variant_id": "variant_medusa_123",
     "is_cart_addable": false,
@@ -120,6 +126,9 @@ Response:
     "tags": ["summer", "beach", "t-shirt"],
     "price": 29.99,
     "cost": 8.5,
+    "design_image_url": "https://cdn.example.com/design.png",
+    "mockup_image_url": "https://cdn.example.com/mockup.png",
+    "print_file_url": "https://cdn.example.com/print-file.png",
     "variants": [],
     "metadata": {}
   }
@@ -175,6 +184,67 @@ Response:
         "front": "12x16in"
       },
       "status": "active"
+    }
+  ]
+}
+```
+
+### Supplier Products
+
+Supplier products expose the Phase 2A product foundation for AI generation: supplier product, color/size SKU variants, print specs, and platform design templates.
+
+#### `GET /admin/supplier-products`
+
+Lists active supplier products. Optional query: `platform_product_id=pp_tshirt`.
+
+#### `GET /store/supplier-products`
+
+Lists active supplier products for storefront/AI generation selection. Optional query: `platform_product_id=pp_tshirt`.
+
+Response shape:
+
+```json
+{
+  "count": 1,
+  "supplier_products": [
+    {
+      "supplier_product_id": "sp_tshirt",
+      "supplier_id": "sup_citigoo_mock",
+      "external_supplier_product_id": "mock_tshirt_001",
+      "platform_product_id": "pp_tshirt",
+      "name": "Mock Cotton T-shirt",
+      "category": "apparel",
+      "base_cost": 8.5,
+      "currency": "usd",
+      "status": "active",
+      "variants": [
+        {
+          "supplier_variant_id": "spv_tshirt_black_m",
+          "external_supplier_variant_id": "mock_tshirt_black_m",
+          "color": "black",
+          "size": "M",
+          "sku": "MOCK-TSHIRT-BLACK-M",
+          "cost": 8.5,
+          "stock_status": "in_stock"
+        }
+      ],
+      "print_specs": [
+        {
+          "print_spec_id": "sps_tshirt_front_png",
+          "print_position": "front",
+          "print_file_width": 4500,
+          "print_file_height": 5400,
+          "dpi": 300,
+          "accepted_formats": ["png"]
+        }
+      ],
+      "design_templates": [
+        {
+          "template_id": "pdt_tshirt_front",
+          "platform_product_id": "pp_tshirt",
+          "name": "T-shirt Front Print"
+        }
+      ]
     }
   ]
 }

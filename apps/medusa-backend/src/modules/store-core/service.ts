@@ -6,6 +6,11 @@ import StoreSetting from "./models/store-setting"
 import Product from "./models/product"
 import ProductCategory from "./models/product-category"
 import PlatformProduct from "./models/platform-product"
+import Supplier from "./models/supplier"
+import SupplierProduct from "./models/supplier-product"
+import SupplierProductVariant from "./models/supplier-product-variant"
+import SupplierPrintSpec from "./models/supplier-print-spec"
+import PlatformDesignTemplate from "./models/platform-design-template"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -14,7 +19,12 @@ class StoreCoreModuleService extends MedusaService({
   StoreSetting,
   Product,
   ProductCategory,
-  PlatformProduct
+  PlatformProduct,
+  Supplier,
+  SupplierProduct,
+  SupplierProductVariant,
+  SupplierPrintSpec,
+  PlatformDesignTemplate
 }) {}
 
 export default StoreCoreModuleService
