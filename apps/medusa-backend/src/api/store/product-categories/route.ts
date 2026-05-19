@@ -14,6 +14,8 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   return res.json({
     store_id: storeId,
     count: categories.length,
-    categories: categories.map(normalizeCategory)
+    categories: categories.map((c: Record<string, unknown>) =>
+      normalizeCategory(c)
+    ),
   })
 }

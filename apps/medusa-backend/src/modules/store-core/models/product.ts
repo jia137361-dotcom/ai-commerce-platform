@@ -28,4 +28,3 @@ const Product = model.define("mc_product", {
 })
 
 export default Product
-
