@@ -5,6 +5,7 @@ import addLineItemWorkflow from "../../../../../workflows/add-line-item"
 import { CartStoreAccessError, CartStoreMismatchError } from "../../../../../lib/cart-store-error"
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import { getStoreCoreService } from "../../../../_helpers/store-core"
+import { resolveLinkedProductForVariant } from "../../../../../lib/resolve-linked-product"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
@@ -32,7 +33,10 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const linkedProducts = await storeCoreService.listProducts({
       medusa_variant_id: variant_id,
     })
-    const linkedProduct = linkedProducts[0]
+    const linkedProduct = resolveLinkedProductForVariant(
+      linkedProducts as Record<string, unknown>[],
+      { storeId: cartStoreId }
+    )
 
     if (!linkedProduct) {
       return res.status(400).json({

@@ -56,20 +56,20 @@ npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
 curl -sS -X POST "http://localhost:9000/auth/user/emailpass" \
   -H "Content-Type: application/json" \
   -d '{"email":"<你的管理员邮箱>","password":"<密码>"}'
-# 响应 JSON 里的 token 写入环境变量或根目录 .env，见下。
+# 响应 JSON 里的 token 写入 apps/medusa-backend/.env，见下。
 ```
 
 **`ADMIN_TOKEN` 放哪里**
 
 | 方式 | 说明 |
 |------|------|
-| **根目录 `.env`** | 增加一行 `ADMIN_TOKEN=eyJ...`（与 `DATABASE_URL` 同级）。`bash scripts/phase1-dev2-self-test.sh` 会**自动 `source` 该文件**。 |
-| **当前终端** | 先 `export ADMIN_TOKEN='eyJ...'` 再跑脚本：**会覆盖**根目录 `.env` 里同名变量。 |
+| **`apps/medusa-backend/.env`** | 增加一行 `ADMIN_TOKEN=eyJ...`。`bash scripts/phase1-dev2-self-test.sh` 会**自动 `source` 该文件**。 |
+| **当前终端** | 先 `export ADMIN_TOKEN='eyJ...'` 再跑脚本：**会覆盖** `.env` 里同名变量。 |
 
 4. **一键跑测并写结果**（需已 bootstrap 出 variant）：
 
 ```bash
-# 二选一：把 PUBLISHABLE_API_KEY（及可选的 ADMIN_TOKEN）写进仓库根 .env，或：
+# 二选一：把 PUBLISHABLE_API_KEY（及可选的 ADMIN_TOKEN）写进 apps/medusa-backend/.env，或：
 export PUBLISHABLE_API_KEY="<pk_...>"
 export ADMIN_TOKEN="<可选，跑步骤 6 时必填>"
 

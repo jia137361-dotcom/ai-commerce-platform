@@ -89,7 +89,7 @@ const platformProducts: PlatformProductSeed[] = [
     description: "Classic printable short-sleeve t-shirt.",
     base_cost: 8.5,
     supplier: "platform",
-    supplier_product_id: "supplier_tshirt",
+    supplier_product_id: "sp_tshirt",
     available_colors: ["white", "black", "navy", "heather_gray"],
     available_sizes: ["S", "M", "L", "XL", "2XL"],
     print_area: { front: "12x16in", back: "12x16in" },

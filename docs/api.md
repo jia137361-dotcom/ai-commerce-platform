@@ -80,7 +80,7 @@ Request body:
   "description": "A clean summer beach inspired t-shirt.",
   "price": 29.99,
   "cost": 8.5,
-  "supplier_product_id": "supplier_tshirt",
+  "supplier_product_id": "sp_tshirt",
   "supplier_id": "sup_citigoo_mock",
   "supplier_variant_id": "spv_tshirt_black_m",
   "medusa_product_id": "prod_medusa_123",
@@ -139,7 +139,7 @@ Response:
     "product_id": "prod_123",
     "store_id": "default_store",
     "platform_product_id": "pp_tshirt",
-    "supplier_product_id": "supplier_tshirt",
+    "supplier_product_id": "sp_tshirt",
     "supplier_id": "sup_citigoo_mock",
     "supplier_variant_id": "spv_tshirt_black_m",
     "medusa_product_id": "prod_medusa_123",
@@ -203,7 +203,7 @@ Response:
       "description": "Classic printable cotton t-shirt.",
       "base_cost": 8.5,
       "supplier": "default_supplier",
-      "supplier_product_id": "supplier_tshirt",
+      "supplier_product_id": "sp_tshirt",
       "available_colors": ["white", "black", "navy"],
       "available_sizes": ["S", "M", "L", "XL"],
       "print_area": {
@@ -275,6 +275,58 @@ Response shape:
   ]
 }
 ```
+
+### AI Product Generation (Phase 2A)
+
+Python service: `apps/ai-worker` (default `http://localhost:8001`).
+
+#### `POST /ai/generate-product` (AI Worker)
+
+Generates design image, print file, mockup, title, description, tags, SEO, and price suggestion.
+
+Request:
+
+```json
+{
+  "prompt": "minimal geometric cat",
+  "platform_product_id": "pp_tshirt",
+  "supplier_product_id": "sp_tshirt",
+  "supplier_variant_id": "spv_tshirt_black_m",
+  "print_position": "front"
+}
+```
+
+Response includes: `ai_job_id`, `design_image_url`, `print_file_url`, `mockup_image_url`, `title`, `description`, `tags`, `seo`, `price_suggestion`.
+
+Environment: `FAL_KEY`, `DEEPSEEK_API_KEY`, or `AI_WORKER_MOCK_GENERATION=true` for local mock.
+
+#### `POST /admin/ai/generate-and-draft` (Medusa)
+
+Calls AI Worker then creates `mc_product` draft with `source: "ai"`.
+
+Required headers:
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+X-Store-Id: default_store
+```
+
+Request body:
+
+```json
+{
+  "prompt": "minimal geometric cat",
+  "platform_product_id": "pp_tshirt",
+  "supplier_product_id": "sp_tshirt",
+  "supplier_variant_id": "spv_tshirt_black_m",
+  "print_position": "front"
+}
+```
+
+Cart line items created via `POST /store/carts/:id/line-items` copy production fields into `line_item.metadata`:
+
+- `supplier_id`, `supplier_product_id`, `supplier_variant_id`
+- `print_file_url`, `print_position`, `color`, `size`
 
 ### Product Categories
 
