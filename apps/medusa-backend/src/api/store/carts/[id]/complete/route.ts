@@ -16,6 +16,7 @@ import {
   syncPaidIfPaymentAlreadyCaptured,
 } from "../../../../../lib/sync-order-paid-fulfillment"
 import { readOrderFulfillmentStatusMeta } from "../../../../../lib/order-custom-metadata"
+import { syncFulfillmentPayloadFromOrder } from "../../../../../lib/sync-fulfillment-line-items"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 
@@ -59,6 +60,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       storeId,
       paymentCollectionId,
     })
+    await syncFulfillmentPayloadFromOrder(req.scope, orderId)
 
     if (!providerDefersPaidUntilCapture(providerId)) {
       await markOrderPaidAndFulfillmentWaiting(req.scope, orderId, "non_stripe_provider_after_complete")

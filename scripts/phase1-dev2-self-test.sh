@@ -4,13 +4,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$REPO_ROOT/apps/medusa-backend/.env"
 # 父进程已 export 的变量优先于 .env（与常见 dotenv 行为一致）
 _INHERIT_PUBLISHABLE="${PUBLISHABLE_API_KEY-}"
 _INHERIT_ADMIN="${ADMIN_TOKEN-}"
-if [[ -f "$REPO_ROOT/.env" ]]; then
+if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1091
-  source "$REPO_ROOT/.env"
+  source "$ENV_FILE"
   set +a
 fi
 [[ -n "${_INHERIT_PUBLISHABLE}" ]] && PUBLISHABLE_API_KEY="$_INHERIT_PUBLISHABLE"

@@ -1,0 +1,10 @@
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
+httpx==0.28.1
+pydantic==2.13.3
+pydantic-settings==2.14.0
+python-multipart==0.0.26
+fal-client>=0.13.2
+Pillow>=10.4.0
+pytest==9.0.3
+pytest-asyncio>=0.24.0

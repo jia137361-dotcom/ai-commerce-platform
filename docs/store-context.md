@@ -42,7 +42,7 @@ If multiple header values are received, the first value is used. Empty values ar
 default_store
 ```
 
-`.env.example` defines:
+[`apps/medusa-backend/.env.example`](../apps/medusa-backend/.env.example) defines:
 
 ```text
 DEFAULT_STORE_ID=default_store
