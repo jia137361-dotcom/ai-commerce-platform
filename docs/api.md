@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:9000`
 
-This document covers the current Development 1 scope: store-aware products, platform products, product categories, and store settings.
+This document covers the current Phase 1 and Phase 2A backend APIs: store context, store-aware products, product categories, supplier product foundation, AI product generation and draft creation, cart bridge behavior, order/fulfillment test flows, and store settings.
 
 ## Store Context
 

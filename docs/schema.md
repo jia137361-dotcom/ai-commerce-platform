@@ -157,6 +157,9 @@ Fields:
 
 ## SupplierProduct
 
+
+> API mapping note: The API response exposes the Store Core model `id` as `supplier_product_id`. The database field `supplier_product_id` is exposed as `external_supplier_product_id`.
+
 Model: `mc_supplier_product`
 
 Purpose: printable supplier catalog product mapped to a platform product.
@@ -177,6 +180,9 @@ Fields:
 | `raw_json` | json, nullable | Supplier source payload or mock metadata. |
 
 ## SupplierProductVariant
+
+
+> API mapping note: The API response exposes the Store Core model `id` as `supplier_variant_id`. The database field `supplier_variant_id` is exposed as `external_supplier_variant_id`.
 
 Model: `mc_supplier_product_variant`
 
