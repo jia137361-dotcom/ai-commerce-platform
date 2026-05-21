@@ -169,18 +169,65 @@ TEST_MEDUSA_PRODUCT_ID=<test_store.medusa_product_id>
 TEST_MEDUSA_VARIANT_ID=<test_store.medusa_variant_id>
 ```
 
+If the terminal output scrolled away, extract the bridge ids from the store product API. Prefer the fixed bootstrap product ids:
+
 Do not blindly choose the first `is_cart_addable` product from a dirty local DB. Prefer:
 
 ```bash
-curl -sS "$BASE_URL/store/products" \
+DEFAULT_BRIDGE_PRODUCT_JSON=$(curl -sS "$BASE_URL/store/products" \
   -H "x-publishable-api-key: $PUBLISHABLE_API_KEY" \
   -H "X-Store-Id: default_store" \
-  | jq '.products[] | select(.product_id == "prod_phase1_default")'
+  | jq '.products[] | select(.product_id == "prod_phase1_default")')
 
-curl -sS "$BASE_URL/store/products" \
+TEST_BRIDGE_PRODUCT_JSON=$(curl -sS "$BASE_URL/store/products" \
   -H "x-publishable-api-key: $PUBLISHABLE_API_KEY" \
   -H "X-Store-Id: test_store" \
-  | jq '.products[] | select(.product_id == "prod_phase1_test")'
+  | jq '.products[] | select(.product_id == "prod_phase1_test")')
+
+echo "$DEFAULT_BRIDGE_PRODUCT_JSON" | jq '{product_id, medusa_product_id, medusa_variant_id, is_cart_addable}'
+echo "$TEST_BRIDGE_PRODUCT_JSON" | jq '{product_id, medusa_product_id, medusa_variant_id, is_cart_addable}'
+```
+
+Export the ids:
+
+```bash
+export DEFAULT_MEDUSA_PRODUCT_ID=$(echo "$DEFAULT_BRIDGE_PRODUCT_JSON" | jq -r '.medusa_product_id')
+export DEFAULT_MEDUSA_VARIANT_ID=$(echo "$DEFAULT_BRIDGE_PRODUCT_JSON" | jq -r '.medusa_variant_id')
+export TEST_MEDUSA_PRODUCT_ID=$(echo "$TEST_BRIDGE_PRODUCT_JSON" | jq -r '.medusa_product_id')
+export TEST_MEDUSA_VARIANT_ID=$(echo "$TEST_BRIDGE_PRODUCT_JSON" | jq -r '.medusa_variant_id')
+```
+
+Write the ids back to local `.env`:
+
+```bash
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+p = Path("apps/medusa-backend/.env")
+text = p.read_text() if p.exists() else ""
+
+updates = {
+    "DEFAULT_MEDUSA_PRODUCT_ID": os.environ["DEFAULT_MEDUSA_PRODUCT_ID"],
+    "DEFAULT_MEDUSA_VARIANT_ID": os.environ["DEFAULT_MEDUSA_VARIANT_ID"],
+    "TEST_MEDUSA_PRODUCT_ID": os.environ["TEST_MEDUSA_PRODUCT_ID"],
+    "TEST_MEDUSA_VARIANT_ID": os.environ["TEST_MEDUSA_VARIANT_ID"],
+}
+
+lines = text.splitlines()
+seen = set()
+for i, line in enumerate(lines):
+    key = line.split("=", 1)[0]
+    if key in updates:
+        lines[i] = f"{key}={updates[key]}"
+        seen.add(key)
+
+for key, value in updates.items():
+    if key not in seen:
+        lines.append(f"{key}={value}")
+
+p.write_text("\\n".join(lines) + "\\n")
+PY
 ```
 
 ## Dev1 Supplier Foundation Checks
@@ -227,6 +274,31 @@ Expected:
 - complete creates an order
 - `payment_status=paid`
 - fulfillment enters `waiting`, then admin push/mock shipment can move it to `pushed`/`shipped`
+
+## Static Checks And Unit Tests
+
+Run backend type checks and tests:
+
+```bash
+npx tsc --noEmit -p apps/medusa-backend/tsconfig.json
+npm test --workspace apps/medusa-backend
+```
+
+Run shell syntax checks:
+
+```bash
+bash -n scripts/phase1-dev2-self-test.sh
+bash -n scripts/phase2a-dev2-e2e.sh
+bash -n scripts/smoke-store-isolation.sh
+```
+
+Run AI Worker tests in mock mode:
+
+```bash
+cd apps/ai-worker
+AI_WORKER_MOCK_GENERATION=true python -m pytest -q
+cd ../..
+```
 
 ## Dev2 Phase 2A E2E
 

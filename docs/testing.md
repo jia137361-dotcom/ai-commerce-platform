@@ -1,178 +1,49 @@
-# Developer 3 Testing Baseline
+# Testing Entry Point
 
-This document defines the tests Developer 3 should add after the documentation PR. It is intentionally a baseline, not an implementation.
+This is the canonical testing entry point for local Phase 1 and Phase 2A backend validation. Keep it concise; use the linked runbooks for command-by-command detail.
 
-## Store Context Tests
+Do not commit `apps/medusa-backend/.env`, real `PUBLISHABLE_API_KEY`, real `ADMIN_TOKEN`, generated AI images, local logs, virtual environments, `node_modules`, or generated self-test results that contain keys or tokens.
 
-Required coverage:
+## Recommended Validation Order
 
-- `resolveCurrentStore` returns `X-Store-Id` when a non-empty header is present.
-- `X-Store-Id` takes precedence over host/default fallback.
-- Empty `X-Store-Id` is ignored.
-- Localhost requests without `X-Store-Id` resolve to `DEFAULT_STORE_ID`.
-- Non-localhost requests without `X-Store-Id` resolve to `DEFAULT_STORE_ID`.
-- `DEFAULT_STORE_ID` falls back to `default_store` when the env var is unset.
-- The returned `source` value is correct for header, host, and default paths.
+1. Start local Postgres and Redis.
+2. Run backend migrations and seed.
+3. Run `phase1-dev2-bootstrap`.
+4. Refresh `ADMIN_TOKEN` and verify `PUBLISHABLE_API_KEY`.
+5. Start Medusa backend and AI Worker.
+6. Run static checks and unit tests.
+7. Run Dev1 supplier foundation checks.
+8. Run Dev2 Phase 1 regression.
+9. Run Dev2 Phase 2A E2E.
+10. Run Dev3 smoke and Postman/Newman coverage.
 
-## Seed Tests
+## Ownership Map
 
-Required coverage:
+| Owner | Coverage |
+| --- | --- |
+| Dev1 supplier foundation | Supplier seed, T-shirt SKU matrix, front PNG print spec, and T-shirt front design template. |
+| Dev2 Phase 1 regression | Store context, product/category/store isolation, product-to-cart bridge, `variant_id` add-to-cart, cart complete, order, and fulfillment. |
+| Dev2 Phase 2A E2E | AI generate-and-draft, publish, storefront detail fields, cart add, complete, and line-item production metadata. |
+| Dev3 | Schema/API/testing docs, Postman/Newman collection, smoke coverage, and local validation runbook. |
 
-- Seed creates `default_store` when missing.
-- Seed creates `test_store` when missing.
-- Seed is idempotent when both stores already exist.
-- Seed respects `DEFAULT_STORE_ID` for the default store id.
+## Required Services
 
-## Product Store Isolation Tests
+- Docker Postgres on `localhost:5432`.
+- Docker Redis on `localhost:6379`.
+- Medusa backend on `http://localhost:9000`.
+- AI Worker on `http://localhost:8001` for Phase 2A.
 
-Required coverage:
+## Required Local Env
 
-- `GET /store/products` only returns published products for the resolved store.
-- `GET /store/products` does not return products from `test_store` when current store is `default_store`.
-- `GET /store/products` does not return products from `default_store` when current store is `test_store`.
-- `GET /store/products/{product_id}` returns a current-store published product.
-- `GET /store/products/{product_id}` returns `PRODUCT_NOT_FOUND` when the product belongs to another store.
-- Draft products are not returned by storefront product APIs.
-- Product draft creation accepts current-store `category_ids`.
-- Product draft creation rejects `category_ids` from another store with `VALIDATION_ERROR`.
+Use `apps/medusa-backend/.env` for local values only.
 
-## Product Category Isolation Tests
-
-Required coverage:
-
-- `GET /store/product-categories` only returns categories for the resolved store.
-- `GET /admin/product-categories` only returns categories for the resolved store.
-- `POST /admin/product-categories` creates a category in the resolved store.
-- `POST /admin/product-categories` returns `STORE_NOT_FOUND` when the resolved store does not exist.
-- `POST /admin/product-categories` returns `VALIDATION_ERROR` when `name` is missing.
-- `POST /admin/product-categories` returns `VALIDATION_ERROR` when the generated slug already exists in the current store.
-- `POST /admin/product-categories` returns `VALIDATION_ERROR` when `parent_id` belongs to another store.
-- Product draft `category_ids` ownership validation should remain an automated regression test.
-
-## Publishable API Key Smoke Tests
-
-Current smoke expectations:
-
-- `GET /health` should pass without `x-publishable-api-key`.
-- `GET /store-context` should pass without `x-publishable-api-key`.
-- `GET /store-context` with `X-Store-Id: test_store` should return `test_store` with `source: "header"`.
-- `GET /store/products` should require `x-publishable-api-key`.
-- `GET /store/product-categories` should require `x-publishable-api-key`.
-
-Placeholder curl examples:
-
-```bash
-curl -i http://localhost:9000/health
-
-curl -i http://localhost:9000/store-context
-
-curl -i \
-  -H "X-Store-Id: test_store" \
-  http://localhost:9000/store-context
-
-curl -i \
-  -H "x-publishable-api-key: <publishable_api_key>" \
-  -H "X-Store-Id: test_store" \
-  http://localhost:9000/store/products
-
-curl -i \
-  -H "x-publishable-api-key: <publishable_api_key>" \
-  -H "X-Store-Id: test_store" \
-  http://localhost:9000/store/product-categories
-```
-
-TODO: Decide whether the backend seed should create a local publishable API key, or whether docs should instruct developers to create one through Medusa Admin.
-
-## Local Smoke Test Script
-
-Developer 3 can run the local store isolation smoke test with:
-
-```bash
-export BASE_URL="http://localhost:9000"
-export PUBLISHABLE_API_KEY="<publishable_api_key>"
-export ADMIN_TOKEN="<admin_bearer_token>"
-export DEFAULT_STORE_ID="default_store"
-export TEST_STORE_ID="test_store"
-
-./scripts/smoke-store-isolation.sh
-```
-
-The script uses `curl` and `jq`, creates uniquely named smoke-test categories and products, publishes products in both seeded stores, then checks positive and negative store isolation behavior.
-
-Required environment variables:
-
-- `PUBLISHABLE_API_KEY`: Medusa publishable API key for Store API requests.
-- `ADMIN_TOKEN`: bearer token for Admin API requests.
-
-Optional environment variables:
-
-- `BASE_URL`: defaults to `http://localhost:9000`.
-- `DEFAULT_STORE_ID`: defaults to `default_store`.
-- `TEST_STORE_ID`: defaults to `test_store`.
-- `DEFAULT_MEDUSA_PRODUCT_ID`: native Medusa product id used for default-store bridge checks.
-- `DEFAULT_MEDUSA_VARIANT_ID`: native Medusa variant id used for default-store cart checks.
-- `TEST_MEDUSA_PRODUCT_ID`: native Medusa product id used for test-store bridge checks.
-- `TEST_MEDUSA_VARIANT_ID`: native Medusa variant id used for test-store cart checks.
-
-## Phase 1 Product-To-Cart Bridge Tests
-
-Required environment:
-
-- `PUBLISHABLE_API_KEY` or local alias `PAK`.
-- `ADMIN_TOKEN`.
-- `DEFAULT_MEDUSA_PRODUCT_ID`.
-- `DEFAULT_MEDUSA_VARIANT_ID`.
-- `TEST_MEDUSA_PRODUCT_ID`.
-- `TEST_MEDUSA_VARIANT_ID`.
-
-Expected behavior:
-
-- `/store/products` and `/store/products/{product_id}` return `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
-- Products without `medusa_variant_id` return `is_cart_addable: false`.
-- Products with a valid `medusa_variant_id` return `is_cart_addable: true`.
-- Same-store cart line-item adds use native `variant_id` and succeed.
-- Cross-store variant adds return `CART_STORE_MISMATCH`.
-- `product_id` / `mc_product.id` add-to-cart is not supported in Phase 1.
-
-Create an admin user locally if one does not exist:
-
-```bash
-cd apps/medusa-backend
-npx medusa user -e admin@example.com -p supersecret
-```
-
-Get `ADMIN_TOKEN`:
-
-```bash
-curl -sS -X POST http://localhost:9000/auth/user/emailpass \
-  -H "Content-Type: application/json" \
-  --data '{"email":"admin@example.com","password":"supersecret"}'
-```
-
-Copy the returned token and export it:
-
-```bash
-export ADMIN_TOKEN="<token>"
-```
-
-Get `PUBLISHABLE_API_KEY` from Medusa Admin. The current seed script does not create one.
-
-## Phase 2A Dev3 Integration Coverage
-
-Phase 2A validation extends the Phase 1 store isolation and cart bridge checks with supplier foundation, AI mock generation, production metadata, order completion, and mock fulfillment.
-
-Required local services:
-
-- Docker Postgres and Redis.
-- Medusa backend at `http://localhost:9000`.
-- AI Worker at `http://localhost:8001` with `AI_WORKER_MOCK_GENERATION=true`.
-
-Required local env in `apps/medusa-backend/.env`:
+Required:
 
 - `DATABASE_URL=postgres://medusa:medusa@localhost:5432/ai_commerce`
 - `REDIS_URL=redis://localhost:6379`
 - `ADMIN_TOKEN`
 - `PUBLISHABLE_API_KEY`
+- `DEFAULT_STORE_ID=default_store`
 - `AI_WORKER_BASE_URL=http://localhost:8001`
 - `AI_WORKER_MOCK_GENERATION=true`
 - `MEDUSA_BASE_URL=http://localhost:9000`
@@ -182,13 +53,16 @@ Required local env in `apps/medusa-backend/.env`:
 - `TEST_MEDUSA_PRODUCT_ID`
 - `TEST_MEDUSA_VARIANT_ID`
 
-Mock mode notes:
+Mock-mode notes:
 
 - `STRIPE_API_KEY` can be empty locally because tests use `pp_system_default`.
 - `DEEPSEEK_API_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
 - `FAL_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
+- `PUBLISHABLE_API_KEY` and `ADMIN_TOKEN` are local-only and must not be committed.
 
-Required bootstrap:
+## Bootstrap Requirement
+
+Run the bootstrap before cart/add-to-cart tests:
 
 ```bash
 npm run seed
@@ -198,118 +72,109 @@ npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
 cd ../..
 ```
 
-The bootstrap creates or updates `prod_phase1_default` and `prod_phase1_test`, links them to native Medusa products/variants, ensures price sets exist, and makes the native bridge variants cart-ready for local tests.
+Use the bootstrap output:
 
-Run the Phase 1 regression:
+- `DEFAULT_MEDUSA_VARIANT_ID` must come from `prod_phase1_default`.
+- `TEST_MEDUSA_VARIANT_ID` must come from `prod_phase1_test`.
+- Do not blindly choose the first `is_cart_addable` product from a dirty local DB.
+
+## Quick Commands
+
+```bash
+docker compose -f infra/docker-compose.yml up -d
+npm --workspace apps/medusa-backend run db:migrate
+npm run seed
+
+cd apps/medusa-backend
+npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
+cd ../..
+```
+
+Static/unit checks:
+
+```bash
+npx tsc --noEmit -p apps/medusa-backend/tsconfig.json
+npm test --workspace apps/medusa-backend
+
+cd apps/ai-worker
+AI_WORKER_MOCK_GENERATION=true python -m pytest -q
+cd ../..
+```
+
+Runtime validation:
 
 ```bash
 bash scripts/phase1-dev2-self-test.sh
+PHASE2A_E2E_COMPLETE=true bash scripts/phase2a-dev2-e2e.sh
+bash scripts/smoke-store-isolation.sh
 ```
 
-Run the Phase 2A E2E:
+Postman/Newman:
 
 ```bash
-PHASE2A_E2E_COMPLETE=true bash scripts/phase2a-dev2-e2e.sh
+set -a
+source apps/medusa-backend/.env
+set +a
+
+npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
+  --env-var "base_url=${MEDUSA_BASE_URL:-http://localhost:9000}" \
+  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://localhost:8001}" \
+  --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
+  --env-var "admin_token=$ADMIN_TOKEN" \
+  --env-var "default_store_id=default_store" \
+  --env-var "test_store_id=test_store" \
+  --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
+  --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
+  --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID"
 ```
 
-For the full local command-by-command Phase 2A validation flow, see [phase2a-test-runbook.md](./phase2a-test-runbook.md).
+Postman files:
 
-## Postman Store Isolation Collection
+- Collection: `postman/ai-commerce-store-isolation.postman_collection.json`
+- Local example environment: `postman/ai-commerce-local.example.postman_environment.json`
 
-Import this collection into Postman:
+## Detailed Docs
 
-```text
-postman/ai-commerce-store-isolation.postman_collection.json
-```
+- Phase 2A full local runbook: [phase2a-test-runbook.md](./phase2a-test-runbook.md)
+- Dev2 Phase 1 regression: [phase1-dev2-self-test.md](./phase1-dev2-self-test.md)
+- API reference: [api.md](./api.md)
+- Schema reference: [schema.md](./schema.md)
+- Store context: [store-context.md](./store-context.md)
 
-Create or select a Postman environment with these variables:
+## Common Failures
 
-| Variable | Example |
-| --- | --- |
-| `base_url` | `http://localhost:9000` |
-| `publishable_api_key` | `<publishable_api_key>` |
-| `admin_token` | `<admin_bearer_token>` |
-| `default_store_id` | `default_store` |
-| `test_store_id` | `test_store` |
+`A valid publishable key is required`
 
-Run the collection in order. It mirrors `scripts/smoke-store-isolation.sh` and creates uniquely named categories/products using a collection-level smoke run id.
+- Refresh `PUBLISHABLE_API_KEY`.
+- Verify with `GET /store/products`.
 
-The collection covers:
+`ADMIN_TOKEN` returns 401
 
-- Health and store-context checks.
-- Missing publishable API key rejection.
-- Admin bearer-token auth check.
-- Category creation in both stores.
-- Product category isolation.
-- Draft product creation in both stores.
-- Product publishing in the correct store.
-- Product list isolation.
-- Cross-store publish rejection.
-- Cross-store `category_ids` rejection.
-- Cross-store product detail blocking.
+- Refresh the token with `POST /auth/user/emailpass`.
+- Store it only in local `.env` or your shell.
 
-Troubleshooting:
+`Cannot read properties of undefined (reading 'calculated_amount')`
 
-- If product draft creation fails because `platform_product_id`, `supplier_product_id`, or another recently added product column is missing, run migrations with `npm --workspace apps/medusa-backend run db:migrate`.
-- `POST /admin/product-categories` accepts `name` and `description`; `slug` and `sort_order` are generated or defaulted by the backend.
+- The selected native variant does not have a calculated price for the cart currency/region.
+- Run `phase1-dev2-bootstrap` again.
+- Update `DEFAULT_MEDUSA_VARIANT_ID` from `prod_phase1_default`.
 
-## Store Settings Isolation Tests
+`Some variant does not have the required inventory`
 
-Required coverage:
+- The selected native variant is not cart-ready for local stock checks.
+- Run `phase1-dev2-bootstrap` and use its output ids.
 
-- `GET /store/settings` returns settings for the resolved store.
-- `GET /store/settings` does not return another store's settings.
-- `GET /admin/store-settings` returns settings for the resolved store.
-- `PUT /admin/store-settings` creates settings for the selected store.
-- `PUT /admin/store-settings` updates only the selected store's settings.
+AI Worker connection refused:
 
-## Publish Cross-Store Tests
+- Start AI Worker on `127.0.0.1:8001`.
+- Use Python 3.10+; Python 3.13 is recommended.
 
-Required coverage:
+Python FastAPI or dependency errors:
 
-- `POST /admin/products/{product_id}/publish` publishes a product in the current store.
-- Publishing a product from another store returns `PRODUCT_STORE_MISMATCH`.
-- A missing product id returns `PRODUCT_NOT_FOUND`.
-- The final updated product remains associated with its original `store_id`.
+- Do not use Python 3.9 for Phase 2A validation.
+- Install `apps/ai-worker/requirements.txt` in the active Python 3.10+ environment.
 
-## body.store_id Override Tests
+`customer_email` unrecognized in cart create:
 
-Current behavior to document in tests before changing:
-
-- `POST /admin/products/draft` uses `body.store_id` when provided.
-- `POST /admin/products/draft` falls back to resolved request store when `body.store_id` is omitted.
-- `POST /admin/products/draft` returns `STORE_NOT_FOUND` for a missing body-selected store.
-- `PUT /admin/store-settings` uses `body.store_id` when provided.
-- `PUT /admin/store-settings` falls back to resolved request store when `body.store_id` is omitted.
-- `PUT /admin/store-settings` returns `STORE_NOT_FOUND` for a missing body-selected store.
-
-Risk to keep visible: admin draft product creation and admin store settings updates may allow `body.store_id` to override request context. This is a known Phase 1 cross-store risk. Do not silently change it without a dedicated behavior-change PR and updated API docs.
-
-## Unknown Store Behavior Tests
-
-Required coverage:
-
-- Storefront product and category list routes with an unknown `X-Store-Id` return empty scoped results unless route behavior changes.
-- Admin category creation validates the resolved store and returns `STORE_NOT_FOUND`.
-- Admin product draft and store settings writes validate the selected store and return `STORE_NOT_FOUND`.
-
-## Future Cart And Order Isolation Tests
-
-When cart and order APIs are added or stabilized, add tests for:
-
-- Cart creation binds cart to current store.
-- Adding items rejects products from another store.
-- Cart reads are scoped to current store.
-- Order creation uses the cart store.
-- Order reads are scoped to current store.
-- Cross-store cart/order operations return `CART_STORE_MISMATCH` or `ORDER_STORE_MISMATCH`.
-- Payment and webhook flows cannot update another store's cart or order.
-
-## Documentation And Collection Tests
-
-Developer 3 should also maintain:
-
-- API documentation examples for store-aware routes.
-- Shared error code documentation.
-- Postman or Apifox collection covering happy paths and cross-store failures.
-- Manual review steps for `default_store` and `test_store` scenarios.
+- Current cart create tests should use `currency_code` and optional `region_id` only unless the route changes.
