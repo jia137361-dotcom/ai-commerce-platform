@@ -278,9 +278,15 @@ All store isolation smoke tests passed.
 
 ## Postman/Newman Coverage
 
-Current Postman coverage focuses on Phase 1 store isolation and product-to-cart bridge behavior. Phase 2A Postman/Newman coverage should be added in a follow-up test asset PR for:
+The Postman collection includes:
 
-- AI Worker health, if the runner can reach the worker.
+- `Phase 1 / Store Isolation Regression`
+- `Phase 2A - AI Product E2E`
+
+The Phase 2A folder covers:
+
+- Medusa health.
+- AI Worker health.
 - `GET /admin/supplier-products`.
 - `GET /store/supplier-products`.
 - `POST /admin/ai/generate-and-draft`.
@@ -291,6 +297,44 @@ Current Postman coverage focuses on Phase 1 store isolation and product-to-cart 
 - `POST /store/carts/:id/complete`.
 - `POST /admin/orders/:id/push-fulfillment`.
 - `POST /admin/orders/:id/mock-shipment`.
+
+Prerequisites:
+
+- Medusa backend is running on `9000`.
+- AI Worker is running on `8001`.
+- `npm run seed` completed.
+- `cd apps/medusa-backend && npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts` completed.
+- Local `.env` has valid `PUBLISHABLE_API_KEY` and `ADMIN_TOKEN`.
+- `DEFAULT_MEDUSA_VARIANT_ID` comes from the `prod_phase1_default` bootstrap product.
+
+Run Newman from the repo root:
+
+```bash
+set -a
+source apps/medusa-backend/.env
+set +a
+
+npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
+  --env-var "base_url=${MEDUSA_BASE_URL:-http://localhost:9000}" \
+  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://localhost:8001}" \
+  --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
+  --env-var "admin_token=$ADMIN_TOKEN" \
+  --env-var "default_store_id=default_store" \
+  --env-var "test_store_id=test_store" \
+  --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
+  --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
+  --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID"
+```
+
+Expected: `failed: 0`.
+
+For Postman app import, use:
+
+- `postman/ai-commerce-store-isolation.postman_collection.json`
+- `postman/ai-commerce-local.example.postman_environment.json`
+
+The example environment contains placeholders only. Replace them locally and do not commit real keys or tokens.
 
 ## Common Failures
 
