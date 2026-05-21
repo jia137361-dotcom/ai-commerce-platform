@@ -319,14 +319,42 @@ Request body:
   "platform_product_id": "pp_tshirt",
   "supplier_product_id": "sp_tshirt",
   "supplier_variant_id": "spv_tshirt_black_m",
-  "print_position": "front"
+  "print_position": "front",
+  "medusa_product_id": "prod_01...",
+  "medusa_variant_id": "variant_01..."
 }
 ```
+
+The Medusa bridge ids are optional for draft creation, but full Phase 2A cart E2E requires a real native Medusa variant. Local tests should use the bootstrap-created `prod_phase1_default` native variant.
+
+Response product includes:
+
+- `supplier_id`
+- `platform_product_id`
+- `supplier_product_id`
+- `supplier_variant_id`
+- `design_image_url`
+- `mockup_image_url`
+- `print_file_url`
+- `medusa_product_id`
+- `medusa_variant_id`
+- `is_cart_addable`
+
+After publishing, `/store/products` and `/store/products/:product_id` expose the same Phase 2A fields.
 
 Cart line items created via `POST /store/carts/:id/line-items` copy production fields into `line_item.metadata`:
 
 - `supplier_id`, `supplier_product_id`, `supplier_variant_id`
 - `print_file_url`, `print_position`, `color`, `size`
+
+Local bootstrap caveat: if cart add-to-cart fails with a missing `calculated_amount` or insufficient inventory error, run:
+
+```bash
+cd apps/medusa-backend
+npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
+```
+
+Then make sure `DEFAULT_MEDUSA_VARIANT_ID` points to the native variant linked by `prod_phase1_default`.
 
 ### Product Categories
 
@@ -503,6 +531,12 @@ Phase 1 product-to-cart bridge behavior:
 - The linked `mc_product` must be published and belong to the cart store.
 - Cross-store variant adds return `CART_STORE_MISMATCH`.
 - Products without `medusa_variant_id` return `is_cart_addable: false` and should not show an enabled add-to-cart action.
+
+Phase 2A line-item metadata behavior:
+
+- The linked published `mc_product` supplies production metadata.
+- AI-generated products should result in line-item metadata containing `supplier_id`, `supplier_product_id`, `supplier_variant_id`, `print_file_url`, `print_position`, `color`, and `size`.
+- Local full E2E uses `pp_system_default` to complete carts without Stripe.
 
 ### `GET /store/settings`
 

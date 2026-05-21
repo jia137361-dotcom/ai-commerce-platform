@@ -157,6 +157,63 @@ export ADMIN_TOKEN="<token>"
 
 Get `PUBLISHABLE_API_KEY` from Medusa Admin. The current seed script does not create one.
 
+## Phase 2A Dev3 Integration Coverage
+
+Phase 2A validation extends the Phase 1 store isolation and cart bridge checks with supplier foundation, AI mock generation, production metadata, order completion, and mock fulfillment.
+
+Required local services:
+
+- Docker Postgres and Redis.
+- Medusa backend at `http://localhost:9000`.
+- AI Worker at `http://localhost:8001` with `AI_WORKER_MOCK_GENERATION=true`.
+
+Required local env in `apps/medusa-backend/.env`:
+
+- `DATABASE_URL=postgres://medusa:medusa@localhost:5432/ai_commerce`
+- `REDIS_URL=redis://localhost:6379`
+- `ADMIN_TOKEN`
+- `PUBLISHABLE_API_KEY`
+- `AI_WORKER_BASE_URL=http://localhost:8001`
+- `AI_WORKER_MOCK_GENERATION=true`
+- `MEDUSA_BASE_URL=http://localhost:9000`
+- `AI_WORKER_PUBLIC_BASE_URL=http://localhost:8001/static`
+- `DEFAULT_MEDUSA_PRODUCT_ID`
+- `DEFAULT_MEDUSA_VARIANT_ID`
+- `TEST_MEDUSA_PRODUCT_ID`
+- `TEST_MEDUSA_VARIANT_ID`
+
+Mock mode notes:
+
+- `STRIPE_API_KEY` can be empty locally because tests use `pp_system_default`.
+- `DEEPSEEK_API_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
+- `FAL_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
+
+Required bootstrap:
+
+```bash
+npm run seed
+
+cd apps/medusa-backend
+npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
+cd ../..
+```
+
+The bootstrap creates or updates `prod_phase1_default` and `prod_phase1_test`, links them to native Medusa products/variants, ensures price sets exist, and makes the native bridge variants cart-ready for local tests.
+
+Run the Phase 1 regression:
+
+```bash
+bash scripts/phase1-dev2-self-test.sh
+```
+
+Run the Phase 2A E2E:
+
+```bash
+PHASE2A_E2E_COMPLETE=true bash scripts/phase2a-dev2-e2e.sh
+```
+
+For the full local command-by-command Phase 2A validation flow, see [phase2a-test-runbook.md](./phase2a-test-runbook.md).
+
 ## Postman Store Isolation Collection
 
 Import this collection into Postman:

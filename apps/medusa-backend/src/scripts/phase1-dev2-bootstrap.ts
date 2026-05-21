@@ -1,6 +1,9 @@
 import type { ExecArgs, MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
-import { createProductsWorkflow } from "@medusajs/medusa/core-flows"
+import {
+  createProductsWorkflow,
+  updateProductVariantsWorkflow,
+} from "@medusajs/medusa/core-flows"
 import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
 import { resolveDefaultRegionId } from "../lib/resolve-default-region"
 import { STORE_CORE_MODULE } from "../modules/store-core"
@@ -30,6 +33,21 @@ async function findNativeProductAndVariantByHandle(
   return null
 }
 
+async function ensureVariantIsCartReady(
+  container: MedusaContainer,
+  input: { productId: string; variantId: string }
+) {
+  await updateProductVariantsWorkflow(container).run({
+    input: {
+      selector: { id: input.variantId, product_id: input.productId },
+      update: {
+        manage_inventory: false,
+        allow_backorder: true,
+      },
+    },
+  })
+}
+
 export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
   const storeCore = container.resolve<StoreCoreModuleService>(STORE_CORE_MODULE)
   const regionId = await resolveDefaultRegionId(container, VARIANT_PRICE_CURRENCY)
@@ -46,6 +64,7 @@ export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
         amount: VARIANT_PRICE_AMOUNT,
         currencyCode: VARIANT_PRICE_CURRENCY,
       })
+      await ensureVariantIsCartReady(container, existing)
       return existing
     }
 
@@ -61,6 +80,8 @@ export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
             variants: [
               {
                 title: "Default",
+                manage_inventory: false,
+                allow_backorder: true,
                 metadata: { store_id: storeId },
                 options: { Default: "Default" },
                 prices: [
@@ -86,6 +107,10 @@ export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
       variantId,
       amount: VARIANT_PRICE_AMOUNT,
       currencyCode: VARIANT_PRICE_CURRENCY,
+    })
+    await ensureVariantIsCartReady(container, {
+      productId: product.id,
+      variantId,
     })
 
     return { productId: product.id, variantId }
