@@ -248,6 +248,44 @@ When cart and order APIs are added or stabilized, add tests for:
 - Cross-store cart/order operations return `CART_STORE_MISMATCH` or `ORDER_STORE_MISMATCH`.
 - Payment and webhook flows cannot update another store's cart or order.
 
+## Phase 2B S2BDIY Tests
+
+### 单元测试
+
+```bash
+cd apps/medusa-backend && npm test
+```
+
+覆盖：`s2bdiy-status-mapper`、`buildThirdOrderId`、line-item S2B 字段。
+
+### S2BDIY 直连 Smoke（不依赖 Medusa）
+
+```bash
+bash scripts/s2bdiy-api-smoke.sh
+```
+
+前置：`.env` 中 `S2BDIY_API_BASE_URL`、`S2BDIY_APP_KEY`、`S2BDIY_APP_SECRET`；可选 `S2BDIY_TEST_BASIC_PRODUCT_ID` 等（未设则从列表接口自动取第一个）。
+
+`orderPay` 若返回 HTTP 502（余额不足）脚本会 `SKIP` 该步，其余步骤仍应 PASS。
+
+### Phase 2B Medusa E2E
+
+```bash
+# migrate + seed 后
+cd apps/medusa-backend && npx medusa db:migrate && npm run seed
+bash scripts/phase2b-e2e.sh
+```
+
+### Admin API 手工检查
+
+- `POST /admin/suppliers/s2bdiy/sync-basic-product`
+- `POST /admin/ai/generate-and-draft` → 响应含 `s2b_designed_product_id`
+- `POST /admin/products/{id}/publish`（需已有 `s2b_designed_product_id`）
+- `GET /admin/orders/{order_id}/supplier-order`
+- `POST /admin/supplier-orders/sync`
+
+详见 [docs/suppliers/s2bdiy.md](suppliers/s2bdiy.md)。
+
 ## Documentation And Collection Tests
 
 Developer 3 should also maintain:
