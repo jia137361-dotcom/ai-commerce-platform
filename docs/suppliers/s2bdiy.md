@@ -30,18 +30,17 @@
 
 ## CitiGoo 字段映射
 
-| CitiGoo | S2BDIY |
+| CitiGoo（Dev1 命名；开发二写入 `mc_product.metadata` 直至列迁移） | S2BDIY |
 |---------|--------|
-| `mc_product.s2b_material_id` | uploadMaterial `id` |
-| `mc_product.s2b_designed_product_id` | quickCreate `product_id` |
-| `mc_product.s2b_mockup_image_url` | product detail `show_images` |
-| `mc_supplier_product.basic_product_id` | basicProduct `id` |
+| `metadata.supplier_material_id` | uploadMaterial `id` |
+| `metadata.supplier_product_id`（非 `sp_*` 目录 id） | quickCreate `product_id` |
+| `mockup_image_url` / `metadata.mockup_image_url` | product detail `show_images` |
+| `metadata.basic_product_id` | basicProduct `id` |
 | `mc_supplier_order.supplier_order_id` | order `id` |
 | `mc_supplier_order.third_order_id` | Medusa `order_id`（勿重复提交） |
 
-## Admin API
+## Admin API（开发二 / 履约）
 
-- `POST /admin/suppliers/s2bdiy/sync-basic-product`
 - `GET /admin/orders/{order_id}/supplier-order`
 - `POST /admin/orders/{order_id}/retry-supplier-pay`
 - `POST /admin/supplier-orders/sync`

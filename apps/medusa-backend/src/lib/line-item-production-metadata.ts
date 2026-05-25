@@ -1,15 +1,20 @@
-import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
+import {
+  readDesignedSupplierProductId,
+  readMcProductSupplierField,
+} from "./s2bdiy/mc-product-supplier-fields"
 
 export type LineItemProductionMetadata = {
   mc_product_id: string | null
   supplier_id: string | null
+  /** Catalog supplier_product row id (e.g. sp_tshirt). */
   supplier_product_id: string | null
   supplier_variant_id: string | null
-  s2b_designed_product_id: string | null
-  s2b_basic_product_id: string | null
-  s2b_size_id: string | null
-  s2b_color_id: string | null
+  basic_product_id: string | null
+  supplier_size_id: string | null
+  supplier_color_id: string | null
+  /** S2B quickCreate product_id (Dev1 naming; stored in mc_product.metadata). */
+  supplier_fulfillment_product_id: string | null
   print_file_url: string | null
   print_position: string | null
   color: string | null
@@ -61,6 +66,10 @@ export async function buildLineItemProductionMetadata(
     }
   }
 
+  const basicProductId = readMcProductSupplierField(linkedProduct, "basic_product_id")
+  const supplierSizeId = readMcProductSupplierField(linkedProduct, "supplier_size_id")
+  const supplierColorId = readMcProductSupplierField(linkedProduct, "supplier_color_id")
+
   return {
     mc_product_id: typeof linkedProduct.id === "string" ? linkedProduct.id : null,
     supplier_id:
@@ -70,18 +79,10 @@ export async function buildLineItemProductionMetadata(
         ? linkedProduct.supplier_product_id
         : null,
     supplier_variant_id: supplierVariantId,
-    s2b_designed_product_id:
-      typeof linkedProduct.s2b_designed_product_id === "string"
-        ? linkedProduct.s2b_designed_product_id
-        : null,
-    s2b_basic_product_id:
-      typeof linkedProduct.s2b_basic_product_id === "string"
-        ? linkedProduct.s2b_basic_product_id
-        : null,
-    s2b_size_id:
-      typeof linkedProduct.s2b_size_id === "string" ? linkedProduct.s2b_size_id : null,
-    s2b_color_id:
-      typeof linkedProduct.s2b_color_id === "string" ? linkedProduct.s2b_color_id : null,
+    basic_product_id: typeof basicProductId === "string" ? basicProductId : null,
+    supplier_size_id: typeof supplierSizeId === "string" ? supplierSizeId : null,
+    supplier_color_id: typeof supplierColorId === "string" ? supplierColorId : null,
+    supplier_fulfillment_product_id: readDesignedSupplierProductId(linkedProduct),
     print_file_url:
       typeof linkedProduct.print_file_url === "string"
         ? linkedProduct.print_file_url

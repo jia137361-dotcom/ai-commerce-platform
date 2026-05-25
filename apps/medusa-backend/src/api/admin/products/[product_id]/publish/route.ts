@@ -6,7 +6,6 @@ import {
   normalizeProduct,
   sendError
 } from "../../../../_helpers/store-core"
-import { getS2bdiyConfig } from "../../../../../lib/s2bdiy"
 
 const readString = (value: unknown) => {
   return typeof value === "string" && value.length > 0 ? value : null
@@ -35,18 +34,6 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       "PRODUCT_STORE_MISMATCH",
       "Product does not belong to current store"
     )
-  }
-
-  if (getS2bdiyConfig()) {
-    const s2bProductId = readString(product.s2b_designed_product_id)
-    if (!s2bProductId) {
-      return sendError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "Product must have s2b_designed_product_id before publish (run S2BDIY provisioning)"
-      )
-    }
   }
 
   const medusaVariantId = readString(product.medusa_variant_id)

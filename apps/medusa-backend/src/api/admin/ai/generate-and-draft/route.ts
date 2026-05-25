@@ -168,10 +168,14 @@ async function handleGenerateAndDraft(
     const sp = spRows[0] as Record<string, unknown> | undefined
     const basicFromCatalog =
       sp?.basic_product_id != null ? String(sp.basic_product_id) : null
-    const s2bIds = resolveS2bIdsFromEnvOrVariant(variant, {
-      ...product,
-      s2b_basic_product_id: basicFromCatalog,
-    } as Record<string, unknown>)
+    const productForS2b = {
+      ...(product as Record<string, unknown>),
+      metadata: {
+        ...((product.metadata as Record<string, unknown> | null) ?? {}),
+        ...(basicFromCatalog ? { basic_product_id: basicFromCatalog } : {}),
+      },
+    }
+    const s2bIds = resolveS2bIdsFromEnvOrVariant(variant, productForS2b)
     if (s2bIds) {
       try {
         await provisionS2bProductForMcProduct(storeCoreService, {

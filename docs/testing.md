@@ -278,9 +278,8 @@ bash scripts/phase2b-e2e.sh
 
 ### Admin API 手工检查
 
-- `POST /admin/suppliers/s2bdiy/sync-basic-product`
-- `POST /admin/ai/generate-and-draft` → 响应含 `s2b_designed_product_id`
-- `POST /admin/products/{id}/publish`（需已有 `s2b_designed_product_id`）
+- `POST /admin/ai/generate-and-draft` → S2B 配置后 `product.metadata` 含 `supplier_product_id`（quickCreate id）
+- `POST /admin/products/{id}/publish`（Phase 2A 规则；S2B 字段由开发一 schema 落地后校验）
 - `GET /admin/orders/{order_id}/supplier-order`
 - `POST /admin/supplier-orders/sync`
 

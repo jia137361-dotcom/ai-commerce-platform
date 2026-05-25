@@ -22,16 +22,7 @@ STORE_ID="${DEFAULT_STORE_ID:-default_store}"
 
 [[ -n "$ADMIN_TOKEN" ]] || fail "ADMIN_TOKEN required"
 
-echo "== Phase 2B: sync basic product (if S2BDIY configured) =="
-if [[ -n "${S2BDIY_API_BASE_URL:-}" ]]; then
-  curl -sS -X POST "$BASE_URL/admin/suppliers/s2bdiy/sync-basic-product" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" \
-    -H "X-Store-Id: $STORE_ID" \
-    -H "Content-Type: application/json" \
-    -d "{\"platform_product_id\":\"pp_tshirt\",\"basic_product_id\":\"${S2BDIY_TEST_BASIC_PRODUCT_ID:-}\"}" | jq . || echo "(sync skipped or failed — set S2BDIY_TEST_BASIC_PRODUCT_ID)"
-else
-  echo "S2BDIY_API_BASE_URL not set — skip supplier sync"
-fi
+echo "== Phase 2B: catalog sync is Dev1 (skip sync-basic-product) =="
 
 echo "== Phase 2A baseline (generate-and-draft) =="
 bash "$REPO_ROOT/scripts/phase2a-dev2-e2e.sh"

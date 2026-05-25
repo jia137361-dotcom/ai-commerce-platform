@@ -23,6 +23,10 @@ import {
 } from "./s2bdiy-order"
 import { syncSupplierOrderById } from "./sync-supplier-orders"
 import { toJsonRecord } from "./json-record"
+import {
+  readDesignedSupplierProductId,
+  readMcProductSupplierField,
+} from "./mc-product-supplier-fields"
 
 type OrderAddress = {
   country?: string
@@ -77,12 +81,18 @@ export async function pushOrderToS2bdiy(
     if (!mcProductId) continue
     const products = await storeCore.listProducts({ id: mcProductId })
     const mc = products[0] as Record<string, unknown> | undefined
-    if (!mc?.s2b_designed_product_id) continue
-    const sizeId = Number(mc.s2b_size_id ?? process.env.S2BDIY_TEST_SIZE_ID)
-    const colorId = Number(mc.s2b_color_id ?? process.env.S2BDIY_TEST_COLOR_ID)
+    if (!mc) continue
+    const designedId = readDesignedSupplierProductId(mc)
+    if (!designedId) continue
+    const sizeId = Number(
+      readMcProductSupplierField(mc, "supplier_size_id") ?? process.env.S2BDIY_TEST_SIZE_ID
+    )
+    const colorId = Number(
+      readMcProductSupplierField(mc, "supplier_color_id") ?? process.env.S2BDIY_TEST_COLOR_ID
+    )
     if (!sizeId || !colorId) continue
     orderItems.push({
-      product_id: String(mc.s2b_designed_product_id),
+      product_id: designedId,
       size_id: sizeId,
       color_id: colorId,
       num: Number(item.quantity ?? 1),
@@ -100,7 +110,11 @@ export async function pushOrderToS2bdiy(
   const addr = (order.shipping_address ?? {}) as OrderAddress
   const firstMc = orderItems[0].mcProduct
   const basicId =
-    String(firstMc.s2b_basic_product_id ?? process.env.S2BDIY_TEST_BASIC_PRODUCT_ID ?? "")
+    String(
+      readMcProductSupplierField(firstMc, "basic_product_id") ??
+        process.env.S2BDIY_TEST_BASIC_PRODUCT_ID ??
+        ""
+    )
 
   const weight = Number(process.env.S2BDIY_DEFAULT_WEIGHT ?? 0.3)
   const length = Number(process.env.S2BDIY_DEFAULT_LENGTH ?? 30)
