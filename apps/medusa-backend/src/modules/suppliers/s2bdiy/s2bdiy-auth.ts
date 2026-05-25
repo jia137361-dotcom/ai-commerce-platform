@@ -1,45 +1,45 @@
-let cachedToken: string | null = null
-let expiresAt: number = 0
+import type { S2bdiyConfig } from "./config"
 
-interface TokenResponse {
-  access_token: string
-  expires_in: number
-}
+type TokenCache = { token: string; expiresAt: number }
+let memoryCache: TokenCache | null = null
+const TOKEN_TTL_MS = 2.5 * 24 * 60 * 60 * 1000
 
-export async function getAccessToken(): Promise<string> {
-  if (cachedToken && Date.now() < expiresAt - 60_000) {
-    return cachedToken
-  }
+export function clearS2bdiyTokenCache(): void { memoryCache = null }
+export const clearTokenCache = clearS2bdiyTokenCache
 
-  const appKey = process.env.S2BDIY_APP_KEY
-  const appSecret = process.env.S2BDIY_APP_SECRET
-  const baseUrl = process.env.S2BDIY_API_BASE_URL
+export async function getS2bdiyAccessToken(config: S2bdiyConfig, forceRefresh = false): Promise<string> {
+  const now = Date.now()
+  if (!forceRefresh && memoryCache && memoryCache.expiresAt > now) return memoryCache.token
 
-  if (!appKey || !appSecret || !baseUrl) {
-    throw new Error("S2BDIY credentials not configured (S2BDIY_APP_KEY, S2BDIY_APP_SECRET, S2BDIY_API_BASE_URL)")
-  }
-
-  const response = await fetch(`${baseUrl}/open/v1/accessToken`, {
+  const url = `${config.apiBaseUrl}/open/v1/accessToken`
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      app_key: appKey,
-      app_secret: appSecret,
-    }),
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ app_key: config.appKey, app_secret: config.appSecret }),
   })
 
-  if (!response.ok) {
-    throw new Error(`S2BDIY auth failed: ${response.status} ${await response.text()}`)
-  }
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok) throw new Error(`S2BDIY accessToken failed HTTP ${res.status}: ${JSON.stringify(body)}`)
 
-  const data: TokenResponse = await response.json()
-  cachedToken = data.access_token
-  expiresAt = Date.now() + (data.expires_in ?? 3600) * 1000
+  const data = (body.data ?? body) as Record<string, unknown>
+  const token =
+    (typeof data.token === "string" && data.token) ||
+    (typeof body.token === "string" && body.token) ||
+    (typeof data.access_token === "string" && data.access_token) ||
+    null
+  if (!token) throw new Error(`S2BDIY accessToken missing token in response: ${JSON.stringify(body)}`)
 
-  return cachedToken
+  memoryCache = { token, expiresAt: now + TOKEN_TTL_MS }
+  return token
 }
 
-export function clearTokenCache(): void {
-  cachedToken = null
-  expiresAt = 0
+/** Simple env-based auth (backward compat) */
+export async function getAccessToken(): Promise<string> {
+  const apiBaseUrl = process.env.S2BDIY_API_BASE_URL?.replace(/\/$/, "")
+  const appKey = process.env.S2BDIY_APP_KEY
+  const appSecret = process.env.S2BDIY_APP_SECRET
+  if (!apiBaseUrl || !appKey || !appSecret) {
+    throw new Error("S2BDIY credentials not configured")
+  }
+  return getS2bdiyAccessToken({ apiBaseUrl, appKey, appSecret, platformId: Number(process.env.S2BDIY_PLATFORM_ID || "99") })
 }
