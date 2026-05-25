@@ -4,6 +4,14 @@ This is the canonical testing entry point for local Phase 1, Phase 2A, and Phase
 
 Keep this file concise. Detailed command-by-command instructions should live in the linked runbooks, scripts, and supplier-specific docs.
 
+Recommended one-command Dev3 backend validation entry:
+
+```bash
+bash scripts/dev3-full-backend-pipeline.sh
+```
+
+This script orchestrates Dev1 supplier foundation checks, Dev2 Phase 1 regression, Dev2 Phase 2A E2E, Dev3 smoke coverage, unified Phase 1/2A/2B Newman, and Phase 2B S2BDIY readiness / optional real supplier smoke.
+
 Do not commit:
 
 - `apps/medusa-backend/.env`
@@ -137,7 +145,7 @@ bash scripts/smoke-store-isolation.sh
 
 Expected: `All store isolation smoke tests passed.`
 
-Run Newman:
+Run unified Newman:
 
 ```bash
 npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
@@ -150,10 +158,20 @@ npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
   --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
   --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
   --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
-  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID"
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID" \
+  --env-var "run_phase2b_s2bdiy=${RUN_PHASE2B_S2BDIY:-false}" \
+  --env-var "s2bdiy_base_url=${S2BDIY_API_BASE_URL:-https://opentest.s2bdiy.com}" \
+  --env-var "s2bdiy_client_id=$S2BDIY_APP_KEY" \
+  --env-var "s2bdiy_client_secret=$S2BDIY_APP_SECRET" \
+  --env-var "s2bdiy_app_secret=$S2BDIY_APP_SECRET" \
+  --env-var "s2bdiy_basic_product_id=$S2BDIY_TEST_BASIC_PRODUCT_ID" \
+  --env-var "s2bdiy_size_id=$S2BDIY_TEST_SIZE_ID" \
+  --env-var "s2bdiy_color_id=$S2BDIY_TEST_COLOR_ID" \
+  --env-var "s2bdiy_view_id=$S2BDIY_TEST_VIEW_ID" \
+  --env-var "s2bdiy_logistics_id=$S2BDIY_TEST_LOGISTICS_ID"
 ```
 
-Expected Newman result: `failed: 0`.
+Expected Newman result: `failed: 0`. Phase 2B lives in the same collection and is credential-dependent. Keep `run_phase2b_s2bdiy=false` when S2BDIY credentials are missing; in that mode Phase 2B is `SKIPPED`, not `FAILED`. Set `run_phase2b_s2bdiy=true` only when the S2BDIY sandbox env is ready.
 
 ### Stage 7: Phase 2B Supplier Validation
 
@@ -317,20 +335,11 @@ set +a
 npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
   --env-var "base_url=${MEDUSA_BASE_URL:-http://localhost:9000}" \
   --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://localhost:8001}" \
-  --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
-  --env-var "admin_token=$ADMIN_TOKEN" \
-  --env-var "default_store_id=default_store" \
-  --env-var "test_store_id=test_store" \
-  --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
-  --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
-  --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
-  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID"
-```
-
 Postman files:
 
 - Collection: `postman/ai-commerce-store-isolation.postman_collection.json`
 - Local example environment: `postman/ai-commerce-local.example.postman_environment.json`
+- The same collection contains Phase 1, Dev1 supplier foundation, Phase 2A, and optional Phase 2B S2BDIY folders.
 
 ## Phase 1 Required Coverage
 
@@ -447,6 +456,8 @@ Expected scripts and assets:
 - `scripts/s2bdiy-error-cases.sh`
 - `scripts/test-assets/test-print.png`
 - `docs/suppliers/s2bdiy.md`
+- `postman/ai-commerce-store-isolation.postman_collection.json`
+- `postman/ai-commerce-local.example.postman_environment.json`
 
 Credential behavior:
 

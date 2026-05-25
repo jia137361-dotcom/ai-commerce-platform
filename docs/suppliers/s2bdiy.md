@@ -122,6 +122,66 @@ Coverage:
 - `scripts/s2bdiy-error-cases.sh`: duplicate `third_order_id` guidance and invalid-token response.
 - `scripts/phase2b-e2e.sh`: Medusa admin sync route, Phase 2A baseline, and supplier order sync route when S2BDIY config is present.
 
+## Postman / Newman
+
+Phase 2B lives in the unified backend collection:
+
+- Collection: [`../../postman/ai-commerce-store-isolation.postman_collection.json`](../../postman/ai-commerce-store-isolation.postman_collection.json)
+- Example environment: [`../../postman/ai-commerce-local.example.postman_environment.json`](../../postman/ai-commerce-local.example.postman_environment.json)
+
+The collection folder is named `Phase 2B / S2BDIY Supplier Fulfillment`. It is skipped by default through `run_phase2b_s2bdiy=false`.
+
+Required environment variables:
+
+- `base_url`
+- `ai_worker_base_url`
+- `admin_token`
+- `publishable_api_key`
+- `default_store_id`
+- `test_store_id`
+- `default_medusa_product_id`
+- `default_medusa_variant_id`
+- `test_medusa_product_id`
+- `test_medusa_variant_id`
+- `run_phase2b_s2bdiy`
+- `s2bdiy_base_url`
+- `s2bdiy_client_id`
+- `s2bdiy_client_secret`
+- `s2bdiy_app_secret`
+- `s2bdiy_basic_product_id`
+- `s2bdiy_size_id`
+- `s2bdiy_color_id`
+- `s2bdiy_view_id`
+- `s2bdiy_logistics_id`
+
+Run with Newman:
+
+```bash
+npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
+  --env-var "base_url=${MEDUSA_BASE_URL:-http://localhost:9000}" \
+  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://localhost:8001}" \
+  --env-var "admin_token=$ADMIN_TOKEN" \
+  --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
+  --env-var "default_store_id=default_store" \
+  --env-var "test_store_id=test_store" \
+  --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
+  --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
+  --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID" \
+  --env-var "run_phase2b_s2bdiy=${RUN_PHASE2B_S2BDIY:-false}" \
+  --env-var "s2bdiy_base_url=${S2BDIY_API_BASE_URL:-https://opentest.s2bdiy.com}" \
+  --env-var "s2bdiy_client_id=$S2BDIY_APP_KEY" \
+  --env-var "s2bdiy_client_secret=$S2BDIY_APP_SECRET" \
+  --env-var "s2bdiy_app_secret=$S2BDIY_APP_SECRET" \
+  --env-var "s2bdiy_basic_product_id=$S2BDIY_TEST_BASIC_PRODUCT_ID" \
+  --env-var "s2bdiy_size_id=$S2BDIY_TEST_SIZE_ID" \
+  --env-var "s2bdiy_color_id=$S2BDIY_TEST_COLOR_ID" \
+  --env-var "s2bdiy_view_id=$S2BDIY_TEST_VIEW_ID" \
+  --env-var "s2bdiy_logistics_id=$S2BDIY_TEST_LOGISTICS_ID"
+```
+
+Without S2BDIY sandbox credentials, keep `run_phase2b_s2bdiy=false`; Phase 2B Newman is `SKIPPED`, not `FAILED`. Set `run_phase2b_s2bdiy=true` only when S2BDIY env and sandbox account readiness are confirmed.
+
 ## 跑通 smoke 第 8–10 步（下单 / 支付 / 查单）
 
 ### 前置

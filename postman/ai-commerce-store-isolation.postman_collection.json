@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "54f82807-9f8b-4af8-b842-dev3-store-isolation",
-    "name": "AI Commerce Store Isolation Smoke Tests",
-    "description": "Local Developer 3 smoke tests for store context, publishable API key behavior, admin auth, product category isolation, product isolation, and cross-store negative cases.",
+    "name": "AI Commerce Backend Integration Tests",
+    "description": "Canonical Dev3 backend Postman/Newman collection covering Phase 1 store isolation, Dev1 supplier foundation, Phase 2A AI product E2E, and optional Phase 2B S2BDIY supplier fulfillment.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -116,6 +116,42 @@
     },
     {
       "key": "phase2a_fulfillment_order_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_product_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_medusa_variant_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_cart_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_order_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_supplier_order_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_material_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_supplier_product_id",
+      "value": ""
+    },
+    {
+      "key": "phase2b_supplier_variant_id",
+      "value": ""
+    },
+    {
+      "key": "s2bdiy_access_token",
       "value": ""
     }
   ],
@@ -1201,6 +1237,82 @@
       ]
     },
     {
+      "name": "Dev1 / Supplier Foundation",
+      "item": [
+        {
+          "name": "D1-01 Admin Supplier Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/supplier-products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('admin supplier products returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "const products = json.supplier_products || [];",
+                  "const tshirt = products.find(function (p) { return p.supplier_product_id === 'sp_tshirt' && p.supplier_id === 'sup_citigoo_mock'; });",
+                  "pm.test('mock T-shirt supplier product exists', function () { pm.expect(tshirt).to.be.an('object'); });",
+                  "const variantIds = (tshirt && tshirt.variants || []).map(function (v) { return v.supplier_variant_id; });",
+                  "['spv_tshirt_black_s','spv_tshirt_black_m','spv_tshirt_black_l','spv_tshirt_black_xl','spv_tshirt_white_s','spv_tshirt_white_m','spv_tshirt_white_l','spv_tshirt_white_xl'].forEach(function (id) {",
+                  "  pm.test('variant exists: ' + id, function () { pm.expect(variantIds).to.include(id); });",
+                  "});",
+                  "const printSpecs = tshirt && tshirt.print_specs || [];",
+                  "const templates = tshirt && tshirt.design_templates || [];",
+                  "pm.test('front PNG print spec exists', function () { pm.expect(printSpecs.some(function (s) { return s.print_spec_id === 'sps_tshirt_front_png'; })).to.equal(true); });",
+                  "pm.test('front design template exists', function () { pm.expect(templates.some(function (t) { return t.template_id === 'pdt_tshirt_front'; })).to.equal(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "D1-02 Store Supplier Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-publishable-api-key",
+                "value": "{{publishable_api_key}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/store/supplier-products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('store supplier products returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "const products = json.supplier_products || [];",
+                  "pm.test('store supplier products include sp_tshirt', function () { pm.expect(products.some(function (p) { return p.supplier_product_id === 'sp_tshirt'; })).to.equal(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Phase 2A - AI Product E2E",
       "item": [
         {
@@ -1764,6 +1876,827 @@
                   "const json = pm.response.json();",
                   "pm.test('shipment/tracking fields exist', () => { pm.expect(json.shipment).to.exist; pm.expect(json.shipment.tracking_number).to.be.a('string').and.not.empty; });"
                 ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phase 2B / S2BDIY Supplier Fulfillment",
+      "item": [
+        {
+          "name": "2B-00 Optional Run Preflight",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Phase 2B folder is optional', function () {",
+                  "  const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase();",
+                  "  pm.expect(['true', 'false', '']).to.include(run);",
+                  "});",
+                  "if (String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() !== 'true') {",
+                  "  console.log('Phase 2B S2BDIY Newman is SKIPPED because run_phase2b_s2bdiy is not true.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-01 Admin Auth",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/users/me"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('admin auth returns 200', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-02 Sync Basic Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/admin/suppliers/s2bdiy/sync-basic-product",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"platform_product_id\": \"pp_tshirt\",\n  \"basic_product_id\": \"{{s2bdiy_basic_product_id}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('sync basic product returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('sync returns supplier product id', function () { pm.expect(json.supplier_product_id).to.be.a('string').and.not.empty; });",
+                  "pm.collectionVariables.set('phase2b_supplier_product_id', json.supplier_product_id || '');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-03 Select Supplier Variant",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/supplier-products?platform_product_id=pp_tshirt"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('admin supplier products returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "const products = json.supplier_products || [];",
+                  "const supplierProductId = pm.collectionVariables.get('phase2b_supplier_product_id');",
+                  "const product = products.find(function (p) { return p.supplier_product_id === supplierProductId; }) || products.find(function (p) { return p.supplier_id === 'sup_s2bdiy'; }) || products[0];",
+                  "const variants = product ? (product.variants || []) : [];",
+                  "const variant = variants.find(function (v) { return String(v.supplier_size_id || '') === String(pm.environment.get('s2bdiy_size_id') || '') && String(v.supplier_color_id || '') === String(pm.environment.get('s2bdiy_color_id') || ''); }) || variants[0];",
+                  "pm.test('supplier product and variant exist', function () { pm.expect(product).to.be.an('object'); pm.expect(variant).to.be.an('object'); });",
+                  "if (product && product.supplier_product_id) pm.collectionVariables.set('phase2b_supplier_product_id', product.supplier_product_id);",
+                  "if (variant && variant.supplier_variant_id) pm.collectionVariables.set('phase2b_supplier_variant_id', variant.supplier_variant_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-04 Generate And Draft AI Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/admin/ai/generate-and-draft",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"phase2b postman s2bdiy minimal cat\",\n  \"platform_product_id\": \"pp_tshirt\",\n  \"supplier_product_id\": \"{{phase2b_supplier_product_id}}\",\n  \"supplier_variant_id\": \"{{phase2b_supplier_variant_id}}\",\n  \"print_position\": \"front\",\n  \"medusa_product_id\": \"{{default_medusa_product_id}}\",\n  \"medusa_variant_id\": \"{{default_medusa_variant_id}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('generate-and-draft returns 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json(); const product = json.product || json;",
+                  "const productId = json.product_id || product.product_id;",
+                  "pm.test('draft product id exists', function () { pm.expect(productId).to.be.a('string').and.not.empty; });",
+                  "pm.test('draft has print or supplier provisioning data', function () { pm.expect(Boolean(product.print_file_url || product.s2b_material_id || product.s2b_designed_product_id)).to.equal(true); });",
+                  "pm.collectionVariables.set('phase2b_product_id', productId);",
+                  "if (product.medusa_variant_id) pm.collectionVariables.set('phase2b_medusa_variant_id', product.medusa_variant_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-05 Publish Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/products/{{phase2b_product_id}}/publish"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('publish returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const product = json.product || json;",
+                  "pm.test('product is published', function () { pm.expect(product.status || json.status).to.equal('published'); });",
+                  "if (product.medusa_variant_id) pm.collectionVariables.set('phase2b_medusa_variant_id', product.medusa_variant_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-06 Store Product Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-publishable-api-key",
+                "value": "{{publishable_api_key}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/store/products/{{phase2b_product_id}}"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('product detail returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const product = json.product || json;",
+                  "pm.test('product exposes supplier and bridge fields', function () {",
+                  "  pm.expect(product.is_cart_addable).to.equal(true);",
+                  "  pm.expect(product.medusa_variant_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(Boolean(product.print_file_url || product.s2b_material_id)).to.equal(true);",
+                  "});",
+                  "pm.collectionVariables.set('phase2b_medusa_variant_id', product.medusa_variant_id || '');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-07 Create Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-publishable-api-key",
+                "value": "{{publishable_api_key}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/store/carts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency_code\": \"usd\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('cart create returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const cartId = json.cart_id || (json.cart && json.cart.id);",
+                  "pm.test('cart id exists', function () { pm.expect(cartId).to.be.a('string').and.not.empty; });",
+                  "pm.collectionVariables.set('phase2b_cart_id', cartId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-08 Add Line Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-publishable-api-key",
+                "value": "{{publishable_api_key}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/store/carts/{{phase2b_cart_id}}/line-items",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variant_id\": \"{{phase2b_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('add line item returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const cart = json.cart || json; const items = cart.items || json.items || [];",
+                  "const item = items.find(function (line) { return line.variant_id === pm.collectionVariables.get('phase2b_medusa_variant_id'); }) || items[0];",
+                  "pm.test('line item uses variant_id', function () { pm.expect(item).to.be.an('object'); pm.expect(item.variant_id).to.equal(pm.collectionVariables.get('phase2b_medusa_variant_id')); });",
+                  "pm.test('line item has production metadata when exposed', function () { const m = item.metadata || {}; if (Object.keys(m).length) pm.expect(Boolean(m.print_file_url || m.s2b_designed_product_id || m.supplier_id)).to.equal(true); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-09 Complete Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-publishable-api-key",
+                "value": "{{publishable_api_key}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/store/carts/{{phase2b_cart_id}}/complete",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_provider_id\": \"pp_system_default\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('complete cart returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const orderId = json.order_id || (json.order && json.order.id);",
+                  "pm.test('order id exists', function () { pm.expect(orderId).to.be.a('string').and.not.empty; });",
+                  "pm.collectionVariables.set('phase2b_order_id', orderId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-10 Read Supplier Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/orders/{{phase2b_order_id}}/supplier-order"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('supplier order read returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const rows = json.supplier_orders || [];",
+                  "pm.test('supplier order response shape', function () { pm.expect(rows).to.be.an('array'); });",
+                  "if (rows[0]) { pm.collectionVariables.set('phase2b_supplier_order_id', rows[0].supplier_order_id || rows[0].id || ''); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-11 Retry Supplier Pay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/orders/{{phase2b_order_id}}/retry-supplier-pay"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('retry supplier pay returns a documented status', function () { pm.expect([200, 400, 502]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200) { pm.expect(pm.response.json().status).to.equal('pay_retried'); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-12 Sync Supplier Orders",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/supplier-orders/sync"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('supplier sync returns a documented status', function () { pm.expect([200, 400, 502]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200) { pm.expect(pm.response.json().synced).to.be.a('number'); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-13 Read Supplier Order After Sync",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/orders/{{phase2b_order_id}}/supplier-order"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('supplier order read after sync returns 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const rows = json.supplier_orders || [];",
+                  "if (rows[0] && rows[0].tracking_number) { pm.test('tracking is exposed when available', function () { pm.expect(rows[0].tracking_number).to.be.a('string').and.not.empty; }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-14 Negative Invalid Order Supplier Lookup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/orders/order_does_not_exist/supplier-order"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('missing order returns documented error', function () { pm.expect([400, 404]).to.include(pm.response.code); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-15 Negative Invalid Order Retry Pay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "X-Store-Id",
+                "value": "{{default_store_id}}"
+              }
+            ],
+            "url": "{{base_url}}/admin/orders/order_does_not_exist/retry-supplier-pay"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invalid retry pay returns documented error', function () { pm.expect([400, 404, 502]).to.include(pm.response.code); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2B-16 Optional Direct S2BDIY Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{s2bdiy_base_url}}/open/v1/accessToken",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app_key\": \"{{s2bdiy_client_id}}\",\n  \"app_secret\": \"{{s2bdiy_client_secret}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const run = String(pm.environment.get('run_phase2b_s2bdiy') || 'false').toLowerCase() === 'true';",
+                  "if (!run) {",
+                  "  console.log('Phase 2B S2BDIY request skipped because run_phase2b_s2bdiy is not true.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "const required = ['admin_token', 'publishable_api_key', 's2bdiy_basic_product_id', 's2bdiy_size_id', 's2bdiy_color_id', 's2bdiy_view_id'];",
+                  "const missing = required.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (missing.length) { throw new Error('Missing Phase 2B environment variables: ' + missing.join(', ')); }",
+                  "const supplierRequired = ['s2bdiy_base_url', 's2bdiy_client_id', 's2bdiy_client_secret'];",
+                  "const supplierMissing = supplierRequired.filter(function (key) { return !pm.environment.get(key); });",
+                  "if (supplierMissing.length) { throw new Error('Missing S2BDIY credential variables: ' + supplierMissing.join(', ')); }"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('S2BDIY token request succeeds with real credentials', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json(); const token = (json.data && (json.data.token || json.data.access_token)) || json.token || json.access_token;",
+                  "pm.test('S2BDIY token exists', function () { pm.expect(token).to.be.a('string').and.not.empty; });",
+                  "pm.collectionVariables.set('s2bdiy_access_token', token || '');"
+                ],
+                "type": "text/javascript"
               }
             }
           ]
