@@ -18,20 +18,176 @@ Do not commit:
 
 ## Recommended Validation Order
 
-1. Start local Postgres and Redis.
-2. Run backend migrations and seed.
-3. Run `phase1-dev2-bootstrap`.
-4. Refresh `ADMIN_TOKEN` and verify `PUBLISHABLE_API_KEY`.
-5. Start Medusa backend.
-6. Start AI Worker in mock mode for Phase 2A / Phase 2B.
-7. Run static checks and unit tests.
-8. Run Dev1 supplier foundation checks.
-9. Run Dev2 Phase 1 regression.
-10. Run Dev2 Phase 2A E2E.
-11. Run Dev3 store isolation smoke and Postman/Newman coverage.
-12. Run Phase 2B S2BDIY supplier smoke / error-case scripts.
-13. Run Phase 2B full E2E after supplier credentials or mock adapter data are ready.
-14. Manually inspect the storefront/admin-facing behavior if frontend or admin UI is involved.
+Use this order for local Dev3 integration validation. Detailed setup commands live in the linked runbooks; this file is the quick entry point.
+
+### Stage 0: Clean Tree And Dependencies
+
+```bash
+git status --short
+test -x node_modules/.bin/medusa || npm install --include=dev
+```
+
+Do not commit `package-lock.json` changes from a local reinstall unless a `package.json` file changed intentionally.
+
+### Stage 1: Static Checks
+
+```bash
+npx tsc --noEmit -p apps/medusa-backend/tsconfig.json
+npm test --workspace apps/medusa-backend
+npm test --workspace apps/medusa-backend -- s2bdiy
+
+bash -n scripts/phase1-dev2-self-test.sh
+bash -n scripts/phase2a-dev2-e2e.sh
+bash -n scripts/smoke-store-isolation.sh
+bash -n scripts/phase2b-e2e.sh
+bash -n scripts/s2bdiy-api-smoke.sh
+bash -n scripts/s2bdiy-error-cases.sh
+
+jq empty postman/ai-commerce-store-isolation.postman_collection.json
+jq empty postman/ai-commerce-local.example.postman_environment.json
+```
+
+If a Python 3.10+ environment is available:
+
+```bash
+cd apps/ai-worker
+AI_WORKER_MOCK_GENERATION=true python -m pytest -q
+cd ../..
+```
+
+### Stage 2: Database And Bootstrap
+
+```bash
+docker compose -f infra/docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml ps
+
+npm --workspace apps/medusa-backend run db:migrate
+npm run seed
+
+cd apps/medusa-backend
+npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
+cd ../..
+```
+
+After bootstrap, extract and validate bridge ids from `prod_phase1_default` and `prod_phase1_test`. Do not blindly choose the first `is_cart_addable` product from a dirty local DB.
+
+### Stage 3: Services And Local Env
+
+Verify Medusa and AI Worker health:
+
+```bash
+curl -i http://localhost:9000/health
+curl -sS http://localhost:8001/health | jq .
+```
+
+Load local env and refresh credentials when needed:
+
+```bash
+set -a
+source apps/medusa-backend/.env
+set +a
+```
+
+Refresh `ADMIN_TOKEN` if `/admin/users/me` returns 401. Verify `PUBLISHABLE_API_KEY` with `GET /store/products`.
+
+### Stage 4: Phase 1 Regression
+
+```bash
+bash scripts/phase1-dev2-self-test.sh
+```
+
+Expected coverage:
+
+- store context resolution
+- product/category/store isolation
+- product-to-cart bridge
+- `variant_id`-only add-to-cart
+- same-store add-to-cart
+- cross-store `CART_STORE_MISMATCH`
+- cart complete, order paid, fulfillment waiting/pushed/shipped
+
+### Stage 5: Phase 2A E2E
+
+```bash
+PHASE2A_E2E_COMPLETE=true bash scripts/phase2a-dev2-e2e.sh
+```
+
+Expected coverage:
+
+- AI Worker mock generation
+- `POST /admin/ai/generate-and-draft`
+- publish
+- store product list/detail fields
+- cart add by `variant_id`
+- line-item production metadata
+- complete paid order
+- fulfillment waiting/push/mock shipment where admin token is available
+
+### Stage 6: Dev3 Smoke And Newman
+
+```bash
+PUBLISHABLE_API_KEY="$PUBLISHABLE_API_KEY" \
+ADMIN_TOKEN="$ADMIN_TOKEN" \
+DEFAULT_MEDUSA_PRODUCT_ID="$DEFAULT_MEDUSA_PRODUCT_ID" \
+DEFAULT_MEDUSA_VARIANT_ID="$DEFAULT_MEDUSA_VARIANT_ID" \
+TEST_MEDUSA_PRODUCT_ID="$TEST_MEDUSA_PRODUCT_ID" \
+TEST_MEDUSA_VARIANT_ID="$TEST_MEDUSA_VARIANT_ID" \
+bash scripts/smoke-store-isolation.sh
+```
+
+Expected: `All store isolation smoke tests passed.`
+
+Run Newman:
+
+```bash
+npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
+  --env-var "base_url=${MEDUSA_BASE_URL:-http://localhost:9000}" \
+  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://localhost:8001}" \
+  --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
+  --env-var "admin_token=$ADMIN_TOKEN" \
+  --env-var "default_store_id=default_store" \
+  --env-var "test_store_id=test_store" \
+  --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
+  --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
+  --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID"
+```
+
+Expected Newman result: `failed: 0`.
+
+### Stage 7: Phase 2B Supplier Validation
+
+```bash
+npm test --workspace apps/medusa-backend -- s2bdiy
+bash scripts/s2bdiy-api-smoke.sh
+bash scripts/s2bdiy-error-cases.sh
+bash scripts/phase2b-e2e.sh
+```
+
+Real S2BDIY smoke and the full Phase 2B E2E require local sandbox supplier credentials and test account readiness. If `S2BDIY_APP_SECRET`, supplier store id, logistics id, or test balance are not configured, document the skip instead of treating it as a platform regression.
+
+### Stage 8: Manual UI/Admin Verification
+
+- Medusa Admin shows generated orders.
+- Order payment and fulfillment status are visible.
+- Store API product detail exposes mockup, print-file, supplier, and bridge fields.
+- Frontend validation is run only when frontend changes are part of the current PR.
+
+### Stage 9: Final Cleanup
+
+```bash
+git status --short
+git diff --check
+git grep -lE "pk_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{20,}|sk_[A-Za-z0-9]|FAL_KEY=.*[A-Za-z0-9]{10,}|DEEPSEEK_API_KEY=.*[A-Za-z0-9]{10,}|STRIPE_API_KEY=.*[A-Za-z0-9]{10,}|S2BDIY.*=.*[A-Za-z0-9]{10,}" -- docs postman scripts apps/medusa-backend/src apps/frontend || true
+```
+
+Restore generated local result files, logs, images, migration snapshot noise, and `.env` changes before pushing.
+
+Push only after the cleanup checks pass:
+
+```bash
+git push origin <branch-name>
+```
 
 ## Ownership Map
 
@@ -141,7 +297,14 @@ Runtime validation:
 ```bash
 bash scripts/phase1-dev2-self-test.sh
 PHASE2A_E2E_COMPLETE=true bash scripts/phase2a-dev2-e2e.sh
+PUBLISHABLE_API_KEY="$PUBLISHABLE_API_KEY" \
+ADMIN_TOKEN="$ADMIN_TOKEN" \
+DEFAULT_MEDUSA_PRODUCT_ID="$DEFAULT_MEDUSA_PRODUCT_ID" \
+DEFAULT_MEDUSA_VARIANT_ID="$DEFAULT_MEDUSA_VARIANT_ID" \
+TEST_MEDUSA_PRODUCT_ID="$TEST_MEDUSA_PRODUCT_ID" \
+TEST_MEDUSA_VARIANT_ID="$TEST_MEDUSA_VARIANT_ID" \
 bash scripts/smoke-store-isolation.sh
+bash scripts/phase2b-e2e.sh
 ```
 
 Postman/Newman:
@@ -285,6 +448,13 @@ Expected scripts and assets:
 - `scripts/test-assets/test-print.png`
 - `docs/suppliers/s2bdiy.md`
 
+Credential behavior:
+
+- Unit/static S2BDIY coverage can run without real supplier credentials.
+- `scripts/phase2b-e2e.sh` skips supplier sync when `S2BDIY_API_BASE_URL` is not set, then runs the Phase 2A baseline.
+- `scripts/s2bdiy-api-smoke.sh` requires `S2BDIY_APP_SECRET` and real sandbox readiness.
+- `orderPay` may fail in the supplier sandbox if the test account lacks prepaid balance; document that as an external supplier-account issue.
+
 Expected backend coverage includes:
 
 - S2BDIY auth tests.
@@ -366,6 +536,8 @@ Failure scenarios should have explicit errors:
 - tracking is empty
 
 Supplier-specific command details should live in supplier docs and Postman/Apifox collections, not in this entry file.
+
+For S2BDIY auth, material upload, quickCreate, logistics, supplier order, orderPay, polling, tracking, and failure-case details, see [suppliers/s2bdiy.md](./suppliers/s2bdiy.md).
 
 ## Postman Store Isolation And Phase 2A Collection
 
@@ -470,6 +642,23 @@ S2BDIY orderPay failed:
 - Verify supplier order id exists.
 - Verify logistics selection and order amount.
 - Re-run order detail polling to determine whether the supplier order was created but not paid.
+- If the S2BDIY sandbox account has no prepaid balance, the real supplier smoke may fail externally even when CitiGoo integration code is working.
+
+## Final PR Checklist
+
+Before PR:
+
+- Worktree is clean except intentional docs/test assets.
+- TypeScript check passed.
+- Backend Jest passed.
+- S2BDIY Jest subset passed.
+- Seed and `phase1-dev2-bootstrap` passed.
+- Phase 1 regression passed.
+- Phase 2A E2E passed.
+- Dev3 smoke passed.
+- Newman passed with `failed: 0`.
+- S2BDIY real smoke either passed or is explicitly skipped due to missing local supplier credentials or sandbox balance.
+- No `.env`, secrets, local result files, logs, generated images, venvs, `node_modules`, or migration snapshot noise are committed.
 
 ## Future Regression Backlog
 

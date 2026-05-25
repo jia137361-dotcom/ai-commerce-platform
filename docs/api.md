@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:9000`
 
-This document covers the current Phase 1 and Phase 2A backend APIs: store context, store-aware products, product categories, supplier product foundation, AI product generation and draft creation, cart bridge behavior, order/fulfillment test flows, and store settings.
+This document covers the current Phase 1, Phase 2A, and Phase 2B backend APIs: store context, store-aware products, product categories, supplier product foundation, AI product generation and draft creation, cart bridge behavior, order/fulfillment test flows, S2BDIY supplier fulfillment integration, and store settings.
 
 ## Store Context
 
@@ -356,6 +356,128 @@ npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
 
 Then make sure `DEFAULT_MEDUSA_VARIANT_ID` points to the native variant linked by `prod_phase1_default`.
 
+### S2BDIY Supplier Fulfillment (Phase 2B)
+
+Phase 2B connects paid CitiGoo orders to S2BDIY supplier fulfillment when S2BDIY env is configured. Real supplier calls require local sandbox credentials; mock/local tests may skip real supplier push.
+
+#### `POST /admin/suppliers/s2bdiy/sync-basic-product`
+
+Imports a S2BDIY basic product into Store Core supplier product, supplier variant, and print spec rows.
+
+Required headers:
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+X-Store-Id: default_store
+```
+
+Request body:
+
+```json
+{
+  "basic_product_id": "1858",
+  "platform_product_id": "pp_tshirt",
+  "supplier_product_row_id": "sp_s2b_1858"
+}
+```
+
+Notes:
+
+- `basic_product_id` may be supplied in the body or via `S2BDIY_TEST_BASIC_PRODUCT_ID`.
+- `platform_product_id` defaults to `pp_tshirt`.
+- `supplier_product_row_id` is optional.
+- Returns `VALIDATION_ERROR` when S2BDIY env is not configured or a basic product id is missing.
+- Real S2BDIY API failures return a `502` response with the supplier error message.
+
+High-level response:
+
+```json
+{
+  "basic_product_id": "1858",
+  "platform_product_id": "pp_tshirt",
+  "supplier_product_id": "sp_s2b_1858",
+  "variants": 8,
+  "print_specs": 1
+}
+```
+
+#### `GET /admin/orders/:order_id/supplier-order`
+
+Returns local supplier order rows and supplier order items for a store-owned order.
+
+Required headers:
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+X-Store-Id: default_store
+```
+
+Store context behavior:
+
+- Retrieves the native Medusa order.
+- Verifies the order belongs to the current store.
+- Returns `403` with an order/store access error when the order belongs to another store.
+
+Response:
+
+```json
+{
+  "order_id": "order_123",
+  "supplier_orders": [],
+  "supplier_order_items": []
+}
+```
+
+#### `POST /admin/orders/:order_id/retry-supplier-pay`
+
+Retries S2BDIY `orderPay` for an existing supplier order.
+
+Required headers:
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+X-Store-Id: default_store
+```
+
+Response:
+
+```json
+{
+  "order_id": "order_123",
+  "status": "pay_retried"
+}
+```
+
+Errors:
+
+- `VALIDATION_ERROR` when S2BDIY env is not configured.
+- `403` when the order does not belong to the current store.
+- `PAYMENT_FAILED` when supplier payment retry fails.
+
+#### `POST /admin/supplier-orders/sync`
+
+Polls pending S2BDIY supplier orders and updates local supplier order/payment/tracking state.
+
+Required headers:
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+```
+
+Response:
+
+```json
+{
+  "synced": 1
+}
+```
+
+Notes:
+
+- Returns `VALIDATION_ERROR` when S2BDIY env is not configured.
+- Terminal supplier statuses are skipped by the sync job.
+- Tracking data, when present, is copied to local supplier order rows and shipment metadata.
+
 ### Product Categories
 
 #### `POST /admin/product-categories`
@@ -622,7 +744,9 @@ Common error codes:
 - `STORE_NOT_FOUND`
 - `PRODUCT_NOT_FOUND`
 - `PRODUCT_STORE_MISMATCH`
+- `CART_STORE_MISMATCH`
 - `VALIDATION_ERROR`
+- `PAYMENT_FAILED`
 
 ## Store Isolation Checks
 
