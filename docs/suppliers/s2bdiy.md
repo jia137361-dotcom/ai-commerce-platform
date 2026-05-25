@@ -7,14 +7,40 @@
 | 测试 | `https://opentest.s2bdiy.com` |
 | 生产 | `https://openapi.s2bdiy.com` |
 
-测试体验密钥（文档概览）：
+测试环境凭据：
 
 - `app_key`: `wm001`
-- `app_secret`: `7b55d8cf04caf3db9232c98eadeb9cc2`
+- `app_secret`: use the current sandbox secret from the supplier console or private handoff.
+
+Do not commit real S2BDIY credentials. Keep them only in `apps/medusa-backend/.env` or your local shell.
 
 ## 配置（`apps/medusa-backend/.env`）
 
 见 [`.env.example`](../../apps/medusa-backend/.env.example) 中 `S2BDIY_*` 段落。
+
+常用本地变量：
+
+| 变量 | 用途 |
+|------|------|
+| `S2BDIY_API_BASE_URL` | S2BDIY Open API base URL, usually `https://opentest.s2bdiy.com` for sandbox. |
+| `S2BDIY_APP_KEY` | Supplier sandbox app key. |
+| `S2BDIY_APP_SECRET` | Supplier sandbox app secret. Required for real S2BDIY smoke. |
+| `S2BDIY_PLATFORM_ID` | S2BDIY platform id. Local default is `99`. |
+| `S2BDIY_TEST_BASIC_PRODUCT_ID` | Basic product id used by sync/smoke. |
+| `S2BDIY_TEST_COLOR_ID` | Test color id used for quickCreate/order payloads. |
+| `S2BDIY_TEST_SIZE_ID` | Test size id used for quickCreate/order payloads. |
+| `S2BDIY_TEST_VIEW_ID` | Test print view id. |
+| `S2BDIY_STORE_ID` | S2BDIY platform store id, not CitiGoo `default_store`. |
+| `S2BDIY_TEST_LOGISTICS_ID` | Optional fallback logistics id when logisticsCalculation cannot select one. |
+| `S2BDIY_TEST_PRINT_FILE` | Optional local print file path; defaults to `scripts/test-assets/test-print.png`. |
+| `S2BDIY_DEFAULT_WEIGHT` / `LENGTH` / `WIDTH` / `HEIGHT` | Package dimensions for logistics calculation. Weight is in grams for current smoke scripts. |
+
+Mock vs real behavior:
+
+- Unit tests and shell syntax checks do not require real S2BDIY credentials.
+- `scripts/phase2b-e2e.sh` skips supplier sync when `S2BDIY_API_BASE_URL` is not configured, then runs the Phase 2A baseline.
+- `scripts/s2bdiy-api-smoke.sh` calls the real S2BDIY sandbox and requires `S2BDIY_APP_SECRET`.
+- `orderPay` requires a supplier sandbox account with prepaid test balance. HTTP 502 from `orderPay` is often an external account-balance issue, not automatically a CitiGoo regression.
 
 ## 调用顺序
 
@@ -46,12 +72,115 @@
 - `POST /admin/orders/{order_id}/retry-supplier-pay`
 - `POST /admin/supplier-orders/sync`
 
+Admin routes require:
+
+- `Authorization: Bearer <ADMIN_TOKEN>`
+- `X-Store-Id: <store_id>` where the route checks order/store ownership
+
+Route behavior:
+
+- `POST /admin/suppliers/s2bdiy/sync-basic-product` imports a S2BDIY basic product into supplier product, variant, and print-spec tables. It requires `basic_product_id` in the body or `S2BDIY_TEST_BASIC_PRODUCT_ID`.
+- `GET /admin/orders/{order_id}/supplier-order` returns local supplier order rows and supplier order items for a store-owned order.
+- `POST /admin/orders/{order_id}/retry-supplier-pay` retries `orderPay` for an existing supplier order and returns `status: "pay_retried"` when accepted.
+- `POST /admin/supplier-orders/sync` polls pending supplier orders and updates local supplier/payment/tracking status.
+
+## 状态映射
+
+Current internal supplier order statuses:
+
+- `not_pushed`
+- `created`
+- `payment_pending`
+- `paid`
+- `reviewing`
+- `queued`
+- `in_production`
+- `shipped`
+- `cancelled`
+- `failed`
+
+Current payment statuses:
+
+- `payment_pending`
+- `paying`
+- `paid`
+- `pay_failed`
+
+When S2BDIY order detail includes tracking, sync writes tracking fields to `mc_supplier_order` and, for shipped orders, updates fulfillment/shipment records where matching local fulfillment rows exist.
+
 ## 测试脚本
 
 ```bash
 bash scripts/s2bdiy-api-smoke.sh
+bash scripts/s2bdiy-error-cases.sh
 bash scripts/phase2b-e2e.sh
 ```
+
+Coverage:
+
+- `scripts/s2bdiy-api-smoke.sh`: token, basic product list/detail, uploadMaterial, quickCreate, product detail, logisticsCalculation, store lookup, create order, orderPay, order detail.
+- `scripts/s2bdiy-error-cases.sh`: duplicate `third_order_id` guidance and invalid-token response.
+- `scripts/phase2b-e2e.sh`: Medusa admin sync route, Phase 2A baseline, and supplier order sync route when S2BDIY config is present.
+
+## Postman / Newman
+
+Phase 2B lives in the unified backend collection:
+
+- Collection: [`../../postman/ai-commerce-store-isolation.postman_collection.json`](../../postman/ai-commerce-store-isolation.postman_collection.json)
+- Example environment: [`../../postman/ai-commerce-local.example.postman_environment.json`](../../postman/ai-commerce-local.example.postman_environment.json)
+
+The collection folder is named `Phase 2B / S2BDIY Supplier Fulfillment`. It is skipped by default through `run_phase2b_s2bdiy=false`.
+
+Required environment variables:
+
+- `base_url`
+- `ai_worker_base_url`
+- `admin_token`
+- `publishable_api_key`
+- `default_store_id`
+- `test_store_id`
+- `default_medusa_product_id`
+- `default_medusa_variant_id`
+- `test_medusa_product_id`
+- `test_medusa_variant_id`
+- `run_phase2b_s2bdiy`
+- `s2bdiy_base_url`
+- `s2bdiy_client_id`
+- `s2bdiy_client_secret`
+- `s2bdiy_app_secret`
+- `s2bdiy_basic_product_id`
+- `s2bdiy_size_id`
+- `s2bdiy_color_id`
+- `s2bdiy_view_id`
+- `s2bdiy_logistics_id`
+
+Run with Newman:
+
+```bash
+npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
+  --env-var "base_url=${MEDUSA_BASE_URL:-http://localhost:9000}" \
+  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://localhost:8001}" \
+  --env-var "admin_token=$ADMIN_TOKEN" \
+  --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
+  --env-var "default_store_id=default_store" \
+  --env-var "test_store_id=test_store" \
+  --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
+  --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
+  --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID" \
+  --env-var "run_phase2b_s2bdiy=${RUN_PHASE2B_S2BDIY:-false}" \
+  --env-var "s2bdiy_base_url=${S2BDIY_API_BASE_URL:-https://opentest.s2bdiy.com}" \
+  --env-var "s2bdiy_client_id=$S2BDIY_APP_KEY" \
+  --env-var "s2bdiy_client_secret=$S2BDIY_APP_SECRET" \
+  --env-var "s2bdiy_app_secret=$S2BDIY_APP_SECRET" \
+  --env-var "s2bdiy_basic_product_id=$S2BDIY_TEST_BASIC_PRODUCT_ID" \
+  --env-var "s2bdiy_size_id=$S2BDIY_TEST_SIZE_ID" \
+  --env-var "s2bdiy_color_id=$S2BDIY_TEST_COLOR_ID" \
+  --env-var "s2bdiy_view_id=$S2BDIY_TEST_VIEW_ID" \
+  --env-var "s2bdiy_logistics_id=$S2BDIY_TEST_LOGISTICS_ID"
+```
+
+Without S2BDIY sandbox credentials, keep `run_phase2b_s2bdiy=false`; Phase 2B Newman is `SKIPPED`, not `FAILED`. Set `run_phase2b_s2bdiy=true` only when S2BDIY env and sandbox account readiness are confirmed.
 
 ## 跑通 smoke 第 8–10 步（下单 / 支付 / 查单）
 
@@ -93,6 +222,18 @@ curl -sS -X POST "${S2BDIY_API_BASE_URL%/}/open/v1/orderPay" \
 ```
 
 Medusa 侧也可：`POST /admin/orders/{order_id}/retry-supplier-pay`（需 `ADMIN_TOKEN`）。
+
+### 常见异常场景
+
+- Token expired / invalid token: rerun accessToken or verify `S2BDIY_APP_KEY` / `S2BDIY_APP_SECRET`.
+- Material upload failed: verify the print file exists, is readable, and matches accepted image constraints.
+- quickCreate failed: verify `basic_product_id`, `size_id`, `color_id`, `view_id`, and uploaded `material_id`.
+- Product detail has no image: check `show_images` in the S2BDIY product detail response before publishing.
+- Missing logistics id: set `S2BDIY_TEST_LOGISTICS_ID` or adjust destination/package dimensions.
+- Create order failed: check duplicate `third_order_id`, store id, address, and item ids.
+- orderPay failed: check supplier order id and sandbox prepaid balance.
+- Order detail polling failed: verify supplier order id and token.
+- Tracking is empty: keep polling; tracking may appear only after supplier production/shipment advances.
 
 ### 手工 curl 第 8–10 步（调试用）
 
