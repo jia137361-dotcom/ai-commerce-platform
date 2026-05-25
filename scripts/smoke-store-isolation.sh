@@ -3,13 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-# 与 phase1-dev2-self-test.sh 一致：自动加载仓库根 .env；父进程已 export 的变量优先
+# 与 phase1-dev2-self-test.sh 一致：自动加载 apps/medusa-backend/.env
+ENV_FILE="$REPO_ROOT/apps/medusa-backend/.env"
 _INHERIT_PUBLISHABLE="${PUBLISHABLE_API_KEY-}"
 _INHERIT_ADMIN="${ADMIN_TOKEN-}"
-if [[ -f "$REPO_ROOT/.env" ]]; then
+if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1091
-  source "$REPO_ROOT/.env"
+  source "$ENV_FILE"
   set +a
 fi
 [[ -n "${_INHERIT_PUBLISHABLE}" ]] && PUBLISHABLE_API_KEY="$_INHERIT_PUBLISHABLE"
@@ -45,10 +46,10 @@ if [[ -z "$PUBLISHABLE_API_KEY" ]]; then
   cat >&2 <<EOF
 ERROR: PUBLISHABLE_API_KEY is required.
 
-Put it in repo root .env (see .env.example), or run:
+Put it in apps/medusa-backend/.env (see apps/medusa-backend/.env.example), or run:
   export PUBLISHABLE_API_KEY="<publishable_api_key>"
 
-Searched .env at: $REPO_ROOT/.env
+Searched .env at: $ENV_FILE
 EOF
   exit 1
 fi
@@ -57,10 +58,10 @@ if [[ -z "$ADMIN_TOKEN" ]]; then
   cat >&2 <<EOF
 ERROR: ADMIN_TOKEN is required.
 
-Put it in repo root .env, or obtain a token and export ADMIN_TOKEN.
+Put it in apps/medusa-backend/.env, or obtain a token and export ADMIN_TOKEN.
 See scripts/smoke-store-isolation.sh header comments.
 
-Searched .env at: $REPO_ROOT/.env
+Searched .env at: $ENV_FILE
 EOF
   exit 1
 fi

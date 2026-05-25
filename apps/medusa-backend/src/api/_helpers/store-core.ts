@@ -196,3 +196,16 @@ export const parseOptionalNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+/** MedusaService.createProducts expects an array (see phase1-dev2-bootstrap.ts). */
+export const createMcProduct = async (
+  storeCoreService: StoreCoreModuleService,
+  data: Record<string, unknown>
+) => {
+  const created = await storeCoreService.createProducts([data])
+  const product = Array.isArray(created) ? created[0] : created
+  if (!product?.id) {
+    throw new Error("createProducts did not return a product row")
+  }
+  return product
+}
+

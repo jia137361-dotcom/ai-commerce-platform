@@ -1,6 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import {
+  createMcProduct,
   getStoreCoreService,
   normalizeProduct,
   parseOptionalNumber,
@@ -217,7 +218,7 @@ export const POST = async (
   const inheritedCost =
     cost ?? supplierVariant?.cost ?? supplierProduct?.base_cost ?? platformProduct?.base_cost ?? null
 
-  const product = await storeCoreService.createProducts({
+  const product = await createMcProduct(storeCoreService, {
     store_id: storeId,
     title,
     description: body.description ?? null,
@@ -245,7 +246,7 @@ export const POST = async (
     category_ids: categoryIds,
     price,
     cost: inheritedCost,
-    variants: Array.isArray(body.variants) ? body.variants : [],
+    variants: Array.isArray(body.variants) ? body.variants : null,
     metadata: body.metadata ?? {}
   })
 

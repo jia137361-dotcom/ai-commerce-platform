@@ -9,6 +9,8 @@ import { Modules } from "@medusajs/framework/utils"
 import { addToCartWorkflow } from "@medusajs/medusa/core-flows"
 import { CartStoreMismatchError } from "../lib/cart-store-error"
 import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
+import { buildLineItemProductionMetadata } from "../lib/line-item-production-metadata"
+import { resolveLinkedProductForVariant } from "../lib/resolve-linked-product"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 
@@ -68,7 +70,10 @@ const addLineItemStep = createStep(
     const linkedProducts = await storeCoreService.listProducts({
       medusa_variant_id: input.variant_id,
     })
-    const linkedProduct = linkedProducts[0] as Record<string, unknown> | undefined
+    const linkedProduct = resolveLinkedProductForVariant(
+      linkedProducts as Record<string, unknown>[],
+      { storeId: cartStoreId }
+    )
 
     if (!linkedProduct) {
       throw new Error("variant_id must be linked to a store-core product")
@@ -92,6 +97,11 @@ const addLineItemStep = createStep(
       currencyCode: cart.currency_code || "usd",
     })
 
+    const productionMetadata = await buildLineItemProductionMetadata(
+      storeCoreService,
+      linkedProduct
+    )
+
     await addToCartWorkflow(container).run({
       input: {
         cart_id: input.cart_id,
@@ -99,6 +109,7 @@ const addLineItemStep = createStep(
           {
             variant_id: input.variant_id,
             quantity: input.quantity ?? 1,
+            metadata: productionMetadata as unknown as Record<string, unknown>,
           },
         ],
       },
@@ -112,7 +123,21 @@ const addLineItemStep = createStep(
     const matching = items.filter((i) => i.variant_id === input.variant_id)
     const lineItem = matching[matching.length - 1]
 
-    return new StepResponse({ lineItem, cart: cartAfter })
+    if (lineItem?.id) {
+      await cartModule.updateLineItems(
+        { id: lineItem.id },
+        { metadata: productionMetadata as unknown as Record<string, unknown> }
+      )
+    }
+
+    const cartFinal = await cartModule.retrieveCart(input.cart_id, {
+      relations: ["items"],
+    })
+    const finalItems = cartFinal.items ?? []
+    const finalMatching = finalItems.filter((i) => i.variant_id === input.variant_id)
+    const finalLineItem = finalMatching[finalMatching.length - 1]
+
+    return new StepResponse({ lineItem: finalLineItem ?? lineItem, cart: cartFinal })
   }
 )
 
