@@ -22,6 +22,8 @@ type SupplierSeed = {
   code: string
   name: string
   country: string
+  api_base_url?: string | null
+  test_api_base_url?: string | null
   status: "active" | "inactive" | "archived"
   raw_json: Record<string, unknown>
 }
@@ -172,6 +174,19 @@ const suppliers: SupplierSeed[] = [
     raw_json: {
       phase: "2A",
       note: "Mock supplier for default_store AI product generation"
+    }
+  },
+  {
+    id: "sup_s2bdiy",
+    code: "s2bdiy",
+    name: "S2BDIY",
+    country: "CN",
+    api_base_url: "https://openapi.s2bdiy.com",
+    test_api_base_url: "https://opentest.s2bdiy.com",
+    status: "active",
+    raw_json: {
+      phase: "2B",
+      note: "S2BDIY Open API supplier for real fulfillment"
     }
   }
 ]
