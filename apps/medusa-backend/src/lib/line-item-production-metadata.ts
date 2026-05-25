@@ -2,9 +2,14 @@ import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 
 export type LineItemProductionMetadata = {
+  mc_product_id: string | null
   supplier_id: string | null
   supplier_product_id: string | null
   supplier_variant_id: string | null
+  s2b_designed_product_id: string | null
+  s2b_basic_product_id: string | null
+  s2b_size_id: string | null
+  s2b_color_id: string | null
   print_file_url: string | null
   print_position: string | null
   color: string | null
@@ -57,6 +62,7 @@ export async function buildLineItemProductionMetadata(
   }
 
   return {
+    mc_product_id: typeof linkedProduct.id === "string" ? linkedProduct.id : null,
     supplier_id:
       typeof linkedProduct.supplier_id === "string" ? linkedProduct.supplier_id : null,
     supplier_product_id:
@@ -64,6 +70,18 @@ export async function buildLineItemProductionMetadata(
         ? linkedProduct.supplier_product_id
         : null,
     supplier_variant_id: supplierVariantId,
+    s2b_designed_product_id:
+      typeof linkedProduct.s2b_designed_product_id === "string"
+        ? linkedProduct.s2b_designed_product_id
+        : null,
+    s2b_basic_product_id:
+      typeof linkedProduct.s2b_basic_product_id === "string"
+        ? linkedProduct.s2b_basic_product_id
+        : null,
+    s2b_size_id:
+      typeof linkedProduct.s2b_size_id === "string" ? linkedProduct.s2b_size_id : null,
+    s2b_color_id:
+      typeof linkedProduct.s2b_color_id === "string" ? linkedProduct.s2b_color_id : null,
     print_file_url:
       typeof linkedProduct.print_file_url === "string"
         ? linkedProduct.print_file_url
