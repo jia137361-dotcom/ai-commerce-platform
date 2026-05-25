@@ -17,8 +17,14 @@ type CreateDraftProductBody = {
   mockup_image_url?: string
   print_file_url?: string
   platform_product_id?: string | null
+  basic_product_id?: string | null
   supplier_product_id?: string | null
   supplier_variant_id?: string | null
+  supplier_material_id?: string | null
+  supplier_size_id?: string | null
+  supplier_color_id?: string | null
+  view_id?: string | null
+  design_type?: number
   medusa_product_id?: string | null
   medusa_variant_id?: string | null
   tags?: string[]
@@ -67,6 +73,11 @@ export const POST = async (
   const supplierId = requireText(body.supplier_id)
   const supplierProductId = requireText(body.supplier_product_id)
   const supplierVariantId = requireText(body.supplier_variant_id)
+  const basicProductId = requireText(body.basic_product_id)
+  const supplierMaterialId = requireText(body.supplier_material_id)
+  const supplierSizeId = requireText(body.supplier_size_id)
+  const supplierColorId = requireText(body.supplier_color_id)
+  const viewId = requireText(body.view_id)
   const medusaProductId = requireText(body.medusa_product_id)
   const medusaVariantId = requireText(body.medusa_variant_id)
   const storeCoreService = getStoreCoreService(req)
@@ -216,8 +227,14 @@ export const POST = async (
     prompt: body.prompt ?? null,
     supplier_id: supplierId ?? supplierProduct?.supplier_id ?? null,
     platform_product_id: platformProductId,
+    basic_product_id: basicProductId,
     supplier_product_id: inheritedSupplierProductId,
     supplier_variant_id: supplierVariantId,
+    supplier_material_id: supplierMaterialId,
+    supplier_size_id: supplierSizeId,
+    supplier_color_id: supplierColorId,
+    view_id: viewId,
+    design_type: body.design_type ?? 1,
     medusa_product_id: medusaProductId,
     medusa_variant_id: medusaVariantId,
     design_image_url: body.design_image_url ?? body.image_url ?? null,

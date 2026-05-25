@@ -11,6 +11,7 @@ import SupplierProduct from "./models/supplier-product"
 import SupplierProductVariant from "./models/supplier-product-variant"
 import SupplierPrintSpec from "./models/supplier-print-spec"
 import PlatformDesignTemplate from "./models/platform-design-template"
+import ProductAsset from "./models/product-asset"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -24,7 +25,8 @@ class StoreCoreModuleService extends MedusaService({
   SupplierProduct,
   SupplierProductVariant,
   SupplierPrintSpec,
-  PlatformDesignTemplate
+  PlatformDesignTemplate,
+  ProductAsset
 }) {}
 
 export default StoreCoreModuleService
