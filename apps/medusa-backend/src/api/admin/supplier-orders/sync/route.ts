@@ -1,6 +1,6 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { syncPendingSupplierOrders } from "../../../../lib/s2bdiy/sync-supplier-orders"
-import { getS2bdiyConfig } from "../../../../lib/s2bdiy"
+import { getS2bdiyConfig } from "../../../../modules/suppliers/s2bdiy/config"
 import { sendError } from "../../../_helpers/store-core"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {

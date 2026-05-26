@@ -8,25 +8,24 @@ import {
   ORDER_META_FULFILLMENT_STATUS,
   normalizeOrderMetadata,
 } from "../order-custom-metadata"
-import { S2BDIY_SUPPLIER_ID, S2bdiyClient, requireS2bdiyConfig } from "./index"
-import { S2bdiyApiError } from "./s2bdiy-client"
-import { calculateLogistics, resolveLogisticsPlatformId } from "./s2bdiy-logistics"
+import { requireS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { S2bdiyApiError, S2bdiyClient } from "../../modules/suppliers/s2bdiy/s2bdiy-client"
+import {
+  calculateLogisticsClient,
+  resolveLogisticsPlatformId,
+} from "../../modules/suppliers/s2bdiy/s2bdiy-logistics"
 import {
   buildDefaultS2bAddress,
   buildThirdOrderId,
-  createOrder,
+  createOrderClient,
   payOrders,
   extractSupplierOrderId,
   listS2bStores,
   resolveS2bStoreId,
   type S2bOrderAddress,
-} from "./s2bdiy-order"
+} from "../../modules/suppliers/s2bdiy/s2bdiy-order"
 import { syncSupplierOrderById } from "./sync-supplier-orders"
 import { toJsonRecord } from "./json-record"
-import {
-  readDesignedSupplierProductId,
-  readMcProductSupplierField,
-} from "./mc-product-supplier-fields"
 
 type OrderAddress = {
   country?: string
@@ -47,6 +46,8 @@ export async function pushOrderToS2bdiy(
   if (!process.env.S2BDIY_API_BASE_URL) {
     return { supplier_order_id: null, skipped: true }
   }
+
+  const S2BDIY_SUPPLIER_ID = "sup_s2bdiy"
 
   const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
   const orderModule = container.resolve(Modules.ORDER)
@@ -82,14 +83,15 @@ export async function pushOrderToS2bdiy(
     const products = await storeCore.listProducts({ id: mcProductId })
     const mc = products[0] as Record<string, unknown> | undefined
     if (!mc) continue
-    const designedId = readDesignedSupplierProductId(mc)
+    const designedId =
+      typeof mc.supplier_product_id === "string" &&
+      mc.supplier_product_id.length > 0 &&
+      !mc.supplier_product_id.startsWith("sp_")
+        ? (mc.supplier_product_id as string)
+        : null
     if (!designedId) continue
-    const sizeId = Number(
-      readMcProductSupplierField(mc, "supplier_size_id") ?? process.env.S2BDIY_TEST_SIZE_ID
-    )
-    const colorId = Number(
-      readMcProductSupplierField(mc, "supplier_color_id") ?? process.env.S2BDIY_TEST_COLOR_ID
-    )
+    const sizeId = Number((mc.supplier_size_id as unknown) ?? process.env.S2BDIY_TEST_SIZE_ID)
+    const colorId = Number((mc.supplier_color_id as unknown) ?? process.env.S2BDIY_TEST_COLOR_ID)
     if (!sizeId || !colorId) continue
     orderItems.push({
       product_id: designedId,
@@ -110,23 +112,19 @@ export async function pushOrderToS2bdiy(
   const addr = (order.shipping_address ?? {}) as OrderAddress
   const firstMc = orderItems[0].mcProduct
   const basicId =
-    String(
-      readMcProductSupplierField(firstMc, "basic_product_id") ??
-        process.env.S2BDIY_TEST_BASIC_PRODUCT_ID ??
-        ""
-    )
+    String((firstMc.basic_product_id as unknown) ?? process.env.S2BDIY_TEST_BASIC_PRODUCT_ID ?? "")
 
   const weight = Number(process.env.S2BDIY_DEFAULT_WEIGHT ?? 0.3)
   const length = Number(process.env.S2BDIY_DEFAULT_LENGTH ?? 30)
   const width = Number(process.env.S2BDIY_DEFAULT_WIDTH ?? 25)
   const height = Number(process.env.S2BDIY_DEFAULT_HEIGHT ?? 2)
 
-  const logisticsOptions = await calculateLogistics(client, {
+  const logisticsOptions = await calculateLogisticsClient(client, {
     basic_product_id: basicId,
     platform: config.platformId,
     num: orderItems.reduce((s, i) => s + i.num, 0),
     country: addr.country_code ?? addr.country ?? "US",
-    province: (addr as Record<string, unknown>).province as string ?? "",
+    province: ((addr as Record<string, unknown>).province as string) ?? "",
     postcode: addr.postal_code ?? "",
     weight,
     length,
@@ -199,7 +197,7 @@ export async function pushOrderToS2bdiy(
 
   if (!supplierOrderId) {
     try {
-      createResponse = await createOrder(client, createPayload)
+      createResponse = await createOrderClient(client, createPayload)
       supplierOrderId = extractSupplierOrderId(createResponse)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
@@ -240,7 +238,7 @@ export async function pushOrderToS2bdiy(
       },
     })
   } catch (error: unknown) {
-    const is502 = error instanceof S2bdiyApiError && error.statusCode === 502
+    const is502 = error instanceof S2bdiyApiError && error.status === 502
     await storeCore.updateSupplierOrders({
       selector: { id: supplierOrderRowId! },
       data: {

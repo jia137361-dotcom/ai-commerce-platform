@@ -1,4 +1,4 @@
-import { buildThirdOrderId } from "../lib/s2bdiy/s2bdiy-order"
+import { buildThirdOrderId } from "../modules/suppliers/s2bdiy/s2bdiy-order"
 
 describe("buildThirdOrderId", () => {
   it("uses order id when no retry", () => {

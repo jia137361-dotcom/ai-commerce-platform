@@ -1,4 +1,7 @@
-import { clearS2bdiyTokenCache, getS2bdiyAccessToken } from "../lib/s2bdiy/s2bdiy-auth"
+import {
+  clearS2bdiyTokenCache,
+  getS2bdiyAccessToken,
+} from "../modules/suppliers/s2bdiy/s2bdiy-auth"
 
 describe("getS2bdiyAccessToken", () => {
   const originalFetch = global.fetch

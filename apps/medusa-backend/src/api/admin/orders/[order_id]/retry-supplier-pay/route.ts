@@ -2,7 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { assertOrderBelongsToCurrentStore } from "../../../../../lib/order-store-context"
 import { OrderStoreAccessError } from "../../../../../lib/order-store-error"
 import { retrySupplierOrderPay } from "../../../../../lib/s2bdiy/push-s2b-order"
-import { getS2bdiyConfig } from "../../../../../lib/s2bdiy"
+import { getS2bdiyConfig } from "../../../../../modules/suppliers/s2bdiy/config"
 import { Modules } from "@medusajs/framework/utils"
 import { sendError } from "../../../../_helpers/store-core"
 

@@ -2,7 +2,7 @@ import {
   isTerminalSupplierOrderStatus,
   mapS2bOrderStatus,
   mapS2bPayStatus,
-} from "../lib/s2bdiy/s2bdiy-status-mapper"
+} from "../modules/suppliers/s2bdiy/s2bdiy-status-mapper"
 
 describe("s2bdiy-status-mapper", () => {
   it("maps order status codes", () => {

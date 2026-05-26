@@ -7,7 +7,7 @@ import type FulfillmentOrdersModuleService from "../modules/fulfillment-orders/s
 import { markOrderPaidAndFulfillmentWaiting } from "../lib/sync-order-paid-fulfillment"
 import { tryRegisterWebhookDedupe } from "../lib/webhook-dedupe"
 import { pushOrderToS2bdiy } from "../lib/s2bdiy/push-s2b-order"
-import { getS2bdiyConfig } from "../lib/s2bdiy"
+import { getS2bdiyConfig } from "../modules/suppliers/s2bdiy/config"
 
 async function resolveOrderIdFromPayment(
   container: MedusaContainer,

@@ -18,7 +18,7 @@ import {
 import { readOrderFulfillmentStatusMeta } from "../../../../../lib/order-custom-metadata"
 import { syncFulfillmentPayloadFromOrder } from "../../../../../lib/sync-fulfillment-line-items"
 import { pushOrderToS2bdiy } from "../../../../../lib/s2bdiy/push-s2b-order"
-import { getS2bdiyConfig } from "../../../../../lib/s2bdiy"
+import { getS2bdiyConfig } from "../../../../../modules/suppliers/s2bdiy/config"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 

@@ -10,13 +10,14 @@ import {
   ORDER_META_FULFILLMENT_STATUS,
   normalizeOrderMetadata,
 } from "../order-custom-metadata"
-import { S2bdiyClient, requireS2bdiyConfig } from "./index"
-import { getOrderDetail } from "./s2bdiy-order"
+import { requireS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { S2bdiyClient } from "../../modules/suppliers/s2bdiy/s2bdiy-client"
+import { getOrderDetailClient } from "../../modules/suppliers/s2bdiy/s2bdiy-order"
 import {
   isTerminalSupplierOrderStatus,
   mapS2bOrderStatus,
   mapS2bPayStatus,
-} from "./s2bdiy-status-mapper"
+} from "../../modules/suppliers/s2bdiy/s2bdiy-status-mapper"
 import { toJsonRecord } from "./json-record"
 
 export async function syncSupplierOrderById(
@@ -32,7 +33,7 @@ export async function syncSupplierOrderById(
 
   const config = requireS2bdiyConfig()
   const client = new S2bdiyClient(config)
-  const detail = await getOrderDetail(client, row.supplier_order_id)
+  const detail = await getOrderDetailClient(client, row.supplier_order_id)
 
   const status = mapS2bOrderStatus(detail.status as number)
   const payStatus = mapS2bPayStatus(detail.pay_status as number)
@@ -110,7 +111,8 @@ export async function syncPendingSupplierOrders(container: MedusaContainer): Pro
   let synced = 0
   for (const row of rows) {
     if (!row.supplier_order_id) continue
-    const status = row.supplier_status as import("./s2bdiy-status-mapper").SupplierOrderStatus
+    const status =
+      row.supplier_status as import("../../modules/suppliers/s2bdiy/s2bdiy-status-mapper").SupplierOrderStatus
     if (isTerminalSupplierOrderStatus(status)) continue
     try {
       await syncSupplierOrderById(container, row.id)

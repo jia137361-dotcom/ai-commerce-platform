@@ -9,7 +9,7 @@ import {
   requireText,
   sendError
 } from "../../../_helpers/store-core"
-import { getS2bdiyConfig } from "../../../../lib/s2bdiy"
+import { getS2bdiyConfig } from "../../../../modules/suppliers/s2bdiy/config"
 import {
   provisionS2bProductForMcProduct,
   resolveS2bIdsFromEnvOrVariant,

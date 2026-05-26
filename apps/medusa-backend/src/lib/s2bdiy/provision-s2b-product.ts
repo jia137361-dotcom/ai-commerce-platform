@@ -1,13 +1,12 @@
 import type StoreCoreModuleService from "../../modules/store-core/service"
-import { S2BDIY_SUPPLIER_ID } from "./index"
-import { S2bdiyClient } from "./s2bdiy-client"
-import { requireS2bdiyConfig } from "./config"
-import { fetchPrintFileBuffer, uploadMaterial } from "./s2bdiy-material"
-import { quickCreateProduct, getProductDetail, extractMockupImageUrl } from "./s2bdiy-product"
+import { requireS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { S2bdiyClient } from "../../modules/suppliers/s2bdiy/s2bdiy-client"
+import { fetchPrintFileBuffer, uploadMaterialClient } from "../../modules/suppliers/s2bdiy/s2bdiy-material"
 import {
-  mergeMcProductSupplierMetadata,
-  readMcProductSupplierField,
-} from "./mc-product-supplier-fields"
+  extractMockupImageUrl,
+  getProductDetail,
+  quickCreateProduct,
+} from "../../modules/suppliers/s2bdiy/s2bdiy-product"
 
 export type ProvisionS2bProductInput = {
   productId: string
@@ -28,38 +27,32 @@ export async function provisionS2bProductForMcProduct(
   const config = requireS2bdiyConfig()
   const client = new S2bdiyClient(config)
 
-  const [productRow] = await storeCore.listProducts({ id: input.productId })
-  const product = (productRow ?? {}) as Record<string, unknown>
+  const S2BDIY_SUPPLIER_ID = "sup_s2bdiy"
 
   try {
     await storeCore.updateProducts({
       selector: { id: input.productId },
       data: {
         supplier_id: S2BDIY_SUPPLIER_ID,
-        metadata: mergeMcProductSupplierMetadata(product, {
-          basic_product_id: input.basicProductId,
-          supplier_size_id: String(input.sizeId),
-          supplier_color_id: String(input.colorId),
-          view_id: String(input.viewId),
-          design_type: input.designType ?? 1,
-        }),
+        basic_product_id: input.basicProductId,
+        supplier_size_id: String(input.sizeId),
+        supplier_color_id: String(input.colorId),
+        view_id: String(input.viewId),
+        design_type: input.designType ?? 1,
       },
     })
 
     const { buffer, filename } = await fetchPrintFileBuffer(input.printFileUrl)
-    const material = await uploadMaterial(client, {
+    const material = await uploadMaterialClient(client, {
       buffer,
       filename,
       name: `${input.title}-print`,
     })
 
-    const [afterMaterial] = await storeCore.listProducts({ id: input.productId })
     await storeCore.updateProducts({
       selector: { id: input.productId },
       data: {
-        metadata: mergeMcProductSupplierMetadata((afterMaterial ?? {}) as Record<string, unknown>, {
-          supplier_material_id: String(material.id),
-        }),
+        supplier_material_id: String(material.id),
       },
     })
 
@@ -73,41 +66,26 @@ export async function provisionS2bProductForMcProduct(
       design_type: input.designType ?? 1,
     })
 
-    const [afterCreate] = await storeCore.listProducts({ id: input.productId })
     await storeCore.updateProducts({
       selector: { id: input.productId },
       data: {
-        metadata: mergeMcProductSupplierMetadata((afterCreate ?? {}) as Record<string, unknown>, {
-          supplier_product_id: String(created.product_id),
-        }),
+        // NOTE: This column starts as catalog row id (e.g. sp_tshirt) at draft-time.
+        // After provisioning, we overwrite it with S2BDIY quickCreate product_id for fulfillment.
+        supplier_product_id: String(created.product_id),
       },
     })
 
     const detail = await getProductDetail(client, created.product_id)
     const mockupUrl = extractMockupImageUrl(detail)
 
-    const [afterDetail] = await storeCore.listProducts({ id: input.productId })
     await storeCore.updateProducts({
       selector: { id: input.productId },
       data: {
         mockup_image_url: mockupUrl,
         image_url: mockupUrl ?? undefined,
-        metadata: mergeMcProductSupplierMetadata((afterDetail ?? {}) as Record<string, unknown>, {
-          mockup_image_url: mockupUrl,
-        }),
       },
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    const [failedRow] = await storeCore.listProducts({ id: input.productId })
-    await storeCore.updateProducts({
-      selector: { id: input.productId },
-      data: {
-        metadata: mergeMcProductSupplierMetadata((failedRow ?? product) as Record<string, unknown>, {
-          supplier_provision_error: message,
-        }),
-      },
-    })
     throw error
   }
 }
@@ -122,23 +100,16 @@ export function resolveS2bIdsFromEnvOrVariant(
   viewId: number
 } | null {
   const basic =
-    (typeof readMcProductSupplierField(product, "basic_product_id") === "string" &&
-      (readMcProductSupplierField(product, "basic_product_id") as string)) ||
+    (typeof product.basic_product_id === "string" && product.basic_product_id) ||
     process.env.S2BDIY_TEST_BASIC_PRODUCT_ID ||
     null
   const sizeId = Number(
-    readMcProductSupplierField(product, "supplier_size_id") ??
-      variant?.supplier_size_id ??
-      process.env.S2BDIY_TEST_SIZE_ID
+    (product.supplier_size_id as unknown) ?? variant?.supplier_size_id ?? process.env.S2BDIY_TEST_SIZE_ID
   )
   const colorId = Number(
-    readMcProductSupplierField(product, "supplier_color_id") ??
-      variant?.supplier_color_id ??
-      process.env.S2BDIY_TEST_COLOR_ID
+    (product.supplier_color_id as unknown) ?? variant?.supplier_color_id ?? process.env.S2BDIY_TEST_COLOR_ID
   )
-  const viewId = Number(
-    readMcProductSupplierField(product, "view_id") ?? process.env.S2BDIY_TEST_VIEW_ID ?? 1
-  )
+  const viewId = Number((product.view_id as unknown) ?? process.env.S2BDIY_TEST_VIEW_ID ?? 1)
 
   if (!basic || !sizeId || !colorId) {
     return null
