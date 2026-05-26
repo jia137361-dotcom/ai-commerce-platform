@@ -26,8 +26,6 @@ fail() {
   exit 1
 }
 
-CURL_JSON_LAST_ERROR_BODY=""
-
 # curl POST/GET：失败时打印 HTTP 状态与响应体（避免 set -e + curl -sf 静默退出）
 curl_json() {
   local max_time="$1"
@@ -45,23 +43,9 @@ curl_json() {
     return 0
   fi
   echo "HTTP $code — response:" >&2
-  CURL_JSON_LAST_ERROR_BODY="$(cat "$tmp")"
-  echo "$CURL_JSON_LAST_ERROR_BODY" >&2
+  cat "$tmp" >&2
   rm -f "$tmp"
   return 1
-}
-
-fail_add_line_item() {
-  if echo "$CURL_JSON_LAST_ERROR_BODY" | grep -q "calculated_amount"; then
-    echo "Add line item failed because the selected native variant has no calculated price for this cart currency/region." >&2
-    echo "Run: cd apps/medusa-backend && npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts" >&2
-    echo "Then update DEFAULT_MEDUSA_VARIANT_ID to prod_phase1_default's bootstrap-created native variant." >&2
-  elif echo "$CURL_JSON_LAST_ERROR_BODY" | grep -q "required inventory"; then
-    echo "Add line item failed because the selected native variant is not cart-ready for local inventory checks." >&2
-    echo "Run: cd apps/medusa-backend && npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts" >&2
-    echo "Then update DEFAULT_MEDUSA_VARIANT_ID to prod_phase1_default's bootstrap-created native variant." >&2
-  fi
-  fail "加购失败"
 }
 
 need_command() {
@@ -89,11 +73,11 @@ BRIDGE_PRODUCT="${DEFAULT_MEDUSA_PRODUCT_ID:-}"
 [[ -n "$ADMIN_TOKEN" ]] || fail "ADMIN_TOKEN missing — put it in apps/medusa-backend/.env or export it."
 
 echo "== (0) Medusa reachable =="
-MEDUSA_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 10 "$BASE_URL/health" 2>/dev/null || echo "000")
+MEDUSA_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 10 "$BASE_URL/store/regions" 2>/dev/null || echo "000")
 if [[ "$MEDUSA_CODE" == "000" ]]; then
   fail "无法连接 Medusa: $BASE_URL — 请先 cd apps/medusa-backend && npm run dev"
 fi
-echo "Medusa OK (HTTP $MEDUSA_CODE on /health)"
+echo "Medusa OK (HTTP $MEDUSA_CODE on /store/regions)"
 
 echo "== (1/6) AI Worker health =="
 if ! HEALTH_BODY=$(curl -sS -f --connect-timeout 3 --max-time 10 "$AI_URL/health"); then
@@ -172,7 +156,7 @@ ADD_BODY=$(curl_json 30 \
   -X POST "$BASE_URL/store/carts/$CART_ID/line-items" \
   -H "Content-Type: application/json" \
   "${STORE_HDR[@]}" \
-  -d "$(jq -nc --arg v "$BRIDGE_VARIANT" '{variant_id: $v, quantity: 1}')") || fail_add_line_item
+  -d "$(jq -nc --arg v "$BRIDGE_VARIANT" '{variant_id: $v, quantity: 1}')") || fail "加购失败"
 
 echo "== (5/6) line_item production metadata =="
 echo "$ADD_BODY" | jq '.line_item | { id, variant_id, metadata }'

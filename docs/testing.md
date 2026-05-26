@@ -1,124 +1,195 @@
-# Testing Entry Point
+# Developer 3 Backend Integration Testing
 
-This is the canonical testing entry point for local Phase 1 and Phase 2A backend validation. Keep it concise; use the linked runbooks for command-by-command detail.
+This is the canonical Developer 3 entry point for full backend validation across Phase 1, Phase 2A, and Phase 2B.
 
-Do not commit `apps/medusa-backend/.env`, real `PUBLISHABLE_API_KEY`, real `ADMIN_TOKEN`, generated AI images, local logs, virtual environments, `node_modules`, or generated self-test results that contain keys or tokens.
+## Primary Command
 
-## Recommended Validation Order
+Run the independent Dev3 pipeline:
 
-1. Start local Postgres and Redis.
-2. Run backend migrations and seed.
-3. Run `phase1-dev2-bootstrap`.
-4. Refresh `ADMIN_TOKEN` and verify `PUBLISHABLE_API_KEY`.
-5. Start Medusa backend and AI Worker.
-6. Run static checks and unit tests.
-7. Run Dev1 supplier foundation checks.
-8. Run Dev2 Phase 1 regression.
-9. Run Dev2 Phase 2A E2E.
-10. Run Dev3 smoke and Postman/Newman coverage.
+```bash
+bash scripts/dev3-full-backend-pipeline.sh
+```
 
-## Ownership Map
+The Dev3 pipeline validates the backend from the outside through APIs and documented contracts. It does not call, source, or wrap the Dev1/Dev2 self-test scripts.
 
-| Owner | Coverage |
-| --- | --- |
-| Dev1 supplier foundation | Supplier seed, T-shirt SKU matrix, front PNG print spec, and T-shirt front design template. |
-| Dev2 Phase 1 regression | Store context, product/category/store isolation, product-to-cart bridge, `variant_id` add-to-cart, cart complete, order, and fulfillment. |
-| Dev2 Phase 2A E2E | AI generate-and-draft, publish, storefront detail fields, cart add, complete, and line-item production metadata. |
-| Dev3 | Schema/API/testing docs, Postman/Newman collection, smoke coverage, and local validation runbook. |
+Use local overrides by copying:
 
-## Required Services
+```bash
+cp scripts/dev3-full-backend-pipeline.example.env scripts/dev3-full-backend-pipeline.local.env
+```
 
-- Docker Postgres on `localhost:5432`.
-- Docker Redis on `localhost:6379`.
-- Medusa backend on `http://localhost:9000`.
-- AI Worker on `http://localhost:8001` for Phase 2A.
+Do not commit `scripts/dev3-full-backend-pipeline.local.env`.
+
+## What Not To Commit
+
+- `apps/medusa-backend/.env`
+- real `PUBLISHABLE_API_KEY`
+- real `ADMIN_TOKEN`
+- Stripe, DeepSeek, FAL, or supplier API keys
+- S2BDIY sandbox secrets
+- generated AI images
+- local logs
+- Python virtual environments
+- `node_modules`
+- generated local result files containing keys or tokens
+
+## Required Local Services
+
+- Docker Postgres on `localhost:5432`
+- Docker Redis on `localhost:6379`
+- Medusa backend on `http://127.0.0.1:9000`
+- AI Worker on `http://127.0.0.1:8001` for Phase 2A runtime checks
+
+Start AI Worker in mock mode when needed:
+
+```bash
+cd apps/ai-worker
+AI_WORKER_MOCK_GENERATION=true python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
 
 ## Required Local Env
 
-Use `apps/medusa-backend/.env` for local values only.
+Required for Phase 1 / Phase 2A:
 
-Required:
-
-- `DATABASE_URL=postgres://medusa:medusa@localhost:5432/ai_commerce`
-- `REDIS_URL=redis://localhost:6379`
-- `ADMIN_TOKEN`
+- `MEDUSA_BASE_URL`, default `http://127.0.0.1:9000`
+- `AI_WORKER_BASE_URL`, default `http://127.0.0.1:8001`
 - `PUBLISHABLE_API_KEY`
+- `ADMIN_TOKEN`
 - `DEFAULT_STORE_ID=default_store`
-- `AI_WORKER_BASE_URL=http://localhost:8001`
-- `AI_WORKER_MOCK_GENERATION=true`
-- `MEDUSA_BASE_URL=http://localhost:9000`
-- `AI_WORKER_PUBLIC_BASE_URL=http://localhost:8001/static`
-- `DEFAULT_MEDUSA_PRODUCT_ID`
-- `DEFAULT_MEDUSA_VARIANT_ID`
-- `TEST_MEDUSA_PRODUCT_ID`
-- `TEST_MEDUSA_VARIANT_ID`
 
 Mock-mode notes:
 
-- `STRIPE_API_KEY` can be empty locally because tests use `pp_system_default`.
+- `STRIPE_API_KEY` can be empty locally when tests use `pp_system_default`.
 - `DEEPSEEK_API_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
 - `FAL_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
-- `PUBLISHABLE_API_KEY` and `ADMIN_TOKEN` are local-only and must not be committed.
 
-## Bootstrap Requirement
+Optional for real Phase 2B S2BDIY:
 
-Run the bootstrap before cart/add-to-cart tests:
+- `RUN_PHASE2B_S2BDIY` set to `true`
+- `S2BDIY_BASE_URL` or `S2BDIY_API_BASE_URL`
+- `S2BDIY_APP_SECRET`
+- `S2BDIY_BASIC_PRODUCT_ID` or `S2BDIY_TEST_BASIC_PRODUCT_ID`
+- `S2BDIY_SIZE_ID` or `S2BDIY_TEST_SIZE_ID`
+- `S2BDIY_COLOR_ID` or `S2BDIY_TEST_COLOR_ID`
+- `S2BDIY_VIEW_ID` or `S2BDIY_TEST_VIEW_ID`
+- `S2BDIY_LOGISTICS_ID` or `S2BDIY_TEST_LOGISTICS_ID`
 
-```bash
-npm run seed
+If S2BDIY credentials are missing, real supplier tests are `SKIPPED`, not `FAILED`.
 
-cd apps/medusa-backend
-npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
-cd ../..
+## Pipeline Coverage
+
+The Dev3 pipeline stages are:
+
+1. Preflight: repo root, tools, Medusa CLI, branch, dirty tree warning, conflict marker check.
+2. Static checks: TypeScript, backend Jest, S2BDIY Jest, Dev3 script syntax, Postman JSON.
+3. Database setup: Docker services, migrations, seed, `phase1-dev2-bootstrap`.
+4. Service health: Medusa and AI Worker.
+5. Env/key validation: admin bearer token and publishable API key.
+6. Store context and multi-store isolation.
+7. Dev1 supplier foundation checks.
+8. Product-to-cart bridge checks.
+9. Phase 2A AI product E2E.
+10. Phase 2B S2BDIY readiness or credential-dependent skip.
+11. Status flow checks.
+12. Negative/exception checks.
+13. Architecture guard for vendor-specific field leakage.
+14. Unified Newman.
+15. Final cleanup, diff check, and secret scan.
+
+## Required Behavior
+
+Phase 1:
+
+- `default_store` and `test_store` are seeded.
+- `X-Store-Id` resolves current store.
+- Storefront product/category APIs require `x-publishable-api-key`.
+- Product/category list/detail APIs are scoped to current store.
+- Cross-store product detail is blocked.
+- Add-to-cart uses native `variant_id = medusa_variant_id`.
+- Cross-store variant add returns `CART_STORE_MISMATCH`.
+
+Dev1 supplier foundation:
+
+- `sup_citigoo_mock` supplier exists.
+- `sp_tshirt` exists.
+- Variants exist for Black/White and S/M/L/XL.
+- Front PNG print spec exists.
+- T-shirt front design template exists.
+
+Phase 2A:
+
+- AI Worker health passes.
+- `POST /admin/ai/generate-and-draft` creates a draft with supplier, mockup, print file, and bridge fields.
+- Publish succeeds.
+- Store product detail exposes supplier/print/mockup fields.
+- Cart add uses `variant_id`.
+- Line-item metadata includes supplier and print production fields.
+- Cart complete creates a paid order with `pp_system_default`.
+- Admin order list can see the order.
+- Push fulfillment and mock shipment routes work.
+
+Phase 2B:
+
+- S2BDIY unit tests always run.
+- Real S2BDIY token/basic product/logistics checks run only when `RUN_PHASE2B_S2BDIY` is set to `true` and supplier credentials are present.
+- Missing supplier credentials are skipped.
+- Supplier status polling/tracking is validated through unit tests and real supplier checks when credentials are available.
+
+## Supplier-Agnostic Core Schema Rule
+
+Core product/order schemas and generic APIs should use supplier-neutral fields:
+
+- `supplier_id`
+- `basic_product_id`
+- `supplier_material_id`
+- `supplier_product_id`
+- `supplier_variant_id`
+- `supplier_size_id`
+- `supplier_color_id`
+- `view_id`
+- `design_type`
+- `supplier_mockup_image_url`
+- `supplier_metadata` or raw supplier response fields where needed
+
+Vendor-specific names such as `s2b_*`, `s2bdiy_*`, `alibaba_*`, or `1688_*` belong only in supplier adapters, supplier-specific scripts, supplier docs, or supplier-specific payload examples.
+
+The Dev3 pipeline includes an architecture guard that fails when vendor-specific fields leak into core models, generic product/cart/order APIs, `docs/api.md`, or `docs/schema.md`.
+
+## Unified Postman / Newman
+
+Canonical collection:
+
+```text
+postman/ai-commerce-store-isolation.postman_collection.json
 ```
 
-Use the bootstrap output:
+Example environment:
 
-- `DEFAULT_MEDUSA_VARIANT_ID` must come from `prod_phase1_default`.
-- `TEST_MEDUSA_VARIANT_ID` must come from `prod_phase1_test`.
-- Do not blindly choose the first `is_cart_addable` product from a dirty local DB.
-
-## Quick Commands
-
-```bash
-docker compose -f infra/docker-compose.yml up -d
-npm --workspace apps/medusa-backend run db:migrate
-npm run seed
-
-cd apps/medusa-backend
-npx medusa exec ./src/scripts/phase1-dev2-bootstrap.ts
-cd ../..
+```text
+postman/ai-commerce-local.example.postman_environment.json
 ```
 
-Static/unit checks:
+Required folders:
 
-```bash
-npx tsc --noEmit -p apps/medusa-backend/tsconfig.json
-npm test --workspace apps/medusa-backend
+- `Phase 1 / Store Isolation Regression`
+- `Dev1 / Supplier Foundation`
+- `Phase 2A / AI Product E2E`
+- `Phase 2B / S2BDIY Supplier Fulfillment`
 
-cd apps/ai-worker
-AI_WORKER_MOCK_GENERATION=true python -m pytest -q
-cd ../..
+Phase 1 and Phase 2A run by default. Phase 2B is present in the same collection but skipped by default with:
+
+```text
+run_phase2b_s2bdiy=false
 ```
 
-Runtime validation:
+Set `run_phase2b_s2bdiy=true` only when S2BDIY sandbox credentials and account readiness are configured.
+
+## Manual Newman Command
 
 ```bash
-bash scripts/phase1-dev2-self-test.sh
-PHASE2A_E2E_COMPLETE=true bash scripts/phase2a-dev2-e2e.sh
-bash scripts/smoke-store-isolation.sh
-```
-
-Postman/Newman:
-
-```bash
-set -a
-source apps/medusa-backend/.env
-set +a
-
 npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
-  --env-var "base_url=${MEDUSA_BASE_URL:-http://localhost:9000}" \
-  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://localhost:8001}" \
+  --env-var "base_url=${MEDUSA_BASE_URL:-http://127.0.0.1:9000}" \
+  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://127.0.0.1:8001}" \
   --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
   --env-var "admin_token=$ADMIN_TOKEN" \
   --env-var "default_store_id=default_store" \
@@ -126,55 +197,24 @@ npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
   --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
   --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
   --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
-  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID"
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID" \
+  --env-var "run_phase2b_s2bdiy=${RUN_PHASE2B_S2BDIY:-false}" \
+  --env-var "s2bdiy_base_url=${S2BDIY_BASE_URL:-}" \
+  --env-var "s2bdiy_app_secret=${S2BDIY_APP_SECRET:-}" \
+  --env-var "s2bdiy_basic_product_id=${S2BDIY_BASIC_PRODUCT_ID:-}" \
+  --env-var "s2bdiy_size_id=${S2BDIY_SIZE_ID:-}" \
+  --env-var "s2bdiy_color_id=${S2BDIY_COLOR_ID:-}" \
+  --env-var "s2bdiy_view_id=${S2BDIY_VIEW_ID:-}" \
+  --env-var "s2bdiy_logistics_id=${S2BDIY_LOGISTICS_ID:-}"
 ```
 
-Postman files:
+Expected result with `run_phase2b_s2bdiy=false`: Phase 1, Dev1, and Phase 2A pass; Phase 2B logs skipped requests.
 
-- Collection: `postman/ai-commerce-store-isolation.postman_collection.json`
-- Local example environment: `postman/ai-commerce-local.example.postman_environment.json`
+## Final PR Checklist
 
-## Detailed Docs
-
-- Phase 2A full local runbook: [phase2a-test-runbook.md](./phase2a-test-runbook.md)
-- Dev2 Phase 1 regression: [phase1-dev2-self-test.md](./phase1-dev2-self-test.md)
-- API reference: [api.md](./api.md)
-- Schema reference: [schema.md](./schema.md)
-- Store context: [store-context.md](./store-context.md)
-
-## Common Failures
-
-`A valid publishable key is required`
-
-- Refresh `PUBLISHABLE_API_KEY`.
-- Verify with `GET /store/products`.
-
-`ADMIN_TOKEN` returns 401
-
-- Refresh the token with `POST /auth/user/emailpass`.
-- Store it only in local `.env` or your shell.
-
-`Cannot read properties of undefined (reading 'calculated_amount')`
-
-- The selected native variant does not have a calculated price for the cart currency/region.
-- Run `phase1-dev2-bootstrap` again.
-- Update `DEFAULT_MEDUSA_VARIANT_ID` from `prod_phase1_default`.
-
-`Some variant does not have the required inventory`
-
-- The selected native variant is not cart-ready for local stock checks.
-- Run `phase1-dev2-bootstrap` and use its output ids.
-
-AI Worker connection refused:
-
-- Start AI Worker on `127.0.0.1:8001`.
-- Use Python 3.10+; Python 3.13 is recommended.
-
-Python FastAPI or dependency errors:
-
-- Do not use Python 3.9 for Phase 2A validation.
-- Install `apps/ai-worker/requirements.txt` in the active Python 3.10+ environment.
-
-`customer_email` unrecognized in cart create:
-
-- Current cart create tests should use `currency_code` and optional `region_id` only unless the route changes.
+- Worktree contains only intentional docs/test assets.
+- `bash -n scripts/dev3-full-backend-pipeline.sh` passes.
+- Postman collection and environment JSON validate with `jq empty`.
+- No conflict markers.
+- No secrets in docs, Postman, or scripts diff.
+- Full Dev3 pipeline result is recorded in the PR notes, including any Phase 2B supplier skips.

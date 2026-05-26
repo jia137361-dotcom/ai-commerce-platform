@@ -9,6 +9,11 @@ import {
   requireText,
   sendError
 } from "../../../_helpers/store-core"
+import { getS2bdiyConfig } from "../../../../modules/suppliers/s2bdiy/config"
+import {
+  provisionS2bProductForMcProduct,
+  resolveS2bIdsFromEnvOrVariant,
+} from "../../../../lib/s2bdiy/provision-s2b-product"
 
 type GenerateAndDraftBody = {
   store_id?: string
@@ -155,12 +160,51 @@ async function handleGenerateAndDraft(
     }
   })
 
+  let s2bProvisionError: string | null = null
+  if (getS2bdiyConfig() && generated.print_file_url) {
+    const variants = await storeCoreService.listSupplierProductVariants({ id: supplierVariantId })
+    const variant = variants[0] as Record<string, unknown> | undefined
+    const spRows = await storeCoreService.listSupplierProducts({ id: supplierProductId })
+    const sp = spRows[0] as Record<string, unknown> | undefined
+    const basicFromCatalog =
+      sp?.basic_product_id != null ? String(sp.basic_product_id) : null
+    const productForS2b = {
+      ...(product as Record<string, unknown>),
+      metadata: {
+        ...((product.metadata as Record<string, unknown> | null) ?? {}),
+        ...(basicFromCatalog ? { basic_product_id: basicFromCatalog } : {}),
+      },
+    }
+    const s2bIds = resolveS2bIdsFromEnvOrVariant(variant, productForS2b)
+    if (s2bIds) {
+      try {
+        await provisionS2bProductForMcProduct(storeCoreService, {
+          productId: product.id,
+          storeId,
+          title,
+          printFileUrl: generated.print_file_url,
+          basicProductId: s2bIds.basicProductId,
+          sizeId: s2bIds.sizeId,
+          colorId: s2bIds.colorId,
+          viewId: s2bIds.viewId,
+        })
+      } catch (error: unknown) {
+        s2bProvisionError = error instanceof Error ? error.message : String(error)
+        console.error("S2BDIY provision failed:", error)
+      }
+    }
+  }
+
+  const refreshed = await storeCoreService.listProducts({ id: product.id })
+  const finalProduct = refreshed[0] ?? product
+
   return res.status(201).json({
-    product_id: product.id,
-    store_id: product.store_id,
-    status: product.status,
+    product_id: finalProduct.id,
+    store_id: finalProduct.store_id,
+    status: finalProduct.status,
     ai_job_id: generated.ai_job_id,
     generation: generated,
-    product: normalizeProduct(product)
+    s2b_provision_error: s2bProvisionError,
+    product: normalizeProduct(finalProduct)
   })
 }

@@ -17,6 +17,8 @@ import {
 } from "../../../../../lib/sync-order-paid-fulfillment"
 import { readOrderFulfillmentStatusMeta } from "../../../../../lib/order-custom-metadata"
 import { syncFulfillmentPayloadFromOrder } from "../../../../../lib/sync-fulfillment-line-items"
+import { pushOrderToS2bdiy } from "../../../../../lib/s2bdiy/push-s2b-order"
+import { getS2bdiyConfig } from "../../../../../modules/suppliers/s2bdiy/config"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 
@@ -64,6 +66,13 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     if (!providerDefersPaidUntilCapture(providerId)) {
       await markOrderPaidAndFulfillmentWaiting(req.scope, orderId, "non_stripe_provider_after_complete")
+      if (getS2bdiyConfig()) {
+        try {
+          await pushOrderToS2bdiy(req.scope, orderId)
+        } catch (error) {
+          console.error("S2BDIY push after complete failed:", error)
+        }
+      }
     } else {
       await syncPaidIfPaymentAlreadyCaptured(req.scope, orderId, paymentCollectionId)
     }

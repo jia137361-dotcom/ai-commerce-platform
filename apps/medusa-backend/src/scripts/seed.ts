@@ -173,6 +173,17 @@ const suppliers: SupplierSeed[] = [
       phase: "2A",
       note: "Mock supplier for default_store AI product generation"
     }
+  },
+  {
+    id: "sup_s2bdiy",
+    code: "s2bdiy",
+    name: "S2BDIY",
+    country: "CN",
+    status: "active",
+    raw_json: {
+      phase: "2B",
+      note: "S2BDIY print-on-demand supplier for production fulfillment"
+    }
   }
 ]
 

@@ -1,10 +1,18 @@
-import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 
 export type LineItemProductionMetadata = {
+  mc_product_id: string | null
   supplier_id: string | null
+  /**
+   * `mc_product.supplier_product_id`:
+   * - draft-time: catalog row id (e.g. sp_tshirt)
+   * - after S2BDIY provisioning: S2BDIY quickCreate product_id (for fulfillment)
+   */
   supplier_product_id: string | null
   supplier_variant_id: string | null
+  basic_product_id: string | null
+  supplier_size_id: string | null
+  supplier_color_id: string | null
   print_file_url: string | null
   print_position: string | null
   color: string | null
@@ -46,6 +54,9 @@ export async function buildLineItemProductionMetadata(
         : null
     if (supplierProductId) {
       const specs = await storeCoreService.listSupplierPrintSpecs({
+        // For Dev1 catalog sync, specs are tied to supplier product rows.
+        // If this product has been provisioned and supplier_product_id is no longer a row id,
+        // the spec lookup will just return empty and we fall back to "front".
         supplier_product_id: supplierProductId,
         status: "active",
       })
@@ -56,7 +67,12 @@ export async function buildLineItemProductionMetadata(
     }
   }
 
+  const basicProductId = linkedProduct.basic_product_id
+  const supplierSizeId = linkedProduct.supplier_size_id
+  const supplierColorId = linkedProduct.supplier_color_id
+
   return {
+    mc_product_id: typeof linkedProduct.id === "string" ? linkedProduct.id : null,
     supplier_id:
       typeof linkedProduct.supplier_id === "string" ? linkedProduct.supplier_id : null,
     supplier_product_id:
@@ -64,6 +80,9 @@ export async function buildLineItemProductionMetadata(
         ? linkedProduct.supplier_product_id
         : null,
     supplier_variant_id: supplierVariantId,
+    basic_product_id: typeof basicProductId === "string" ? basicProductId : null,
+    supplier_size_id: typeof supplierSizeId === "string" ? supplierSizeId : null,
+    supplier_color_id: typeof supplierColorId === "string" ? supplierColorId : null,
     print_file_url:
       typeof linkedProduct.print_file_url === "string"
         ? linkedProduct.print_file_url

@@ -1,6 +1,6 @@
-# Phase 1 / Phase 2A Schema
+# Phase 1 Schema
 
-This document describes the current Phase 1 and Phase 2A store-core schemas and one future input schema for AI-created product drafts.
+This document describes the current Phase 1 store-core schemas and one future input schema for AI-created product drafts.
 
 ## Store
 
@@ -101,13 +101,9 @@ Fields:
 | `prompt` | text, nullable | AI prompt or generation context. |
 | `platform_product_id` | text, nullable | Optional reference to a global platform product. |
 | `supplier_product_id` | text, nullable | Supplier product id, either provided directly or inherited from a platform product. |
-| `supplier_id` | text, nullable | Supplier id for Phase 2A AI/supplier-generated products. |
-| `supplier_variant_id` | text, nullable | Supplier product variant selected for production. |
 | `medusa_product_id` | text, nullable | Explicit bridge to a native Medusa product. |
 | `medusa_variant_id` | text, nullable | Explicit bridge to the native Medusa variant used for cart line items. |
 | `design_image_url` | text, nullable | Design image URL. |
-| `mockup_image_url` | text, nullable | AI Worker mockup image URL. |
-| `print_file_url` | text, nullable | Production print file URL. |
 | `image_url` | text, nullable | Product image URL. |
 | `tags` | text array, nullable | Product tags. |
 | `price` | float, nullable | Phase 1 simple price. |
@@ -131,122 +127,6 @@ Category caveats:
 - Keep a regression test for cross-store category ids so future changes do not weaken this isolation.
 - Products without `medusa_variant_id` are catalog-visible after publish, but are not cart-addable.
 - Cart line items use native Medusa `variant_id`, sourced from `mc_product.medusa_variant_id`.
-
-Phase 2A product metadata:
-
-- AI-generated products use `source: "ai"` and preserve `ai_job_id`, `prompt`, supplier ids, design/mockup/print URLs, and print metadata.
-- Cart line-item metadata is derived from the published `mc_product` linked by `medusa_variant_id`.
-- Required line-item production metadata includes `supplier_id`, `supplier_product_id`, `supplier_variant_id`, `print_file_url`, `print_position`, `color`, and `size`.
-
-## Supplier
-
-Model: `mc_supplier`
-
-Purpose: Phase 2A supplier identity used by supplier products.
-
-Fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | text | Primary key with `sup` prefix. Seed includes `sup_citigoo_mock`. |
-| `code` | text | Supplier code. Seed uses `citigoo_mock`. |
-| `name` | text | Supplier display name. |
-| `country` | text, nullable | Supplier country. |
-| `status` | enum | `active`, `inactive`, `archived`; defaults to `active`. |
-| `raw_json` | json, nullable | Supplier source payload or mock metadata. |
-
-## SupplierProduct
-
-
-> API mapping note: The API response exposes the Store Core model `id` as `supplier_product_id`. The database field `supplier_product_id` is exposed as `external_supplier_product_id`.
-
-Model: `mc_supplier_product`
-
-Purpose: printable supplier catalog product mapped to a platform product.
-
-Fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | text | Primary key with `sp` prefix. Seed includes `sp_tshirt`. |
-| `supplier_id` | text | Supplier id, e.g. `sup_citigoo_mock`. |
-| `supplier_product_id` | text | External supplier product id, e.g. `mock_tshirt_001`. |
-| `platform_product_id` | text | Platform product id, e.g. `pp_tshirt`. |
-| `name` | text | Supplier product name. |
-| `category` | text | Supplier category. |
-| `base_cost` | float | Base cost. |
-| `currency` | text | Cost currency; defaults to `usd`. |
-| `status` | enum | `active`, `inactive`, `archived`; defaults to `active`. |
-| `raw_json` | json, nullable | Supplier source payload or mock metadata. |
-
-## SupplierProductVariant
-
-
-> API mapping note: The API response exposes the Store Core model `id` as `supplier_variant_id`. The database field `supplier_variant_id` is exposed as `external_supplier_variant_id`.
-
-Model: `mc_supplier_product_variant`
-
-Purpose: supplier color/size SKU variant used for production metadata.
-
-Fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | text | Primary key with `spv` prefix. Seed includes `spv_tshirt_black_m`. |
-| `supplier_product_id` | text | Supplier product id, e.g. `sp_tshirt`. |
-| `supplier_variant_id` | text | External supplier variant id. |
-| `color` | text, nullable | Seed includes `black` and `white`. |
-| `size` | text, nullable | Seed includes `S`, `M`, `L`, and `XL`. |
-| `sku` | text | Supplier SKU. |
-| `cost` | float | Variant cost. |
-| `stock_status` | enum | `in_stock`, `out_of_stock`, `unknown`; defaults to `in_stock`. |
-| `raw_json` | json, nullable | Supplier variant payload or mock metadata. |
-
-## SupplierPrintSpec
-
-Model: `mc_supplier_print_spec`
-
-Purpose: supplier print-file requirements for a supplier product or variant.
-
-Fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | text | Primary key with `sps` prefix. Seed includes `sps_tshirt_front_png`. |
-| `supplier_product_id` | text | Supplier product id. |
-| `supplier_variant_id` | text, nullable | Optional supplier variant id. |
-| `print_position` | text | Seed uses `front`. |
-| `print_file_width` | number | Seed uses `4500`. |
-| `print_file_height` | number | Seed uses `5400`. |
-| `dpi` | number | Seed uses `300`. |
-| `accepted_formats` | text array, nullable | Seed accepts `png`. |
-| `background_required` | boolean | Defaults to `false`. |
-| `safe_margin` | number, nullable | Optional safe margin. |
-| `bleed` | number, nullable | Optional bleed. |
-| `color_mode` | text | Defaults to `RGB`. |
-| `status` | enum | `active`, `inactive`, `archived`; defaults to `active`. |
-
-## PlatformDesignTemplate
-
-Model: `mc_platform_design_template`
-
-Purpose: design canvas/template information for a platform product.
-
-Fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | text | Primary key with `pdt` prefix. Seed includes `pdt_tshirt_front`. |
-| `platform_product_id` | text | Platform product id, e.g. `pp_tshirt`. |
-| `name` | text | Template name. |
-| `canvas_width` | number | Template canvas width. |
-| `canvas_height` | number | Template canvas height. |
-| `design_area_x` | number | Design area X offset. |
-| `design_area_y` | number | Design area Y offset. |
-| `design_area_width` | number | Design area width. |
-| `design_area_height` | number | Design area height. |
-| `preview_background_url` | text, nullable | Preview/mockup background URL. |
-| `status` | enum | `active`, `inactive`, `archived`; defaults to `active`. |
 
 ## ProductCategory
 
