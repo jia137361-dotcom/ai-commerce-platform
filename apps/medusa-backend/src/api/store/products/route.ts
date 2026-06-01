@@ -1,6 +1,10 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../lib/store-context"
-import { getStoreCoreService, normalizeProduct } from "../../_helpers/store-core"
+import {
+  getProductReviewSummaries,
+  getStoreCoreService,
+  normalizeProductWithReviewSummary
+} from "../../_helpers/store-core"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: storeId } = resolveCurrentStore(req)
@@ -18,10 +22,18 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
   )
 
+  const summaries = await getProductReviewSummaries(
+    storeCoreService,
+    storeId,
+    products.map((product: any) => product.id)
+  )
+
   return res.json({
     store_id: storeId,
     count: products.length,
-    products: products.map(normalizeProduct)
+    products: products.map((product: any) =>
+      normalizeProductWithReviewSummary(product, summaries.get(product.id))
+    )
   })
 }
 

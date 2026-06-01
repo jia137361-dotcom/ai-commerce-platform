@@ -482,6 +482,103 @@ curl -i \
 
 The `product` response uses the same store-core shape as the list route and includes `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
 
+Product list and detail responses also include review summary fields:
+
+```json
+{
+  "average_rating": 4.8,
+  "review_count": 14
+}
+```
+
+When a product has no published reviews, `average_rating` is `null` and `review_count` is `0`.
+
+### `GET /store/products/:product_id/reviews`
+
+Returns published reviews and the five-star rating summary for a published product in the current store.
+
+Required headers:
+
+```http
+x-publishable-api-key: <publishable_api_key>
+```
+
+Optional query:
+
+- `limit`: default `20`, max `100`
+
+Response:
+
+```json
+{
+  "product_id": "prod_123",
+  "store_id": "default_store",
+  "average_rating": 4.8,
+  "review_count": 14,
+  "rating_breakdown": {
+    "5": 10,
+    "4": 3,
+    "3": 1,
+    "2": 0,
+    "1": 0
+  },
+  "reviews": [
+    {
+      "review_id": "prv_123",
+      "store_id": "default_store",
+      "product_id": "prod_123",
+      "order_id": "order_123",
+      "order_display_id": 1001,
+      "customer_name": "Verified buyer",
+      "rating": 5,
+      "title": "Great shirt",
+      "content": "Good print quality and fits as expected.",
+      "status": "published",
+      "metadata": {},
+      "created_at": "2026-06-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### `POST /store/products/:product_id/reviews`
+
+Creates a published product review after verifying the buyer purchased the product.
+
+The buyer must provide the same email and order number used for the order. The order must belong to the current store, and one of its line items must contain `metadata.mc_product_id` matching `product_id`.
+
+Required headers:
+
+```http
+x-publishable-api-key: <publishable_api_key>
+```
+
+Request body:
+
+```json
+{
+  "email": "buyer@example.com",
+  "order_number": 1001,
+  "rating": 5,
+  "title": "Great shirt",
+  "content": "Good print quality and fits as expected.",
+  "customer_name": "Jane"
+}
+```
+
+Rules:
+
+- `rating` must be an integer from `1` to `5`; five stars is the maximum score.
+- Half-star submissions are not accepted.
+- Each order can review the same product once.
+- Reviews are published immediately.
+
+Errors:
+
+- `PRODUCT_NOT_FOUND` if the product does not exist, is not published, or belongs to a different store.
+- `VALIDATION_ERROR` if the request body is invalid.
+- `REVIEW_NOT_ALLOWED` if the order cannot be verified, did not buy the product, or already reviewed it.
+
 ### `GET /store/products/:product_id/share`
 
 Returns share links and share text for a published product. This endpoint does **not** call any third-party social APIs — all URLs are constructed server-side using platform share-intent URL formats.
