@@ -109,6 +109,29 @@ async function handleGenerateAndDraft(
     )
   }
 
+  const supplierVariants = await storeCoreService.listSupplierProductVariants({
+    id: supplierVariantId,
+  })
+  const supplierVariant = supplierVariants[0] as Record<string, unknown> | undefined
+
+  if (!supplierVariant) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "supplier_variant_id must reference a supplier product variant"
+    )
+  }
+
+  if (supplierVariant.supplier_product_id !== supplierProductId) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "supplier_variant_id must belong to supplier_product_id"
+    )
+  }
+
   const cost =
     parseOptionalNumber(supplierProduct.base_cost) ??
     parseOptionalNumber(generated.price_suggestion) ??
@@ -162,20 +185,15 @@ async function handleGenerateAndDraft(
 
   let s2bProvisionError: string | null = null
   if (getS2bdiyConfig() && generated.print_file_url) {
-    const variants = await storeCoreService.listSupplierProductVariants({ id: supplierVariantId })
-    const variant = variants[0] as Record<string, unknown> | undefined
     const spRows = await storeCoreService.listSupplierProducts({ id: supplierProductId })
     const sp = spRows[0] as Record<string, unknown> | undefined
     const basicFromCatalog =
       sp?.basic_product_id != null ? String(sp.basic_product_id) : null
     const productForS2b = {
       ...(product as Record<string, unknown>),
-      metadata: {
-        ...((product.metadata as Record<string, unknown> | null) ?? {}),
-        ...(basicFromCatalog ? { basic_product_id: basicFromCatalog } : {}),
-      },
+      ...(basicFromCatalog ? { basic_product_id: basicFromCatalog } : {}),
     }
-    const s2bIds = resolveS2bIdsFromEnvOrVariant(variant, productForS2b)
+    const s2bIds = resolveS2bIdsFromEnvOrVariant(supplierVariant, productForS2b)
     if (s2bIds) {
       try {
         await provisionS2bProductForMcProduct(storeCoreService, {

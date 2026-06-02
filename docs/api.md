@@ -482,6 +482,208 @@ curl -i \
 
 The `product` response uses the same store-core shape as the list route and includes `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
 
+Product list and detail responses also include review summary fields:
+
+```json
+{
+  "average_rating": 4.8,
+  "review_count": 14
+}
+```
+
+When a product has no published reviews, `average_rating` is `null` and `review_count` is `0`.
+
+### `GET /store/products/:product_id/reviews`
+
+Returns published reviews and the five-star rating summary for a published product in the current store.
+
+Required headers:
+
+```http
+x-publishable-api-key: <publishable_api_key>
+```
+
+Optional query:
+
+- `limit`: default `20`, max `100`
+
+Response:
+
+```json
+{
+  "product_id": "prod_123",
+  "store_id": "default_store",
+  "average_rating": 4.8,
+  "review_count": 14,
+  "rating_breakdown": {
+    "5": 10,
+    "4": 3,
+    "3": 1,
+    "2": 0,
+    "1": 0
+  },
+  "reviews": [
+    {
+      "review_id": "prv_123",
+      "store_id": "default_store",
+      "product_id": "prod_123",
+      "order_id": "order_123",
+      "order_display_id": 1001,
+      "customer_name": "Verified buyer",
+      "rating": 5,
+      "title": "Great shirt",
+      "content": "Good print quality and fits as expected.",
+      "status": "published",
+      "metadata": {},
+      "created_at": "2026-06-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### `POST /store/products/:product_id/reviews`
+
+Creates a published product review after verifying the buyer purchased the product.
+
+The buyer must provide the same email and order number used for the order. The order must belong to the current store, and one of its line items must contain `metadata.mc_product_id` matching `product_id`.
+
+Required headers:
+
+```http
+x-publishable-api-key: <publishable_api_key>
+```
+
+Request body:
+
+```json
+{
+  "email": "buyer@example.com",
+  "order_number": 1001,
+  "rating": 5,
+  "title": "Great shirt",
+  "content": "Good print quality and fits as expected.",
+  "customer_name": "Jane"
+}
+```
+
+Rules:
+
+- `rating` must be an integer from `1` to `5`; five stars is the maximum score.
+- Half-star submissions are not accepted.
+- Each order can review the same product once.
+- Reviews are published immediately.
+
+Errors:
+
+- `PRODUCT_NOT_FOUND` if the product does not exist, is not published, or belongs to a different store.
+- `VALIDATION_ERROR` if the request body is invalid.
+- `REVIEW_NOT_ALLOWED` if the order cannot be verified, did not buy the product, or already reviewed it.
+
+### `GET /store/products/:product_id/share`
+
+Returns share links and share text for a published product. This endpoint does **not** call any third-party social APIs — all URLs are constructed server-side using platform share-intent URL formats.
+
+Required headers:
+
+```http
+x-publishable-api-key: <publishable_api_key>
+```
+
+Optional headers:
+
+```http
+X-Store-Id: default_store
+```
+
+Example:
+
+```bash
+curl -i \
+  -H "x-publishable-api-key: <publishable_api_key>" \
+  -H "X-Store-Id: default_store" \
+  http://localhost:9000/store/products/prod_xxx/share
+```
+
+Response `200`:
+
+```json
+{
+  "product_id": "prod_xxx",
+  "store_id": "default_store",
+  "title": "Cool T-Shirt",
+  "description": "A clean summer beach inspired t-shirt.",
+  "image_url": "https://cdn.example.com/product.png",
+  "product_url": "https://citigoo.app/products/prod_xxx",
+  "share_text": "Cool T-Shirt https://citigoo.app/products/prod_xxx",
+  "channels": {
+    "facebook": {
+      "enabled": true,
+      "type": "web_share_url",
+      "url": "https://www.facebook.com/sharer/sharer.php?u=..."
+    },
+    "x": {
+      "enabled": true,
+      "type": "web_share_url",
+      "url": "https://x.com/intent/post?url=...&text=..."
+    },
+    "pinterest": {
+      "enabled": true,
+      "type": "web_share_url",
+      "url": "https://pinterest.com/pin/create/button/?url=...&description=...&media=..."
+    },
+    "whatsapp": {
+      "enabled": true,
+      "type": "web_share_url",
+      "url": "https://wa.me/?text=..."
+    },
+    "telegram": {
+      "enabled": true,
+      "type": "web_share_url",
+      "url": "https://t.me/share/url?url=...&text=..."
+    },
+    "email": {
+      "enabled": true,
+      "type": "mailto",
+      "url": "mailto:?subject=...&body=..."
+    },
+    "copy_link": {
+      "enabled": true,
+      "type": "copy",
+      "value": "https://citigoo.app/products/prod_xxx"
+    },
+    "instagram": {
+      "enabled": true,
+      "type": "copy_then_open",
+      "value": "https://citigoo.app/products/prod_xxx",
+      "message": "Instagram does not support direct web sharing. Copy link and open Instagram."
+    },
+    "tiktok": {
+      "enabled": true,
+      "type": "copy_then_open",
+      "value": "https://citigoo.app/products/prod_xxx",
+      "message": "TikTok does not support direct web sharing. Copy link and open TikTok."
+    }
+  }
+}
+```
+
+**Channel types**:
+
+| Type | Channels | Frontend behavior |
+|---|---|---|
+| `web_share_url` | facebook, x, pinterest, whatsapp, telegram | Open `url` in a new window or share sheet |
+| `mailto` | email | Open `url` as mailto link |
+| `copy` | copy_link | Call `navigator.clipboard.writeText(value)` |
+| `copy_then_open` | instagram, tiktok | Show `message`, copy `value` to clipboard, let user open the app |
+
+**Image URL priority**: `image_url` > `mockup_image_url` > `design_image_url`
+
+**Product URL**: Constructed from `STOREFRONT_BASE_URL` env var (fallback: `http://localhost:3000`) + `/products/{product_id}`
+
+Errors:
+
+- `PRODUCT_NOT_FOUND` if the product does not exist, is not published, or belongs to a different store.
+
 ### `POST /store/carts/:id/line-items`
 
 Adds a native Medusa variant to a cart.

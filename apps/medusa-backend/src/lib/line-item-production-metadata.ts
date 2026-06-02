@@ -34,6 +34,7 @@ export async function buildLineItemProductionMetadata(
   let color: string | null = null
   let size: string | null = null
   let printPosition: string | null = null
+  let catalogSupplierProductId: string | null = null
 
   if (supplierVariantId) {
     const variants = await storeCoreService.listSupplierProductVariants({
@@ -43,6 +44,8 @@ export async function buildLineItemProductionMetadata(
     if (variant) {
       color = typeof variant.color === "string" ? variant.color : null
       size = typeof variant.size === "string" ? variant.size : null
+      catalogSupplierProductId =
+        typeof variant.supplier_product_id === "string" ? variant.supplier_product_id : null
       const raw = variant.raw_json as Record<string, unknown> | null | undefined
       if (raw && typeof raw.print_position === "string") {
         printPosition = raw.print_position
@@ -52,14 +55,12 @@ export async function buildLineItemProductionMetadata(
 
   if (!printPosition) {
     const supplierProductId =
-      typeof linkedProduct.supplier_product_id === "string"
+      catalogSupplierProductId ??
+      (typeof linkedProduct.supplier_product_id === "string"
         ? linkedProduct.supplier_product_id
-        : null
+        : null)
     if (supplierProductId) {
       const specs = await storeCoreService.listSupplierPrintSpecs({
-        // For Dev1 catalog sync, specs are tied to supplier product rows.
-        // If this product has been provisioned and supplier_product_id is no longer a row id,
-        // the spec lookup will just return empty and we fall back to "front".
         supplier_product_id: supplierProductId,
         status: "active",
       })

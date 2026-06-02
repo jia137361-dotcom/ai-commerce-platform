@@ -1,8 +1,9 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import {
+  getProductReviewSummaries,
   getStoreCoreService,
-  normalizeProduct,
+  normalizeProductWithReviewSummary,
   sendError
 } from "../../../_helpers/store-core"
 
@@ -23,7 +24,11 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
   }
 
+  const summaries = await getProductReviewSummaries(storeCoreService, storeId, [
+    product.id
+  ])
+
   return res.json({
-    product: normalizeProduct(product)
+    product: normalizeProductWithReviewSummary(product, summaries.get(product.id))
   })
 }

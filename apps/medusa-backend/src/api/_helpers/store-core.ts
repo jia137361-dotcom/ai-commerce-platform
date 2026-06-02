@@ -2,6 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { STORE_CORE_MODULE } from "../../modules/store-core"
 import StoreCoreModuleService from "../../modules/store-core/service"
 import { ErrorCodes } from "../../lib/errors"
+import { summarizeProductReviews } from "../../lib/product-reviews"
 
 export type ProductStatus = "draft" | "published" | "unpublished" | "archived"
 export type ProductSource = "manual" | "ai"
@@ -59,6 +60,46 @@ export const normalizeProduct = (product: any) => ({
   created_at: product.created_at,
   updated_at: product.updated_at
 })
+
+export const normalizeProductWithReviewSummary = (
+  product: any,
+  summary?: { average_rating: number | null; review_count: number }
+) => ({
+  ...normalizeProduct(product),
+  average_rating: summary?.average_rating ?? null,
+  review_count: summary?.review_count ?? 0
+})
+
+export const getProductReviewSummaries = async (
+  storeCoreService: StoreCoreModuleService,
+  storeId: string,
+  productIds: string[]
+) => {
+  const summaries = new Map<string, { average_rating: number | null; review_count: number }>()
+  const uniqueProductIds = [...new Set(productIds.filter(Boolean))]
+
+  if (!uniqueProductIds.length) {
+    return summaries
+  }
+
+  const reviews = await (storeCoreService as any).listProductReviews({
+    store_id: storeId,
+    product_id: uniqueProductIds,
+    status: "published"
+  })
+
+  for (const productId of uniqueProductIds) {
+    const summary = summarizeProductReviews(
+      reviews.filter((review: any) => review.product_id === productId)
+    )
+    summaries.set(productId, {
+      average_rating: summary.average_rating,
+      review_count: summary.review_count
+    })
+  }
+
+  return summaries
+}
 
 export const normalizeCategory = (category: any) => ({
   category_id: category.id,

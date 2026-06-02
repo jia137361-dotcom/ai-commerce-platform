@@ -6,6 +6,7 @@ describe("buildLineItemProductionMetadata", () => {
       listSupplierProductVariants: jest.fn().mockResolvedValue([
         {
           id: "spv_tshirt_black_m",
+          supplier_product_id: "sp_tshirt",
           color: "black",
           size: "M",
           raw_json: { print_position: "front" },
@@ -40,5 +41,41 @@ describe("buildLineItemProductionMetadata", () => {
     expect(meta.color).toBe("black")
     expect(meta.size).toBe("M")
     expect(meta.print_position).toBe("front")
+  })
+
+  it("uses the catalog supplier product from the variant when product supplier_product_id is provisioned", async () => {
+    const storeCoreService = {
+      listSupplierProductVariants: jest.fn().mockResolvedValue([
+        {
+          id: "spv_tshirt_black_m",
+          supplier_product_id: "sp_tshirt",
+          color: "black",
+          size: "M",
+          raw_json: {},
+        },
+      ]),
+      listSupplierPrintSpecs: jest.fn().mockResolvedValue([
+        {
+          print_position: "back",
+        },
+      ]),
+    }
+
+    const meta = await buildLineItemProductionMetadata(storeCoreService as any, {
+      id: "prod_test_1",
+      supplier_id: "sup_s2bdiy",
+      supplier_product_id: "99901",
+      supplier_variant_id: "spv_tshirt_black_m",
+      basic_product_id: "1672",
+      supplier_size_id: "1",
+      supplier_color_id: "2",
+      print_file_url: "https://example.com/print.png",
+    })
+
+    expect(storeCoreService.listSupplierPrintSpecs).toHaveBeenCalledWith({
+      supplier_product_id: "sp_tshirt",
+      status: "active",
+    })
+    expect(meta.print_position).toBe("back")
   })
 })
