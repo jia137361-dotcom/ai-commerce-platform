@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import zlib from "node:zlib"
 import { execSync } from "node:child_process"
+import type { ExecArgs } from "@medusajs/framework/types"
 import { S2bdiyClient } from "../modules/suppliers/s2bdiy/s2bdiy-client"
 import { getS2bdiyAccessToken } from "../modules/suppliers/s2bdiy/s2bdiy-auth"
 import {
@@ -341,7 +342,7 @@ ${steps.map((s) => `- ${s.name}: ${s.rawPath ? path.relative(logDir, s.rawPath) 
   fs.writeFileSync(path.join(logDir, "REPORT.md"), report)
 }
 
-async function main(): Promise<void> {
+export default async function s2bdiySingleStoreDryRun(_args: ExecArgs): Promise<void> {
   const baseUrl = env("S2BDIY_BASE_URL", env("S2BDIY_API_BASE_URL")).replace(/\/$/, "")
   const config = {
     apiBaseUrl: baseUrl,
@@ -632,9 +633,3 @@ async function main(): Promise<void> {
 
   writeReport()
 }
-
-main().catch((error) => {
-  record({ phase: "unknown", name: "script", result: "FAIL", notes: error instanceof Error ? error.message : String(error) })
-  writeReport()
-  process.exitCode = 1
-})
