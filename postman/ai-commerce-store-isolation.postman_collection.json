@@ -589,12 +589,13 @@
                   "pm.test('includes default smoke product', () => pm.expect(json.products.some((p) => p.product_id === own && p.store_id === store)).to.eql(true));",
                   "pm.test('all products belong to default store', () => pm.expect(json.products.every((p) => p.store_id === store)).to.eql(true));",
                   "pm.test('does not include test smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));",
-                  "pm.test('default product exposes bridge fields and is not cart-addable', () => {",
+                  "pm.test('default product exposes bridge fields and is cart-addable after publish', () => {",
                   "  const p = json.products.find((p) => p.product_id === own);",
                   "  pm.expect(p).to.be.an('object');",
-                  "  pm.expect(p).to.have.property('medusa_product_id');",
-                  "  pm.expect(p).to.have.property('medusa_variant_id');",
-                  "  pm.expect(p.is_cart_addable).to.eql(false);",
+                  "  pm.expect(p.store_id).to.eql(store);",
+                  "  pm.expect(p.medusa_product_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(p.medusa_variant_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(p.is_cart_addable).to.eql(true);",
                   "});"
                 ]
               }
@@ -628,9 +629,9 @@
                   "pm.test('detail returns store-core product fields', () => {",
                   "  pm.expect(json.product.product_id).to.eql(pm.collectionVariables.get('default_product_id'));",
                   "  pm.expect(json.product.store_id).to.eql(pm.environment.get('default_store_id'));",
-                  "  pm.expect(json.product).to.have.property('medusa_product_id');",
-                  "  pm.expect(json.product).to.have.property('medusa_variant_id');",
-                  "  pm.expect(json.product.is_cart_addable).to.eql(false);",
+                  "  pm.expect(json.product.medusa_product_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.product.medusa_variant_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.product.is_cart_addable).to.eql(true);",
                   "});"
                 ]
               }
@@ -668,12 +669,13 @@
                   "pm.test('includes test smoke product', () => pm.expect(json.products.some((p) => p.product_id === own && p.store_id === store)).to.eql(true));",
                   "pm.test('all products belong to test store', () => pm.expect(json.products.every((p) => p.store_id === store)).to.eql(true));",
                   "pm.test('does not include default smoke product', () => pm.expect(json.products.some((p) => p.product_id === other)).to.eql(false));",
-                  "pm.test('test product exposes bridge fields and is not cart-addable', () => {",
+                  "pm.test('test product exposes bridge fields and is cart-addable after publish', () => {",
                   "  const p = json.products.find((p) => p.product_id === own);",
                   "  pm.expect(p).to.be.an('object');",
-                  "  pm.expect(p).to.have.property('medusa_product_id');",
-                  "  pm.expect(p).to.have.property('medusa_variant_id');",
-                  "  pm.expect(p.is_cart_addable).to.eql(false);",
+                  "  pm.expect(p.store_id).to.eql(store);",
+                  "  pm.expect(p.medusa_product_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(p.medusa_variant_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(p.is_cart_addable).to.eql(true);",
                   "});"
                 ]
               }
@@ -707,9 +709,9 @@
                   "pm.test('detail returns store-core product fields', () => {",
                   "  pm.expect(json.product.product_id).to.eql(pm.collectionVariables.get('test_product_id'));",
                   "  pm.expect(json.product.store_id).to.eql(pm.environment.get('test_store_id'));",
-                  "  pm.expect(json.product).to.have.property('medusa_product_id');",
-                  "  pm.expect(json.product).to.have.property('medusa_variant_id');",
-                  "  pm.expect(json.product.is_cart_addable).to.eql(false);",
+                  "  pm.expect(json.product.medusa_product_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.product.medusa_variant_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.product.is_cart_addable).to.eql(true);",
                   "});"
                 ]
               }
@@ -943,9 +945,13 @@
                 "exec": [
                   "pm.test('status is 200', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('default bridge keeps canonical variant and is cart-addable', () => {",
-                  "  pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('default_medusa_variant_id'));",
-                  "  pm.expect(json.product.medusa_product_id).to.eql(pm.environment.get('default_medusa_product_id'));",
+                  "// Dedicated native variants are expected for normal published store-core products. Canonical bootstrap variants are not required to be reused unless the product is explicitly marked as shared SKU.",
+                  "pm.collectionVariables.set('default_bridge_medusa_product_id', json.product.medusa_product_id);",
+                  "pm.collectionVariables.set('default_bridge_medusa_variant_id', json.product.medusa_variant_id);",
+                  "pm.test('default bridge has usable native IDs and is cart-addable', () => {",
+                  "  pm.expect(json.product.store_id).to.eql(pm.environment.get('default_store_id'));",
+                  "  pm.expect(json.product.medusa_product_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.product.medusa_variant_id).to.be.a('string').and.not.empty;",
                   "  pm.expect(json.product.is_cart_addable).to.eql(true);",
                   "});"
                 ]
@@ -985,9 +991,13 @@
                 "exec": [
                   "pm.test('status is 200', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('test bridge keeps canonical variant and is cart-addable', () => {",
-                  "  pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('test_medusa_variant_id'));",
-                  "  pm.expect(json.product.medusa_product_id).to.eql(pm.environment.get('test_medusa_product_id'));",
+                  "// Dedicated native variants are expected for normal published store-core products. Canonical bootstrap variants are not required to be reused unless the product is explicitly marked as shared SKU.",
+                  "pm.collectionVariables.set('test_bridge_medusa_product_id', json.product.medusa_product_id);",
+                  "pm.collectionVariables.set('test_bridge_medusa_variant_id', json.product.medusa_variant_id);",
+                  "pm.test('test bridge has usable native IDs and is cart-addable', () => {",
+                  "  pm.expect(json.product.store_id).to.eql(pm.environment.get('test_store_id'));",
+                  "  pm.expect(json.product.medusa_product_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.product.medusa_variant_id).to.be.a('string').and.not.empty;",
                   "  pm.expect(json.product.is_cart_addable).to.eql(true);",
                   "});"
                 ]
@@ -1019,9 +1029,12 @@
                 "exec": [
                   "pm.test('status is 200', () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test('detail exposes canonical medusa variant', () => {",
-                  "  pm.expect(json.product.medusa_variant_id).to.eql(pm.environment.get('default_medusa_variant_id'));",
-                  "  pm.expect(json.product.medusa_product_id).to.eql(pm.environment.get('default_medusa_product_id'));",
+                  "// Dedicated native variants are expected for normal published store-core products. Canonical bootstrap variants are not required to be reused unless the product is explicitly marked as shared SKU.",
+                  "pm.test('detail exposes usable native IDs for the default bridge product', () => {",
+                  "  pm.expect(json.product.product_id).to.eql(pm.collectionVariables.get('default_bridge_product_id'));",
+                  "  pm.expect(json.product.store_id).to.eql(pm.environment.get('default_store_id'));",
+                  "  pm.expect(json.product.medusa_product_id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(json.product.medusa_variant_id).to.be.a('string').and.not.empty;",
                   "  pm.expect(json.product.is_cart_addable).to.eql(true);",
                   "});"
                 ]
@@ -1128,7 +1141,7 @@
             "url": "{{base_url}}/store/carts/{{default_cart_id}}/line-items",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"variant_id\": \"{{default_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+              "raw": "{\n  \"variant_id\": \"{{default_bridge_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
             }
           },
           "event": [
@@ -1141,7 +1154,7 @@
                   "pm.test('status is 200: ' + body, () => pm.response.to.have.status(200));",
                   "if (pm.response.code === 200) {",
                   "  const json = pm.response.json();",
-                  "  pm.test('line item uses canonical default variant', () => pm.expect(json.line_item.variant_id).to.eql(pm.environment.get('default_medusa_variant_id')));",
+                  "  pm.test('line item uses returned default bridge variant', () => pm.expect(json.line_item.variant_id).to.eql(pm.collectionVariables.get('default_bridge_medusa_variant_id')));",
                   "}"
                 ]
               }
@@ -1169,7 +1182,7 @@
             "url": "{{base_url}}/store/carts/{{test_cart_id}}/line-items",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"variant_id\": \"{{test_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+              "raw": "{\n  \"variant_id\": \"{{test_bridge_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
             }
           },
           "event": [
@@ -1182,7 +1195,7 @@
                   "pm.test('status is 200: ' + body, () => pm.response.to.have.status(200));",
                   "if (pm.response.code === 200) {",
                   "  const json = pm.response.json();",
-                  "  pm.test('line item uses canonical test variant', () => pm.expect(json.line_item.variant_id).to.eql(pm.environment.get('test_medusa_variant_id')));",
+                  "  pm.test('line item uses returned test bridge variant', () => pm.expect(json.line_item.variant_id).to.eql(pm.collectionVariables.get('test_bridge_medusa_variant_id')));",
                   "}"
                 ]
               }
@@ -1210,7 +1223,7 @@
             "url": "{{base_url}}/store/carts/{{default_cart_id}}/line-items",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"variant_id\": \"{{test_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
+              "raw": "{\n  \"variant_id\": \"{{test_bridge_medusa_variant_id}}\",\n  \"quantity\": 1\n}"
             }
           },
           "event": [
