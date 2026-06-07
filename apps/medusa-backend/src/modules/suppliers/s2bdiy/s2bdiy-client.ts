@@ -89,18 +89,18 @@ export function unwrapList<T>(data: unknown): T[] {
 // ---- Standalone functions (backward compat) ----
 
 async function getToken(): Promise<string> {
-  const apiBaseUrl = process.env.S2BDIY_API_BASE_URL?.replace(/\/$/, "")
+  const apiBaseUrl = (process.env.S2BDIY_BASE_URL || process.env.S2BDIY_API_BASE_URL)?.replace(/\/$/, "")
   const appKey = process.env.S2BDIY_APP_KEY
   const appSecret = process.env.S2BDIY_APP_SECRET
   if (!apiBaseUrl || !appKey || !appSecret) {
-    throw new Error("S2BDIY credentials not configured")
+    throw new Error("S2BDIY credentials not configured. Set S2BDIY_BASE_URL or S2BDIY_API_BASE_URL, S2BDIY_APP_KEY, and S2BDIY_APP_SECRET.")
   }
   return getS2bdiyAccessToken({ apiBaseUrl, appKey, appSecret, platformId: Number(process.env.S2BDIY_PLATFORM_ID || "99") })
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = await getToken()
-  const baseUrl = process.env.S2BDIY_API_BASE_URL?.replace(/\/$/, "")
+  const baseUrl = (process.env.S2BDIY_BASE_URL || process.env.S2BDIY_API_BASE_URL)?.replace(/\/$/, "")
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
   let fetchBody: BodyInit | undefined
   if (body instanceof FormData) {
