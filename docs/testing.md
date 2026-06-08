@@ -2,6 +2,12 @@
 
 This is the canonical Developer 3 entry point for full backend validation across Phase 1, Phase 2A, and Phase 2B.
 
+For the full copy/paste runbook, including Admin token acquisition, publishable API key setup, AI Worker mock startup, product rating/review tests, and gated real S2BDIY sandbox flow, see:
+
+```text
+docs/testing/dev3-full-backend-pipeline.md
+```
+
 ## Primary Command
 
 Run the independent Dev3 pipeline:
@@ -81,7 +87,7 @@ If S2BDIY credentials are missing, real supplier tests are `SKIPPED`, not `FAILE
 The Dev3 pipeline stages are:
 
 1. Preflight: repo root, tools, Medusa CLI, branch, dirty tree warning, conflict marker check.
-2. Static checks: TypeScript, backend Jest, S2BDIY Jest, Dev3 script syntax, Postman JSON.
+2. Static checks: TypeScript, backend Jest, dedicated product rating/review Jest, S2BDIY Jest, Dev3 script syntax, Postman JSON.
 3. Database setup: Docker services, migrations, seed, `phase1-dev2-bootstrap`.
 4. Service health: Medusa and AI Worker.
 5. Env/key validation: admin bearer token and publishable API key.
@@ -89,7 +95,7 @@ The Dev3 pipeline stages are:
 7. Dev1 supplier foundation checks.
 8. Product-to-cart bridge checks.
 9. Phase 2A AI product E2E.
-10. Phase 2B S2BDIY readiness or credential-dependent skip.
+10. Phase 2B S2BDIY readiness, gated sandbox no-payment flow, gated sandbox payment flow, or credential-dependent skip.
 11. Status flow checks.
 12. Negative/exception checks.
 13. Architecture guard for vendor-specific field leakage.
@@ -131,9 +137,17 @@ Phase 2A:
 Phase 2B:
 
 - S2BDIY unit tests always run.
-- Real S2BDIY token/basic product/logistics checks run only when `RUN_PHASE2B_S2BDIY` is set to `true` and supplier credentials are present.
+- Real S2BDIY sandbox checks run only when `RUN_PHASE2B_S2BDIY` is set to `true` and supplier credentials/config are present.
 - Missing supplier credentials are skipped.
-- Supplier status polling/tracking is validated through unit tests and real supplier checks when credentials are available.
+- Default real supplier mode stops at product generation and keeps payment skipped.
+- Create order requires both `S2BDIY_ALLOW_CREATE_ORDER=true` and `S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE=true`.
+- Payment requires `S2BDIY_ALLOW_PAYMENT=true` and `HUMAN_APPROVED_PAYMENT=true` in addition to the create-order gates.
+- Tracking may remain blocked after sandbox payment because S2BDIY test orders require manual review.
+
+Product rating/review:
+
+- `npm --workspace apps/medusa-backend run test -- rating` runs as a dedicated Dev3 stage.
+- Product review creation is verified for valid ratings, invalid ratings, duplicate rejection, verified order/product matching, and cross-store blocking.
 
 ## Supplier-Agnostic Core Schema Rule
 

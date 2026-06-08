@@ -23,6 +23,7 @@ import {
   extractSupplierOrderId,
   getOrderDetailClient,
   listS2bStores,
+  payOrders,
   resolveS2bStoreId,
 } from "../modules/suppliers/s2bdiy/s2bdiy-order"
 
@@ -146,6 +147,19 @@ function pickNamed(list: Record<string, unknown>[], preferred: string[]): Record
   return list[0] ?? null
 }
 
+function pickByIdOrNamed(
+  list: Record<string, unknown>[],
+  envName: string,
+  preferred: string[]
+): Record<string, unknown> | null {
+  const fromEnv = env(envName)
+  if (fromEnv) {
+    const exact = list.find((item) => safeString(item.id) === fromEnv)
+    if (exact) return exact
+  }
+  return pickNamed(list, preferred)
+}
+
 function pickSelection(products: Record<string, unknown>[], detail: Record<string, unknown>): Selection {
   const ranked = [...products].sort((a, b) => scoreBasicProduct(b) - scoreBasicProduct(a))
   const product = ranked[0] ?? null
@@ -155,9 +169,9 @@ function pickSelection(products: Record<string, unknown>[], detail: Record<strin
   const views = asArray(detail.views)
   const printAreas = asArray(detail.print_areas)
   const items = asArray(detail.items)
-  const color = pickNamed(colors, ["Black", "黑", "White", "白"])
-  const size = pickNamed(sizes, ["M", "L", "S", "XL"])
-  const view = pickNamed(views, ["Front", "正面", "A面", "View A"])
+  const color = pickByIdOrNamed(colors, "S2BDIY_COLOR_ID", ["Black", "黑", "White", "白"])
+  const size = pickByIdOrNamed(sizes, "S2BDIY_SIZE_ID", ["M", "L", "S", "XL"])
+  const view = pickByIdOrNamed(views, "S2BDIY_VIEW_ID", ["Front", "正面", "A面", "View A"])
   const viewId = safeString(view?.id)
   const printArea = printAreas.find((area) => safeString(area.view_id) === viewId) ?? printAreas[0] ?? null
   const colorId = safeString(color?.id)
@@ -257,16 +271,20 @@ function writeReport(): void {
 - app_secret: ${env("S2BDIY_APP_SECRET") ? "exists" : "missing"}
 - S2BDIY_TEST_MODE: ${env("S2BDIY_TEST_MODE", "false")}
 - SUPPLIER_ALLOW_PAYMENT: ${env("SUPPLIER_ALLOW_PAYMENT", "false")}
+- S2BDIY_ALLOW_PAYMENT: ${env("S2BDIY_ALLOW_PAYMENT", "false")}
 - HUMAN_APPROVED_PAYMENT: ${env("HUMAN_APPROVED_PAYMENT", "false")}
 - S2BDIY_DRY_RUN_MAX_PHASE: ${env("S2BDIY_DRY_RUN_MAX_PHASE", "0")}
+- S2BDIY_ALLOW_CREATE_ORDER: ${env("S2BDIY_ALLOW_CREATE_ORDER", "false")}
 - S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE: ${env("S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE", "false")}
 
 ## 2. Safety Gates
 
 - supplier_mutations_require_test_mode: ${env("S2BDIY_TEST_MODE", "false") === "true"}
+- create_order_allowed: ${env("S2BDIY_ALLOW_CREATE_ORDER", "false")}
 - create_order_confirmed_no_charge: ${env("S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE", "false")}
-- payment_allowed: false
-- never_called: POST /open/v1/orderPay, POST /open/v1/order/{id}/logistics, POST /open/v1/childUser, POST /open/v1/store, POST /open/v1/product/{id}/copy, DELETE /open/v1/order/{id}
+- payment_allowed: ${env("S2BDIY_ALLOW_PAYMENT", env("SUPPLIER_ALLOW_PAYMENT", "false")) === "true" && env("HUMAN_APPROVED_PAYMENT", "false") === "true"}
+- orderPay_allowed_only_when: S2BDIY_DRY_RUN_MAX_PHASE=3, S2BDIY_ALLOW_PAYMENT=true, HUMAN_APPROVED_PAYMENT=true
+- never_called: POST /open/v1/order/{id}/logistics, POST /open/v1/childUser, POST /open/v1/store, POST /open/v1/product/{id}/copy, DELETE /open/v1/order/{id}
 
 ## 3. Overall Result
 
@@ -275,7 +293,7 @@ function writeReport(): void {
 | Phase 0 Env Check | ${p0?.result ?? "SKIPPED"} | ${p0?.notes ?? ""} |
 | Phase 1 Product Generation | ${p1?.result ?? "SKIPPED"} | ${p1?.notes ?? "Not requested or blocked"} |
 | Phase 2 Unpaid Order Pricing | ${p2?.result ?? "SKIPPED"} | ${p2?.notes ?? "Not requested or blocked"} |
-| Phase 3 Payment | SKIPPED | PAYMENT_SKIPPED_BY_DEFAULT |
+| Phase 3 Payment | ${state.payment_phase_result ?? "SKIPPED"} | ${state.payment_phase_notes ?? "PAYMENT_SKIPPED_BY_DEFAULT"} |
 
 ## 4. Selected Basic Product
 
@@ -323,7 +341,9 @@ function writeReport(): void {
 - pay_status_text: ${state.pay_status_text ?? "SKIPPED"}
 - status: ${state.status ?? "SKIPPED"}
 - status_text: ${state.status_text ?? "SKIPPED"}
-- payment_status: PAYMENT_SKIPPED_BY_DEFAULT
+- order_logistics: ${state.order_logistics_summary ?? "SKIPPED"}
+- tracking_number: ${state.tracking_number ?? "SKIPPED"}
+- payment_status: ${state.payment_status ?? "PAYMENT_SKIPPED_BY_DEFAULT"}
 
 ## 10. Blockers
 
@@ -336,7 +356,7 @@ ${steps.map((s) => `- ${s.name}: ${s.rawPath ? path.relative(logDir, s.rawPath) 
 ## 12. Next Actions
 
 - Review raw responses before enabling the next phase.
-- Keep payment skipped; this script never calls orderPay.
+- Keep payment skipped unless S2BDIY_DRY_RUN_MAX_PHASE=3, S2BDIY_ALLOW_PAYMENT=true, and HUMAN_APPROVED_PAYMENT=true.
 - Confirm Create Order no-charge behavior before Phase 2.
 `
   fs.writeFileSync(path.join(logDir, "REPORT.md"), report)
@@ -407,8 +427,12 @@ export default async function s2bdiySingleStoreDryRun(_args: ExecArgs): Promise<
     })
     if (!products.length) throw new Error("No basic products returned")
 
+    const forcedBasicProductId = env("S2BDIY_BASIC_PRODUCT_ID", env("S2BDIY_TEST_BASIC_PRODUCT_ID"))
     const ranked = [...products].sort((a, b) => scoreBasicProduct(b) - scoreBasicProduct(a))
-    const selectedProduct = ranked[0]
+    const selectedProduct =
+      (forcedBasicProductId
+        ? products.find((candidate) => safeString(candidate.id) === forcedBasicProductId)
+        : null) ?? ranked[0]
     const basicProductId = safeString(selectedProduct?.id)
     if (!basicProductId) throw new Error("Selected basic product missing id")
 
@@ -524,8 +548,15 @@ export default async function s2bdiySingleStoreDryRun(_args: ExecArgs): Promise<
     return
   }
 
+  if (env("S2BDIY_ALLOW_CREATE_ORDER", "false") !== "true") {
+    record({ phase: "phase2_unpaid_order_pricing", name: "create order gate", result: "BLOCKED", notes: "S2BDIY_ALLOW_CREATE_ORDER is not true; stopped before create order." })
+    writeReport()
+    process.exitCode = 2
+    return
+  }
+
   if (env("S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE", "false") !== "true") {
-    record({ phase: "phase2_unpaid_order_pricing", name: "create order gate", result: "BLOCKED", notes: "S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE is not true; stopped before create order." })
+    record({ phase: "phase2_unpaid_order_pricing", name: "create order no-charge gate", result: "BLOCKED", notes: "S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE is not true; stopped before create order." })
     writeReport()
     process.exitCode = 2
     return
@@ -555,7 +586,7 @@ export default async function s2bdiySingleStoreDryRun(_args: ExecArgs): Promise<
       height,
     })
     const logisticsPath = writeJson(rawPath("logistics-calculation.json"), logistics)
-    const logisticsId = resolveLogisticsPlatformId(logistics)
+    const logisticsId = env("S2BDIY_LOGISTICS_ID", env("S2BDIY_TEST_LOGISTICS_ID")) || resolveLogisticsPlatformId(logistics)
     state.logistics_platform_id = logisticsId ?? ""
     state.logistics_quote_amount = safeString(logistics[0]?.amount)
     state.logistics_quote_source = "GET /open/v1/logisticsCalculation"
@@ -620,12 +651,96 @@ export default async function s2bdiySingleStoreDryRun(_args: ExecArgs): Promise<
     state.pay_status_text = safeString(orderDetail.pay_status_text)
     state.status = safeString(orderDetail.status)
     state.status_text = safeString(orderDetail.status_text)
+    state.order_logistics_summary = orderDetail.order_logistics ? "present" : "empty"
     record({ phase: "phase2_unpaid_order_pricing", name: "order detail", result: "PASS", notes: "Final pricing read from GET /open/v1/order/{id}.", rawPath: rawPath("order-detail.json") })
 
     const orders = await client.request<unknown>("/open/v1/order", { method: "GET", query: { third_order_id: externalOrderId } })
     record({ phase: "phase2_unpaid_order_pricing", name: "orders by third_order_id", result: "PASS", notes: "Order list fetched.", rawPath: writeJson(rawPath("orders.json"), orders) })
   } catch (error) {
     record({ phase: "phase2_unpaid_order_pricing", name: "phase2", result: "FAIL", notes: error instanceof Error ? error.message : String(error) })
+    writeReport()
+    process.exitCode = 1
+    return
+  }
+
+  if (maxPhase < 3) {
+    state.payment_phase_result = "SKIPPED"
+    state.payment_phase_notes = "PAYMENT_SKIPPED_BY_DEFAULT"
+    writeReport()
+    return
+  }
+
+  const paymentAllowed =
+    env("S2BDIY_ALLOW_PAYMENT", env("SUPPLIER_ALLOW_PAYMENT", "false")) === "true" &&
+    env("HUMAN_APPROVED_PAYMENT", "false") === "true"
+
+  if (!paymentAllowed) {
+    state.payment_phase_result = "BLOCKED"
+    state.payment_phase_notes = "S2BDIY_ALLOW_PAYMENT and HUMAN_APPROVED_PAYMENT must both be true before orderPay."
+    record({
+      phase: "phase3_payment",
+      name: "payment gate",
+      result: "BLOCKED",
+      notes: String(state.payment_phase_notes),
+    })
+    writeReport()
+    process.exitCode = 2
+    return
+  }
+
+  try {
+    const supplierOrderId = String(state.supplier_order_id || "")
+    if (!supplierOrderId) throw new Error("Missing supplier_order_id before payment")
+
+    const payment = await payOrders(client, [supplierOrderId])
+    record({
+      phase: "phase3_payment",
+      name: "orderPay",
+      result: "PASS",
+      notes: "Sandbox order payment returned success.",
+      rawPath: writeJson(rawPath("order-pay.json"), payment),
+    })
+
+    const afterPay = await getOrderDetailClient(client, supplierOrderId)
+    writeJson(rawPath("order-after-pay.json"), afterPay)
+    state.product_amount = safeString(afterPay.product_amount) || state.product_amount
+    state.shipping_amount = safeString(afterPay.shipping_amount) || state.shipping_amount
+    state.discount_amount = safeString(afterPay.discount_amount) || state.discount_amount
+    state.total_amount = safeString(afterPay.total_amount) || state.total_amount
+    state.currency = safeString(afterPay.currency) || state.currency || "TODO_CONFIRM_WITH_SUPPLIER"
+    state.pay_status = safeString(afterPay.pay_status)
+    state.pay_status_text = safeString(afterPay.pay_status_text)
+    state.status = safeString(afterPay.status)
+    state.status_text = safeString(afterPay.status_text)
+
+    const logistics = afterPay.order_logistics as Record<string, unknown> | undefined | null
+    const tracking =
+      safeString(logistics?.logisticss_track_number) ||
+      safeString(logistics?.logistics_track_number) ||
+      safeString(logistics?.tracking_number)
+    state.order_logistics_summary = logistics ? "present" : "empty"
+    state.tracking_number = tracking || "empty"
+
+    const trackingBlocked =
+      !tracking &&
+      (String(state.status_text || "").includes("审核") || safeString(afterPay.status) === "3")
+    state.payment_status = trackingBlocked
+      ? "PASS_TO_PAYMENT_BUT_TRACKING_BLOCKED_BY_TEST_ENV_MANUAL_REVIEW"
+      : "PAYMENT_COMPLETED"
+    state.payment_phase_result = "PASS"
+    state.payment_phase_notes = state.payment_status
+
+    record({
+      phase: "phase3_payment",
+      name: "order detail after pay",
+      result: "PASS",
+      notes: String(state.payment_status),
+      rawPath: rawPath("order-after-pay.json"),
+    })
+  } catch (error) {
+    state.payment_phase_result = "FAIL"
+    state.payment_phase_notes = error instanceof Error ? error.message : String(error)
+    record({ phase: "phase3_payment", name: "payment", result: "FAIL", notes: String(state.payment_phase_notes) })
     writeReport()
     process.exitCode = 1
     return

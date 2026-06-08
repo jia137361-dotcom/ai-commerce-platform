@@ -25,8 +25,10 @@ S2BDIY_APP_KEY="${S2BDIY_APP_KEY:-}"
 S2BDIY_APP_SECRET="${S2BDIY_APP_SECRET:-}"
 S2BDIY_TEST_MODE="${S2BDIY_TEST_MODE:-false}"
 SUPPLIER_ALLOW_PAYMENT="${SUPPLIER_ALLOW_PAYMENT:-false}"
+S2BDIY_ALLOW_PAYMENT="${S2BDIY_ALLOW_PAYMENT:-$SUPPLIER_ALLOW_PAYMENT}"
 HUMAN_APPROVED_PAYMENT="${HUMAN_APPROVED_PAYMENT:-false}"
 S2BDIY_DRY_RUN_MAX_PHASE="${S2BDIY_DRY_RUN_MAX_PHASE:-0}"
+S2BDIY_ALLOW_CREATE_ORDER="${S2BDIY_ALLOW_CREATE_ORDER:-false}"
 S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE="${S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE:-false}"
 
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
@@ -87,16 +89,20 @@ write_phase0_report() {
 - app_secret: $([[ -n "$S2BDIY_APP_SECRET" ]] && printf "exists" || printf "missing")
 - S2BDIY_TEST_MODE: $S2BDIY_TEST_MODE
 - SUPPLIER_ALLOW_PAYMENT: $SUPPLIER_ALLOW_PAYMENT
+- S2BDIY_ALLOW_PAYMENT: $S2BDIY_ALLOW_PAYMENT
 - HUMAN_APPROVED_PAYMENT: $HUMAN_APPROVED_PAYMENT
 - S2BDIY_DRY_RUN_MAX_PHASE: $S2BDIY_DRY_RUN_MAX_PHASE
+- S2BDIY_ALLOW_CREATE_ORDER: $S2BDIY_ALLOW_CREATE_ORDER
 - S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE: $S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE
 
 ## 2. Safety Gates
 
 - missing_core_credentials: ${missing_core[*]:-none}
 - supplier_mutations_allowed: $mutation_allowed
-- payment_allowed: false
-- never_call: POST /open/v1/orderPay, POST /open/v1/order/{id}/logistics, POST /open/v1/childUser, POST /open/v1/store, POST /open/v1/product/{id}/copy, DELETE /open/v1/order/{id}
+- create_order_allowed: $S2BDIY_ALLOW_CREATE_ORDER
+- payment_allowed: $([[ "$S2BDIY_ALLOW_PAYMENT" == "true" && "$HUMAN_APPROVED_PAYMENT" == "true" ]] && printf "true" || printf "false")
+- orderPay_allowed_only_when: S2BDIY_DRY_RUN_MAX_PHASE=3, S2BDIY_ALLOW_PAYMENT=true, HUMAN_APPROVED_PAYMENT=true
+- never_call: POST /open/v1/order/{id}/logistics, POST /open/v1/childUser, POST /open/v1/store, POST /open/v1/product/{id}/copy, DELETE /open/v1/order/{id}
 
 ## 3. Overall Result
 
@@ -105,7 +111,7 @@ write_phase0_report() {
 | Phase 0 Env Check | $result | $notes |
 | Phase 1 Product Generation | SKIPPED | S2BDIY_DRY_RUN_MAX_PHASE=$S2BDIY_DRY_RUN_MAX_PHASE |
 | Phase 2 Unpaid Order Pricing | SKIPPED | Requires S2BDIY_DRY_RUN_MAX_PHASE >= 2 and S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE=true |
-| Phase 3 Payment | SKIPPED | PAYMENT_SKIPPED_BY_DEFAULT |
+| Phase 3 Payment | SKIPPED | PAYMENT_SKIPPED_BY_DEFAULT unless Phase 3 payment gates are explicitly enabled |
 
 ## 4. Selected Basic Product
 
@@ -172,7 +178,7 @@ Expected paths for later phases:
 - Set S2BDIY_TEST_MODE=true only for confirmed test/sandbox credentials.
 - Run Phase 1 with S2BDIY_DRY_RUN_MAX_PHASE=1.
 - Run Phase 2 only after confirming Create Order does not charge: S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE=true S2BDIY_DRY_RUN_MAX_PHASE=2.
-- This script never calls POST /open/v1/orderPay.
+- This script calls POST /open/v1/orderPay only when S2BDIY_DRY_RUN_MAX_PHASE=3, S2BDIY_ALLOW_PAYMENT=true, and HUMAN_APPROVED_PAYMENT=true.
 EOF
 }
 
@@ -212,8 +218,8 @@ fi
 
 export S2BDIY_BASE_URL S2BDIY_API_BASE_URL="$S2BDIY_BASE_URL"
 export S2BDIY_APP_KEY S2BDIY_APP_SECRET S2BDIY_TEST_MODE
-export SUPPLIER_ALLOW_PAYMENT HUMAN_APPROVED_PAYMENT
-export S2BDIY_DRY_RUN_MAX_PHASE S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE
+export SUPPLIER_ALLOW_PAYMENT S2BDIY_ALLOW_PAYMENT HUMAN_APPROVED_PAYMENT
+export S2BDIY_DRY_RUN_MAX_PHASE S2BDIY_ALLOW_CREATE_ORDER S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE
 export SUPPLIER_LOG_DIR RUN_ID
 
 if [[ ! -x "apps/medusa-backend/node_modules/.bin/medusa" && ! -x "node_modules/.bin/medusa" ]]; then
