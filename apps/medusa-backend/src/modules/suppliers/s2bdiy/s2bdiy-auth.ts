@@ -11,7 +11,8 @@ export async function getS2bdiyAccessToken(config: S2bdiyConfig, forceRefresh = 
   const now = Date.now()
   if (!forceRefresh && memoryCache && memoryCache.expiresAt > now) return memoryCache.token
 
-  const url = `${config.apiBaseUrl}/open/v1/accessToken`
+  const apiBaseUrl = config.apiBaseUrl.replace(/\/$/, "")
+  const url = `${apiBaseUrl}/open/v1/accessToken`
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -35,11 +36,11 @@ export async function getS2bdiyAccessToken(config: S2bdiyConfig, forceRefresh = 
 
 /** Simple env-based auth (backward compat) */
 export async function getAccessToken(): Promise<string> {
-  const apiBaseUrl = process.env.S2BDIY_API_BASE_URL?.replace(/\/$/, "")
+  const apiBaseUrl = (process.env.S2BDIY_BASE_URL || process.env.S2BDIY_API_BASE_URL)?.replace(/\/$/, "")
   const appKey = process.env.S2BDIY_APP_KEY
   const appSecret = process.env.S2BDIY_APP_SECRET
   if (!apiBaseUrl || !appKey || !appSecret) {
-    throw new Error("S2BDIY credentials not configured")
+    throw new Error("S2BDIY credentials not configured. Set S2BDIY_BASE_URL or S2BDIY_API_BASE_URL, S2BDIY_APP_KEY, and S2BDIY_APP_SECRET.")
   }
   return getS2bdiyAccessToken({ apiBaseUrl, appKey, appSecret, platformId: Number(process.env.S2BDIY_PLATFORM_ID || "99") })
 }

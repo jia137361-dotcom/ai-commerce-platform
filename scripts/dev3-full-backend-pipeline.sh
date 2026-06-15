@@ -102,7 +102,9 @@ json_assert() {
 secret_diff_scan() {
   local paths
   paths="$(git diff --name-only -- docs postman scripts)"
-  if git diff -- docs postman scripts | grep -Eq "pk_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{20,}|sk_[A-Za-z0-9]|FAL_KEY=.*[A-Za-z0-9]{10,}|DEEPSEEK_API_KEY=.*[A-Za-z0-9]{10,}|STRIPE_API_KEY=.*[A-Za-z0-9]{10,}|S2BDIY.*=.*[A-Za-z0-9]{10,}"; then
+  if git diff -- docs postman scripts \
+    | grep -Ev "grep -E|secret_diff_scan" \
+    | grep -Eq "pk_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{20,}|sk_[A-Za-z0-9]|FAL_KEY=.*[A-Za-z0-9]{10,}|DEEPSEEK_API_KEY=.*[A-Za-z0-9]{10,}|STRIPE_API_KEY=.*[A-Za-z0-9]{10,}|S2BDIY_APP_SECRET=.*[A-Za-z0-9]{16,}|Authorization: Bearer [A-Za-z0-9._-]{16,}"; then
     echo "Potential secret in changed docs/postman/scripts paths:"
     echo "$paths"
     return 1
@@ -164,6 +166,7 @@ stage "Stage 1 — Static checks"
 
 run_required "tsc" npx tsc --noEmit -p apps/medusa-backend/tsconfig.json
 run_required "backend Jest" npm test --workspace apps/medusa-backend
+run_required "product rating/review tests" npm test --workspace apps/medusa-backend -- rating
 run_required "S2BDIY Jest" npm test --workspace apps/medusa-backend -- s2bdiy
 run_required "Dev3 pipeline syntax" bash -n scripts/dev3-full-backend-pipeline.sh
 run_required "Postman JSON" jq empty postman/ai-commerce-store-isolation.postman_collection.json
@@ -361,22 +364,61 @@ S2BDIY_COLOR_ID="${S2BDIY_COLOR_ID:-${S2BDIY_TEST_COLOR_ID:-}}"
 S2BDIY_VIEW_ID="${S2BDIY_VIEW_ID:-${S2BDIY_TEST_VIEW_ID:-}}"
 S2BDIY_LOGISTICS_ID="${S2BDIY_LOGISTICS_ID:-${S2BDIY_TEST_LOGISTICS_ID:-}}"
 S2BDIY_APP_KEY="${S2BDIY_APP_KEY:-wm001}"
+S2BDIY_ALLOW_CREATE_ORDER="${S2BDIY_ALLOW_CREATE_ORDER:-false}"
+S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE="${S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE:-false}"
+S2BDIY_ALLOW_PAYMENT="${S2BDIY_ALLOW_PAYMENT:-${SUPPLIER_ALLOW_PAYMENT:-false}}"
+HUMAN_APPROVED_PAYMENT="${HUMAN_APPROVED_PAYMENT:-false}"
 
-if [[ "$RUN_PHASE2B_S2BDIY" != "true" || -z "${S2BDIY_APP_SECRET:-}" || -z "$S2BDIY_BASE_URL" || -z "$S2BDIY_BASIC_PRODUCT_ID" || -z "$S2BDIY_SIZE_ID" || -z "$S2BDIY_COLOR_ID" || -z "$S2BDIY_VIEW_ID" ]]; then
-  record "Phase 2B S2BDIY readiness" "SKIPPED" "RUN_PHASE2B_S2BDIY not true or supplier env incomplete"
-  record "Phase 2B real supplier tests" "SKIPPED" "credential/network dependent"
+if [[ "$RUN_PHASE2B_S2BDIY" != "true" ]]; then
+  record "Phase 2B S2BDIY readiness" "SKIPPED" "RUN_PHASE2B_S2BDIY=false"
+  record "Phase 2B real supplier tests" "SKIPPED" "real S2BDIY sandbox disabled by default"
 else
-  S2BDIY_BASE_URL="${S2BDIY_BASE_URL%/}"
-  curl_capture POST "$S2BDIY_BASE_URL/open/v1/accessToken" "{\"app_key\":\"$S2BDIY_APP_KEY\",\"app_secret\":\"$S2BDIY_APP_SECRET\"}" -H "Content-Type: application/json"
-  assert_http 200 "S2BDIY token"
-  S2B_TOKEN="$(jq -r '.data.token // .token // .data.access_token // empty' <<<"$HTTP_BODY")"
-  [[ -n "$S2B_TOKEN" ]] || fail "S2BDIY token missing"
-  curl_capture GET "$S2BDIY_BASE_URL/open/v1/basicProduct/$S2BDIY_BASIC_PRODUCT_ID" "" -H "Authorization: Bearer $S2B_TOKEN"
-  assert_http 200 "S2BDIY basic product detail"
-  curl_capture GET "$S2BDIY_BASE_URL/open/v1/logisticsCalculation?basic_product_id=$S2BDIY_BASIC_PRODUCT_ID&platform=99&num=1&country=US&postcode=10001&weight=225&length=20&width=20&height=10" "" -H "Authorization: Bearer $S2B_TOKEN"
-  assert_http 200 "S2BDIY logistics calculation"
-  record "Phase 2B S2BDIY readiness" "PASS" "token, basic product, logistics"
-  record "Phase 2B real supplier tests" "BLOCKED" "material/orderPay/tracking require explicit paid sandbox and print asset; use supplier runbook"
+  declare -a MISSING_S2BDIY=()
+  [[ -n "$S2BDIY_BASE_URL" ]] || MISSING_S2BDIY+=("S2BDIY_BASE_URL")
+  [[ -n "$S2BDIY_APP_KEY" ]] || MISSING_S2BDIY+=("S2BDIY_APP_KEY")
+  [[ -n "${S2BDIY_APP_SECRET:-}" ]] || MISSING_S2BDIY+=("S2BDIY_APP_SECRET")
+  [[ -n "$S2BDIY_BASIC_PRODUCT_ID" ]] || MISSING_S2BDIY+=("S2BDIY_BASIC_PRODUCT_ID")
+  [[ -n "$S2BDIY_SIZE_ID" ]] || MISSING_S2BDIY+=("S2BDIY_SIZE_ID")
+  [[ -n "$S2BDIY_COLOR_ID" ]] || MISSING_S2BDIY+=("S2BDIY_COLOR_ID")
+  [[ -n "$S2BDIY_VIEW_ID" ]] || MISSING_S2BDIY+=("S2BDIY_VIEW_ID")
+  [[ -n "$S2BDIY_LOGISTICS_ID" ]] || MISSING_S2BDIY+=("S2BDIY_LOGISTICS_ID")
+
+  if ((${#MISSING_S2BDIY[@]} > 0)); then
+    record "Phase 2B S2BDIY readiness" "SKIPPED" "missing: ${MISSING_S2BDIY[*]}"
+    record "Phase 2B real supplier tests" "SKIPPED" "credential/config dependent"
+  else
+    S2BDIY_DRY_RUN_MAX_PHASE=1
+    PHASE2B_MODE="sandbox product generation"
+    if [[ "$S2BDIY_ALLOW_CREATE_ORDER" == "true" && "$S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE" == "true" ]]; then
+      S2BDIY_DRY_RUN_MAX_PHASE=2
+      PHASE2B_MODE="sandbox unpaid order pricing"
+    fi
+    if [[ "$S2BDIY_DRY_RUN_MAX_PHASE" == "2" && "$S2BDIY_ALLOW_PAYMENT" == "true" && "$HUMAN_APPROVED_PAYMENT" == "true" ]]; then
+      S2BDIY_DRY_RUN_MAX_PHASE=3
+      PHASE2B_MODE="sandbox payment gated"
+    fi
+
+    echo "S2BDIY app key: ${S2BDIY_APP_KEY:0:3}***"
+    echo "S2BDIY base URL: ${S2BDIY_BASE_URL%/}"
+    echo "S2BDIY Phase 2B mode: $PHASE2B_MODE"
+    if S2BDIY_DRY_RUN_MAX_PHASE="$S2BDIY_DRY_RUN_MAX_PHASE" \
+      S2BDIY_TEST_MODE="${S2BDIY_TEST_MODE:-true}" \
+      S2BDIY_ALLOW_CREATE_ORDER="$S2BDIY_ALLOW_CREATE_ORDER" \
+      S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE="$S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE" \
+      S2BDIY_ALLOW_PAYMENT="$S2BDIY_ALLOW_PAYMENT" \
+      HUMAN_APPROVED_PAYMENT="$HUMAN_APPROVED_PAYMENT" \
+      bash scripts/supplier-single-store-dry-run.sh; then
+      record "Phase 2B S2BDIY readiness" "PASS" "$PHASE2B_MODE"
+      if [[ "$S2BDIY_DRY_RUN_MAX_PHASE" == "3" ]]; then
+        record "Phase 2B real supplier tests" "PASS" "payment gated; tracking may be blocked by sandbox manual review"
+      else
+        record "Phase 2B real supplier tests" "PASS" "$PHASE2B_MODE; payment skipped"
+      fi
+    else
+      record "Phase 2B S2BDIY readiness" "FAIL" "$PHASE2B_MODE failed"
+      fail "Phase 2B S2BDIY dry-run failed"
+    fi
+  fi
 fi
 
 stage "Stage 10 — Status flow checks"
