@@ -9,7 +9,6 @@ import { ShareModal } from "./components/modals/ShareModal"
 import { ConfirmReceiptModal } from "./components/modals/ConfirmReceiptModal"
 import { OrderCard } from "./components/orders/OrderCard"
 import { OrderTimeline } from "./components/orders/OrderTimeline"
-import { ProductDetailPage } from "./components/product/ProductDetailPage"
 import { orders, type Order, type StoreCart, type StoreProduct } from "./lib/mock-data"
 import {
   addCartLineItem,
@@ -19,6 +18,7 @@ import {
   fetchStoreCart,
   updateCartLineItem,
 } from "./lib/store-api"
+import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 
 function App() {
@@ -93,14 +93,7 @@ function App() {
   const cartCount = cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0
 
   if (path.startsWith("/products/")) {
-    return (
-      <>
-        <TopNav onShare={() => setShareOpen(true)} cartCount={cartCount} />
-        <ProductDetailPage productId={decodeURIComponent(path.split("/").pop() ?? "")} onAddToCart={addProductToCart} />
-        <StoreFooter />
-        {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
-      </>
-    )
+    return <ProductDetailPage productId={decodeURIComponent(path.split("/").pop() ?? "")} cartCount={cartCount} onCartUpdated={setCart} />
   }
 
   if (path.startsWith("/cart")) {
