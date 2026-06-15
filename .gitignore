@@ -8,6 +8,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!apps/storefront/.env.local.example
 
 # Local planning documents, not for GitHub
 github仓库
