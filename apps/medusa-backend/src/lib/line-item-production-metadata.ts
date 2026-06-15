@@ -2,6 +2,8 @@ import type StoreCoreModuleService from "../modules/store-core/service"
 
 export type LineItemProductionMetadata = {
   mc_product_id: string | null
+  mc_product_title: string | null
+  store_id: string | null
   supplier_id: string | null
   /**
    * `mc_product.supplier_product_id`:
@@ -14,6 +16,7 @@ export type LineItemProductionMetadata = {
   supplier_size_id: string | null
   supplier_color_id: string | null
   print_file_url: string | null
+  mockup_image_url: string | null
   print_position: string | null
   color: string | null
   size: string | null
@@ -74,6 +77,10 @@ export async function buildLineItemProductionMetadata(
 
   return {
     mc_product_id: typeof linkedProduct.id === "string" ? linkedProduct.id : null,
+    mc_product_title:
+      typeof linkedProduct.title === "string" ? linkedProduct.title : null,
+    store_id:
+      typeof linkedProduct.store_id === "string" ? linkedProduct.store_id : null,
     supplier_id:
       typeof linkedProduct.supplier_id === "string" ? linkedProduct.supplier_id : null,
     supplier_product_id:
@@ -87,6 +94,10 @@ export async function buildLineItemProductionMetadata(
     print_file_url:
       typeof linkedProduct.print_file_url === "string"
         ? linkedProduct.print_file_url
+        : null,
+    mockup_image_url:
+      typeof linkedProduct.mockup_image_url === "string"
+        ? linkedProduct.mockup_image_url
         : null,
     print_position: printPosition ?? "front",
     color,

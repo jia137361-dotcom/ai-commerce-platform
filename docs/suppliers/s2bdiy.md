@@ -1,115 +1,120 @@
-# S2BDIY Open API 对接
+# S2BDIY Supplier Integration
 
-## 环境
+This document covers supplier-specific S2BDIY behavior. Keep real credentials out of git.
 
-| 环境 | Base URL |
-|------|----------|
-| 测试 | `https://opentest.s2bdiy.com` |
-| 生产 | `https://openapi.s2bdiy.com` |
+## Environments
 
-测试体验密钥（文档概览）：
+| Environment | Base URL |
+| --- | --- |
+| Sandbox | `https://opentest.s2bdiy.com` |
+| Production | `https://openapi.s2bdiy.com` |
 
-- `app_key`: `wm001`
-- `app_secret`: `7b55d8cf04caf3db9232c98eadeb9cc2`
+Use the current sandbox `app_key` / `app_secret` from the supplier console or private handoff. Do not commit real S2BDIY credentials.
 
-## 配置（`apps/medusa-backend/.env`）
+## Local Env
 
-见 [`.env.example`](../../apps/medusa-backend/.env.example) 中 `S2BDIY_*` 段落。
+Use `apps/medusa-backend/.env` or `scripts/dev3-full-backend-pipeline.local.env` for local-only values.
 
-## 调用顺序
+Common variables:
 
-1. `POST /open/v1/accessToken` → Bearer token（3 天有效）
-2. `GET /open/v1/basicProduct` / `{id}` → 选品、颜色、尺码、印刷面
-3. `POST /open/v1/material/uploadMaterial` → `material_id`
-4. `POST /open/v1/product/quickCreate` → `product_id`（长期可复用下单）
-5. `GET /open/v1/product/{id}` → 供应商效果图
-6. `GET /open/v1/logisticsCalculation` → `logistics_platform_id`
-7. `POST /open/v1/order` → 供应商订单号
-8. `POST /open/v1/orderPay` → 预充值扣款（余额不足 HTTP 502，可重试）
-9. `GET /open/v1/order/{id}` → 轮询状态/物流（无 webhook）
+- `S2BDIY_API_BASE_URL` or `S2BDIY_BASE_URL`
+- `S2BDIY_APP_KEY`
+- `S2BDIY_APP_SECRET`
+- `S2BDIY_PLATFORM_ID`
+- `S2BDIY_TEST_BASIC_PRODUCT_ID` or `S2BDIY_BASIC_PRODUCT_ID`
+- `S2BDIY_TEST_SIZE_ID` or `S2BDIY_SIZE_ID`
+- `S2BDIY_TEST_COLOR_ID` or `S2BDIY_COLOR_ID`
+- `S2BDIY_TEST_VIEW_ID` or `S2BDIY_VIEW_ID`
+- `S2BDIY_TEST_LOGISTICS_ID` or `S2BDIY_LOGISTICS_ID`
+- `S2BDIY_STORE_ID`
+- `S2BDIY_DEFAULT_WEIGHT`
+- `S2BDIY_DEFAULT_LENGTH`
+- `S2BDIY_DEFAULT_WIDTH`
+- `S2BDIY_DEFAULT_HEIGHT`
 
-## CitiGoo 字段映射
+`S2BDIY_DEFAULT_WEIGHT` is in grams for the current smoke/debug payloads.
 
-| CitiGoo（Dev1 命名；开发二写入 `mc_product.metadata` 直至列迁移） | S2BDIY |
-|---------|--------|
-| `metadata.supplier_material_id` | uploadMaterial `id` |
-| `metadata.supplier_product_id`（非 `sp_*` 目录 id） | quickCreate `product_id` |
-| `mockup_image_url` / `metadata.mockup_image_url` | product detail `show_images` |
-| `metadata.basic_product_id` | basicProduct `id` |
-| `mc_supplier_order.supplier_order_id` | order `id` |
-| `mc_supplier_order.third_order_id` | Medusa `order_id`（勿重复提交） |
+## Supplier API Flow
 
-## Admin API（开发二 / 履约）
+1. `POST /open/v1/accessToken` returns a bearer token.
+2. `GET /open/v1/basicProduct` and `GET /open/v1/basicProduct/{id}` return product, color, size, and print view data.
+3. `POST /open/v1/material/uploadMaterial` uploads a print file and returns `material_id`.
+4. `POST /open/v1/product/quickCreate` creates a supplier-designed product.
+5. `GET /open/v1/product/{id}` returns product detail and `show_images`.
+6. `GET /open/v1/logisticsCalculation` returns logistics options.
+7. `POST /open/v1/order` creates the supplier order.
+8. `POST /open/v1/orderPay` pays the supplier order from prepaid balance.
+9. `GET /open/v1/order/{id}` polls supplier status and tracking.
 
+## Field Mapping
+
+Core CitiGoo fields should stay supplier-neutral:
+
+| CitiGoo | S2BDIY |
+| --- | --- |
+| `supplier_material_id` | uploadMaterial `id` |
+| `supplier_product_id` after provisioning | quickCreate `product_id` |
+| `supplier_mockup_image_url` or `mockup_image_url` | product detail `show_images` |
+| `basic_product_id` | basicProduct `id` |
+| `supplier_size_id` | S2BDIY size id |
+| `supplier_color_id` | S2BDIY color id |
+| `view_id` | S2BDIY view id |
+| `mc_supplier_order.supplier_order_id` | supplier order `id` |
+| `mc_supplier_order.third_order_id` | CitiGoo/Medusa order reference |
+
+Vendor-specific names such as `s2b_*` or `s2bdiy_*` should remain inside supplier adapter code, supplier docs, supplier scripts, or supplier payload examples.
+
+## Backend Admin Routes
+
+- `POST /admin/supplier-products/sync-basic-product`
 - `GET /admin/orders/{order_id}/supplier-order`
 - `POST /admin/orders/{order_id}/retry-supplier-pay`
 - `POST /admin/supplier-orders/sync`
 
-## 测试脚本
+Routes require `Authorization: Bearer <ADMIN_TOKEN>`. Order-scoped routes also use `X-Store-Id` and reject cross-store access.
+
+## Mock Vs Real Credential Behavior
+
+- Unit tests and JSON/syntax checks do not require real S2BDIY credentials.
+- The Dev3 full backend pipeline marks real supplier checks as `SKIPPED` unless `RUN_PHASE2B_S2BDIY` is set to `true` and required S2BDIY env vars are present.
+- `orderPay` requires prepaid test balance in the S2BDIY sandbox. A supplier HTTP 502 during payment is usually an external sandbox account issue, not automatically a CitiGoo regression.
+
+## Dev3 Pipeline
+
+Run:
 
 ```bash
-bash scripts/s2bdiy-api-smoke.sh
-bash scripts/phase2b-e2e.sh
+bash scripts/dev3-full-backend-pipeline.sh
 ```
 
-## 跑通 smoke 第 8–10 步（下单 / 支付 / 查单）
+The pipeline validates S2BDIY unit coverage every run. Real token/basic product/logistics checks run only when enabled with S2BDIY credentials.
 
-### 前置
+## Unified Postman / Newman
 
-1. `source apps/medusa-backend/.env`（含 `S2BDIY_*`）
-2. `.env` 中 `S2BDIY_DEFAULT_WEIGHT` 使用**克**（如 `225`），不要用 `0.3`
-3. 配置 **`S2BDIY_STORE_ID`**：S2B 平台店铺 id（不是你的 `default_store`）
-   ```bash
-   curl -sS -H "Authorization: Bearer $S2B_TOKEN" \
-     "${S2BDIY_API_BASE_URL%/}/open/v1/store?page=1" | jq '.data.data[0].id'
-   ```
-4. 测试账户需有**预充值余额**（见下）
+S2BDIY coverage lives in the unified backend collection:
 
-### 一键跑全流程
+- `postman/ai-commerce-store-isolation.postman_collection.json`
+- `postman/ai-commerce-local.example.postman_environment.json`
 
-```bash
-cd /path/to/ai-commerce-platform
-set -a && source apps/medusa-backend/.env && set +a
-bash scripts/s2bdiy-api-smoke.sh
+Folder:
+
+- `Phase 2B / S2BDIY Supplier Fulfillment`
+
+The folder is skipped by default:
+
+```text
+run_phase2b_s2bdiy=false
 ```
 
-成功时步骤 8–10 会输出 `order_id`，并完成 `orderPay`、订单详情查询。
+Set `run_phase2b_s2bdiy=true` only when S2BDIY sandbox credentials and account readiness are configured.
 
-### orderPay 返回 HTTP 502
+## Common Failures
 
-表示**测试环境账户余额不足**。处理方式：
-
-1. 登录 S2B **测试环境**网页后台（与 `opentest.s2bdiy.com` 对应的开户站点，用 `wm001` 绑定账号或联系技术开通）
-2. 在「账户 / 充值 / 预充值」中充值测试额度
-3. 或在对接群联系 **小定 / 陈任翔**，说明 `app_key: wm001` 需要测试充值
-4. 充值后重跑 smoke，或单独重试支付（已有订单号时）：
-
-```bash
-curl -sS -X POST "${S2BDIY_API_BASE_URL%/}/open/v1/orderPay" \
-  -H "Authorization: Bearer $S2B_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"ids\":[<供应商订单号>]}"
-```
-
-Medusa 侧也可：`POST /admin/orders/{order_id}/retry-supplier-pay`（需 `ADMIN_TOKEN`）。
-
-### 手工 curl 第 8–10 步（调试用）
-
-在 smoke 1–6 步已有 `PRODUCT_ID`、`LOGISTICS_ID` 后：
-
-```bash
-THIRD="manual-$(date +%s)"
-# 8 创建订单
-curl -sS -X POST "${S2BDIY_API_BASE_URL%/}/open/v1/order" \
-  -H "Authorization: Bearer $S2B_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"third_order_id\":\"$THIRD\",\"platform\":99,\"logistics_id\":150,\"country\":\"US\",\"postcode\":\"10001\",\"name\":\"Test\",\"phone\":\"123\",\"items\":[{\"product_id\":<PRODUCT_ID>,\"size_id\":20,\"color_id\":6,\"num\":1}]}"
-
-# 9 支付（ids 为返回的供应商订单 id）
-curl -sS -X POST "${S2BDIY_API_BASE_URL%/}/open/v1/orderPay" \
-  -H "Authorization: Bearer $S2B_TOKEN" -H "Content-Type: application/json" \
-  -d '{"ids":[<ORDER_ID>]}'
-
-# 10 查单
-curl -sS -H "Authorization: Bearer $S2B_TOKEN" \
-  "${S2BDIY_API_BASE_URL%/}/open/v1/order/<ORDER_ID>"
-```
+- Invalid token: refresh `accessToken` and verify `S2BDIY_APP_KEY` / `S2BDIY_APP_SECRET`.
+- Material upload failed: verify print file path, image format, and supplier limits.
+- quickCreate failed: verify `basic_product_id`, `size_id`, `color_id`, `view_id`, and `material_id`.
+- Product detail has no `show_images`: inspect supplier product detail before publishing.
+- Missing logistics option: set `S2BDIY_TEST_LOGISTICS_ID` or adjust destination/package dimensions.
+- Create order failed: check duplicate `third_order_id`, supplier store id, address, and item ids.
+- orderPay failed: verify supplier order id and prepaid sandbox balance.
+- Tracking empty: continue polling; tracking may appear only after supplier production/shipping advances.

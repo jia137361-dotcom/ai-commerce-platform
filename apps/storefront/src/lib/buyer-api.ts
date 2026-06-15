@@ -1,4 +1,4 @@
-import { mockProducts, type StoreProduct } from "./mock-data"
+import { mockProducts, reviews as mockReviews, type CartLineItem, type StoreCart, type StoreProduct } from "./mock-data"
 
 export type DataSource = "backend" | "mock" | "static"
 
@@ -19,6 +19,39 @@ export type BuyerCategory = {
   description?: string | null
   parentId?: string | null
   sortOrder?: number
+}
+
+export type BuyerReview = {
+  id: string
+  customerName: string
+  rating: number
+  title?: string
+  content: string
+  createdAt?: string
+}
+
+export type BuyerReviewsSummary = {
+  productId: string
+  averageRating: number | null
+  reviewCount: number
+  ratingBreakdown: Record<string, number>
+  reviews: BuyerReview[]
+}
+
+export type BuyerShareInfo = {
+  productId: string
+  title: string
+  description?: string
+  imageUrl?: string
+  productUrl: string
+  shareText: string
+  channels: Record<string, {
+    enabled?: boolean
+    type?: string
+    url?: string
+    value?: string
+    message?: string
+  }>
 }
 
 export type LoadResult<T> = {
@@ -85,6 +118,65 @@ type ApiProducts = {
   products?: ApiProduct[]
 }
 
+type ApiProductDetail = {
+  product?: ApiProduct
+}
+
+type ApiReview = {
+  review_id?: string
+  id?: string
+  customer_name?: string | null
+  rating?: number
+  title?: string | null
+  content?: string | null
+  created_at?: string
+}
+
+type ApiReviews = {
+  product_id?: string
+  average_rating?: number | null
+  review_count?: number
+  rating_breakdown?: Record<string, number>
+  reviews?: ApiReview[]
+}
+
+type ApiShare = {
+  product_id?: string
+  title?: string
+  description?: string | null
+  image_url?: string | null
+  product_url?: string
+  share_text?: string
+  channels?: BuyerShareInfo["channels"]
+}
+
+type ApiCartLineItem = {
+  id?: string
+  title?: string
+  quantity?: number
+  unit_price?: number
+  total?: number
+  variant_id?: string
+  product_id?: string
+  thumbnail?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+type ApiCart = {
+  id?: string
+  cart_id?: string
+  store_id?: string
+  email?: string
+  currency_code?: string
+  items?: ApiCartLineItem[]
+  subtotal?: number
+  total?: number
+}
+
+type ApiCartMutation = ApiCart & {
+  cart?: ApiCart
+}
+
 const fallbackSettings: BuyerStoreSettings = {
   storeId: "default_store",
   brandName: "Nespresso",
@@ -110,6 +202,10 @@ const config = {
   storeId: readEnv("VITE_DEFAULT_STORE_ID", readEnv("NEXT_PUBLIC_STORE_ID", "default_store")),
 }
 
+export const getBuyerStoreId = () => config.storeId || "default_store"
+
+export const getBuyerCartStorageKey = (storeId = getBuyerStoreId()) => `citigoo:${storeId}:cart_id`
+
 const headers = () => ({
   "x-publishable-api-key": config.publishableKey,
   "X-Store-Id": config.storeId || "default_store",
@@ -126,6 +222,14 @@ const money = (value: number | string | null | undefined) => {
   }).format(amount)} USD`
 }
 
+export const formatBuyerMoney = (value: number | undefined, currency = "USD") => {
+  const amount = Number.isFinite(value) ? (value as number) : 0
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount)
+}
+
 const readNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
@@ -133,6 +237,8 @@ const readNumber = (value: number | string | null | undefined) => {
 
 const firstVariantPrice = (product: ApiProduct) =>
   product.variants?.flatMap((variant) => variant.prices ?? [])[0]?.amount
+
+const readString = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined)
 
 const warnFallback = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error)
@@ -144,7 +250,7 @@ const warnFallback = (label: string, error: unknown) => {
   return message
 }
 
-const apiFetch = async <T>(path: string): Promise<T> => {
+const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
   const backendUrl = config.backendUrl.replace(/\/+$/, "")
   if (!backendUrl) {
     throw new Error("VITE_MEDUSA_BASE_URL is missing")
@@ -153,7 +259,14 @@ const apiFetch = async <T>(path: string): Promise<T> => {
     throw new Error("VITE_PUBLISHABLE_API_KEY is missing or still a placeholder")
   }
 
-  const response = await fetch(`${backendUrl}${path}`, { headers: headers() })
+  const response = await fetch(`${backendUrl}${path}`, {
+    ...init,
+    headers: {
+      ...headers(),
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(init.headers ?? {}),
+    },
+  })
   if (!response.ok) {
     const body = await response.text()
     throw new Error(`HTTP ${response.status}${body ? `: ${body.slice(0, 180)}` : ""}`)
@@ -218,6 +331,104 @@ const normalizeProduct = (product: ApiProduct, index: number): StoreProduct => {
   }
 }
 
+const normalizeReview = (review: ApiReview, index: number): BuyerReview => ({
+  id: review.review_id ?? review.id ?? `review-${index}`,
+  customerName: review.customer_name ?? "Verified buyer",
+  rating: review.rating ?? 5,
+  title: review.title ?? undefined,
+  content: review.content ?? "",
+  createdAt: review.created_at,
+})
+
+const normalizeReviews = (payload: ApiReviews, productId: string): BuyerReviewsSummary => ({
+  productId: payload.product_id ?? productId,
+  averageRating: payload.average_rating ?? null,
+  reviewCount: payload.review_count ?? payload.reviews?.length ?? 0,
+  ratingBreakdown: payload.rating_breakdown ?? {},
+  reviews: (payload.reviews ?? []).map(normalizeReview),
+})
+
+const fallbackReviews = (productId: string): BuyerReviewsSummary => ({
+  productId,
+  averageRating: 4.8,
+  reviewCount: mockReviews.length,
+  ratingBreakdown: { "5": 2, "4": 1, "3": 0, "2": 0, "1": 0 },
+  reviews: mockReviews.map((review) => ({
+    id: review.id,
+    customerName: review.user,
+    rating: review.rating,
+    title: review.location,
+    content: review.text,
+    createdAt: review.date,
+  })),
+})
+
+const fallbackShare = (product: StoreProduct): BuyerShareInfo => {
+  const productUrl = `${window.location.origin}/products/${encodeURIComponent(product.id)}`
+  return {
+    productId: product.id,
+    title: product.title,
+    description: product.description,
+    imageUrl: product.imageUrl,
+    productUrl,
+    shareText: `${product.title} ${productUrl}`,
+    channels: {
+      copy_link: {
+        enabled: true,
+        type: "copy",
+        value: productUrl,
+      },
+    },
+  }
+}
+
+const normalizeShare = (payload: ApiShare, product: StoreProduct): BuyerShareInfo => {
+  const productUrl = payload.product_url ?? `${window.location.origin}/products/${encodeURIComponent(product.id)}`
+  return {
+    productId: payload.product_id ?? product.id,
+    title: payload.title ?? product.title,
+    description: payload.description ?? product.description,
+    imageUrl: payload.image_url ?? product.imageUrl,
+    productUrl,
+    shareText: payload.share_text ?? `${product.title} ${productUrl}`,
+    channels: payload.channels ?? {},
+  }
+}
+
+const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
+  const quantity = item.quantity ?? 1
+  const unitPrice = readNumber(item.unit_price) ?? readNumber(item.total) ?? 0
+  const total = readNumber(item.total) ?? unitPrice * quantity
+  return {
+    id: item.id ?? item.variant_id ?? `line-${Math.random().toString(36).slice(2)}`,
+    title: item.title ?? readString(item.metadata?.mc_product_title) ?? "Cart item",
+    imageUrl: item.thumbnail ?? readString(item.metadata?.mockup_image_url),
+    quantity,
+    unitPrice,
+    total,
+    variantId: item.variant_id,
+    variantTitle: readString(item.metadata?.variant_title) ?? readString(item.metadata?.supplier_variant_title),
+    productId: item.product_id ?? readString(item.metadata?.mc_product_id),
+    colorName: readString(item.metadata?.color_name) ?? readString(item.metadata?.color),
+    sizeName: readString(item.metadata?.size_name) ?? readString(item.metadata?.size),
+  }
+}
+
+const normalizeCart = (cart: ApiCart): StoreCart => {
+  const items = (cart.items ?? []).map(normalizeCartLineItem)
+  const subtotal = readNumber(cart.subtotal) ?? items.reduce((sum, item) => sum + item.total, 0)
+  const total = readNumber(cart.total) ?? subtotal
+  return {
+    id: cart.cart_id ?? cart.id ?? "",
+    storeId: cart.store_id,
+    email: cart.email,
+    currencyCode: cart.currency_code ?? "usd",
+    items,
+    subtotal,
+    total,
+  }
+}
+
 const mockProductsWithCategories = mockProducts.map((product, index) => ({
   ...product,
   categoryIds: product.categoryIds ?? [fallbackCategories[(index % (fallbackCategories.length - 1)) + 1]?.id ?? "all"],
@@ -261,4 +472,73 @@ export const fetchProducts = async (): Promise<LoadResult<StoreProduct[]>> => {
   } catch (error) {
     return { data: mockProductsWithCategories, source: "mock", error: warnFallback("products", error) }
   }
+}
+
+export const fetchProductDetail = async (productId: string): Promise<LoadResult<StoreProduct>> => {
+  try {
+    const payload = await apiFetch<ApiProductDetail>(`/store/products/${encodeURIComponent(productId)}`)
+    if (!payload.product) {
+      throw new Error("Backend returned no product")
+    }
+    return { data: normalizeProduct(payload.product, 0), source: "backend" }
+  } catch (error) {
+    const fallback = mockProducts.find((product) => product.id === productId) ?? mockProducts[0]
+    return { data: fallback, source: "mock", error: warnFallback("product detail", error) }
+  }
+}
+
+export const fetchProductReviews = async (productId: string): Promise<LoadResult<BuyerReviewsSummary>> => {
+  try {
+    const payload = await apiFetch<ApiReviews>(`/store/products/${encodeURIComponent(productId)}/reviews`)
+    return { data: normalizeReviews(payload, productId), source: "backend" }
+  } catch (error) {
+    return { data: fallbackReviews(productId), source: "mock", error: warnFallback("product reviews", error) }
+  }
+}
+
+export const fetchProductShare = async (product: StoreProduct): Promise<LoadResult<BuyerShareInfo>> => {
+  try {
+    const payload = await apiFetch<ApiShare>(`/store/products/${encodeURIComponent(product.id)}/share`)
+    return { data: normalizeShare(payload, product), source: "backend" }
+  } catch (error) {
+    return { data: fallbackShare(product), source: "static", error: warnFallback("product share", error) }
+  }
+}
+
+export const createCart = async () => {
+  const cart = await apiFetch<ApiCart>("/store/carts", {
+    method: "POST",
+    body: JSON.stringify({ currency_code: "usd" }),
+  })
+  return normalizeCart(cart)
+}
+
+export const fetchCart = async (cartId: string) => {
+  return normalizeCart(await apiFetch<ApiCart>(`/store/carts/${encodeURIComponent(cartId)}`))
+}
+
+export const addCartLineItem = async (cartId: string, variantId: string, quantity: number) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items`, {
+    method: "POST",
+    body: JSON.stringify({ variant_id: variantId, quantity }),
+  })
+  if (payload.cart || payload.items) {
+    return normalizeCart(payload.cart ?? payload)
+  }
+  return fetchCart(cartId)
+}
+
+export const updateCartLineItem = async (cartId: string, lineId: string, quantity: number) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ quantity }),
+  })
+  return normalizeCart(payload.cart ?? payload)
+}
+
+export const deleteCartLineItem = async (cartId: string, lineId: string) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`, {
+    method: "DELETE",
+  })
+  return normalizeCart(payload.cart ?? payload)
 }
