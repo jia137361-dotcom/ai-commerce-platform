@@ -177,6 +177,24 @@ type ApiCartMutation = ApiCart & {
   cart?: ApiCart
 }
 
+export type CompleteCartResponse = {
+  orderId: string
+  storeId: string
+  paymentProviderId?: string
+  paymentStatus?: unknown
+  fulfillmentStatus?: unknown
+  order?: unknown
+}
+
+type ApiCompleteCartResponse = {
+  order_id?: string
+  store_id?: string
+  payment_provider_id?: string
+  payment_status?: unknown
+  fulfillment_status?: unknown
+  order?: unknown
+}
+
 const fallbackSettings: BuyerStoreSettings = {
   storeId: "default_store",
   brandName: "Nespresso",
@@ -541,4 +559,19 @@ export const deleteCartLineItem = async (cartId: string, lineId: string) => {
     method: "DELETE",
   })
   return normalizeCart(payload.cart ?? payload)
+}
+
+export const completeCart = async (cartId: string, paymentProviderId?: string): Promise<CompleteCartResponse> => {
+  const payload = await apiFetch<ApiCompleteCartResponse>(`/store/carts/${encodeURIComponent(cartId)}/complete`, {
+    method: "POST",
+    body: JSON.stringify(paymentProviderId ? { payment_provider_id: paymentProviderId } : {}),
+  })
+  return {
+    orderId: payload.order_id ?? "",
+    storeId: payload.store_id ?? getBuyerStoreId(),
+    paymentProviderId: payload.payment_provider_id,
+    paymentStatus: payload.payment_status,
+    fulfillmentStatus: payload.fulfillment_status,
+    order: payload.order,
+  }
 }
