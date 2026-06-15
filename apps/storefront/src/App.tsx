@@ -10,34 +10,19 @@ import { ConfirmReceiptModal } from "./components/modals/ConfirmReceiptModal"
 import { OrderCard } from "./components/orders/OrderCard"
 import { OrderTimeline } from "./components/orders/OrderTimeline"
 import { ProductDetailPage } from "./components/product/ProductDetailPage"
-import { ProductGrid } from "./components/store/ProductGrid"
-import { ReviewsPanel } from "./components/store/ReviewsPanel"
-import { StoreHeader } from "./components/store/StoreHeader"
-import { StoreHero } from "./components/store/StoreHero"
-import { categories, mockProducts, orders, type Order, type StoreCart, type StoreProduct } from "./lib/mock-data"
+import { orders, type Order, type StoreCart, type StoreProduct } from "./lib/mock-data"
 import {
   addCartLineItem,
   cartStorageKey,
   createStoreCart,
   deleteCartLineItem,
   fetchStoreCart,
-  fetchStoreProducts,
   updateCartLineItem,
 } from "./lib/store-api"
-
-type ProductState = {
-  products: StoreProduct[]
-  source: "backend" | "mock"
-  error?: string
-}
-
-const readTab = () => new URLSearchParams(window.location.search).get("tab") ?? "all-items"
-const normalizeTab = (tab: string) => tab === "category" ? "category" : tab === "reviews" ? "reviews" : tab
+import { StoreHomePage } from "./pages/store/StoreHomePage"
 
 function App() {
   const [path, setPath] = useState(window.location.pathname)
-  const [activeTab, setActiveTab] = useState(normalizeTab(readTab()))
-  const [products, setProducts] = useState<ProductState>({ products: mockProducts, source: "mock" })
   const [cart, setCart] = useState<StoreCart | null>(null)
   const [cartLoading, setCartLoading] = useState(false)
   const [cartError, setCartError] = useState<string | undefined>()
@@ -46,14 +31,9 @@ function App() {
   useEffect(() => {
     const onPop = () => {
       setPath(window.location.pathname)
-      setActiveTab(normalizeTab(readTab()))
     }
     window.addEventListener("popstate", onPop)
     return () => window.removeEventListener("popstate", onPop)
-  }, [])
-
-  useEffect(() => {
-    fetchStoreProducts().then(setProducts)
   }, [])
 
   const loadCart = async () => {
@@ -108,14 +88,6 @@ function App() {
   const removeLine = async (lineId: string) => {
     if (!cart?.id) return
     setCart(await deleteCartLineItem(cart.id, lineId))
-  }
-
-  const setStoreTab = (tab: string) => {
-    const normalized = normalizeTab(tab)
-    setActiveTab(normalized)
-    const url = normalized === "all-items" ? "/store" : `/store?tab=${normalized === "reviews" ? "reviews" : normalized}`
-    window.history.pushState({}, "", url)
-    setPath("/store")
   }
 
   const cartCount = cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0
@@ -177,79 +149,7 @@ function App() {
     return <OrdersPage />
   }
 
-  return (
-    <StorePage
-      activeTab={activeTab}
-      setActiveTab={setStoreTab}
-      products={products}
-      onAddToCart={addProductToCart}
-      cartCount={cartCount}
-      shareOpen={shareOpen}
-      setShareOpen={setShareOpen}
-    />
-  )
-}
-
-function StorePage({
-  activeTab,
-  setActiveTab,
-  products,
-  onAddToCart,
-  cartCount,
-  shareOpen,
-  setShareOpen,
-}: {
-  activeTab: string
-  setActiveTab: (tab: string) => void
-  products: ProductState
-  onAddToCart: (product: StoreProduct) => Promise<void>
-  cartCount: number
-  shareOpen: boolean
-  setShareOpen: (open: boolean) => void
-}) {
-  const categoryProducts = products.products.filter((product) => categories.includes(product.category))
-  const displayProducts = activeTab === "category" ? (categoryProducts.length ? categoryProducts : products.products) : products.products
-
-  return (
-    <>
-      <TopNav onShare={() => setShareOpen(true)} cartCount={cartCount} />
-      <main className="store-shell">
-        <StoreHero />
-        <StoreHeader activeTab={activeTab} onTabChange={setActiveTab} onShare={() => setShareOpen(true)} />
-        {activeTab === "category" ? (
-          <CategoryView products={displayProducts} onAddToCart={onAddToCart} />
-        ) : activeTab === "reviews" ? (
-          <ReviewsPanel />
-        ) : (
-          <ProductGrid products={displayProducts} source={products.source} error={products.error} onAddToCart={(product) => void onAddToCart(product)} />
-        )}
-      </main>
-      <StoreFooter />
-      {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
-    </>
-  )
-}
-
-function CategoryView({ products, onAddToCart }: { products: StoreProduct[]; onAddToCart: (product: StoreProduct) => Promise<void> }) {
-  const [category, setCategory] = useState(categories[0])
-  const filtered = products.filter((product) => product.category === category)
-  const shown = filtered.length ? filtered : products
-
-  return (
-    <section className="category-view">
-      <aside className="category-sidebar">
-        {categories.map((item) => (
-          <button className={category === item ? "active" : ""} type="button" key={item} onClick={() => setCategory(item)}>
-            {item}
-          </button>
-        ))}
-      </aside>
-      <div className="category-content">
-        <ProductGrid products={shown} onAddToCart={(product) => void onAddToCart(product)} />
-        <button className="load-more" type="button">Load More Products</button>
-      </div>
-    </section>
-  )
+  return <StoreHomePage cartCount={cartCount} />
 }
 
 const orderTabs = ["All", "Processing", "Shipped", "Delivered", "Reviews", "Returns"]

@@ -2,6 +2,7 @@ export type StoreProduct = {
   id: string
   title: string
   category: string
+  categoryIds?: string[]
   price: string
   numericPrice?: number
   imageUrl: string
