@@ -222,6 +222,14 @@ const money = (value: number | string | null | undefined) => {
   }).format(amount)} USD`
 }
 
+export const formatBuyerMoney = (value: number | undefined, currency = "USD") => {
+  const amount = Number.isFinite(value) ? (value as number) : 0
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount)
+}
+
 const readNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
@@ -399,9 +407,10 @@ const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
     unitPrice,
     total,
     variantId: item.variant_id,
+    variantTitle: readString(item.metadata?.variant_title) ?? readString(item.metadata?.supplier_variant_title),
     productId: item.product_id ?? readString(item.metadata?.mc_product_id),
-    colorName: readString(item.metadata?.color),
-    sizeName: readString(item.metadata?.size),
+    colorName: readString(item.metadata?.color_name) ?? readString(item.metadata?.color),
+    sizeName: readString(item.metadata?.size_name) ?? readString(item.metadata?.size),
   }
 }
 
@@ -517,4 +526,19 @@ export const addCartLineItem = async (cartId: string, variantId: string, quantit
     return normalizeCart(payload.cart ?? payload)
   }
   return fetchCart(cartId)
+}
+
+export const updateCartLineItem = async (cartId: string, lineId: string, quantity: number) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ quantity }),
+  })
+  return normalizeCart(payload.cart ?? payload)
+}
+
+export const deleteCartLineItem = async (cartId: string, lineId: string) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`, {
+    method: "DELETE",
+  })
+  return normalizeCart(payload.cart ?? payload)
 }

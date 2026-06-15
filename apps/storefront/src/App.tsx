@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { AccountSidebar } from "./components/account/AccountSidebar"
-import { CartPage } from "./components/cart/CartPage"
 import { CheckoutPage, OrderSuccessPage } from "./components/checkout/CheckoutPage"
 import { TopNav } from "./components/layout/TopNav"
 import { StoreFooter } from "./components/layout/StoreFooter"
@@ -18,6 +17,7 @@ import {
   fetchStoreCart,
   updateCartLineItem,
 } from "./lib/store-api"
+import { CartPage } from "./pages/cart/CartPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 
@@ -97,21 +97,7 @@ function App() {
   }
 
   if (path.startsWith("/cart")) {
-    return (
-      <>
-        <TopNav onShare={() => setShareOpen(true)} cartCount={cartCount} />
-        <CartPage
-          cart={cart}
-          loading={cartLoading}
-          error={cartError}
-          onRefresh={loadCart}
-          onUpdateQuantity={updateLineQuantity}
-          onRemove={removeLine}
-        />
-        <StoreFooter />
-        {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
-      </>
-    )
+    return <CartPage onCartUpdated={setCart} />
   }
 
   if (path.startsWith("/checkout/success")) {
