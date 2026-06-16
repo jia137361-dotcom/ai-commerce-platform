@@ -20,6 +20,7 @@ import { CartPage } from "./pages/cart/CartPage"
 import { CheckoutPage } from "./pages/checkout/CheckoutPage"
 import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
 import { OrderDetailPage } from "./pages/orders/OrderDetailPage"
+import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
@@ -125,7 +126,7 @@ function App() {
   }
 
   if (path.startsWith("/account/orders")) {
-    return <OrdersPage />
+    return <OrderHistoryPage cartCount={cartCount} />
   }
 
   return <StoreHomePage cartCount={cartCount} />
