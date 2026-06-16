@@ -13,6 +13,7 @@ import {
   getBuyerStoreId,
   selectCartShippingMethod,
   updateCartAddress,
+  updateCartContact,
   type CartShippingOption,
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
@@ -55,6 +56,8 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [addressSaving, setAddressSaving] = useState(false)
   const [addressSaved, setAddressSaved] = useState(false)
   const [addressError, setAddressError] = useState<string | undefined>()
+  const [contactStatus, setContactStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [contactError, setContactError] = useState<string | undefined>()
   const [shippingLoading, setShippingLoading] = useState(false)
   const [shippingOptions, setShippingOptions] = useState<CartShippingOption[]>([])
   const [selectedShippingOptionId, setSelectedShippingOptionId] = useState("")
@@ -64,7 +67,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [placingOrder, setPlacingOrder] = useState(false)
   const [completeError, setCompleteError] = useState<string | undefined>()
 
-  const contactIsValid = contact.email.includes("@") && contact.phone.trim().length >= 4 && contact.name.trim().length > 1
+  const contactIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim()) && contact.phone.trim().length >= 4 && contact.name.trim().length > 1
   const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && address.country.trim())
   const completeEndpointConfirmed = true
   const shippingRequirementsMet = !requiresShippingMethod || (addressSaved && shippingMethodSaved)
@@ -72,14 +75,14 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const placeOrderDisabledReason = (() => {
     if (!cart?.items.length) return "Cart is empty."
     if (!completeEndpointConfirmed) return "Complete cart API is not ready for buyer checkout."
-    if (!requiresShippingMethod) return ""
     if (!contactIsValid) return "Enter a valid email, phone, and receiver name."
+    if (!requiresShippingMethod) return ""
     if (!addressIsValid) return "Enter a complete delivery address."
     if (!addressSaved) return "Save delivery address before placing the order."
     if (!shippingMethodSaved) return "Select and save a shipping method."
     return ""
   })()
-  const canPlaceOrder = Boolean(cart?.items.length && completeEndpointConfirmed && shippingRequirementsMet)
+  const canPlaceOrder = Boolean(cart?.items.length && completeEndpointConfirmed && contactIsValid && shippingRequirementsMet)
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
 
   useEffect(() => {
@@ -138,12 +141,35 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   }, [onCartUpdated])
 
   useEffect(() => {
+    setContactStatus("idle")
+    setContactError(undefined)
     setAddressSaved(false)
     setShippingOptions([])
     setSelectedShippingOptionId("")
     setShippingMethodSaved(false)
     setShippingError(undefined)
   }, [contact, address])
+
+  const handleSaveContact = async () => {
+    if (!cart) throw new Error("Checkout cart is unavailable.")
+    setContactStatus("saving")
+    setContactError(undefined)
+    try {
+      const updated = await updateCartContact(cart.id, {
+        email: contact.email.trim(),
+        phone: contact.phone.trim() || undefined,
+      })
+      setCart(updated)
+      onCartUpdated(updated)
+      setContactStatus("saved")
+      return updated
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : "Unable to save contact information."
+      setContactStatus("error")
+      setContactError(message)
+      throw new Error(message)
+    }
+  }
 
   const handleSaveAddress = async () => {
     if (!cart) return
@@ -207,9 +233,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setPlacingOrder(true)
     setCompleteError(undefined)
     try {
-      const result = await completeCart(cart.id)
+      const contactCart = await handleSaveContact()
+      const result = await completeCart(contactCart.id)
       if (!result.orderId) {
         throw new Error("Complete cart succeeded without an order_id.")
+      }
+      if (!result.email) {
+        console.warn("[checkout] complete cart returned an order without email", result)
       }
 
       const storeId = getBuyerStoreId()
@@ -270,7 +300,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
                 <p>Review contact, delivery, payment, and order summary before placing the order.</p>
               </div>
               {completeError && <p className="buyer-checkout-inline-error">{completeError}</p>}
-              <CheckoutContactForm value={contact} onChange={setContact} />
+              <CheckoutContactForm value={contact} onChange={setContact} status={contactStatus} error={contactError} />
               <CheckoutAddressPanel
                 value={address}
                 onChange={setAddress}

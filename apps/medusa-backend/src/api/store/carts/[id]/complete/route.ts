@@ -64,6 +64,15 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       return res.status(400).json({ error: "Cart has no line items" })
     }
 
+    if (!cart.email || !cart.email.includes("@")) {
+      return res.status(400).json({
+        error: {
+          code: "CART_CONTACT_REQUIRED",
+          message: "Cart email is required before complete",
+        },
+      })
+    }
+
     await ensureCartPaymentReady(req.scope, cartId, providerId)
 
     const { result } = await completeCartWorkflow(req.scope).run({

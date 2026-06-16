@@ -20,6 +20,9 @@ export function CheckoutSuccessSummary({ info }: CheckoutSuccessSummaryProps) {
         ...(info.displayId ? { display_id: info.displayId } : {}),
       }).toString()}`
     : undefined
+  const detailHref = info.email
+    ? `/account/orders/${encodeURIComponent(info.orderId)}?${new URLSearchParams({ email: info.email }).toString()}`
+    : undefined
 
   return (
     <section className="buyer-checkout-success-card">
@@ -45,12 +48,12 @@ export function CheckoutSuccessSummary({ info }: CheckoutSuccessSummaryProps) {
       </dl>
       <div className="buyer-checkout-success-actions">
         {trackingHref ? <a href={trackingHref}>Track order</a> : null}
-        <a href={`/account/orders/${encodeURIComponent(info.orderId)}`}>View order</a>
+        {detailHref ? <a href={detailHref}>View order</a> : null}
         <a href="/store">Continue shopping</a>
       </div>
       <p className="buyer-checkout-success-note">
         {info.email
-          ? "Tracking uses the email saved on the real order record. Order detail is still routed to the existing placeholder until the buyer order detail API is completed."
+          ? "Order detail and tracking use the email saved on the real backend order record."
           : "This order does not have an email on the backend order record, so email-based tracking is not available yet. Save the order id or display id for support lookup."}
       </p>
     </section>

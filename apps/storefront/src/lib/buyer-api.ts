@@ -192,6 +192,11 @@ export type CartAddressUpdateInput = {
   }
 }
 
+export type CartContactUpdateInput = {
+  email: string
+  phone?: string
+}
+
 export type CartShippingOption = {
   id: string
   name: string
@@ -280,6 +285,41 @@ type ApiOrderTrackingResponse = {
   shipments?: ApiShipment[]
 }
 
+type ApiOrderDetailItem = {
+  id?: string
+  product_id?: string | null
+  variant_id?: string | null
+  title?: string | null
+  variant_title?: string | null
+  thumbnail?: string | null
+  quantity?: number | null
+  unit_price?: number | null
+  subtotal?: number | null
+  metadata?: Record<string, unknown> | null
+}
+
+type ApiOrderAddress = Record<string, unknown> | null
+
+type ApiOrderDetailResponse = {
+  order_id?: string
+  display_id?: string | number | null
+  store_id?: string
+  email?: string | null
+  status?: string | null
+  payment_status?: string | null
+  fulfillment_status?: string | null
+  created_at?: string | null
+  currency_code?: string | null
+  items?: ApiOrderDetailItem[]
+  shipping_address?: ApiOrderAddress
+  billing_address?: ApiOrderAddress
+  subtotal?: number | null
+  shipping_total?: number | null
+  discount_total?: number | null
+  tax_total?: number | null
+  total?: number | null
+}
+
 export type BuyerOrderLookupResult = {
   orderId: string
   displayId?: string
@@ -312,6 +352,39 @@ export type BuyerOrderTracking = {
     date?: string | null
     status?: string | null
   }>
+}
+
+export type BuyerOrderDetailItem = {
+  id: string
+  productId?: string | null
+  variantId?: string | null
+  title: string
+  variantTitle?: string | null
+  thumbnail?: string | null
+  quantity: number
+  unitPrice?: number | null
+  subtotal?: number | null
+  metadata?: Record<string, unknown> | null
+}
+
+export type BuyerOrderDetail = {
+  orderId: string
+  displayId?: string
+  storeId?: string
+  email?: string | null
+  status?: string | null
+  paymentStatus?: string | null
+  fulfillmentStatus?: string | null
+  createdAt?: string | null
+  currencyCode?: string | null
+  items: BuyerOrderDetailItem[]
+  shippingAddress?: ApiOrderAddress
+  billingAddress?: ApiOrderAddress
+  subtotal?: number | null
+  shippingTotal?: number | null
+  discountTotal?: number | null
+  taxTotal?: number | null
+  total?: number | null
 }
 
 const fallbackSettings: BuyerStoreSettings = {
@@ -701,6 +774,17 @@ export const updateCartAddress = async (cartId: string, input: CartAddressUpdate
   return normalizeCart(payload.cart ?? payload)
 }
 
+export const updateCartContact = async (cartId: string, input: CartContactUpdateInput) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/contact`, {
+    method: "PUT",
+    body: JSON.stringify({
+      email: input.email,
+      phone: input.phone,
+    }),
+  })
+  return normalizeCart(payload.cart ?? payload)
+}
+
 export const getCartShippingOptions = async (cartId: string) => {
   const payload = await apiFetch<ApiShippingOptionsResponse>(`/store/carts/${encodeURIComponent(cartId)}/shipping-options`)
   const options = (payload.shipping_options ?? [])
@@ -800,5 +884,40 @@ export const getOrderTracking = async (orderId: string, email: string): Promise<
     fulfillmentOrder: payload.fulfillment_order ?? null,
     shipments,
     events: shipmentEvents(shipments),
+  }
+}
+
+export const getOrderDetail = async (orderId: string, email: string): Promise<BuyerOrderDetail> => {
+  const params = new URLSearchParams({ email: email.trim().toLowerCase() })
+  const payload = await apiFetch<ApiOrderDetailResponse>(`/store/orders/${encodeURIComponent(orderId)}/detail?${params.toString()}`)
+  return {
+    orderId: payload.order_id ?? orderId,
+    displayId: payload.display_id == null ? undefined : String(payload.display_id),
+    storeId: payload.store_id,
+    email: payload.email ?? null,
+    status: payload.status ?? null,
+    paymentStatus: payload.payment_status ?? null,
+    fulfillmentStatus: payload.fulfillment_status ?? null,
+    createdAt: payload.created_at ?? null,
+    currencyCode: payload.currency_code ?? undefined,
+    items: (payload.items ?? []).map((item, index) => ({
+      id: item.id ?? `order-line-${index}`,
+      productId: item.product_id ?? null,
+      variantId: item.variant_id ?? null,
+      title: item.title ?? "Untitled item",
+      variantTitle: item.variant_title ?? null,
+      thumbnail: item.thumbnail ?? null,
+      quantity: item.quantity ?? 0,
+      unitPrice: item.unit_price ?? null,
+      subtotal: item.subtotal ?? null,
+      metadata: item.metadata ?? null,
+    })),
+    shippingAddress: payload.shipping_address ?? null,
+    billingAddress: payload.billing_address ?? null,
+    subtotal: payload.subtotal ?? null,
+    shippingTotal: payload.shipping_total ?? null,
+    discountTotal: payload.discount_total ?? null,
+    taxTotal: payload.tax_total ?? null,
+    total: payload.total ?? null,
   }
 }

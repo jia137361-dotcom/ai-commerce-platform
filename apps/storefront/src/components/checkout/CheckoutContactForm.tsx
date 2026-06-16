@@ -7,9 +7,11 @@ export type CheckoutContact = {
 type CheckoutContactFormProps = {
   value: CheckoutContact
   onChange: (value: CheckoutContact) => void
+  status: "idle" | "saving" | "saved" | "error"
+  error?: string
 }
 
-export function CheckoutContactForm({ value, onChange }: CheckoutContactFormProps) {
+export function CheckoutContactForm({ value, onChange, status, error }: CheckoutContactFormProps) {
   const update = (field: keyof CheckoutContact, fieldValue: string) => {
     onChange({ ...value, [field]: fieldValue })
   }
@@ -20,9 +22,19 @@ export function CheckoutContactForm({ value, onChange }: CheckoutContactFormProp
         <span>1</span>
         <div>
           <h2>Contact information</h2>
-          <p>Used for delivery updates and order lookup.</p>
+          <p>
+            {status === "saving"
+              ? "Saving contact to checkout cart..."
+              : status === "saved"
+                ? "Contact saved to checkout cart."
+                : status === "error"
+                  ? "Contact could not be saved."
+                  : "Used for delivery updates and order lookup."}
+          </p>
         </div>
+        <strong className={`buyer-checkout-save-status ${status}`}>{status}</strong>
       </header>
+      {error && <p className="buyer-checkout-inline-error buyer-checkout-contact-error">{error}</p>}
       <div className="buyer-checkout-form-grid">
         <label>
           Email
