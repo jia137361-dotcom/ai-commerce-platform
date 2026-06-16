@@ -241,6 +241,79 @@ type ApiCompleteCartResponse = {
   order?: ApiCompletedOrder
 }
 
+type ApiOrderLookupResponse = {
+  order_id?: string
+  display_id?: string | number
+  order_number?: string | number
+  email?: string | null
+  store_id?: string
+  payment_status?: unknown
+  fulfillment_status?: unknown
+  created_at?: string
+}
+
+type ApiFulfillmentOrder = {
+  id?: string
+  status?: string | null
+  supplier?: string | null
+  supplier_order_id?: string | null
+  pushed_at?: string | null
+  failed_reason?: string | null
+}
+
+type ApiShipment = {
+  id?: string
+  carrier?: string | null
+  tracking_number?: string | null
+  tracking_url?: string | null
+  shipped_at?: string | null
+  delivered_at?: string | null
+  status?: string | null
+}
+
+type ApiOrderTrackingResponse = {
+  order_id?: string
+  store_id?: string
+  payment_status?: unknown
+  fulfillment_status?: unknown
+  fulfillment_order?: ApiFulfillmentOrder | null
+  shipments?: ApiShipment[]
+}
+
+export type BuyerOrderLookupResult = {
+  orderId: string
+  displayId?: string
+  email?: string | null
+  storeId?: string
+  paymentStatus?: unknown
+  fulfillmentStatus?: unknown
+  createdAt?: string
+}
+
+export type BuyerOrderShipment = {
+  id?: string
+  carrier?: string | null
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  shippedAt?: string | null
+  deliveredAt?: string | null
+  status?: string | null
+}
+
+export type BuyerOrderTracking = {
+  orderId: string
+  storeId?: string
+  paymentStatus?: unknown
+  fulfillmentStatus?: unknown
+  fulfillmentOrder?: ApiFulfillmentOrder | null
+  shipments: BuyerOrderShipment[]
+  events: Array<{
+    label: string
+    date?: string | null
+    status?: string | null
+  }>
+}
+
 const fallbackSettings: BuyerStoreSettings = {
   storeId: "default_store",
   brandName: "Nespresso",
@@ -672,5 +745,60 @@ export const completeCart = async (cartId: string, paymentProviderId?: string): 
     paymentStatus: payload.payment_status,
     fulfillmentStatus: payload.fulfillment_status,
     order,
+  }
+}
+
+export const lookupOrder = async (email: string, displayId: string): Promise<BuyerOrderLookupResult> => {
+  const params = new URLSearchParams({
+    email: email.trim().toLowerCase(),
+    display_id: displayId.trim(),
+  })
+  const payload = await apiFetch<ApiOrderLookupResponse>(`/store/orders/lookup?${params.toString()}`)
+  return {
+    orderId: payload.order_id ?? "",
+    displayId: payload.display_id ? String(payload.display_id) : payload.order_number ? String(payload.order_number) : undefined,
+    email: payload.email ?? null,
+    storeId: payload.store_id,
+    paymentStatus: payload.payment_status,
+    fulfillmentStatus: payload.fulfillment_status,
+    createdAt: payload.created_at,
+  }
+}
+
+const normalizeShipment = (shipment: ApiShipment): BuyerOrderShipment => ({
+  id: shipment.id,
+  carrier: shipment.carrier ?? null,
+  trackingNumber: shipment.tracking_number ?? null,
+  trackingUrl: shipment.tracking_url ?? null,
+  shippedAt: shipment.shipped_at ?? null,
+  deliveredAt: shipment.delivered_at ?? null,
+  status: shipment.status ?? null,
+})
+
+const shipmentEvents = (shipments: BuyerOrderShipment[]) => {
+  const events: BuyerOrderTracking["events"] = []
+  for (const shipment of shipments) {
+    if (shipment.shippedAt) {
+      events.push({ label: "Shipped", date: shipment.shippedAt, status: shipment.status })
+    }
+    if (shipment.deliveredAt) {
+      events.push({ label: "Delivered", date: shipment.deliveredAt, status: "delivered" })
+    }
+  }
+  return events
+}
+
+export const getOrderTracking = async (orderId: string, email: string): Promise<BuyerOrderTracking> => {
+  const params = new URLSearchParams({ email: email.trim().toLowerCase() })
+  const payload = await apiFetch<ApiOrderTrackingResponse>(`/store/orders/${encodeURIComponent(orderId)}/tracking?${params.toString()}`)
+  const shipments = (payload.shipments ?? []).map(normalizeShipment)
+  return {
+    orderId: payload.order_id ?? orderId,
+    storeId: payload.store_id,
+    paymentStatus: payload.payment_status,
+    fulfillmentStatus: payload.fulfillment_status,
+    fulfillmentOrder: payload.fulfillment_order ?? null,
+    shipments,
+    events: shipmentEvents(shipments),
   }
 }

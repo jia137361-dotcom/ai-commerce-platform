@@ -19,6 +19,8 @@ import {
 import { CartPage } from "./pages/cart/CartPage"
 import { CheckoutPage } from "./pages/checkout/CheckoutPage"
 import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
+import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
+import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 
@@ -107,6 +109,14 @@ function App() {
 
   if (path.startsWith("/checkout")) {
     return <CheckoutPage cartCount={cartCount} onCartUpdated={setCart} />
+  }
+
+  if (path.startsWith("/orders/lookup")) {
+    return <OrderLookupPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/account/orders/") && path.endsWith("/tracking")) {
+    return <OrderTrackingPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
   }
 
   if (path.startsWith("/account/orders/")) {

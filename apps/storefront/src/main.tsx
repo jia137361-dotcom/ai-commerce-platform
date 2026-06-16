@@ -6,6 +6,7 @@ import "./styles/store-home.css"
 import "./styles/product-detail.css"
 import "./styles/cart.css"
 import "./styles/checkout.css"
+import "./styles/orders.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

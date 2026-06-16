@@ -1,0 +1,298 @@
+.buyer-orders-page {
+  min-height: 100vh;
+  background: #f6f7f9;
+  color: #151923;
+}
+
+.buyer-orders-main {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 42px 0 72px;
+}
+
+.buyer-order-lookup-main {
+  display: flex;
+  justify-content: center;
+  padding-top: 72px;
+}
+
+.buyer-order-card {
+  border: 1px solid #e3e7ee;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(21, 25, 35, 0.07);
+}
+
+.buyer-order-lookup-card {
+  width: min(560px, 100%);
+  padding: 34px;
+}
+
+.buyer-order-kicker {
+  margin: 0 0 8px;
+  color: #ef5a14;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.buyer-order-lookup-card h1,
+.buyer-order-empty h1,
+.buyer-order-tracking-header h1 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+.buyer-order-lookup-card > p,
+.buyer-order-empty p,
+.buyer-order-tracking-header p {
+  margin: 12px 0 0;
+  color: #677083;
+  line-height: 1.55;
+}
+
+.buyer-order-lookup-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.buyer-order-field {
+  display: grid;
+  gap: 8px;
+}
+
+.buyer-order-field span {
+  font-weight: 800;
+  color: #202636;
+}
+
+.buyer-order-field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d5dbe6;
+  border-radius: 6px;
+  padding: 13px 14px;
+  font: inherit;
+  background: #fff;
+}
+
+.buyer-order-field input:focus {
+  outline: 2px solid rgba(239, 90, 20, 0.22);
+  border-color: #ef5a14;
+}
+
+.buyer-order-lookup-form button,
+.buyer-order-actions a,
+.buyer-order-empty a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 18px;
+  background: #ef5a14;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.buyer-order-lookup-form button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.buyer-order-error {
+  border: 1px solid #f3c5b8;
+  border-radius: 6px;
+  background: #fff3ef;
+  color: #9d2f10;
+  padding: 12px 14px;
+  font-weight: 700;
+}
+
+.buyer-order-tracking-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: start;
+  padding: 28px;
+}
+
+.buyer-order-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+}
+
+.buyer-order-status-pills div {
+  display: grid;
+  gap: 5px;
+}
+
+.buyer-order-status-pills dt {
+  color: #687386;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.buyer-order-status-pill {
+  margin: 0;
+  border: 1px solid #dce2eb;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #f9fafc;
+  color: #273043;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.buyer-order-tracking-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.buyer-order-tracking-left {
+  display: grid;
+  gap: 22px;
+}
+
+.buyer-order-shipment,
+.buyer-order-timeline,
+.buyer-order-empty,
+.buyer-order-actions {
+  padding: 28px;
+}
+
+.buyer-order-shipment h2,
+.buyer-order-timeline h2,
+.buyer-order-actions h2 {
+  margin: 0 0 18px;
+  font-size: 22px;
+}
+
+.buyer-order-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.buyer-order-data-grid dt {
+  color: #687386;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.buyer-order-data-grid dd {
+  margin: 5px 0 0;
+  color: #151923;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.buyer-order-data-grid a {
+  color: #ef5a14;
+}
+
+.buyer-order-muted {
+  color: #707b8e;
+}
+
+.buyer-order-timeline-list {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.buyer-order-timeline-event {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 12px;
+}
+
+.buyer-order-timeline-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border: 3px solid #ffd7c7;
+  border-radius: 999px;
+  background: #ef5a14;
+}
+
+.buyer-order-timeline-event h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.buyer-order-timeline-event p {
+  margin: 5px 0 0;
+  color: #677083;
+}
+
+.buyer-order-actions {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-order-actions a:nth-of-type(n + 2),
+.buyer-order-empty a:nth-of-type(n + 2) {
+  border: 1px solid #cfd6e2;
+  background: #fff;
+  color: #202636;
+}
+
+.buyer-order-empty {
+  width: min(620px, 100%);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.buyer-order-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+@media (max-width: 760px) {
+  .buyer-orders-main {
+    width: min(100% - 28px, 1180px);
+    padding-top: 28px;
+  }
+
+  .buyer-order-lookup-main {
+    padding-top: 32px;
+  }
+
+  .buyer-order-lookup-card,
+  .buyer-order-shipment,
+  .buyer-order-timeline,
+  .buyer-order-empty,
+  .buyer-order-actions,
+  .buyer-order-tracking-header {
+    padding: 22px;
+  }
+
+  .buyer-order-tracking-header,
+  .buyer-order-tracking-grid,
+  .buyer-order-data-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-order-lookup-card h1,
+  .buyer-order-empty h1,
+  .buyer-order-tracking-header h1 {
+    font-size: 26px;
+  }
+}
