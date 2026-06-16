@@ -3,7 +3,7 @@ import { formatBuyerMoney } from "../../lib/buyer-api"
 export type CheckoutSuccessInfo = {
   orderId: string
   displayId?: string
-  email?: string
+  email?: string | null
   total?: number
   currencyCode?: string
 }

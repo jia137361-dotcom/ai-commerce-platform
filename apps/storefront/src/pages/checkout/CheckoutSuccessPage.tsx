@@ -31,14 +31,19 @@ const readSuccessInfo = (): CheckoutSuccessInfo | null => {
   }
 
   try {
-    const parsed = JSON.parse(raw) as Partial<CheckoutSuccessInfo>
-    if (parsed.orderId && (!orderId || parsed.orderId === orderId)) {
+    const parsed = JSON.parse(raw) as Partial<CheckoutSuccessInfo> & {
+      order_id?: string
+      display_id?: string
+      currency_code?: string
+    }
+    const storedOrderId = parsed.orderId ?? parsed.order_id
+    if (storedOrderId && (!orderId || storedOrderId === orderId)) {
       return {
-        orderId: parsed.orderId,
-        displayId: parsed.displayId,
+        orderId: storedOrderId,
+        displayId: parsed.displayId ?? parsed.display_id,
         email: parsed.email,
         total: parsed.total,
-        currencyCode: parsed.currencyCode,
+        currencyCode: parsed.currencyCode ?? parsed.currency_code,
       }
     }
   } catch (error) {

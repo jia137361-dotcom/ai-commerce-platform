@@ -66,18 +66,20 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
 
   const contactIsValid = contact.email.includes("@") && contact.phone.trim().length >= 4 && contact.name.trim().length > 1
   const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && address.country.trim())
-  const completeEndpointConfirmed = false
+  const completeEndpointConfirmed = true
+  const shippingRequirementsMet = !requiresShippingMethod || (addressSaved && shippingMethodSaved)
 
   const placeOrderDisabledReason = (() => {
     if (!cart?.items.length) return "Cart is empty."
+    if (!completeEndpointConfirmed) return "Complete cart API is not ready for buyer checkout."
+    if (!requiresShippingMethod) return ""
     if (!contactIsValid) return "Enter a valid email, phone, and receiver name."
     if (!addressIsValid) return "Enter a complete delivery address."
     if (!addressSaved) return "Save delivery address before placing the order."
-    if (requiresShippingMethod && !shippingMethodSaved) return "Select and save a shipping method."
-    if (!completeEndpointConfirmed) return "Complete cart runtime verification is still pending."
+    if (!shippingMethodSaved) return "Select and save a shipping method."
     return ""
   })()
-  const canPlaceOrder = Boolean(cart?.items.length && contactIsValid && addressIsValid && addressSaved && (!requiresShippingMethod || shippingMethodSaved) && completeEndpointConfirmed)
+  const canPlaceOrder = Boolean(cart?.items.length && completeEndpointConfirmed && shippingRequirementsMet)
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
 
   useEffect(() => {
@@ -106,6 +108,19 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         if (!active) return
         setCart(loaded)
         onCartUpdated(loaded)
+        try {
+          const shipping = await getCartShippingOptions(loaded.id)
+          if (!active) return
+          setShippingOptions(shipping.options)
+          setRequiresShippingMethod(shipping.requiresShippingMethod)
+          setSelectedShippingOptionId(shipping.options[0]?.id ?? "")
+          setShippingMethodSaved(!shipping.requiresShippingMethod)
+        } catch (shippingProbeError) {
+          console.warn("[checkout] shipping requirement probe failed", shippingProbeError)
+          if (!active) return
+          setRequiresShippingMethod(true)
+          setShippingMethodSaved(false)
+        }
       } catch (loadError) {
         if (!active) return
         setError(loadError instanceof Error ? loadError.message : "Unable to load checkout cart.")
@@ -199,9 +214,12 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
 
       const storeId = getBuyerStoreId()
       const successPayload = {
+        order_id: result.orderId,
+        display_id: result.displayId,
+        currency_code: result.currencyCode ?? cart.currencyCode,
         orderId: result.orderId,
         displayId: result.displayId,
-        email: result.email ?? contact.email.trim(),
+        email: result.email ?? null,
         total: result.total ?? cart.total,
         currencyCode: result.currencyCode ?? cart.currencyCode,
       }
@@ -266,13 +284,15 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
                   <span>3</span>
                   <div>
                     <h2>Shipping method</h2>
-                    <p>{addressSaved ? "Choose an available delivery method." : "Save delivery address to load available shipping methods."}</p>
+                    <p>{requiresShippingMethod ? (addressSaved ? "Choose an available delivery method." : "Save delivery address to load available shipping methods.") : "This cart does not require a shipping method."}</p>
                   </div>
                 </header>
                 {shippingLoading ? (
                   <div><strong>Loading shipping options</strong><span>Please wait...</span></div>
                 ) : shippingError ? (
                   <p className="buyer-checkout-inline-error">{shippingError}</p>
+                ) : !requiresShippingMethod ? (
+                  <div><strong>No shipping option required</strong><span>The backend returned requires_shipping_method=false for this cart.</span></div>
                 ) : !addressSaved ? (
                   <div><strong>Address required</strong><span>Shipping options are loaded from the backend after address save.</span></div>
                 ) : shippingOptions.length ? (

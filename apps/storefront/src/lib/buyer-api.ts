@@ -222,7 +222,7 @@ type ApiCompletedOrder = {
 export type CompleteCartResponse = {
   orderId: string
   displayId?: string
-  email?: string
+  email?: string | null
   total?: number
   currencyCode?: string
   storeId: string
@@ -664,7 +664,7 @@ export const completeCart = async (cartId: string, paymentProviderId?: string): 
   return {
     orderId: payload.order_id ?? order?.id ?? "",
     displayId: order?.display_id ? String(order.display_id) : undefined,
-    email: order?.email ?? undefined,
+    email: order?.email ?? null,
     total: readNumber(order?.total),
     currencyCode: order?.currency_code,
     storeId: payload.store_id ?? getBuyerStoreId(),
