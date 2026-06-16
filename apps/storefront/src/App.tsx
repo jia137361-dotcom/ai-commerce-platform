@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { AccountSidebar } from "./components/account/AccountSidebar"
-import { OrderSuccessPage } from "./components/checkout/CheckoutPage"
 import { TopNav } from "./components/layout/TopNav"
 import { StoreFooter } from "./components/layout/StoreFooter"
 import { ShareModal } from "./components/modals/ShareModal"
@@ -19,6 +18,7 @@ import {
 } from "./lib/store-api"
 import { CartPage } from "./pages/cart/CartPage"
 import { CheckoutPage } from "./pages/checkout/CheckoutPage"
+import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 
@@ -102,13 +102,7 @@ function App() {
   }
 
   if (path.startsWith("/checkout/success")) {
-    return (
-      <>
-        <TopNav onShare={() => setShareOpen(true)} cartCount={cartCount} />
-        <OrderSuccessPage />
-        <StoreFooter />
-      </>
-    )
+    return <CheckoutSuccessPage cartCount={cartCount} />
   }
 
   if (path.startsWith("/checkout")) {

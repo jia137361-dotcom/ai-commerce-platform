@@ -22,8 +22,32 @@ import { getS2bdiyConfig } from "../../../../../modules/suppliers/s2bdiy/config"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 
+const readHeader = (req: MedusaRequest, name: string) => {
+  const value = req.headers[name.toLowerCase()]
+  return Array.isArray(value) ? value[0] : value
+}
+
+const validateCheckoutBridgeHeaders = (req: MedusaRequest) => {
+  if (!readHeader(req, "x-publishable-api-key")) {
+    return "x-publishable-api-key is required"
+  }
+
+  if (!readHeader(req, "x-store-id")) {
+    return "X-Store-Id is required"
+  }
+
+  return null
+}
+
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
+    const headerError = validateCheckoutBridgeHeaders(req)
+    if (headerError) {
+      return res.status(401).json({
+        error: { code: "CHECKOUT_HEADER_REQUIRED", message: headerError },
+      })
+    }
+
     const cartId = req.params.id as string
     const body = (req.body || {}) as { payment_provider_id?: string }
     const providerId = body.payment_provider_id?.trim() || DEFAULT_PAYMENT_PROVIDER

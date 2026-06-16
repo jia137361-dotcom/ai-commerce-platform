@@ -4,10 +4,23 @@ import { CheckoutLineItem } from "./CheckoutLineItem"
 
 type CheckoutSummaryProps = {
   cart: StoreCart
+  canPlaceOrder: boolean
+  disabledReason: string
+  onPlaceOrder?: () => void
+  placing?: boolean
+  shippingAmount?: number
 }
 
-export function CheckoutSummary({ cart }: CheckoutSummaryProps) {
+export function CheckoutSummary({
+  cart,
+  canPlaceOrder,
+  disabledReason,
+  onPlaceOrder,
+  placing = false,
+  shippingAmount,
+}: CheckoutSummaryProps) {
   const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0)
+  const total = cart.total + (shippingAmount ?? 0)
 
   return (
     <aside className="buyer-checkout-summary">
@@ -28,12 +41,14 @@ export function CheckoutSummary({ cart }: CheckoutSummaryProps) {
       </label>
       <dl>
         <div><dt>Subtotal ({itemCount} items)</dt><dd>{formatBuyerMoney(cart.subtotal, cart.currencyCode)}</dd></div>
-        <div><dt>Shipping</dt><dd>Pending</dd></div>
+        <div><dt>Shipping</dt><dd>{shippingAmount === undefined ? "Pending" : formatBuyerMoney(shippingAmount, cart.currencyCode)}</dd></div>
         <div><dt>Discount</dt><dd>{formatBuyerMoney(0, cart.currencyCode)}</dd></div>
-        <div className="total"><dt>Total</dt><dd>{formatBuyerMoney(cart.total, cart.currencyCode)}</dd></div>
+        <div className="total"><dt>Total</dt><dd>{formatBuyerMoney(total, cart.currencyCode)}</dd></div>
       </dl>
-      <button type="button" disabled>Checkout backend pending</button>
-      <p>Place Order is disabled until address and shipping APIs are available.</p>
+      <button type="button" disabled={!canPlaceOrder || placing} onClick={onPlaceOrder}>
+        {placing ? "Placing order..." : "Place Order"}
+      </button>
+      <p>{canPlaceOrder ? "Checkout bridge is ready for the next confirmation step." : disabledReason}</p>
     </aside>
   )
 }

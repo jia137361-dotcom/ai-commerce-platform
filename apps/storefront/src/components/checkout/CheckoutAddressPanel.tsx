@@ -11,11 +11,15 @@ export type CheckoutAddress = {
 type CheckoutAddressPanelProps = {
   value: CheckoutAddress
   onChange: (value: CheckoutAddress) => void
+  onSave: () => void
+  saving?: boolean
+  saved?: boolean
+  error?: string
 }
 
 const labels = ["Home", "Company", "School", "Parents", "Other"]
 
-export function CheckoutAddressPanel({ value, onChange }: CheckoutAddressPanelProps) {
+export function CheckoutAddressPanel({ value, onChange, onSave, saving = false, saved = false, error }: CheckoutAddressPanelProps) {
   const update = (field: keyof CheckoutAddress, fieldValue: string) => {
     onChange({ ...value, [field]: fieldValue })
   }
@@ -28,10 +32,11 @@ export function CheckoutAddressPanel({ value, onChange }: CheckoutAddressPanelPr
         <span>2</span>
         <div>
           <h2>Delivery address</h2>
-          <p>Local form state only. Address save API is pending.</p>
+          <p>{saved ? "Address saved to checkout cart." : "Save address before selecting shipping."}</p>
         </div>
-        <button type="button">Manage</button>
+        <button type="button" onClick={onSave} disabled={saving}>{saving ? "Saving" : "Save"}</button>
       </header>
+      {error && <p className="buyer-checkout-inline-error">{error}</p>}
 
       {!hasAddress && (
         <div className="buyer-checkout-address-empty">

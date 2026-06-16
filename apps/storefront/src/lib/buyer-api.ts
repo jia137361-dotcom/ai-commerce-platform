@@ -177,8 +177,54 @@ type ApiCartMutation = ApiCart & {
   cart?: ApiCart
 }
 
+export type CartAddressUpdateInput = {
+  email: string
+  phone: string
+  shippingAddress: {
+    firstName: string
+    lastName: string
+    address1: string
+    address2?: string
+    city: string
+    province?: string
+    postalCode: string
+    countryCode: string
+  }
+}
+
+export type CartShippingOption = {
+  id: string
+  name: string
+  amount: number
+  currencyCode: string
+}
+
+type ApiShippingOption = {
+  id?: string
+  name?: string
+  amount?: number
+  currency_code?: string
+}
+
+type ApiShippingOptionsResponse = {
+  shipping_options?: ApiShippingOption[]
+  requires_shipping_method?: boolean
+}
+
+type ApiCompletedOrder = {
+  id?: string
+  display_id?: string | number
+  email?: string | null
+  total?: number
+  currency_code?: string
+}
+
 export type CompleteCartResponse = {
   orderId: string
+  displayId?: string
+  email?: string
+  total?: number
+  currencyCode?: string
   storeId: string
   paymentProviderId?: string
   paymentStatus?: unknown
@@ -192,7 +238,7 @@ type ApiCompleteCartResponse = {
   payment_provider_id?: string
   payment_status?: unknown
   fulfillment_status?: unknown
-  order?: unknown
+  order?: ApiCompletedOrder
 }
 
 const fallbackSettings: BuyerStoreSettings = {
@@ -561,17 +607,70 @@ export const deleteCartLineItem = async (cartId: string, lineId: string) => {
   return normalizeCart(payload.cart ?? payload)
 }
 
+export const updateCartAddress = async (cartId: string, input: CartAddressUpdateInput) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/address`, {
+    method: "PUT",
+    body: JSON.stringify({
+      email: input.email,
+      phone: input.phone,
+      shipping_address: {
+        first_name: input.shippingAddress.firstName,
+        last_name: input.shippingAddress.lastName,
+        address_1: input.shippingAddress.address1,
+        address_2: input.shippingAddress.address2,
+        city: input.shippingAddress.city,
+        province: input.shippingAddress.province,
+        postal_code: input.shippingAddress.postalCode,
+        country_code: input.shippingAddress.countryCode,
+      },
+    }),
+  })
+  return normalizeCart(payload.cart ?? payload)
+}
+
+export const getCartShippingOptions = async (cartId: string) => {
+  const payload = await apiFetch<ApiShippingOptionsResponse>(`/store/carts/${encodeURIComponent(cartId)}/shipping-options`)
+  const options = (payload.shipping_options ?? [])
+    .filter((option): option is Required<Pick<ApiShippingOption, "id" | "name">> & ApiShippingOption =>
+      Boolean(option.id && option.name)
+    )
+    .map<CartShippingOption>((option) => ({
+      id: option.id,
+      name: option.name,
+      amount: readNumber(option.amount) ?? 0,
+      currencyCode: option.currency_code ?? "usd",
+    }))
+
+  return {
+    options,
+    requiresShippingMethod: payload.requires_shipping_method ?? options.length > 0,
+  }
+}
+
+export const selectCartShippingMethod = async (cartId: string, optionId: string) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/shipping-methods`, {
+    method: "POST",
+    body: JSON.stringify({ option_id: optionId }),
+  })
+  return normalizeCart(payload.cart ?? payload)
+}
+
 export const completeCart = async (cartId: string, paymentProviderId?: string): Promise<CompleteCartResponse> => {
   const payload = await apiFetch<ApiCompleteCartResponse>(`/store/carts/${encodeURIComponent(cartId)}/complete`, {
     method: "POST",
     body: JSON.stringify(paymentProviderId ? { payment_provider_id: paymentProviderId } : {}),
   })
+  const order = payload.order
   return {
-    orderId: payload.order_id ?? "",
+    orderId: payload.order_id ?? order?.id ?? "",
+    displayId: order?.display_id ? String(order.display_id) : undefined,
+    email: order?.email ?? undefined,
+    total: readNumber(order?.total),
+    currencyCode: order?.currency_code,
     storeId: payload.store_id ?? getBuyerStoreId(),
     paymentProviderId: payload.payment_provider_id,
     paymentStatus: payload.payment_status,
     fulfillmentStatus: payload.fulfillment_status,
-    order: payload.order,
+    order,
   }
 }

@@ -2,7 +2,7 @@ export function CheckoutPaymentPanel() {
   return (
     <section className="buyer-checkout-panel buyer-checkout-payment">
       <header>
-        <span>3</span>
+        <span>4</span>
         <div>
           <h2>Payment method</h2>
           <p>Payment collection is not completed in this batch.</p>
