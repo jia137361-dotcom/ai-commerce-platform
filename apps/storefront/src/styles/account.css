@@ -1,0 +1,277 @@
+.buyer-account-page {
+  min-height: 100vh;
+  background: #f7f8fa;
+  color: #17202e;
+}
+
+.buyer-account-main {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 56px 0 96px;
+}
+
+.buyer-account-auth-shell {
+  display: grid;
+  grid-template-columns: minmax(280px, 440px) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+
+.buyer-account-auth-intro {
+  padding-top: 32px;
+}
+
+.buyer-account-auth-intro p {
+  margin: 0 0 12px;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.buyer-account-auth-intro h1 {
+  margin: 0 0 16px;
+  color: #111827;
+  font-size: 38px;
+  line-height: 1.08;
+}
+
+.buyer-account-auth-intro span {
+  display: block;
+  max-width: 420px;
+  color: #4b5563;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.buyer-account-auth-card,
+.buyer-account-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
+}
+
+.buyer-account-auth-card {
+  overflow: hidden;
+}
+
+.buyer-account-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.buyer-account-auth-tabs a {
+  padding: 18px 20px;
+  color: #6b7280;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.buyer-account-auth-tabs a.active {
+  color: #111827;
+  border-bottom: 3px solid #ff6b16;
+}
+
+.buyer-account-form {
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+}
+
+.buyer-account-form label {
+  display: grid;
+  gap: 8px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.buyer-account-form input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 0 14px;
+  color: #111827;
+  font-size: 15px;
+  background: #fff;
+}
+
+.buyer-account-form input:focus {
+  outline: 2px solid rgba(255, 107, 22, 0.22);
+  border-color: #ff6b16;
+}
+
+.buyer-account-form button,
+.buyer-account-primary-link {
+  min-height: 48px;
+  border: 0;
+  border-radius: 4px;
+  background: #ff6b16;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.buyer-account-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.buyer-account-error,
+.buyer-account-success {
+  margin: 0;
+  border-radius: 4px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.buyer-account-error {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.buyer-account-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.buyer-account-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 24px;
+}
+
+.buyer-account-nav {
+  padding: 22px;
+  align-self: start;
+}
+
+.buyer-account-nav-user {
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.buyer-account-nav-user strong,
+.buyer-account-nav-user span {
+  display: block;
+}
+
+.buyer-account-nav-user strong {
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.buyer-account-nav-user span {
+  color: #6b7280;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.buyer-account-nav a,
+.buyer-account-nav button {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  border: 0;
+  border-radius: 4px;
+  padding: 0 10px;
+  background: transparent;
+  color: #1f2937;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.buyer-account-nav a:hover,
+.buyer-account-nav button:hover {
+  background: #f3f4f6;
+}
+
+.buyer-account-nav-links {
+  display: grid;
+  gap: 4px;
+  padding-top: 16px;
+}
+
+.buyer-account-overview,
+.buyer-account-profile,
+.buyer-account-required {
+  padding: 28px;
+}
+
+.buyer-account-kicker {
+  margin: 0 0 8px;
+  color: #ff6b16;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.buyer-account-overview h1,
+.buyer-account-profile h1,
+.buyer-account-required h1 {
+  margin: 0 0 12px;
+  color: #111827;
+  font-size: 30px;
+}
+
+.buyer-account-overview p,
+.buyer-account-required p {
+  max-width: 680px;
+  margin: 0 0 24px;
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+.buyer-account-overview div,
+.buyer-account-required-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.buyer-account-overview a,
+.buyer-account-required-actions a {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 0 18px;
+  color: #111827;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.buyer-account-required-actions a:first-child {
+  border-color: #ff6b16;
+  background: #ff6b16;
+  color: #fff;
+}
+
+@media (max-width: 860px) {
+  .buyer-account-main {
+    width: min(100% - 28px, 620px);
+    padding: 32px 0 64px;
+  }
+
+  .buyer-account-auth-shell,
+  .buyer-account-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-account-auth-intro {
+    padding-top: 0;
+  }
+}

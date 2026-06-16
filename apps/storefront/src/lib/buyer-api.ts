@@ -320,6 +320,53 @@ type ApiOrderDetailResponse = {
   total?: number | null
 }
 
+type ApiAuthTokenResponse = {
+  token?: string
+}
+
+type ApiCustomerResponse = {
+  customer?: ApiCustomer
+}
+
+type ApiCustomer = {
+  id?: string
+  email?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  phone?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export type BuyerCustomer = {
+  id: string
+  email?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  phone?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type BuyerRegisterInput = {
+  email: string
+  password: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+}
+
+export type BuyerSignInInput = {
+  email: string
+  password: string
+}
+
+export type BuyerProfileUpdateInput = {
+  firstName?: string
+  lastName?: string
+  phone?: string
+}
+
 export type BuyerOrderLookupResult = {
   orderId: string
   displayId?: string
@@ -471,6 +518,7 @@ const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => 
 
   const response = await fetch(`${backendUrl}${path}`, {
     ...init,
+    credentials: init.credentials ?? "include",
     headers: {
       ...headers(),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -481,7 +529,21 @@ const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => 
     const body = await response.text()
     throw new Error(`HTTP ${response.status}${body ? `: ${body.slice(0, 180)}` : ""}`)
   }
-  return response.json() as Promise<T>
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}
+
+const normalizeCustomer = (customer?: ApiCustomer): BuyerCustomer | null => {
+  if (!customer?.id) return null
+  return {
+    id: customer.id,
+    email: customer.email ?? null,
+    firstName: customer.first_name ?? null,
+    lastName: customer.last_name ?? null,
+    phone: customer.phone ?? null,
+    createdAt: customer.created_at ?? null,
+    updatedAt: customer.updated_at ?? null,
+  }
 }
 
 const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
@@ -727,6 +789,14 @@ export const fetchCart = async (cartId: string) => {
   return normalizeCart(await apiFetch<ApiCart>(`/store/carts/${encodeURIComponent(cartId)}`))
 }
 
+export const attachCustomerToCart = async (cartId: string) => {
+  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/customer`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+  return normalizeCart(payload.cart ?? payload)
+}
+
 export const addCartLineItem = async (cartId: string, variantId: string, quantity: number) => {
   const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items`, {
     method: "POST",
@@ -920,4 +990,79 @@ export const getOrderDetail = async (orderId: string, email: string): Promise<Bu
     taxTotal: payload.tax_total ?? null,
     total: payload.total ?? null,
   }
+}
+
+const createCustomerSession = async (token: string) => {
+  await apiFetch<{ user?: unknown }>("/auth/session", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export const getCurrentCustomer = async () => {
+  const payload = await apiFetch<ApiCustomerResponse>("/store/customers/me")
+  return normalizeCustomer(payload.customer)
+}
+
+export const signInCustomer = async (input: BuyerSignInInput) => {
+  const payload = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email.trim().toLowerCase(),
+      password: input.password,
+    }),
+  })
+  if (!payload.token) throw new Error("Authentication succeeded without a token.")
+  await createCustomerSession(payload.token)
+  const customer = await getCurrentCustomer()
+  if (!customer) throw new Error("Unable to load customer after sign in.")
+  return customer
+}
+
+export const registerCustomer = async (input: BuyerRegisterInput) => {
+  const email = input.email.trim().toLowerCase()
+  const auth = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass/register", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      password: input.password,
+    }),
+  })
+  if (!auth.token) throw new Error("Registration succeeded without an auth token.")
+  const payload = await apiFetch<ApiCustomerResponse>("/store/customers", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${auth.token}`,
+    },
+    body: JSON.stringify({
+      email,
+      first_name: input.firstName?.trim() || undefined,
+      last_name: input.lastName?.trim() || undefined,
+      phone: input.phone?.trim() || undefined,
+    }),
+  })
+  await createCustomerSession(auth.token)
+  return normalizeCustomer(payload.customer) ?? getCurrentCustomer()
+}
+
+export const updateCustomerProfile = async (input: BuyerProfileUpdateInput) => {
+  const payload = await apiFetch<ApiCustomerResponse>("/store/customers/me", {
+    method: "POST",
+    body: JSON.stringify({
+      first_name: input.firstName?.trim() || undefined,
+      last_name: input.lastName?.trim() || undefined,
+      phone: input.phone?.trim() || undefined,
+    }),
+  })
+  const customer = normalizeCustomer(payload.customer)
+  if (!customer) throw new Error("Unable to load customer after profile update.")
+  return customer
+}
+
+export const signOutCustomer = async () => {
+  await apiFetch<{ success?: boolean }>("/auth/session", {
+    method: "DELETE",
+  })
 }

@@ -4,7 +4,9 @@ import { CheckoutContactForm, type CheckoutContact } from "../../components/chec
 import { CheckoutPaymentPanel } from "../../components/checkout/CheckoutPaymentPanel"
 import { CheckoutSummary } from "../../components/checkout/CheckoutSummary"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
+  attachCustomerToCart,
   completeCart,
   fetchCart,
   fetchStoreSettings,
@@ -47,9 +49,11 @@ const initialAddress: CheckoutAddress = {
 }
 
 export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
+  const auth = useBuyerAuth()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [cart, setCart] = useState<StoreCart | null>(null)
   const [contact, setContact] = useState(initialContact)
+  const [contactTouched, setContactTouched] = useState(false)
   const [address, setAddress] = useState(initialAddress)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
@@ -109,10 +113,19 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       try {
         const loaded = await fetchCart(cartId)
         if (!active) return
-        setCart(loaded)
-        onCartUpdated(loaded)
+        let activeCart = loaded
+        if (auth.customer) {
+          try {
+            activeCart = await attachCustomerToCart(loaded.id)
+          } catch (attachError) {
+            console.warn("[checkout] unable to attach authenticated customer to cart", attachError)
+          }
+        }
+        if (!active) return
+        setCart(activeCart)
+        onCartUpdated(activeCart)
         try {
-          const shipping = await getCartShippingOptions(loaded.id)
+          const shipping = await getCartShippingOptions(activeCart.id)
           if (!active) return
           setShippingOptions(shipping.options)
           setRequiresShippingMethod(shipping.requiresShippingMethod)
@@ -138,7 +151,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     return () => {
       active = false
     }
-  }, [onCartUpdated])
+  }, [auth.customer, onCartUpdated])
 
   useEffect(() => {
     setContactStatus("idle")
@@ -149,6 +162,15 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setShippingMethodSaved(false)
     setShippingError(undefined)
   }, [contact, address])
+
+  useEffect(() => {
+    if (!auth.customer || contactTouched || contact.email || contact.name || contact.phone) return
+    setContact({
+      email: auth.customer.email,
+      phone: auth.customer.phone ?? "",
+      name: [auth.customer.firstName, auth.customer.lastName].filter(Boolean).join(" "),
+    })
+  }, [auth.customer, contact.email, contact.name, contact.phone, contactTouched])
 
   const handleSaveContact = async () => {
     if (!cart) throw new Error("Checkout cart is unavailable.")
@@ -300,7 +322,15 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
                 <p>Review contact, delivery, payment, and order summary before placing the order.</p>
               </div>
               {completeError && <p className="buyer-checkout-inline-error">{completeError}</p>}
-              <CheckoutContactForm value={contact} onChange={setContact} status={contactStatus} error={contactError} />
+              <CheckoutContactForm
+                value={contact}
+                onChange={(nextContact) => {
+                  setContactTouched(true)
+                  setContact(nextContact)
+                }}
+                status={contactStatus}
+                error={contactError}
+              />
               <CheckoutAddressPanel
                 value={address}
                 onChange={setAddress}

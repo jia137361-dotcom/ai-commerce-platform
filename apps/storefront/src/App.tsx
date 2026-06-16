@@ -19,6 +19,10 @@ import {
 import { CartPage } from "./pages/cart/CartPage"
 import { CheckoutPage } from "./pages/checkout/CheckoutPage"
 import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
+import { AccountHomePage } from "./pages/account/AccountHomePage"
+import { AccountProfilePage } from "./pages/account/AccountProfilePage"
+import { RegisterPage } from "./pages/account/RegisterPage"
+import { SignInPage } from "./pages/account/SignInPage"
 import { OrderDetailPage } from "./pages/orders/OrderDetailPage"
 import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
@@ -117,6 +121,18 @@ function App() {
     return <OrderLookupPage cartCount={cartCount} />
   }
 
+  if (path.startsWith("/account/sign-in")) {
+    return <SignInPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/account/register")) {
+    return <RegisterPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/account/profile")) {
+    return <AccountProfilePage cartCount={cartCount} />
+  }
+
   if (path.startsWith("/account/orders/") && path.endsWith("/tracking")) {
     return <OrderTrackingPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
   }
@@ -127,6 +143,10 @@ function App() {
 
   if (path.startsWith("/account/orders")) {
     return <OrderHistoryPage cartCount={cartCount} />
+  }
+
+  if (path === "/account" || path.startsWith("/account?")) {
+    return <AccountHomePage cartCount={cartCount} />
   }
 
   return <StoreHomePage cartCount={cartCount} />

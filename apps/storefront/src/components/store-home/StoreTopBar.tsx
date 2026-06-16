@@ -1,3 +1,4 @@
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import type { BuyerStoreSettings } from "../../lib/buyer-api"
 
 type StoreTopBarProps = {
@@ -6,6 +7,11 @@ type StoreTopBarProps = {
 }
 
 export function StoreTopBar({ settings, cartCount }: StoreTopBarProps) {
+  const auth = useBuyerAuth()
+  const accountHref = auth.customer ? "/account" : "/account/sign-in"
+  const accountName = auth.customer?.firstName || auth.customer?.email?.split("@")[0] || "Sign in"
+  const accountCaption = auth.customer ? "Orders & Account" : "Buyer Account"
+
   return (
     <header className="buyer-store-topbar">
       <a className="buyer-store-logo" href="/store" aria-label="Citigoo home">
@@ -23,11 +29,11 @@ export function StoreTopBar({ settings, cartCount }: StoreTopBarProps) {
         <a href="/store?tab=locals">Locals</a>
       </nav>
       <div className="buyer-store-actions">
-        <a className="buyer-store-account" href="/account/orders">
+        <a className="buyer-store-account" href={accountHref}>
           <span className="buyer-store-avatar">◎</span>
           <span>
-            <strong>lulu</strong>
-            <small>Orders & Account</small>
+            <strong>{auth.isLoading ? "Account" : accountName}</strong>
+            <small>{accountCaption}</small>
           </span>
         </a>
         <a className="buyer-store-support" href="/help">
