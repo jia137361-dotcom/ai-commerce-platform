@@ -88,6 +88,9 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
   }, [email, orderId])
 
   const firstShipment = tracking?.shipments[0]
+  const detailHref = email
+    ? `/account/orders/${encodeURIComponent(orderId)}?${new URLSearchParams({ email }).toString()}`
+    : "/orders/lookup"
 
   return (
     <div className="buyer-orders-page">
@@ -109,7 +112,7 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
                 <p className="buyer-order-kicker">Actions</p>
                 <h2>Next steps</h2>
                 <a href="/store">Back to store</a>
-                <a href={`/account/orders/${encodeURIComponent(tracking.orderId)}`}>View order details</a>
+                <a href={detailHref}>View order details</a>
                 <a href="/orders/lookup">Search another order</a>
               </aside>
             </section>

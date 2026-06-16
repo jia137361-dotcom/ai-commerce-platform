@@ -53,7 +53,7 @@ export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
       }
       const params = new URLSearchParams({ email: email.trim().toLowerCase() })
       if (order.displayId) params.set("display_id", order.displayId)
-      window.location.assign(`/account/orders/${encodeURIComponent(order.orderId)}/tracking?${params.toString()}`)
+      window.location.assign(`/account/orders/${encodeURIComponent(order.orderId)}?${params.toString()}`)
     } catch (lookupError) {
       setError(lookupError instanceof Error ? lookupError.message : "Unable to find that order.")
     } finally {

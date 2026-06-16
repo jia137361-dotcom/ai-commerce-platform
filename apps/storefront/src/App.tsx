@@ -19,6 +19,7 @@ import {
 import { CartPage } from "./pages/cart/CartPage"
 import { CheckoutPage } from "./pages/checkout/CheckoutPage"
 import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
+import { OrderDetailPage } from "./pages/orders/OrderDetailPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
@@ -120,7 +121,7 @@ function App() {
   }
 
   if (path.startsWith("/account/orders/")) {
-    return <OrderDetailsPage orderId={decodeURIComponent(path.split("/").pop() ?? "")} onShare={() => setShareOpen(true)} shareOpen={shareOpen} setShareOpen={setShareOpen} />
+    return <OrderDetailPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
   }
 
   if (path.startsWith("/account/orders")) {

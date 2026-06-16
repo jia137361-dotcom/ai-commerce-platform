@@ -1,0 +1,125 @@
+import { useEffect, useState } from "react"
+import { OrderDetailAddress } from "../../components/orders/OrderDetailAddress"
+import { OrderDetailEmptyState } from "../../components/orders/OrderDetailEmptyState"
+import { OrderDetailHeader } from "../../components/orders/OrderDetailHeader"
+import { OrderDetailItems } from "../../components/orders/OrderDetailItems"
+import { OrderDetailSummary } from "../../components/orders/OrderDetailSummary"
+import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import {
+  fetchStoreSettings,
+  getBuyerStoreId,
+  getOrderDetail,
+  type BuyerOrderDetail,
+  type BuyerStoreSettings,
+} from "../../lib/buyer-api"
+
+type OrderDetailPageProps = {
+  orderId: string
+  cartCount: number
+}
+
+const fallbackSettings: BuyerStoreSettings = {
+  storeId: "default_store",
+  brandName: "Citigoo",
+  metadata: {},
+}
+
+const checkoutSuccessKey = () => `citigoo:${getBuyerStoreId()}:checkout_success`
+
+const readSessionEmail = (orderId: string) => {
+  const raw = window.sessionStorage.getItem(checkoutSuccessKey())
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as { orderId?: string; order_id?: string; email?: string | null }
+    const storedOrderId = parsed.orderId ?? parsed.order_id
+    if (storedOrderId === orderId && parsed.email) return parsed.email
+  } catch (error) {
+    console.warn("[order-detail] unable to parse checkout success data", error)
+  }
+  return undefined
+}
+
+export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
+  const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
+  const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | undefined>()
+
+  const params = new URLSearchParams(window.location.search)
+  const email = params.get("email")?.trim() || readSessionEmail(orderId)
+
+  useEffect(() => {
+    let active = true
+    void fetchStoreSettings().then((result) => {
+      if (active) setSettings(result.data)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(undefined)
+      if (!email) {
+        setOrder(null)
+        setError("Order detail requires the email associated with the order.")
+        setLoading(false)
+        return
+      }
+      try {
+        const result = await getOrderDetail(orderId, email)
+        if (!active) return
+        setOrder(result)
+      } catch (detailError) {
+        if (!active) return
+        setOrder(null)
+        setError(detailError instanceof Error ? detailError.message : "Unable to load order detail.")
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      active = false
+    }
+  }, [email, orderId])
+
+  const emailParam = email ? new URLSearchParams({ email }).toString() : ""
+  const trackingHref = emailParam ? `/account/orders/${encodeURIComponent(orderId)}/tracking?${emailParam}${order?.displayId ? `&display_id=${encodeURIComponent(order.displayId)}` : ""}` : "/orders/lookup"
+
+  return (
+    <div className="buyer-orders-page">
+      <StoreTopBar settings={settings} cartCount={cartCount} />
+      <main className="buyer-orders-main">
+        {loading ? (
+          <OrderDetailEmptyState title="Loading order" message="Checking the order detail API." />
+        ) : error || !order ? (
+          <OrderDetailEmptyState title="Order detail unavailable" message={error ?? "No order detail was returned."} />
+        ) : (
+          <>
+            <OrderDetailHeader order={order} />
+            <section className="buyer-order-detail-grid">
+              <div className="buyer-order-detail-main">
+                <OrderDetailItems order={order} />
+                <OrderDetailAddress address={order.shippingAddress} email={order.email} />
+              </div>
+              <aside className="buyer-order-detail-side">
+                <OrderDetailSummary order={order} />
+                <section className="buyer-order-card buyer-order-actions">
+                  <p className="buyer-order-kicker">Actions</p>
+                  <h2>Next steps</h2>
+                  <a href={trackingHref}>Track order</a>
+                  <a href="/store">Back to store</a>
+                  <a href="/orders/lookup">Search another order</a>
+                </section>
+              </aside>
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  )
+}
