@@ -5,6 +5,7 @@ import { OrderDetailHeader } from "../../components/orders/OrderDetailHeader"
 import { OrderDetailItems } from "../../components/orders/OrderDetailItems"
 import { OrderDetailSummary } from "../../components/orders/OrderDetailSummary"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   fetchStoreSettings,
   getBuyerStoreId,
@@ -40,13 +41,15 @@ const readSessionEmail = (orderId: string) => {
 }
 
 export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
+  const auth = useBuyerAuth()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
 
   const params = new URLSearchParams(window.location.search)
-  const email = params.get("email")?.trim() || readSessionEmail(orderId)
+  const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
+  const email = auth.customer ? undefined : guestEmail
 
   useEffect(() => {
     let active = true
@@ -63,7 +66,8 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
     const load = async () => {
       setLoading(true)
       setError(undefined)
-      if (!email) {
+      if (auth.isLoading) return
+      if (!auth.customer && !email) {
         setOrder(null)
         setError("Order detail requires the email associated with the order.")
         setLoading(false)
@@ -85,10 +89,13 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
     return () => {
       active = false
     }
-  }, [email, orderId])
+  }, [auth.customer, auth.isLoading, email, orderId])
 
-  const emailParam = email ? new URLSearchParams({ email }).toString() : ""
-  const trackingHref = emailParam ? `/account/orders/${encodeURIComponent(orderId)}/tracking?${emailParam}${order?.displayId ? `&display_id=${encodeURIComponent(order.displayId)}` : ""}` : "/orders/lookup"
+  const trackingParams = new URLSearchParams()
+  if (guestEmail && !auth.customer) trackingParams.set("email", guestEmail)
+  if (order?.displayId) trackingParams.set("display_id", order.displayId)
+  const trackingQuery = trackingParams.toString()
+  const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
 
   return (
     <div className="buyer-orders-page">

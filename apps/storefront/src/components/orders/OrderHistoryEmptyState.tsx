@@ -1,8 +1,9 @@
-export function OrderHistoryEmptyState() {
+export function OrderHistoryEmptyState({ title = "No orders yet", message = "Orders placed while signed in will appear here." }: { title?: string; message?: string }) {
   return (
     <section className="buyer-order-card buyer-order-history-empty">
-      <h2>No orders loaded</h2>
-      <p>Authenticated order history is pending a buyer login/session model.</p>
+      <h2>{title}</h2>
+      <p>{message}</p>
+      <a href="/store">Continue shopping</a>
     </section>
   )
 }

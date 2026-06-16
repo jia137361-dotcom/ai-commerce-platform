@@ -22,6 +22,19 @@ type OrderLineItem = {
   metadata?: Record<string, unknown> | null
 }
 
+type DetailOrder = {
+  id?: string
+  customer_id?: string | null
+  email?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+type AuthenticatedRequest = MedusaRequest & {
+  auth_context?: {
+    actor_id?: string
+  }
+}
+
 const readHeader = (req: MedusaRequest, name: string) => {
   const value = req.headers[name.toLowerCase()]
   return Array.isArray(value) ? value[0] : value
@@ -40,6 +53,19 @@ const validateHeaders = (req: MedusaRequest) => {
 }
 
 const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? ""
+
+const readAuthCustomerId = (req: MedusaRequest) =>
+  (req as AuthenticatedRequest).auth_context?.actor_id
+
+const hasAuthenticatedAccess = (req: MedusaRequest, order: DetailOrder) => {
+  const customerId = readAuthCustomerId(req)
+  return Boolean(customerId && order.customer_id && order.customer_id === customerId)
+}
+
+const hasAuthenticatedMismatch = (req: MedusaRequest, order: DetailOrder) => {
+  const customerId = readAuthCustomerId(req)
+  return Boolean(customerId && order.customer_id && order.customer_id !== customerId)
+}
 
 const readNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value
@@ -83,10 +109,6 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const orderId = req.params.id as string
     const email = normalizeEmail(req.query?.email as string | undefined)
-    if (!email) {
-      return res.status(400).json({ error: "email query parameter is required" })
-    }
-
     const orderModule = req.scope.resolve(Modules.ORDER)
     const order = await orderModule.retrieveOrder(orderId, {
       relations: ["items", "shipping_address", "billing_address"],
@@ -94,7 +116,16 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
     assertOrderBelongsToCurrentStore(req, order)
 
-    if (!order.email || normalizeEmail(order.email) !== email) {
+    const hasAuthAccess = hasAuthenticatedAccess(req, order)
+    if (hasAuthenticatedMismatch(req, order)) {
+      return res.status(403).json({ error: "Customer does not match order" })
+    }
+
+    if (!hasAuthAccess && !email) {
+      return res.status(400).json({ error: "email query parameter is required" })
+    }
+
+    if (!hasAuthAccess && (!order.email || normalizeEmail(order.email) !== email)) {
       return res.status(403).json({ error: "Email does not match order" })
     }
 

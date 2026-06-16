@@ -11,20 +11,52 @@ import type FulfillmentOrdersModuleService from "../../../../../modules/fulfillm
 import { SHIPMENTS_MODULE } from "../../../../../modules/shipments"
 import type ShipmentsModuleService from "../../../../../modules/shipments/service"
 
+type TrackingOrder = {
+  customer_id?: string | null
+  email?: string | null
+}
+
+type AuthenticatedRequest = MedusaRequest & {
+  auth_context?: {
+    actor_id?: string
+  }
+}
+
+const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? ""
+
+const readAuthCustomerId = (req: MedusaRequest) =>
+  (req as AuthenticatedRequest).auth_context?.actor_id
+
+const hasAuthenticatedAccess = (req: MedusaRequest, order: TrackingOrder) => {
+  const customerId = readAuthCustomerId(req)
+  return Boolean(customerId && order.customer_id && order.customer_id === customerId)
+}
+
+const hasAuthenticatedMismatch = (req: MedusaRequest, order: TrackingOrder) => {
+  const customerId = readAuthCustomerId(req)
+  return Boolean(customerId && order.customer_id && order.customer_id !== customerId)
+}
+
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const orderId = req.params.id as string
-    const email = (req.query?.email as string | undefined)?.trim().toLowerCase()
-    if (!email) {
-      return res.status(400).json({ error: "email query parameter is required" })
-    }
+    const email = normalizeEmail(req.query?.email as string | undefined)
 
     const orderModule = req.scope.resolve(Modules.ORDER)
     const order = await orderModule.retrieveOrder(orderId)
 
     assertOrderBelongsToCurrentStore(req, order)
 
-    if (!order.email || order.email.trim().toLowerCase() !== email) {
+    const hasAuthAccess = hasAuthenticatedAccess(req, order)
+    if (hasAuthenticatedMismatch(req, order)) {
+      return res.status(403).json({ error: "Customer does not match order" })
+    }
+
+    if (!hasAuthAccess && !email) {
+      return res.status(400).json({ error: "email query parameter is required" })
+    }
+
+    if (!hasAuthAccess && (!order.email || order.email.trim().toLowerCase() !== email)) {
       return res.status(403).json({ error: "Email does not match order" })
     }
 

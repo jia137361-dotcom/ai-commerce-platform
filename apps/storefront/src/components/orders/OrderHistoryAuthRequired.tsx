@@ -7,7 +7,8 @@ export function OrderHistoryAuthRequired() {
         Full order history requires a verified buyer account. Guest access is limited to finding one order with its email and display id.
       </p>
       <div>
-        <a className="primary" href="/orders/lookup">Find an order</a>
+        <a className="primary" href="/account/sign-in?returnTo=/account/orders">Sign in</a>
+        <a href="/orders/lookup">Find an order</a>
         <a href="/store">Back to store</a>
       </div>
     </section>

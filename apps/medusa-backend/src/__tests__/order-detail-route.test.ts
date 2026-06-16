@@ -12,6 +12,7 @@ type MockRes = MedusaResponse & {
 const order = {
   id: "order_1",
   display_id: 63,
+  customer_id: "cus_a",
   email: "buyer@example.com",
   status: "pending",
   currency_code: "usd",
@@ -64,11 +65,13 @@ const createReq = ({
   },
   retrievedOrder = order as Record<string, unknown>,
   retrieveError,
+  authCustomerId = undefined,
 }: {
   query?: Record<string, unknown>
   headers?: Record<string, string>
   retrievedOrder?: Record<string, unknown>
   retrieveError?: Error
+  authCustomerId?: string
 } = {}) => {
   const orderModule = {
     retrieveOrder: jest.fn(async () => {
@@ -80,6 +83,7 @@ const createReq = ({
     params: { id: "order_1" },
     query,
     headers,
+    auth_context: authCustomerId ? { actor_id: authCustomerId } : undefined,
     scope: {
       resolve: jest.fn((key: string) => {
         if (key === Modules.ORDER) return orderModule
@@ -93,7 +97,7 @@ const createReq = ({
 
 describe("GET /store/orders/:order_id/detail", () => {
   it("returns order detail for matching email and store", async () => {
-    const { req } = createReq()
+    const { req } = createReq({ authCustomerId: undefined })
     const res = createRes()
 
     await getOrderDetail(req, res)
@@ -117,6 +121,24 @@ describe("GET /store/orders/:order_id/detail", () => {
       ],
       total: 2125,
     })
+  })
+
+  it("returns order detail for authenticated matching customer without email query", async () => {
+    const { req } = createReq({ query: {}, authCustomerId: "cus_a" })
+    const res = createRes()
+
+    await getOrderDetail(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+  })
+
+  it("rejects authenticated customer mismatch even when email matches", async () => {
+    const { req } = createReq({ authCustomerId: "cus_b" })
+    const res = createRes()
+
+    await getOrderDetail(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(403)
   })
 
   it("rejects wrong email", async () => {
@@ -169,6 +191,7 @@ describe("GET /store/orders/:order_id/detail", () => {
   it("does not allow guest access to email-null orders", async () => {
     const { req } = createReq({
       retrievedOrder: { ...order, email: null },
+      authCustomerId: undefined,
     })
     const res = createRes()
 

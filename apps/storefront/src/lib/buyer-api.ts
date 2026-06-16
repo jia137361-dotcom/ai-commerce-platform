@@ -320,6 +320,33 @@ type ApiOrderDetailResponse = {
   total?: number | null
 }
 
+type ApiMyOrderPreviewItem = {
+  title?: string
+  thumbnail?: string | null
+  quantity?: number
+}
+
+type ApiMyOrder = {
+  order_id?: string
+  display_id?: string | number | null
+  created_at?: string | null
+  email?: string | null
+  status?: string | null
+  payment_status?: string | null
+  fulfillment_status?: string | null
+  currency_code?: string | null
+  total?: number | null
+  item_count?: number
+  preview_items?: ApiMyOrderPreviewItem[]
+}
+
+type ApiMyOrdersResponse = {
+  orders?: ApiMyOrder[]
+  count?: number
+  limit?: number
+  offset?: number
+}
+
 type ApiAuthTokenResponse = {
   token?: string
 }
@@ -432,6 +459,39 @@ export type BuyerOrderDetail = {
   discountTotal?: number | null
   taxTotal?: number | null
   total?: number | null
+}
+
+export type BuyerOrderSummary = {
+  orderId: string
+  displayId?: string
+  createdAt?: string | null
+  email?: string | null
+  status?: string | null
+  paymentStatus?: string | null
+  fulfillmentStatus?: string | null
+  currencyCode?: string | null
+  total?: number | null
+  itemCount: number
+  previewItems: Array<{
+    title: string
+    thumbnail?: string | null
+    quantity: number
+  }>
+}
+
+export type BuyerOrdersPage = {
+  orders: BuyerOrderSummary[]
+  count: number
+  limit: number
+  offset: number
+}
+
+export type BuyerOrdersQuery = {
+  limit?: number
+  offset?: number
+  status?: string
+  paymentStatus?: string
+  fulfillmentStatus?: string
 }
 
 const fallbackSettings: BuyerStoreSettings = {
@@ -919,6 +979,46 @@ export const lookupOrder = async (email: string, displayId: string): Promise<Buy
   }
 }
 
+export const getMyOrders = async ({
+  limit = 20,
+  offset = 0,
+  status,
+  paymentStatus,
+  fulfillmentStatus,
+}: BuyerOrdersQuery = {}): Promise<BuyerOrdersPage> => {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  if (status) params.set("status", status)
+  if (paymentStatus) params.set("payment_status", paymentStatus)
+  if (fulfillmentStatus) params.set("fulfillment_status", fulfillmentStatus)
+
+  const payload = await apiFetch<ApiMyOrdersResponse>(`/store/customers/me/orders?${params.toString()}`)
+  return {
+    orders: (payload.orders ?? []).map((order) => ({
+      orderId: order.order_id ?? "",
+      displayId: order.display_id == null ? undefined : String(order.display_id),
+      createdAt: order.created_at ?? null,
+      email: order.email ?? null,
+      status: order.status ?? null,
+      paymentStatus: order.payment_status ?? null,
+      fulfillmentStatus: order.fulfillment_status ?? null,
+      currencyCode: order.currency_code ?? null,
+      total: order.total ?? null,
+      itemCount: order.item_count ?? 0,
+      previewItems: (order.preview_items ?? []).map((item) => ({
+        title: item.title ?? "Untitled item",
+        thumbnail: item.thumbnail ?? null,
+        quantity: item.quantity ?? 0,
+      })),
+    })),
+    count: payload.count ?? 0,
+    limit: payload.limit ?? limit,
+    offset: payload.offset ?? offset,
+  }
+}
+
 const normalizeShipment = (shipment: ApiShipment): BuyerOrderShipment => ({
   id: shipment.id,
   carrier: shipment.carrier ?? null,
@@ -942,9 +1042,11 @@ const shipmentEvents = (shipments: BuyerOrderShipment[]) => {
   return events
 }
 
-export const getOrderTracking = async (orderId: string, email: string): Promise<BuyerOrderTracking> => {
-  const params = new URLSearchParams({ email: email.trim().toLowerCase() })
-  const payload = await apiFetch<ApiOrderTrackingResponse>(`/store/orders/${encodeURIComponent(orderId)}/tracking?${params.toString()}`)
+export const getOrderTracking = async (orderId: string, email?: string): Promise<BuyerOrderTracking> => {
+  const params = new URLSearchParams()
+  if (email) params.set("email", email.trim().toLowerCase())
+  const query = params.toString()
+  const payload = await apiFetch<ApiOrderTrackingResponse>(`/store/orders/${encodeURIComponent(orderId)}/tracking${query ? `?${query}` : ""}`)
   const shipments = (payload.shipments ?? []).map(normalizeShipment)
   return {
     orderId: payload.order_id ?? orderId,
@@ -957,9 +1059,11 @@ export const getOrderTracking = async (orderId: string, email: string): Promise<
   }
 }
 
-export const getOrderDetail = async (orderId: string, email: string): Promise<BuyerOrderDetail> => {
-  const params = new URLSearchParams({ email: email.trim().toLowerCase() })
-  const payload = await apiFetch<ApiOrderDetailResponse>(`/store/orders/${encodeURIComponent(orderId)}/detail?${params.toString()}`)
+export const getOrderDetail = async (orderId: string, email?: string): Promise<BuyerOrderDetail> => {
+  const params = new URLSearchParams()
+  if (email) params.set("email", email.trim().toLowerCase())
+  const query = params.toString()
+  const payload = await apiFetch<ApiOrderDetailResponse>(`/store/orders/${encodeURIComponent(orderId)}/detail${query ? `?${query}` : ""}`)
   return {
     orderId: payload.order_id ?? orderId,
     displayId: payload.display_id == null ? undefined : String(payload.display_id),
