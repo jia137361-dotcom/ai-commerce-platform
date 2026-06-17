@@ -78,15 +78,26 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
 
   const placeOrderDisabledReason = (() => {
     if (!cart?.items.length) return "Cart is empty."
+    if (auth.isLoading) return "Checking account session."
+    if (!auth.customer) return "Sign in before placing an authenticated order."
     if (!completeEndpointConfirmed) return "Complete cart API is not ready for buyer checkout."
     if (!contactIsValid) return "Enter a valid email, phone, and receiver name."
+    if (placingOrder) return "Placing order..."
     if (!requiresShippingMethod) return ""
     if (!addressIsValid) return "Enter a complete delivery address."
     if (!addressSaved) return "Save delivery address before placing the order."
     if (!shippingMethodSaved) return "Select and save a shipping method."
     return ""
   })()
-  const canPlaceOrder = Boolean(cart?.items.length && completeEndpointConfirmed && contactIsValid && shippingRequirementsMet)
+  const canPlaceOrder = Boolean(
+    cart?.items.length &&
+    auth.customer &&
+    !auth.isLoading &&
+    !placingOrder &&
+    completeEndpointConfirmed &&
+    contactIsValid &&
+    shippingRequirementsMet
+  )
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
 
   useEffect(() => {
@@ -172,12 +183,11 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     })
   }, [auth.customer, contact.email, contact.name, contact.phone, contactTouched])
 
-  const handleSaveContact = async () => {
-    if (!cart) throw new Error("Checkout cart is unavailable.")
+  const saveContactForCart = async (targetCart: StoreCart) => {
     setContactStatus("saving")
     setContactError(undefined)
     try {
-      const updated = await updateCartContact(cart.id, {
+      const updated = await updateCartContact(targetCart.id, {
         email: contact.email.trim(),
         phone: contact.phone.trim() || undefined,
       })
@@ -191,6 +201,11 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       setContactError(message)
       throw new Error(message)
     }
+  }
+
+  const handleSaveContact = async () => {
+    if (!cart) throw new Error("Checkout cart is unavailable.")
+    return saveContactForCart(cart)
   }
 
   const handleSaveAddress = async () => {
@@ -255,7 +270,17 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setPlacingOrder(true)
     setCompleteError(undefined)
     try {
-      const contactCart = await handleSaveContact()
+      if (!auth.customer) {
+        throw new Error("Sign in before placing an authenticated order.")
+      }
+      const boundCart = await attachCustomerToCart(cart.id)
+      if (boundCart.customerId !== auth.customer.id) {
+        throw new Error("Cart customer binding did not return the current customer.")
+      }
+      setCart(boundCart)
+      onCartUpdated(boundCart)
+
+      const contactCart = await saveContactForCart(boundCart)
       const result = await completeCart(contactCart.id)
       if (!result.orderId) {
         throw new Error("Complete cart succeeded without an order_id.")

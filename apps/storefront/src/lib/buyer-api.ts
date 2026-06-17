@@ -166,6 +166,7 @@ type ApiCart = {
   id?: string
   cart_id?: string
   store_id?: string
+  customer_id?: string | null
   email?: string
   currency_code?: string
   items?: ApiCartLineItem[]
@@ -568,6 +569,11 @@ const warnFallback = (label: string, error: unknown) => {
 }
 
 const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const { payload } = await apiFetchWithStatus<T>(path, init)
+  return payload
+}
+
+const apiFetchWithStatus = async <T>(path: string, init: RequestInit = {}): Promise<{ status: number; payload: T }> => {
   const backendUrl = config.backendUrl.replace(/\/+$/, "")
   if (!backendUrl) {
     throw new Error("VITE_MEDUSA_BASE_URL is missing")
@@ -587,10 +593,20 @@ const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => 
   })
   if (!response.ok) {
     const body = await response.text()
+    if (import.meta.env.DEV) {
+      console.warn("[buyer-api] response error", {
+        path,
+        http_status: response.status,
+        raw_response: body,
+      })
+    }
     throw new Error(`HTTP ${response.status}${body ? `: ${body.slice(0, 180)}` : ""}`)
   }
   const text = await response.text()
-  return (text ? JSON.parse(text) : undefined) as T
+  return {
+    status: response.status,
+    payload: (text ? JSON.parse(text) : undefined) as T,
+  }
 }
 
 const normalizeCustomer = (customer?: ApiCustomer): BuyerCustomer | null => {
@@ -754,6 +770,7 @@ const normalizeCart = (cart: ApiCart): StoreCart => {
     id: cart.cart_id ?? cart.id ?? "",
     storeId: cart.store_id,
     email: cart.email,
+    customerId: cart.customer_id ?? null,
     currencyCode: cart.currency_code ?? "usd",
     items,
     subtotal,
@@ -994,9 +1011,9 @@ export const getMyOrders = async ({
   if (paymentStatus) params.set("payment_status", paymentStatus)
   if (fulfillmentStatus) params.set("fulfillment_status", fulfillmentStatus)
 
-  const payload = await apiFetch<ApiMyOrdersResponse>(`/store/customers/me/orders?${params.toString()}`)
-  return {
-    orders: (payload.orders ?? []).map((order) => ({
+  const { status: httpStatus, payload } = await apiFetchWithStatus<ApiMyOrdersResponse>(`/store/customers/me/orders?${params.toString()}`)
+  const rawOrders = Array.isArray(payload.orders) ? payload.orders : []
+  const parsedOrders = rawOrders.map((order) => ({
       orderId: order.order_id ?? "",
       displayId: order.display_id == null ? undefined : String(order.display_id),
       createdAt: order.created_at ?? null,
@@ -1012,7 +1029,22 @@ export const getMyOrders = async ({
         thumbnail: item.thumbnail ?? null,
         quantity: item.quantity ?? 0,
       })),
-    })),
+    }))
+  if (import.meta.env.DEV) {
+    console.info("[account-orders-api] response", {
+      http_status: httpStatus,
+      raw_response: payload,
+      parsed_order_count: parsedOrders.length,
+    })
+    if ((payload.count ?? parsedOrders.length) !== parsedOrders.length) {
+      console.warn("[account-orders-api] count does not match parsed orders", {
+        count: payload.count,
+        parsed_order_count: parsedOrders.length,
+      })
+    }
+  }
+  return {
+    orders: parsedOrders,
     count: payload.count ?? 0,
     limit: payload.limit ?? limit,
     offset: payload.offset ?? offset,

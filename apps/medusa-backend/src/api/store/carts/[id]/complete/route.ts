@@ -3,6 +3,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { completeCartWorkflow } from "@medusajs/medusa/core-flows"
 import { assertCartBelongsToCurrentStore, readCartStoreId } from "../../../../../lib/assert-cart-store"
 import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
+import { readOrderStoreId } from "../../../../../lib/order-store-context"
 import {
   ensureCartPaymentReady,
   type CartWithPaymentCollection,
@@ -39,6 +40,25 @@ const validateCheckoutBridgeHeaders = (req: MedusaRequest) => {
   return null
 }
 
+type AuthenticatedRequest = MedusaRequest & {
+  auth_context?: {
+    actor_id?: string
+  }
+}
+
+type CompleteCart = CartWithPaymentCollection & {
+  customer_id?: string | null
+}
+
+type CompleteOrder = {
+  id: string
+  customer_id?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+const readAuthCustomerId = (req: MedusaRequest) =>
+  (req as AuthenticatedRequest).auth_context?.actor_id
+
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const headerError = validateCheckoutBridgeHeaders(req)
@@ -55,13 +75,31 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const cartModule = req.scope.resolve(Modules.CART)
     const cart = (await cartModule.retrieveCart(cartId, {
       relations: ["items"],
-    })) as CartWithPaymentCollection
+    })) as CompleteCart
 
     assertCartBelongsToCurrentStore(req, cart)
     const storeId = readCartStoreId(cart)
+    const authCustomerId = readAuthCustomerId(req)
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[checkout-complete] before complete", {
+        cart_id: cartId,
+        auth_customer_id: authCustomerId ?? null,
+        cart_customer_id_before_complete: cart.customer_id ?? null,
+        store_id: storeId,
+      })
+    }
 
     if (!cart.items?.length) {
       return res.status(400).json({ error: "Cart has no line items" })
+    }
+
+    if (authCustomerId && cart.customer_id !== authCustomerId) {
+      return res.status(403).json({
+        error: {
+          code: "CART_CUSTOMER_REQUIRED",
+          message: "Authenticated checkout requires the cart to be bound to the current customer before complete.",
+        },
+      })
     }
 
     if (!cart.email || !cart.email.includes("@")) {
@@ -80,6 +118,32 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     })
 
     const orderId = result.id as string
+    const orderModule = req.scope.resolve(Modules.ORDER)
+    let completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+
+    if (cart.customer_id) {
+      if (completedOrder.customer_id && completedOrder.customer_id !== cart.customer_id) {
+        return res.status(400).json({
+          error: {
+            code: "ORDER_CUSTOMER_MISMATCH",
+            message: "Completed order customer does not match the checkout cart customer.",
+          },
+        })
+      }
+
+      if (!completedOrder.customer_id) {
+        console.warn("[checkout-complete] completed order missing customer_id; applying trusted cart customer_id", {
+          order_id: orderId,
+          cart_id: cartId,
+          customer_id: cart.customer_id,
+        })
+        await orderModule.updateOrders(orderId, { customer_id: cart.customer_id } as never)
+        completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+        if (completedOrder.customer_id !== cart.customer_id) {
+          throw new Error("Completed order customer_id could not be persisted")
+        }
+      }
+    }
 
     const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
     const { data: cartPaymentRows } = (await query.graph({
@@ -89,7 +153,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     })) as { data: Array<{ payment_collection?: { id?: string } | null }> }
     const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
-    await setOrderPostCompletePendingMetadata(req.scope, orderId)
+    await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
     await seedFulfillmentOrderIfMissing(req.scope, {
       orderId,
       storeId,
@@ -110,12 +174,29 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       await syncPaidIfPaymentAlreadyCaptured(req.scope, orderId, paymentCollectionId)
     }
 
-    const orderModule = req.scope.resolve(Modules.ORDER)
     const order = await orderModule.retrieveOrder(orderId)
+    if (readOrderStoreId(order) !== storeId) {
+      throw new Error("Completed order store_id could not be persisted")
+    }
+    if (cart.customer_id && (order as CompleteOrder).customer_id !== cart.customer_id) {
+      throw new Error("Completed order customer_id does not match the checkout cart customer")
+    }
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[checkout-complete] after complete", {
+        cart_id: cartId,
+        auth_customer_id: authCustomerId ?? null,
+        cart_customer_id_before_complete: cart.customer_id ?? null,
+        order_id: order.id,
+        order_customer_id_after_complete: (order as CompleteOrder).customer_id ?? null,
+        order_store_id: readOrderStoreId(order),
+      })
+    }
 
     res.status(200).json({
       order_id: order.id,
       store_id: storeId,
+      cart_customer_id: cart.customer_id ?? null,
+      order_customer_id: (order as CompleteOrder).customer_id ?? null,
       payment_provider_id: providerId,
       payment_status: (order.metadata as Record<string, unknown> | null)?.payment_status ?? null,
       fulfillment_status: readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null),

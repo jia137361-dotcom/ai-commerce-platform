@@ -1,5 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { GET as getCustomerOrders } from "../api/store/customers/me/orders/route"
 
 type MockRes = MedusaResponse & {
@@ -74,7 +74,7 @@ const orders = [
   {
     id: "order_guest",
     display_id: 401,
-    customer_id: null,
+    customer_id: "cus_b",
     email: "guest@example.com",
     status: "pending",
     currency_code: "usd",
@@ -93,14 +93,24 @@ const createReq = ({
     "x-store-id": "default_store",
   },
   listedOrders = orders,
+  graphOrders = [],
+  listError,
 }: {
   authCustomerId?: string | null
   query?: Record<string, unknown>
   headers?: Record<string, string>
   listedOrders?: Record<string, unknown>[]
+  graphOrders?: Record<string, unknown>[]
+  listError?: Error
 } = {}) => {
   const orderModule = {
-    listOrders: jest.fn(async () => listedOrders),
+    listOrders: jest.fn(async () => {
+      if (listError) throw listError
+      return listedOrders
+    }),
+  }
+  const queryGraph = {
+    graph: jest.fn(async () => ({ data: graphOrders })),
   }
   const req = {
     query,
@@ -109,12 +119,13 @@ const createReq = ({
     scope: {
       resolve: jest.fn((key: string) => {
         if (key === Modules.ORDER) return orderModule
+        if (key === ContainerRegistrationKeys.QUERY) return queryGraph
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
   } as unknown as MedusaRequest
 
-  return { req, orderModule }
+  return { req, orderModule, queryGraph }
 }
 
 describe("GET /store/customers/me/orders", () => {
@@ -159,6 +170,127 @@ describe("GET /store/customers/me/orders", () => {
         { order_id: "order_a2", item_count: 1 },
       ],
     })
+  })
+
+  it("does not request unsupported customer relation population", async () => {
+    const { req, orderModule } = createReq()
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(orderModule.listOrders).toHaveBeenCalledWith(
+      expect.objectContaining({ customer_id: "cus_a" }),
+      expect.not.objectContaining({
+        relations: expect.arrayContaining(["customer"]),
+      })
+    )
+  })
+
+  it("keeps selector-owned orders when DTO omits customer_id", async () => {
+    const dtoWithoutCustomerIdOrders = Array.from({ length: 5 }, (_, index) => ({
+      id: `order_no_customer_field_${index + 1}`,
+      display_id: 500 + index,
+      email: "a@example.com",
+      status: "pending",
+      currency_code: "usd",
+      created_at: `2026-06-16T0${index}:00:00.000Z`,
+      metadata: { store_id: "default_store", payment_status: "paid", mc_fulfillment_status: "waiting" },
+      items: [{ title: `Relation item ${index + 1}`, quantity: 1 }],
+    }))
+    const { req } = createReq({ listedOrders: dtoWithoutCustomerIdOrders })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      count: 5,
+      orders: [
+        { order_id: "order_no_customer_field_1" },
+        { order_id: "order_no_customer_field_2" },
+        { order_id: "order_no_customer_field_3" },
+        { order_id: "order_no_customer_field_4" },
+        { order_id: "order_no_customer_field_5" },
+      ],
+    })
+  })
+
+  it("filters orders when DTO customer_id exists and does not match", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_wrong_customer",
+          customer_id: "cus_b",
+          email: "a@example.com",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({ count: 0, orders: [] })
+  })
+
+  it("does not use matching email to override an explicit customer_id mismatch", async () => {
+    const { req } = createReq({
+      authCustomerId: "cus_a",
+      listedOrders: [
+        {
+          id: "order_wrong_customer_matching_email",
+          customer_id: "cus_b",
+          email: "a@example.com",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({ count: 0, orders: [] })
+  })
+
+  it("keeps selector-owned rows with missing DTO customer_id regardless of email", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_no_customer_id_different_email",
+          email: "someone-else@example.com",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({
+      count: 1,
+      orders: [{ order_id: "order_no_customer_id_different_email" }],
+    })
+  })
+
+  it("filters selector-owned orders from another store", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_other_store_no_customer_field",
+          email: "a@example.com",
+          metadata: { store_id: "other_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({ count: 0, orders: [] })
   })
 
   it("does not trust query customer_id", async () => {
@@ -215,5 +347,65 @@ describe("GET /store/customers/me/orders", () => {
       expect.objectContaining({ status: "completed", customer_id: "cus_a" }),
       expect.anything()
     )
+  })
+
+  it("falls back to query graph when order module selector returns no rows", async () => {
+    const { req, queryGraph } = createReq({
+      listedOrders: [],
+      graphOrders: [orders[0]],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(queryGraph.graph).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "order",
+        filters: { customer_id: "cus_a" },
+      })
+    )
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      count: 1,
+      orders: [{ order_id: "order_a1" }],
+    })
+  })
+
+  it("keeps query graph rows selected by trusted customer_id even when DTO omits customer_id", async () => {
+    const { req } = createReq({
+      listedOrders: [],
+      graphOrders: [
+        {
+          id: "order_graph_no_customer_field",
+          display_id: 601,
+          email: "a@example.com",
+          metadata: { store_id: "default_store" },
+          items: [{ title: "Graph relation item", quantity: 1 }],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({
+      count: 1,
+      orders: [{ order_id: "order_graph_no_customer_field" }],
+    })
+  })
+
+  it("returns 500 for internal order query errors", async () => {
+    const { req } = createReq({ listError: new Error("MikroORM blew up") })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(500)
+    expect(res.body).toMatchObject({
+      error: {
+        code: "CUSTOMER_ORDERS_LIST_ERROR",
+        message: "Failed to retrieve customer orders",
+      },
+    })
   })
 })

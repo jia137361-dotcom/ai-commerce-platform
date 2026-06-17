@@ -4,6 +4,7 @@ import {
   type CheckoutSuccessInfo,
 } from "../../components/checkout/CheckoutSuccessSummary"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   fetchStoreSettings,
   getBuyerStoreId,
@@ -54,6 +55,7 @@ const readSuccessInfo = (): CheckoutSuccessInfo | null => {
 }
 
 export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
+  const auth = useBuyerAuth()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [successInfo] = useState(() => readSuccessInfo())
 
@@ -72,7 +74,7 @@ export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
       <StoreTopBar settings={settings} cartCount={cartCount} />
       <main className="buyer-checkout-main">
         {successInfo?.orderId ? (
-          <CheckoutSuccessSummary info={successInfo} />
+          <CheckoutSuccessSummary info={successInfo} isAuthenticated={Boolean(auth.customer)} />
         ) : (
           <section className="buyer-checkout-state">
             <strong>No completed order found</strong>

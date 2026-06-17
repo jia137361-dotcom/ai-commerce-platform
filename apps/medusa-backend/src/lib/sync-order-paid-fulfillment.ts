@@ -91,14 +91,19 @@ export async function seedFulfillmentOrderIfMissing(
 
 export async function setOrderPostCompletePendingMetadata(
   container: MedusaContainer,
-  orderId: string
+  orderId: string,
+  storeId?: string
 ): Promise<void> {
   const orderModule = container.resolve(Modules.ORDER)
   const order = await orderModule.retrieveOrder(orderId)
-  const meta = mergeMeta(normalizeOrderMetadata(order.metadata as Record<string, unknown> | null), {
-    [ORDER_META_PAYMENT_STATUS]: "pending" satisfies OrderPaymentStatus,
-    [ORDER_META_FULFILLMENT_STATUS]: "none" satisfies OrderFulfillmentStatus,
-  })
+  const meta = mergeMeta(
+    normalizeOrderMetadata(order.metadata as Record<string, unknown> | null),
+    {
+      ...(storeId ? { store_id: storeId } : {}),
+      [ORDER_META_PAYMENT_STATUS]: "pending" satisfies OrderPaymentStatus,
+      [ORDER_META_FULFILLMENT_STATUS]: "none" satisfies OrderFulfillmentStatus,
+    }
+  )
   await orderModule.updateOrders(orderId, { metadata: meta })
 }
 

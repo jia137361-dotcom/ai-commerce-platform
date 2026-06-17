@@ -10,19 +10,24 @@ export type CheckoutSuccessInfo = {
 
 type CheckoutSuccessSummaryProps = {
   info: CheckoutSuccessInfo
+  isAuthenticated?: boolean
 }
 
-export function CheckoutSuccessSummary({ info }: CheckoutSuccessSummaryProps) {
+export function CheckoutSuccessSummary({ info, isAuthenticated = false }: CheckoutSuccessSummaryProps) {
   const orderLabel = info.displayId ? `#${info.displayId}` : info.orderId
-  const trackingHref = info.email
-    ? `/account/orders/${encodeURIComponent(info.orderId)}/tracking?${new URLSearchParams({
-        email: info.email,
-        ...(info.displayId ? { display_id: info.displayId } : {}),
-      }).toString()}`
-    : undefined
-  const detailHref = info.email
-    ? `/account/orders/${encodeURIComponent(info.orderId)}?${new URLSearchParams({ email: info.email }).toString()}`
-    : undefined
+  const trackingHref = (() => {
+    if (isAuthenticated) return `/account/orders/${encodeURIComponent(info.orderId)}/tracking`
+    if (!info.email) return undefined
+    return `/account/orders/${encodeURIComponent(info.orderId)}/tracking?${new URLSearchParams({
+      email: info.email,
+      ...(info.displayId ? { display_id: info.displayId } : {}),
+    }).toString()}`
+  })()
+  const detailHref = (() => {
+    if (isAuthenticated) return `/account/orders/${encodeURIComponent(info.orderId)}`
+    if (!info.email) return undefined
+    return `/account/orders/${encodeURIComponent(info.orderId)}?${new URLSearchParams({ email: info.email }).toString()}`
+  })()
 
   return (
     <section className="buyer-checkout-success-card">
@@ -53,7 +58,9 @@ export function CheckoutSuccessSummary({ info }: CheckoutSuccessSummaryProps) {
       </div>
       <p className="buyer-checkout-success-note">
         {info.email
-          ? "Order detail and tracking use the email saved on the real backend order record."
+          ? isAuthenticated
+            ? "Order detail and tracking use your secure account session. View Order only navigates to the saved order."
+            : "Order detail and tracking use the email saved on the real backend order record."
           : "This order does not have an email on the backend order record, so email-based tracking is not available yet. Save the order id or display id for support lookup."}
       </p>
     </section>

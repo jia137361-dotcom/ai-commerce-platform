@@ -48,6 +48,7 @@ export type StoreCart = {
   id: string
   storeId?: string
   email?: string
+  customerId?: string | null
   currencyCode: string
   items: CartLineItem[]
   subtotal: number

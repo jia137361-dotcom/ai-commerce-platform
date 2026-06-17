@@ -56,6 +56,14 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
           fulfillmentStatus: activeFilter.fulfillmentStatus,
         })
         if (!active) return
+        if (import.meta.env.DEV) {
+          console.info("[account-orders] parsed counts", {
+            selected_tab: activeFilter.key,
+            parsed_order_count: page.orders.length,
+            filtered_order_count: page.orders.length,
+            response_count: page.count,
+          })
+        }
         setOrdersPage(page)
       } catch (error) {
         if (!active) return

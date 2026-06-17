@@ -1,5 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
 import { readOrderStoreId } from "../../../../../lib/order-store-context"
 import {
@@ -24,6 +24,11 @@ type CustomerOrder = {
   total?: number | string | null
   metadata?: Record<string, unknown> | null
   items?: OrderLineItem[] | null
+}
+
+type CustomerRecord = {
+  id?: string
+  email?: string | null
 }
 
 type AuthenticatedRequest = MedusaRequest & {
@@ -80,6 +85,22 @@ const dateValue = (value: unknown) => {
   return null
 }
 
+const readOrderCustomerId = (order: CustomerOrder): string | null => {
+  if (typeof order.customer_id === "string" && order.customer_id.trim()) {
+    return order.customer_id.trim()
+  }
+
+  return null
+}
+
+const safeOrderShape = (order: CustomerOrder) => ({
+  id: order.id,
+  customer_id: order.customer_id ?? null,
+  email: order.email ?? null,
+  metadata_store_id: order.metadata?.store_id,
+  keys: Object.keys(order),
+})
+
 const normalizeOrderSummary = (order: CustomerOrder) => {
   const metadata = order.metadata ?? null
   const items = order.items ?? []
@@ -99,6 +120,104 @@ const normalizeOrderSummary = (order: CustomerOrder) => {
       thumbnail: item.thumbnail ?? null,
       quantity: readNumber(item.quantity) ?? 0,
     })),
+  }
+}
+
+const loadOrdersWithOrderModule = async (
+  req: MedusaRequest,
+  selector: Record<string, unknown>
+): Promise<CustomerOrder[]> => {
+  const orderModule = req.scope.resolve(Modules.ORDER)
+  return (await orderModule.listOrders(selector as never, {
+    relations: ["items"],
+    order: { created_at: "DESC" },
+    take: 500,
+  } as never)) as CustomerOrder[]
+}
+
+const loadOrdersWithQueryGraph = async (
+  req: MedusaRequest,
+  selector: Record<string, unknown>
+): Promise<CustomerOrder[]> => {
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = (await query.graph({
+    entity: "order",
+    fields: [
+      "id",
+      "display_id",
+      "customer_id",
+      "email",
+      "status",
+      "created_at",
+      "currency_code",
+      "metadata",
+      "items.title",
+      "items.thumbnail",
+      "items.quantity",
+    ],
+    filters: selector,
+    pagination: {
+      take: 500,
+      order: { created_at: "DESC" },
+    },
+  } as never)) as { data: CustomerOrder[] }
+  return data ?? []
+}
+
+const loadCustomerOrders = async (
+  req: MedusaRequest,
+  selector: Record<string, unknown>
+): Promise<{ orders: CustomerOrder[]; source: "order_module" | "query_graph" }> => {
+  const moduleOrders = await loadOrdersWithOrderModule(req, selector)
+  if (moduleOrders.length > 0) {
+    return { orders: moduleOrders, source: "order_module" }
+  }
+
+  try {
+    const graphOrders = await loadOrdersWithQueryGraph(req, selector)
+    if (graphOrders.length > 0) {
+      return { orders: graphOrders, source: "query_graph" }
+    }
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[customer-orders] query graph fallback failed", {
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  return { orders: moduleOrders, source: "order_module" }
+}
+
+const assertOwnershipWasEnforced = (
+  selector: Record<string, unknown>,
+  customerId: string
+) => {
+  if (selector.customer_id !== customerId) {
+    throw new Error("Order ownership was not enforced")
+  }
+}
+
+const orderMatchesAuthenticatedCustomer = (
+  order: CustomerOrder,
+  customerId: string
+) => {
+  const dtoCustomerId = readOrderCustomerId(order)
+  return !dtoCustomerId || dtoCustomerId === customerId
+}
+
+const readCustomerEmailForDiagnostics = async (
+  req: MedusaRequest,
+  customerId: string
+): Promise<string | null> => {
+  try {
+    const customerModule = req.scope.resolve(Modules.CUSTOMER) as {
+      retrieveCustomer?: (id: string) => Promise<CustomerRecord>
+    }
+    const customer = await customerModule.retrieveCustomer?.(customerId)
+    return customer?.email?.trim().toLowerCase() ?? null
+  } catch {
+    return null
   }
 }
 
@@ -123,23 +242,52 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const fulfillmentStatus = readStringFilter(req.query?.fulfillment_status)
     const storeId = resolveCurrentStore(req).store_id
 
-    const orderModule = req.scope.resolve(Modules.ORDER)
     const selector: Record<string, unknown> = { customer_id: customerId }
     if (status) selector.status = status
+    assertOwnershipWasEnforced(selector, customerId)
 
-    const orders = (await orderModule.listOrders(selector as never, {
-      relations: ["items"],
-      order: { created_at: "DESC" },
-      take: 500,
-    } as never)) as CustomerOrder[]
+    const { orders, source } = await loadCustomerOrders(req, selector)
 
     const filtered = orders
-      .filter((order) => order.customer_id === customerId)
+      .filter((order) => orderMatchesAuthenticatedCustomer(order, customerId))
       .filter((order) => readOrderStoreId(order) === storeId)
       .filter((order) => !paymentStatus || order.metadata?.[ORDER_META_PAYMENT_STATUS] === paymentStatus)
       .filter((order) => !fulfillmentStatus || readOrderFulfillmentStatusMeta(order.metadata ?? null) === fulfillmentStatus)
 
     const page = filtered.slice(offset, offset + limit)
+    if (process.env.NODE_ENV !== "production") {
+      const customerEmail = await readCustomerEmailForDiagnostics(req, customerId)
+      let sameEmailUnownedCount: number | undefined
+      if (customerEmail) {
+        try {
+          const sameEmailOrders = await loadOrdersWithOrderModule(req, { email: customerEmail })
+          sameEmailUnownedCount = sameEmailOrders.filter(
+            (order) => !readOrderCustomerId(order) && readOrderStoreId(order) === storeId
+          ).length
+        } catch {
+          sameEmailUnownedCount = undefined
+        }
+      }
+      const dtoCustomerMatched = orders.filter((order) => readOrderCustomerId(order) === customerId)
+      const dtoCustomerMissing = orders.filter((order) => !readOrderCustomerId(order))
+      const customerMatchedByProvenance = orders.filter((order) => orderMatchesAuthenticatedCustomer(order, customerId))
+      const storeMatched = customerMatchedByProvenance.filter((order) => readOrderStoreId(order) === storeId)
+      console.info("[customer-orders] list counts", {
+        auth_customer_id: customerId,
+        requested_store_id: storeId,
+        query_source: source,
+        raw_query_selector: selector,
+        raw_order_count: orders.length,
+        customer_matched_count: customerMatchedByProvenance.length,
+        dto_customer_matched_count: dtoCustomerMatched.length,
+        dto_customer_missing_count: dtoCustomerMissing.length,
+        store_matched_count: storeMatched.length,
+        returned_count: page.length,
+        returned_order_ids: page.map((order) => order.id).filter(Boolean),
+        same_email_unowned_store_order_count: sameEmailUnownedCount,
+        first_order_shape: orders[0] ? safeOrderShape(orders[0]) : null,
+      })
+    }
 
     return res.status(200).json({
       orders: page.map(normalizeOrderSummary),
@@ -148,8 +296,12 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       offset,
     })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error"
     console.error("authenticated customer orders failed:", error)
-    return res.status(400).json({ error: message })
+    return res.status(500).json({
+      error: {
+        code: "CUSTOMER_ORDERS_LIST_ERROR",
+        message: "Failed to retrieve customer orders",
+      },
+    })
   }
 }
