@@ -46,10 +46,12 @@ type SmokeOrderSummary = {
   cart_id: string | null
   order_id: string
   display_id: string | number | null
+  requested_variant_id: string | null
+  actual_variant_id: string | null
+  variant_resolution_source: string | null
   sales_channel_id: string | null
   region_id: string | null
   currency_code: string | null
-  variant_id: string | null
   line_item_unit_price: number | null
   order_status: string | null
   payment_status: string | null
@@ -58,6 +60,41 @@ type SmokeOrderSummary = {
   fulfillment_count: number
   store_id: string
   cancellation_allowed: true
+}
+
+type SmokeVariantContext = {
+  regionId: string | null
+  salesChannelId: string | null
+  currencyCode: string | null
+  customerId?: string | null
+}
+
+type SmokeVariantResolution = {
+  requested_variant_id: string | null
+  actual_variant_id: string
+  variant_resolution_source:
+    | "requested_variant"
+    | "store_core_cart_addable_fallback"
+  product_id: string
+  store_core_product_id: string
+  store_id: string
+  is_cart_addable: boolean
+  requires_shipping: boolean | null
+  price_set_id: string
+  raw_price_amount: number | null
+  calculated_amount: number
+}
+
+class SmokeSetupError extends Error {
+  code: string
+  details: Record<string, unknown>
+
+  constructor(code: string, message: string, details: Record<string, unknown> = {}) {
+    super(`${code}: ${message}`)
+    this.name = "SmokeSetupError"
+    this.code = code
+    this.details = details
+  }
 }
 
 type SmokeStep =
@@ -89,6 +126,15 @@ const readNumber = (value: unknown): number => {
   }
   return 0
 }
+
+const readNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null
+  const parsed = readNumber(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const readBoolean = (value: unknown): boolean | null =>
+  typeof value === "boolean" ? value : null
 
 const logSmokeStep = (step: SmokeStep, details?: Record<string, unknown>) => {
   if (process.env.NODE_ENV !== "production") {
@@ -193,6 +239,278 @@ export async function resolveSmokeVariantId(
 
   throw new Error(
     "Unable to resolve a non-shippable smoke variant. Set BATCH12A_CANCEL_SMOKE_VARIANT_ID explicitly."
+  )
+}
+
+async function readVariantPriceSetId(query: QueryGraph, variantId: string) {
+  const variantRow = await queryFirst(query, "variant", { id: variantId }, [
+    "id",
+    "price_set.id",
+  ])
+  const priceSet = variantRow?.price_set as { id?: unknown } | null | undefined
+  return readString(priceSet?.id)
+}
+
+async function readRawPriceAmount(
+  pricingModule: {
+    retrievePriceSet?: (
+      id: string,
+      config?: Record<string, unknown>
+    ) => Promise<Record<string, unknown>>
+  },
+  priceSetId: string,
+  currencyCode: string | null
+) {
+  if (!pricingModule.retrievePriceSet) return null
+  const priceSet = await pricingModule.retrievePriceSet(priceSetId, {
+    relations: ["prices"],
+  })
+  const prices = Array.isArray(priceSet.prices) ? priceSet.prices : []
+  const matching = prices.find((price) => {
+    const priceCurrency = readString((price as Record<string, unknown>).currency_code)
+    return !currencyCode || priceCurrency === currencyCode
+  }) as Record<string, unknown> | undefined
+  return readNullableNumber(matching?.amount ?? matching?.raw_amount)
+}
+
+async function assertVariantCartAddableInCurrentContext({
+  container,
+  storeId,
+  variantId,
+  context,
+}: {
+  container: ExecArgs["container"]
+  storeId: string
+  variantId: string
+  context: SmokeVariantContext
+}): Promise<SmokeVariantResolution> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY) as QueryGraph
+  const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+  const productModule = container.resolve(Modules.PRODUCT) as unknown as {
+    retrieveProductVariant: (
+      id: string,
+      config?: Record<string, unknown>
+    ) => Promise<Record<string, unknown>>
+  }
+  const pricingModule = container.resolve(Modules.PRICING) as unknown as {
+    retrievePriceSet?: (
+      id: string,
+      config?: Record<string, unknown>
+    ) => Promise<Record<string, unknown>>
+    calculatePrices: (
+      filters: Record<string, unknown>,
+      context?: Record<string, unknown>
+    ) => Promise<Array<Record<string, unknown>>>
+  }
+
+  const linkedProducts = await storeCore.listProducts({
+    medusa_variant_id: variantId,
+  })
+  const linkedProduct = (linkedProducts as Array<Record<string, unknown>>).find(
+    (product) => product.store_id === storeId && product.status === "published"
+  )
+  const storeCoreProductId = readString(linkedProduct?.id)
+  const productId = readString(linkedProduct?.medusa_product_id)
+  const isCartAddable =
+    Boolean(storeCoreProductId) &&
+    linkedProduct?.status === "published" &&
+    Boolean(readString(linkedProduct?.medusa_variant_id))
+
+  if (!storeCoreProductId || !isCartAddable) {
+    throw new SmokeSetupError(
+      "SMOKE_VARIANT_NOT_CART_ADDABLE",
+      `Variant ${variantId} is not linked to a published cart-addable product in store ${storeId}`,
+      {
+        variant_id: variantId,
+        product_id: productId,
+        store_core_product_id: storeCoreProductId,
+        store_id: storeId,
+        is_cart_addable: isCartAddable,
+      }
+    )
+  }
+
+  const variant = await productModule.retrieveProductVariant(variantId, {
+    select: ["id", "requires_shipping"],
+  })
+  const requiresShipping = readBoolean(variant.requires_shipping)
+  const priceSetId = await readVariantPriceSetId(query, variantId)
+  const rawPriceAmount = priceSetId
+    ? await readRawPriceAmount(pricingModule, priceSetId, context.currencyCode)
+    : null
+
+  if (!priceSetId) {
+    throw new SmokeSetupError(
+      "SMOKE_VARIANT_PRICE_UNAVAILABLE",
+      `Variant ${variantId} has no price set`,
+      {
+        variant_id: variantId,
+        product_id: productId,
+        store_core_product_id: storeCoreProductId,
+        store_id: storeId,
+        region_id: context.regionId,
+        sales_channel_id: context.salesChannelId,
+        currency_code: context.currencyCode,
+        price_set_id: null,
+        raw_price_amount: rawPriceAmount,
+        calculated_price_result: null,
+      }
+    )
+  }
+
+  const pricingContext = {
+    currency_code: context.currencyCode ?? "usd",
+    region_id: context.regionId ?? undefined,
+    sales_channel_id: context.salesChannelId ?? undefined,
+    customer_id: context.customerId ?? undefined,
+    quantity: 1,
+  }
+  const calculatedPrices = await pricingModule.calculatePrices(
+    { id: [priceSetId] },
+    { context: pricingContext }
+  )
+  const calculatedPrice = calculatedPrices.find(
+    (price) => readString(price.id) === priceSetId || readString(price.price_set_id) === priceSetId
+  )
+  const calculatedAmount = readNullableNumber(
+    calculatedPrice?.calculated_amount ?? calculatedPrice?.amount
+  )
+
+  if (calculatedAmount === null) {
+    throw new SmokeSetupError(
+      "SMOKE_VARIANT_PRICE_UNAVAILABLE",
+      `Variant ${variantId} did not return a calculated price for the current cart context`,
+      {
+        variant_id: variantId,
+        product_id: productId,
+        store_core_product_id: storeCoreProductId,
+        store_id: storeId,
+        region_id: context.regionId,
+        sales_channel_id: context.salesChannelId,
+        currency_code: context.currencyCode,
+        price_set_id: priceSetId,
+        raw_price_amount: rawPriceAmount,
+        calculated_price_result: calculatedPrice ?? null,
+      }
+    )
+  }
+
+  const resolution: SmokeVariantResolution = {
+    requested_variant_id: variantId,
+    actual_variant_id: variantId,
+    variant_resolution_source: "requested_variant",
+    product_id: productId ?? "",
+    store_core_product_id: storeCoreProductId,
+    store_id: storeId,
+    is_cart_addable: isCartAddable,
+    requires_shipping: requiresShipping,
+    price_set_id: priceSetId,
+    raw_price_amount: rawPriceAmount,
+    calculated_amount: calculatedAmount,
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[batch12a-cancel-smoke] variant cart-addable check", resolution)
+  }
+
+  return resolution
+}
+
+async function resolveSmokeVariantForCart({
+  container,
+  storeId,
+  requestedVariantId,
+  context,
+}: {
+  container: ExecArgs["container"]
+  storeId: string
+  requestedVariantId: string | null
+  context: SmokeVariantContext
+}): Promise<SmokeVariantResolution> {
+  let requestedFailure: SmokeSetupError | null = null
+
+  if (requestedVariantId) {
+    try {
+      return await assertVariantCartAddableInCurrentContext({
+        container,
+        storeId,
+        variantId: requestedVariantId,
+        context,
+      })
+    } catch (error) {
+      if (error instanceof SmokeSetupError) {
+        requestedFailure = error
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[batch12a-cancel-smoke] requested variant unavailable", {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          })
+        }
+      } else {
+        throw error
+      }
+    }
+  }
+
+  const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+  const products = (await storeCore.listProducts({
+    store_id: storeId,
+    status: "published",
+  })) as Array<Record<string, unknown>>
+  const candidates = products
+    .map((product) => readString(product.medusa_variant_id))
+    .filter((variantId): variantId is string => Boolean(variantId))
+    .filter((variantId) => variantId !== requestedVariantId)
+
+  let shippableCandidate: SmokeVariantResolution | null = null
+  for (const candidate of candidates) {
+    try {
+      const resolution = await assertVariantCartAddableInCurrentContext({
+        container,
+        storeId,
+        variantId: candidate,
+        context,
+      })
+      if (resolution.requires_shipping === false) {
+        return {
+          ...resolution,
+          requested_variant_id: requestedVariantId,
+          variant_resolution_source: "store_core_cart_addable_fallback",
+        }
+      }
+      shippableCandidate ??= resolution
+    } catch (error) {
+      if (!(error instanceof SmokeSetupError)) {
+        throw error
+      }
+    }
+  }
+
+  if (shippableCandidate) {
+    throw new SmokeSetupError(
+      "NO_CART_ADDABLE_SMOKE_VARIANT_FOUND",
+      "Only shippable cart-addable fallback variants were found; Batch 12A cancel smoke does not silently enter the shipping flow.",
+      {
+        requested_variant_id: requestedVariantId,
+        shippable_variant_id: shippableCandidate.actual_variant_id,
+        requested_variant_failure: requestedFailure?.details ?? null,
+      }
+    )
+  }
+
+  if (requestedFailure?.code === "SMOKE_VARIANT_PRICE_UNAVAILABLE") {
+    throw requestedFailure
+  }
+
+  throw new SmokeSetupError(
+    "NO_CART_ADDABLE_SMOKE_VARIANT_FOUND",
+    "No non-shippable cart-addable variant with a calculated price was found for Batch 12A smoke setup.",
+    {
+      requested_variant_id: requestedVariantId,
+      requested_variant_failure: requestedFailure?.details ?? null,
+      store_id: storeId,
+    }
   )
 }
 
@@ -345,10 +663,16 @@ export async function validateCancellationSmokeOrder(
     cart_id: readString(order.metadata?.batch12a_smoke_cart_id),
     order_id: order.id!,
     display_id: order.display_id ?? null,
+    requested_variant_id: readString(order.metadata?.batch12a_smoke_requested_variant_id),
+    actual_variant_id:
+      readString(order.metadata?.batch12a_smoke_actual_variant_id) ??
+      readString(order.metadata?.batch12a_smoke_variant_id),
+    variant_resolution_source: readString(
+      order.metadata?.batch12a_smoke_variant_resolution_source
+    ),
     sales_channel_id: readString(order.metadata?.batch12a_smoke_sales_channel_id),
     region_id: readString(order.metadata?.batch12a_smoke_region_id),
     currency_code: readString(order.metadata?.batch12a_smoke_currency_code),
-    variant_id: readString(order.metadata?.batch12a_smoke_variant_id),
     line_item_unit_price: readNumber(order.metadata?.batch12a_smoke_line_item_unit_price) || null,
     order_status: order.status ?? null,
     payment_status:
@@ -393,10 +717,11 @@ export async function createBatch12aCancellationSmokeOrder({
     if (existing) return existing
 
     const query = container.resolve(ContainerRegistrationKeys.QUERY) as QueryGraph
-    step("resolve_variant")
-    const variantId = await resolveSmokeVariantId(container, storeId, env)
+    const requestedVariantId =
+      readString(env.BATCH12A_CANCEL_SMOKE_VARIANT_ID) ??
+      (await resolveSmokeVariantId(container, storeId, env))
 
-    step("create_cart", { store_id: storeId, variant_id: variantId })
+    step("create_cart", { store_id: storeId, requested_variant_id: requestedVariantId })
     const { result: cartResult } = await createCartWorkflow(container).run({
       input: {
         store_id: storeId,
@@ -424,14 +749,64 @@ export async function createBatch12aCancellationSmokeOrder({
       },
     })
 
-    step("add_line_item", { cart_id: cartId, variant_id: variantId })
-    const { result: addLineResult } = await addLineItemWorkflow(container).run({
-      input: {
-        cart_id: cartId,
-        variant_id: variantId,
-        quantity: 1,
+    step("resolve_variant", {
+      requested_variant_id: requestedVariantId,
+      cart_id: cartId,
+      region_id: regionId,
+      sales_channel_id: salesChannelId,
+      currency_code: currencyCode,
+    })
+    const variantResolution = await resolveSmokeVariantForCart({
+      container,
+      storeId,
+      requestedVariantId,
+      context: {
+        regionId,
+        salesChannelId,
+        currencyCode,
+        customerId: customer.id,
       },
     })
+    const variantId = variantResolution.actual_variant_id
+
+    step("add_line_item", { cart_id: cartId, variant_id: variantId })
+    let addLineResult: unknown
+    try {
+      const addLineRun = await addLineItemWorkflow(container).run({
+        input: {
+          cart_id: cartId,
+          variant_id: variantId,
+          quantity: 1,
+        },
+      })
+      addLineResult = addLineRun.result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (/calculated_amount|price/i.test(message)) {
+        throw new SmokeSetupError(
+          "SMOKE_VARIANT_PRICE_UNAVAILABLE",
+          `Variant ${variantId} failed add-to-cart price resolution after precheck`,
+          {
+            requested_variant_id: requestedVariantId,
+            actual_variant_id: variantId,
+            variant_resolution_source: variantResolution.variant_resolution_source,
+            product_id: variantResolution.product_id,
+            store_core_product_id: variantResolution.store_core_product_id,
+            store_id: storeId,
+            region_id: regionId,
+            sales_channel_id: salesChannelId,
+            currency_code: currencyCode,
+            price_set_id: variantResolution.price_set_id,
+            raw_price_amount: variantResolution.raw_price_amount,
+            calculated_price_result: {
+              calculated_amount: variantResolution.calculated_amount,
+            },
+            add_to_cart_error: message,
+          }
+        )
+      }
+      throw error
+    }
     const lineItemUnitPrice = readNumber(
       (addLineResult as { lineItem?: { unit_price?: unknown } })?.lineItem?.unit_price
     )
@@ -461,11 +836,16 @@ export async function createBatch12aCancellationSmokeOrder({
       store_id: storeId,
       [SMOKE_METADATA_FLAG]: true,
       batch12a_smoke_cart_id: cartId,
-      batch12a_smoke_variant_id: variantId,
+      batch12a_smoke_requested_variant_id: requestedVariantId,
+      batch12a_smoke_actual_variant_id: variantId,
+      batch12a_smoke_variant_resolution_source: variantResolution.variant_resolution_source,
       batch12a_smoke_sales_channel_id: salesChannelId,
       batch12a_smoke_region_id: regionId,
       batch12a_smoke_currency_code: currencyCode,
-      batch12a_smoke_line_item_unit_price: lineItemUnitPrice || null,
+      batch12a_smoke_line_item_unit_price:
+        lineItemUnitPrice || variantResolution.calculated_amount || null,
+      batch12a_smoke_price_set_id: variantResolution.price_set_id,
+      batch12a_smoke_raw_price_amount: variantResolution.raw_price_amount,
       ...(paymentCollectionId ? { batch12a_smoke_payment_collection_id: paymentCollectionId } : {}),
     }
     await orderModule.updateOrders(orderId, { metadata: orderMeta })

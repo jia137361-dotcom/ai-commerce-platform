@@ -43,7 +43,9 @@ const baseOrder = {
     mc_fulfillment_status: "none",
     batch12a_cancel_smoke: true,
     batch12a_smoke_cart_id: "cart_smoke",
-    batch12a_smoke_variant_id: "variant_smoke",
+    batch12a_smoke_requested_variant_id: "variant_smoke",
+    batch12a_smoke_actual_variant_id: "variant_smoke",
+    batch12a_smoke_variant_resolution_source: "requested_variant",
     batch12a_smoke_sales_channel_id: "sc_smoke",
     batch12a_smoke_region_id: "reg_smoke",
     batch12a_smoke_currency_code: "usd",
@@ -68,17 +70,40 @@ const makeContainer = ({
   existingOrders = [],
   customers = [{ id: "cus_smoke", email: "batch12a@example.com" }],
   customFulfillments = [],
+  products = [
+    {
+      id: "mc_prod",
+      store_id: "default_store",
+      status: "published",
+      medusa_product_id: "prod_smoke",
+      medusa_variant_id: "variant_smoke",
+      price: 22.5,
+    },
+  ],
+  calculatedAmount = 2250,
+  variantRequiresShipping = false,
 }: {
   order?: Record<string, unknown>
   existingOrders?: Array<Record<string, unknown>>
   customers?: Array<Record<string, unknown>>
   customFulfillments?: Array<Record<string, unknown>>
+  products?: Array<Record<string, unknown>>
+  calculatedAmount?: number | null
+  variantRequiresShipping?: boolean
 } = {}) => {
   let latestOrder = { ...order }
   const query = {
     graph: jest.fn(async (input: { entity: string; filters?: Record<string, unknown> }) => {
       if (input.entity === "cart") {
         return graphResult([{ id: "cart_smoke", payment_collection: { id: "paycol_smoke" } }])
+      }
+      if (input.entity === "variant") {
+        return graphResult([
+          {
+            id: input.filters?.id,
+            price_set: { id: "pset_smoke" },
+          },
+        ])
       }
       if (input.entity === "order") {
         return graphResult([latestOrder])
@@ -109,20 +134,33 @@ const makeContainer = ({
     }),
   }
   const storeCore = {
-    listProducts: jest.fn(async () => [
-      {
-        id: "mc_prod",
-        store_id: "default_store",
-        status: "published",
-        medusa_variant_id: "variant_smoke",
-      },
-    ]),
+    listProducts: jest.fn(async (filters?: Record<string, unknown>) =>
+      products.filter((product) => {
+        if (filters?.store_id && product.store_id !== filters.store_id) return false
+        if (filters?.status && product.status !== filters.status) return false
+        if (filters?.medusa_variant_id && product.medusa_variant_id !== filters.medusa_variant_id) {
+          return false
+        }
+        return true
+      })
+    ),
   }
   const productModule = {
     retrieveProductVariant: jest.fn(async () => ({
       id: "variant_smoke",
-      requires_shipping: false,
+      requires_shipping: variantRequiresShipping,
     })),
+  }
+  const pricingModule = {
+    retrievePriceSet: jest.fn(async () => ({
+      id: "pset_smoke",
+      prices: [{ amount: 2250, currency_code: "usd" }],
+    })),
+    calculatePrices: jest.fn(async () =>
+      calculatedAmount === null
+        ? [{ id: "pset_smoke", calculated_amount: null, currency_code: "usd" }]
+        : [{ id: "pset_smoke", calculated_amount: calculatedAmount, currency_code: "usd" }]
+    ),
   }
   const fulfillmentOrders = {
     listFulfillmentOrders: jest.fn(async () => customFulfillments),
@@ -134,6 +172,7 @@ const makeContainer = ({
       if (key === Modules.ORDER) return orderModule
       if (key === STORE_CORE_MODULE) return storeCore
       if (key === Modules.PRODUCT) return productModule
+      if (key === Modules.PRICING) return pricingModule
       if (key === FULFILLMENT_ORDERS_MODULE) return fulfillmentOrders
       throw new Error(`Unexpected dependency: ${key}`)
     }),
@@ -146,6 +185,7 @@ const makeContainer = ({
     orderModule,
     storeCore,
     productModule,
+    pricingModule,
     fulfillmentOrders,
   }
 }
@@ -204,10 +244,12 @@ describe("Batch 12A cancel smoke setup", () => {
       cart_id: "cart_smoke",
       order_id: "order_smoke",
       display_id: 1201,
+      requested_variant_id: "variant_smoke",
+      actual_variant_id: "variant_smoke",
+      variant_resolution_source: "requested_variant",
       sales_channel_id: "sc_smoke",
       region_id: "reg_smoke",
       currency_code: "usd",
-      variant_id: "variant_smoke",
       line_item_unit_price: 2250,
       payment_status: "pending",
       captured_amount: 0,
@@ -246,7 +288,9 @@ describe("Batch 12A cancel smoke setup", () => {
         metadata: expect.objectContaining({
           batch12a_cancel_smoke: true,
           batch12a_smoke_cart_id: "cart_smoke",
-          batch12a_smoke_variant_id: "variant_smoke",
+          batch12a_smoke_requested_variant_id: "variant_smoke",
+          batch12a_smoke_actual_variant_id: "variant_smoke",
+          batch12a_smoke_variant_resolution_source: "requested_variant",
           batch12a_smoke_sales_channel_id: "sc_smoke",
           batch12a_smoke_region_id: "reg_smoke",
           batch12a_smoke_currency_code: "usd",
@@ -255,6 +299,133 @@ describe("Batch 12A cancel smoke setup", () => {
       })
     )
     expect(mockMarkOrderPaidAndFulfillmentWaiting).not.toHaveBeenCalled()
+  })
+
+  it("fails with a smoke price error before add line item when calculated price is unavailable", async () => {
+    const { container } = makeContainer({
+      calculatedAmount: null,
+      products: [
+        {
+          id: "mc_prod",
+          store_id: "default_store",
+          status: "published",
+          medusa_product_id: "prod_smoke",
+          medusa_variant_id: "variant_smoke",
+          price: 22.5,
+        },
+      ],
+    })
+
+    await expect(
+      createBatch12aCancellationSmokeOrder({
+        container,
+        env: {
+          NODE_ENV: "development",
+          BATCH12A_CANCEL_SMOKE_ENABLED: "true",
+          BATCH12A_CUSTOMER_EMAIL: "batch12a@example.com",
+          BATCH12A_CANCEL_SMOKE_VARIANT_ID: "variant_smoke",
+        },
+      })
+    ).rejects.toThrow("SMOKE_VARIANT_PRICE_UNAVAILABLE")
+
+    expect(mockAddLineItemRun).not.toHaveBeenCalled()
+  })
+
+  it("falls back explicitly to a non-shippable cart-addable variant", async () => {
+    const { container, orderModule, pricingModule } = makeContainer({
+      products: [
+        {
+          id: "mc_requested",
+          store_id: "default_store",
+          status: "published",
+          medusa_product_id: "prod_requested",
+          medusa_variant_id: "variant_bad",
+          price: 21.25,
+        },
+        {
+          id: "mc_fallback",
+          store_id: "default_store",
+          status: "published",
+          medusa_product_id: "prod_fallback",
+          medusa_variant_id: "variant_smoke",
+          price: 22.5,
+        },
+      ],
+    })
+    pricingModule.calculatePrices
+      .mockResolvedValueOnce([{ id: "pset_smoke", calculated_amount: null, currency_code: "usd" }])
+      .mockResolvedValueOnce([{ id: "pset_smoke", calculated_amount: 2250, currency_code: "usd" }])
+
+    await expect(
+      createBatch12aCancellationSmokeOrder({
+        container,
+        env: {
+          NODE_ENV: "development",
+          BATCH12A_CANCEL_SMOKE_ENABLED: "true",
+          BATCH12A_CUSTOMER_EMAIL: "batch12a@example.com",
+          BATCH12A_CANCEL_SMOKE_VARIANT_ID: "variant_bad",
+        },
+      })
+    ).resolves.toMatchObject({
+      requested_variant_id: "variant_bad",
+      actual_variant_id: "variant_smoke",
+      variant_resolution_source: "store_core_cart_addable_fallback",
+    })
+
+    expect(mockAddLineItemRun).toHaveBeenCalledWith({
+      input: expect.objectContaining({ variant_id: "variant_smoke" }),
+    })
+    expect(orderModule.updateOrders).toHaveBeenCalledWith(
+      "order_smoke",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          batch12a_smoke_requested_variant_id: "variant_bad",
+          batch12a_smoke_actual_variant_id: "variant_smoke",
+          batch12a_smoke_variant_resolution_source: "store_core_cart_addable_fallback",
+        }),
+      })
+    )
+  })
+
+  it("refuses shippable fallback variants in this smoke setup", async () => {
+    const { container, pricingModule } = makeContainer({
+      products: [
+        {
+          id: "mc_requested",
+          store_id: "default_store",
+          status: "published",
+          medusa_product_id: "prod_requested",
+          medusa_variant_id: "variant_bad",
+          price: 21.25,
+        },
+        {
+          id: "mc_fallback",
+          store_id: "default_store",
+          status: "published",
+          medusa_product_id: "prod_fallback",
+          medusa_variant_id: "variant_smoke",
+          price: 22.5,
+        },
+      ],
+      variantRequiresShipping: true,
+    })
+    pricingModule.calculatePrices
+      .mockResolvedValueOnce([{ id: "pset_smoke", calculated_amount: null, currency_code: "usd" }])
+      .mockResolvedValueOnce([{ id: "pset_smoke", calculated_amount: 2250, currency_code: "usd" }])
+
+    await expect(
+      createBatch12aCancellationSmokeOrder({
+        container,
+        env: {
+          NODE_ENV: "development",
+          BATCH12A_CANCEL_SMOKE_ENABLED: "true",
+          BATCH12A_CUSTOMER_EMAIL: "batch12a@example.com",
+          BATCH12A_CANCEL_SMOKE_VARIANT_ID: "variant_bad",
+        },
+      })
+    ).rejects.toThrow("NO_CART_ADDABLE_SMOKE_VARIANT_FOUND")
+
+    expect(mockAddLineItemRun).not.toHaveBeenCalled()
   })
 
   it("does not update cart after line items are present", async () => {
