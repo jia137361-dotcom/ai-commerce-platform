@@ -24,6 +24,33 @@ type CartAddressUpdateBody = {
   }
 }
 
+type RegionCountry =
+  | string
+  | {
+      iso_2?: string | null
+      iso2?: string | null
+      code?: string | null
+      country_code?: string | null
+    }
+
+type CartForAddressUpdate = {
+  id?: string
+  email?: string | null
+  sales_channel_id?: string | null
+  region_id?: string | null
+  region?: {
+    id?: string | null
+    countries?: RegionCountry[] | null
+  } | null
+}
+
+type RegionModuleService = {
+  retrieveRegion: (
+    id: string,
+    config?: { relations?: string[] }
+  ) => Promise<{ id?: string; countries?: RegionCountry[] | null }>
+}
+
 const requiredAddressFields: Array<keyof NonNullable<CartAddressUpdateBody["shipping_address"]>> = [
   "first_name",
   "last_name",
@@ -72,6 +99,57 @@ const validateBody = (body: CartAddressUpdateBody) => {
   return null
 }
 
+const readCountryCode = (country: RegionCountry) => {
+  if (typeof country === "string") return country.trim().toLowerCase()
+  return (
+    country.iso_2 ??
+    country.iso2 ??
+    country.code ??
+    country.country_code ??
+    ""
+  )
+    .trim()
+    .toLowerCase()
+}
+
+const readRegionCountries = async (
+  req: MedusaRequest,
+  cart: CartForAddressUpdate
+) => {
+  const loadedCountries = cart.region?.countries
+  if (loadedCountries?.length) {
+    return loadedCountries.map(readCountryCode).filter(Boolean)
+  }
+
+  const regionId = cart.region_id ?? cart.region?.id
+  if (!regionId) {
+    return []
+  }
+
+  const regionModule = req.scope.resolve(Modules.REGION) as RegionModuleService
+  const region = await regionModule.retrieveRegion(regionId, {
+    relations: ["countries"],
+  })
+  return (region.countries ?? []).map(readCountryCode).filter(Boolean)
+}
+
+const validateCountryInRegion = async (
+  req: MedusaRequest,
+  cart: CartForAddressUpdate,
+  countryCode: string
+) => {
+  const regionCountries = await readRegionCountries(req, cart)
+  if (regionCountries.length && !regionCountries.includes(countryCode)) {
+    return `country_code ${countryCode} is not supported by cart region`
+  }
+  return null
+}
+
+const isPricingRecalculationError = (error: unknown) => {
+  const message = readWorkflowErrorMessage(error)
+  return /calculated_amount|pricing|price recalculation|recalculation/i.test(message)
+}
+
 export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const headerError = validateCheckoutBridgeHeaders(req)
@@ -97,40 +175,70 @@ export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
     })
     assertCartBelongsToCurrentStore(req, cart)
 
+    const email = String(body.email).trim().toLowerCase()
+    const phone = String(body.phone).trim()
+    const countryCode = body.shipping_address!.country_code!.trim().toLowerCase()
+    const countryError = await validateCountryInRegion(req, cart as CartForAddressUpdate, countryCode)
+    if (countryError) {
+      return res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: countryError },
+      })
+    }
+
     const shippingAddress = {
       ...body.shipping_address,
-      phone: body.phone,
-      country_code: body.shipping_address!.country_code!.toLowerCase(),
+      phone,
+      country_code: countryCode,
     }
 
     const salesChannelId = cart.sales_channel_id
       ? undefined
       : await resolveDefaultSalesChannelId(req.scope)
 
-    await updateCartWorkflow(req.scope).run({
-      input: {
-        id: cart_id,
-        email: body.email,
-        ...(salesChannelId ? { sales_channel_id: salesChannelId } : {}),
-        shipping_address: shippingAddress,
-        billing_address: shippingAddress,
-      },
-    })
-
-    if (salesChannelId) {
-      await cartModule.updateCarts(cart_id, {
-        sales_channel_id: salesChannelId,
-      })
+    const workflowPayload = {
+      email,
+      ...(salesChannelId ? { sales_channel_id: salesChannelId } : {}),
+      shipping_address: shippingAddress,
+    }
+    const fallbackPayload = {
+      email,
+      ...(salesChannelId ? { sales_channel_id: salesChannelId } : {}),
+      shipping_address: { ...shippingAddress },
     }
 
-    await cartModule.updateCarts(cart_id, {
-      ...(salesChannelId ? { sales_channel_id: salesChannelId } : {}),
-      email: body.email,
-    })
+    try {
+      await updateCartWorkflow(req.scope).run({
+        input: {
+          id: cart_id,
+          ...workflowPayload,
+        },
+      })
+    } catch (workflowError) {
+      if (!isPricingRecalculationError(workflowError)) {
+        throw workflowError
+      }
+
+      console.warn(
+        "updateCartWorkflow failed while saving address; falling back to cart service update:",
+        readWorkflowErrorMessage(workflowError)
+      )
+      await cartModule.updateCarts(cart_id, fallbackPayload)
+    }
 
     const cartAfter = await cartModule.retrieveCart(cart_id, {
       relations: ["items", "shipping_address", "billing_address", "shipping_methods"],
     })
+
+    if (process.env.NODE_ENV !== "production") {
+      const cartForLog = cart as CartForAddressUpdate
+      console.info("[cart-address] saved", {
+        cart_id,
+        region_id: cartForLog.region_id ?? cartForLog.region?.id ?? null,
+        sales_channel_id: cartForLog.sales_channel_id ?? salesChannelId ?? null,
+        country_code: countryCode,
+        address_saved: Boolean(cartAfter.shipping_address),
+      })
+    }
 
     res.status(200).json({
       cart_id: cartAfter.id,
@@ -146,6 +254,6 @@ export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const message = readWorkflowErrorMessage(error)
     console.error("更新购物车地址失败:", error)
-    res.status(400).json({ error: { code: "CART_ADDRESS_UPDATE_ERROR", message } })
+    res.status(500).json({ error: { code: "CART_ADDRESS_UPDATE_ERROR", message } })
   }
 }

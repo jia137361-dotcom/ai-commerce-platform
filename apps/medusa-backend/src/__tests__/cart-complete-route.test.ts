@@ -64,11 +64,17 @@ const createReq = ({
   cartCustomerId = "cus_a",
   orderCustomerId = "cus_a",
   persistCustomerUpdate = true,
+  items = [{ id: "line_1", quantity: 1, requires_shipping: false }],
+  shippingAddress = null,
+  shippingMethods = [],
 }: {
   authCustomerId?: string | null
   cartCustomerId?: string | null
   orderCustomerId?: string | null
   persistCustomerUpdate?: boolean
+  items?: Array<Record<string, unknown>>
+  shippingAddress?: Record<string, unknown> | null
+  shippingMethods?: Array<Record<string, unknown>>
 } = {}) => {
   let order = {
     id: "order_1",
@@ -83,7 +89,9 @@ const createReq = ({
       id: "cart_1",
       customer_id: cartCustomerId,
       email: "buyer@example.com",
-      items: [{ id: "line_1", quantity: 1 }],
+      items,
+      shipping_address: shippingAddress,
+      shipping_methods: shippingMethods,
       metadata: { store_id: "default_store" },
     })),
   }
@@ -195,5 +203,57 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
         message: "Completed order customer_id could not be persisted",
       },
     })
+  })
+
+  it("rejects shippable carts without a shipping address", async () => {
+    const { req } = createReq({
+      items: [{ id: "line_1", quantity: 1, requires_shipping: true }],
+      shippingAddress: null,
+      shippingMethods: [{ id: "sm_1", shipping_option_id: "so_1" }],
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.body).toMatchObject({
+      error: {
+        code: "CART_SHIPPING_ADDRESS_REQUIRED",
+      },
+    })
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+  })
+
+  it("rejects shippable carts without a shipping method", async () => {
+    const { req } = createReq({
+      items: [{ id: "line_1", quantity: 1, requires_shipping: true }],
+      shippingAddress: { id: "addr_1", country_code: "cn" },
+      shippingMethods: [],
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.body).toMatchObject({
+      error: {
+        code: "CART_SHIPPING_METHOD_REQUIRED",
+      },
+    })
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+  })
+
+  it("completes shippable carts with address and shipping method", async () => {
+    const { req } = createReq({
+      items: [{ id: "line_1", quantity: 1, requires_shipping: true }],
+      shippingAddress: { id: "addr_1", country_code: "cn" },
+      shippingMethods: [{ id: "sm_1", shipping_option_id: "so_1" }],
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockCompleteRun).toHaveBeenCalledTimes(1)
+    expect(res.status).toHaveBeenCalledWith(200)
   })
 })

@@ -64,6 +64,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       relations: ["items", "shipping_address", "shipping_methods"],
     })
 
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[cart-shipping-method] selected", {
+        cart_id,
+        selected_option_id: body.option_id,
+        shipping_method_id: cartAfter.shipping_methods?.[0]?.id ?? null,
+      })
+    }
+
     res.status(200).json({
       cart_id: cartAfter.id,
       store_id: readCartStoreId(cartAfter),

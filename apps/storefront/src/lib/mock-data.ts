@@ -13,6 +13,7 @@ export type StoreProduct = {
   description?: string
   medusaProductId?: string
   medusaVariantId?: string
+  requiresShipping?: boolean
   supplierId?: string
   supplierProductId?: string
   supplierVariantId?: string

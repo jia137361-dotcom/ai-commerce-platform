@@ -46,6 +46,7 @@ export const normalizeProduct = (product: any) => ({
   design_type: product.design_type,
   medusa_product_id: product.medusa_product_id,
   medusa_variant_id: product.medusa_variant_id,
+  requires_shipping: typeof product.requires_shipping === "boolean" ? product.requires_shipping : undefined,
   is_cart_addable: product.status === "published" && Boolean(product.medusa_variant_id),
   design_image_url: product.design_image_url,
   mockup_image_url: product.mockup_image_url,
@@ -249,4 +250,3 @@ export const createMcProduct = async (
   }
   return product
 }
-

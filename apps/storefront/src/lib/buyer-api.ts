@@ -105,6 +105,7 @@ type ApiProduct = {
   metadata?: Record<string, unknown> | null
   medusa_product_id?: string | null
   medusa_variant_id?: string | null
+  requires_shipping?: boolean
   supplier_id?: string | null
   supplier_product_id?: string | null
   supplier_variant_id?: string | null
@@ -669,6 +670,7 @@ const normalizeProduct = (product: ApiProduct, index: number): StoreProduct => {
     description: product.description ?? undefined,
     medusaProductId: product.medusa_product_id ?? undefined,
     medusaVariantId: product.medusa_variant_id ?? undefined,
+    requiresShipping: product.requires_shipping,
     supplierId: product.supplier_id ?? undefined,
     supplierProductId: product.supplier_product_id ?? undefined,
     supplierVariantId: product.supplier_variant_id ?? undefined,

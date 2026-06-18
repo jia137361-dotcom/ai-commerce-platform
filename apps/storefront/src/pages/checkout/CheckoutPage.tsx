@@ -395,7 +395,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
                     ))}
                   </div>
                 ) : (
-                  <div><strong>No shipping option required</strong><span>The backend did not return selectable shipping methods for this cart.</span></div>
+                  <div><strong>No shipping options</strong><span>No selectable shipping methods are available for this address. Place Order remains disabled.</span></div>
                 )}
               </section>
               <CheckoutPaymentPanel />

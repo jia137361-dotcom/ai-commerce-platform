@@ -48,6 +48,9 @@ type AuthenticatedRequest = MedusaRequest & {
 
 type CompleteCart = CartWithPaymentCollection & {
   customer_id?: string | null
+  shipping_address?: unknown | null
+  shipping_methods?: unknown[] | null
+  items?: Array<{ requires_shipping?: boolean | null }> | null
 }
 
 type CompleteOrder = {
@@ -74,18 +77,24 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const cartModule = req.scope.resolve(Modules.CART)
     const cart = (await cartModule.retrieveCart(cartId, {
-      relations: ["items"],
+      relations: ["items", "shipping_address", "shipping_methods"],
     })) as CompleteCart
 
     assertCartBelongsToCurrentStore(req, cart)
     const storeId = readCartStoreId(cart)
     const authCustomerId = readAuthCustomerId(req)
+    const requiresShipping = Boolean(cart.items?.some((item) => item.requires_shipping))
+    const addressPresent = Boolean(cart.shipping_address)
+    const shippingMethodCount = cart.shipping_methods?.length ?? 0
     if (process.env.NODE_ENV !== "production") {
       console.info("[checkout-complete] before complete", {
         cart_id: cartId,
         auth_customer_id: authCustomerId ?? null,
         cart_customer_id_before_complete: cart.customer_id ?? null,
         store_id: storeId,
+        requires_shipping: requiresShipping,
+        address_present: addressPresent,
+        shipping_method_count: shippingMethodCount,
       })
     }
 
@@ -107,6 +116,24 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         error: {
           code: "CART_CONTACT_REQUIRED",
           message: "Cart email is required before complete",
+        },
+      })
+    }
+
+    if (requiresShipping && !addressPresent) {
+      return res.status(400).json({
+        error: {
+          code: "CART_SHIPPING_ADDRESS_REQUIRED",
+          message: "Shipping address is required before complete.",
+        },
+      })
+    }
+
+    if (requiresShipping && shippingMethodCount === 0) {
+      return res.status(400).json({
+        error: {
+          code: "CART_SHIPPING_METHOD_REQUIRED",
+          message: "Shipping method is required before complete.",
         },
       })
     }
@@ -186,6 +213,8 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         cart_id: cartId,
         auth_customer_id: authCustomerId ?? null,
         cart_customer_id_before_complete: cart.customer_id ?? null,
+        address_present: addressPresent,
+        shipping_method_count: shippingMethodCount,
         order_id: order.id,
         order_customer_id_after_complete: (order as CompleteOrder).customer_id ?? null,
         order_store_id: readOrderStoreId(order),
