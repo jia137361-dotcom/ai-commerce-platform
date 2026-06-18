@@ -54,6 +54,38 @@ const cancelledOrder = {
   canceled_at: "2026-06-18T08:00:00.000Z",
 }
 
+const authorizedOrder = {
+  ...baseOrder,
+  metadata: { ...baseOrder.metadata, payment_status: "authorized" },
+  payment_collections: [
+    {
+      id: "paycol_1",
+      status: "authorized",
+      authorized_amount: 2125,
+      captured_amount: 0,
+      completed_at: null,
+      payments: [{ id: "pay_1", status: "authorized", captured_at: null, captures: [] }],
+      payment_sessions: [{ status: "authorized" }],
+    },
+  ],
+}
+
+const cancelledAuthorizedOrder = {
+  ...cancelledOrder,
+  metadata: { ...cancelledOrder.metadata, payment_status: "authorized" },
+  payment_collections: [
+    {
+      id: "paycol_1",
+      status: "canceled",
+      authorized_amount: 0,
+      captured_amount: 0,
+      completed_at: null,
+      payments: [{ id: "pay_1", status: "canceled", captured_at: null, captures: [] }],
+      payment_sessions: [{ status: "canceled" }],
+    },
+  ],
+}
+
 const createReq = ({
   authCustomerId = "cus_a",
   headers = {
@@ -204,6 +236,44 @@ describe("POST /store/customers/me/orders/:id/cancel", () => {
     expect(mockCancelRun).not.toHaveBeenCalled()
   })
 
+  it("allows authorized but uncaptured orders when workflow cancels the authorization", async () => {
+    const { req } = createReq({
+      graphOrders: [authorizedOrder],
+      retrieveOrder: cancelledAuthorizedOrder,
+    })
+    const res = createRes()
+
+    await cancelOrder(req, res)
+
+    expect(mockCancelRun).toHaveBeenCalledTimes(1)
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      cancelled: true,
+      order: {
+        id: "order_1",
+        status: "cancelled",
+      },
+    })
+  })
+
+  it("fails closed if cancel workflow leaves an active authorization", async () => {
+    const { req } = createReq({
+      graphOrders: [authorizedOrder],
+      retrieveOrder: {
+        ...cancelledOrder,
+        metadata: { ...cancelledOrder.metadata, payment_status: "authorized" },
+        payment_collections: authorizedOrder.payment_collections,
+      },
+    })
+    const res = createRes()
+
+    await cancelOrder(req, res)
+
+    expect(mockCancelRun).toHaveBeenCalledTimes(1)
+    expect(res.status).toHaveBeenCalledWith(500)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_CANCEL_WORKFLOW_ERROR" } })
+  })
+
   it("rejects captured payments", async () => {
     const { req } = createReq({
       graphOrders: [
@@ -214,6 +284,56 @@ describe("POST /store/customers/me/orders/:id/cancel", () => {
             status: "captured",
             captured_amount: 100,
             payments: [{ id: "pay_1", captures: [{ id: "cap_1", amount: 100 }] }],
+          }],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await cancelOrder(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(409)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_PAYMENT_CAPTURED" } })
+    expect(mockCancelRun).not.toHaveBeenCalled()
+  })
+
+  it("rejects payments with captured_at even when captured amount is zero", async () => {
+    const { req } = createReq({
+      graphOrders: [
+        {
+          ...baseOrder,
+          payment_collections: [{
+            id: "paycol_1",
+            status: "authorized",
+            captured_amount: 0,
+            payments: [{ id: "pay_1", status: "authorized", captured_at: "2026-06-18T08:00:00.000Z", captures: [] }],
+            payment_sessions: [{ status: "authorized" }],
+          }],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await cancelOrder(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(409)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_PAYMENT_CAPTURED" } })
+    expect(mockCancelRun).not.toHaveBeenCalled()
+  })
+
+  it("rejects completed payment collections", async () => {
+    const { req } = createReq({
+      graphOrders: [
+        {
+          ...baseOrder,
+          payment_collections: [{
+            id: "paycol_1",
+            status: "completed",
+            completed_at: "2026-06-18T08:00:00.000Z",
+            authorized_amount: 2125,
+            captured_amount: 0,
+            payments: [{ id: "pay_1", status: "authorized", captured_at: null, captures: [] }],
+            payment_sessions: [{ status: "authorized" }],
           }],
         },
       ],

@@ -36,6 +36,9 @@ type PaymentRecord = {
 type PaymentCollectionRecord = {
   id?: string
   status?: unknown
+  completed_at?: unknown
+  authorized_amount?: unknown
+  raw_authorized_amount?: unknown
   captured_amount?: unknown
   raw_captured_amount?: unknown
   refunded_amount?: unknown
@@ -78,7 +81,7 @@ export type CancellationContext = {
   }>
 }
 
-const allowedPaymentStatuses = new Set(["", "pending", "not_paid", "awaiting"])
+const allowedPaymentStatuses = new Set(["", "pending", "not_paid", "awaiting", "authorized"])
 const rejectedPaymentStatuses = new Set([
   "paid",
   "captured",
@@ -86,8 +89,8 @@ const rejectedPaymentStatuses = new Set([
   "partially_captured",
   "refunded",
   "partially_refunded",
-  "authorized",
   "requires_refund",
+  "completed",
 ])
 
 const allowedFulfillmentStatuses = new Set(["", "none", "not_fulfilled", "unfulfilled"])
@@ -177,6 +180,7 @@ const orderIsCancelled = (order: CancellationOrder) =>
 const hasCapturedPayment = (order: CancellationOrder) => {
   for (const collection of order.payment_collections ?? []) {
     if (
+      collection.completed_at ||
       hasPositiveAmount(collection.captured_amount) ||
       hasPositiveAmount(collection.raw_captured_amount)
     ) {
@@ -206,15 +210,43 @@ const hasCapturedPayment = (order: CancellationOrder) => {
 
 const hasSuccessfulPayment = (order: CancellationOrder) => {
   for (const collection of order.payment_collections ?? []) {
+    const collectionStatus = normalizeStatus(collection.status)
+    if (["completed", "captured", "paid", "partially_captured"].includes(collectionStatus)) {
+      return true
+    }
     for (const payment of collection.payments ?? []) {
       const status = normalizeStatus(payment.status)
       if (rejectedPaymentStatuses.has(status)) return true
     }
     for (const session of collection.payment_sessions ?? []) {
       const status = normalizeStatus(session.status)
-      if (["authorized", "captured", "paid", "partially_captured"].includes(status)) {
+      if (["captured", "paid", "partially_captured", "completed"].includes(status)) {
         return true
       }
+    }
+  }
+  return false
+}
+
+export const hasActivePaymentAuthorization = (order: CancellationOrder) => {
+  for (const collection of order.payment_collections ?? []) {
+    const collectionStatus = normalizeStatus(collection.status)
+    if (["canceled", "cancelled"].includes(collectionStatus)) {
+      continue
+    }
+    if (collectionStatus === "authorized") return true
+    if (
+      hasPositiveAmount(collection.authorized_amount) ||
+      hasPositiveAmount(collection.raw_authorized_amount)
+    ) {
+      return true
+    }
+    for (const payment of collection.payments ?? []) {
+      const paymentStatus = normalizeStatus(payment.status)
+      if (paymentStatus === "authorized" && !payment.captured_at) return true
+    }
+    for (const session of collection.payment_sessions ?? []) {
+      if (normalizeStatus(session.status) === "authorized") return true
     }
   }
   return false
@@ -316,10 +348,15 @@ export const summarizeCancellationContext = (
   order_status: context.order.status ?? null,
   payment_status: readPaymentStatus(context.order) || null,
   payment_collection_status: (context.order.payment_collections ?? []).map((pc) => pc.status ?? null),
+  authorized_amount: (context.order.payment_collections ?? []).reduce(
+    (sum, pc) => sum + readNumber(pc.authorized_amount) + readNumber(pc.raw_authorized_amount),
+    0
+  ),
   captured_amount: (context.order.payment_collections ?? []).reduce(
     (sum, pc) => sum + readNumber(pc.captured_amount) + readNumber(pc.raw_captured_amount),
     0
   ),
+  active_authorization: hasActivePaymentAuthorization(context.order),
   fulfillment_status: readFulfillmentStatus(context.order) || null,
   fulfillment_count: (context.order.fulfillments ?? []).length + context.customFulfillmentOrders.length,
   payment_state_resolved: context.paymentStateResolved,
@@ -344,6 +381,9 @@ const loadOrderFromGraph = async (
       "metadata",
       "payment_collections.id",
       "payment_collections.status",
+      "payment_collections.completed_at",
+      "payment_collections.authorized_amount",
+      "payment_collections.raw_authorized_amount",
       "payment_collections.captured_amount",
       "payment_collections.raw_captured_amount",
       "payment_collections.payments.id",

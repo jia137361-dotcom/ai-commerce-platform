@@ -5,6 +5,7 @@ import { resolveCurrentStore } from "../../../../../../../lib/store-context"
 import {
   cancellationResponse,
   evaluateCancellationEligibility,
+  hasActivePaymentAuthorization,
   loadCancellationContext,
   summarizeCancellationContext,
   validateCancelReason,
@@ -140,6 +141,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const orderModule = req.scope.resolve(Modules.ORDER)
     const cancelledOrder = (await orderModule.retrieveOrder(orderId)) as CancellationOrder
     const cancelledContext = await loadCancellationContext(req, orderId, cancelledOrder)
+    if (hasActivePaymentAuthorization(cancelledContext.order)) {
+      throw new Error(
+        "Cancel workflow completed but payment authorization is still active."
+      )
+    }
+
     const afterEligibility = evaluateCancellationEligibility(cancelledContext, {
       authCustomerId,
       requestedStoreId: storeId,

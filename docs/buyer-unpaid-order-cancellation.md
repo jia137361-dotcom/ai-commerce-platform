@@ -35,9 +35,10 @@ Allowed only when all are true:
 - order is not already cancelled
 - order is not completed or terminal
 - payment relation state is reliably loaded
-- payment status is unpaid/pending/awaiting or an empty status on a loaded payment state
+- payment status is unpaid/pending/awaiting, or authorized without capture, on a loaded payment state
 - no payment captures exist
-- no successful/captured/authorized payment record exists
+- no captured/successful payment record exists
+- authorized payment, if present, must be voided/cancelled by the official workflow before the API returns success
 - fulfillment relation state is reliably loaded
 - fulfillment status is none/not fulfilled/unfulfilled or an empty status on a loaded fulfillment state
 - no native Medusa fulfillment records exist
@@ -158,6 +159,8 @@ Disallowed transitions in this batch:
 
 The route calls Medusa official `cancelOrderWorkflow`. It does not directly update the order table, payment state, or inventory.
 
+Medusa's `cancelOrderWorkflow` cancels uncaptured payments and updates payment collections to cancelled. Batch 12A now verifies the post-cancel order no longer has an active authorization before returning success. If an authorization remains active after the workflow, the route fails closed with `ORDER_CANCEL_WORKFLOW_ERROR`.
+
 ## 6. UI Behavior
 
 Order detail response now includes:
@@ -234,6 +237,17 @@ Successful output shape:
   "cancellation_allowed": true
 }
 ```
+
+Batch 12A runtime smoke produced `order_01KVE09VVJ9MJCR0FXTACEARVJ`. Payment evidence showed:
+
+- `payment_collection.status = authorized`
+- `authorized_amount = 2125`
+- `captured_amount = 0`
+- `payment_collection.completed_at = NULL`
+- `payment.captured_at = NULL`
+- `payment_session.status = authorized`
+
+This is an authorized-not-captured order, not a captured paid order. The current complete cart flow creates an authorization for this smoke path; it does not capture payment. Batch 12A treats authorized-not-captured orders as cancellable candidates only when `cancelOrderWorkflow`/payment cancellation clears the active authorization. Captured, completed, or paid states remain rejected.
 
 Existing completed buyer orders from Batch 11 are paid/waiting and therefore intentionally not cancellable by this batch.
 
