@@ -20,6 +20,8 @@ type CustomerOrder = {
   customer_id?: string | null
   email?: string | null
   status?: string | null
+  canceled_at?: string | Date | null
+  cancelled_at?: string | Date | null
   created_at?: string | Date | null
   currency_code?: string | null
   total?: number | string | null
@@ -124,7 +126,7 @@ const normalizeOrderSummary = (order: CustomerOrder) => {
     display_id: readDisplayId(order),
     created_at: dateValue(order.created_at),
     email: order.email ?? null,
-    status: order.status ?? null,
+    status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
     payment_status: metadata?.[ORDER_META_PAYMENT_STATUS] ?? null,
     fulfillment_status: readOrderFulfillmentStatusMeta(metadata),
     currency_code: order.currency_code ?? null,
@@ -150,6 +152,7 @@ const loadOrdersWithOrderModule = async (
       "customer_id",
       "email",
       "status",
+      "canceled_at",
       "created_at",
       "currency_code",
       "metadata",
@@ -173,6 +176,7 @@ const loadOrdersWithQueryGraph = async (
       "customer_id",
       "email",
       "status",
+      "canceled_at",
       "created_at",
       "currency_code",
       "metadata",

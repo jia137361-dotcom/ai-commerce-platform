@@ -79,7 +79,24 @@
   background: #fff;
 }
 
+.buyer-order-field textarea {
+  width: 100%;
+  min-height: 96px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #d5dbe6;
+  border-radius: 6px;
+  padding: 13px 14px;
+  font: inherit;
+  background: #fff;
+}
+
 .buyer-order-field input:focus {
+  outline: 2px solid rgba(239, 90, 20, 0.22);
+  border-color: #ef5a14;
+}
+
+.buyer-order-field textarea:focus {
   outline: 2px solid rgba(239, 90, 20, 0.22);
   border-color: #ef5a14;
 }
@@ -368,6 +385,95 @@
   align-self: start;
   display: grid;
   gap: 12px;
+}
+
+.buyer-order-actions button {
+  min-height: 44px;
+  border-radius: 6px;
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.buyer-order-danger-action {
+  border: 1px solid #c7351b;
+  background: #c7351b;
+  color: #fff;
+}
+
+.buyer-order-danger-action:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.buyer-order-action-note {
+  margin: 0;
+  border: 1px solid #f1d4c9;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #fff7f3;
+  color: #8d3b20;
+  line-height: 1.45;
+}
+
+.buyer-order-action-success {
+  margin: 0;
+  border: 1px solid #bfe2c4;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #f1fbf2;
+  color: #226833;
+  font-weight: 800;
+}
+
+.buyer-order-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.buyer-order-modal {
+  width: min(480px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+}
+
+.buyer-order-modal h2 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.buyer-order-modal header p:last-child {
+  margin: 10px 0 0;
+  color: #667083;
+  line-height: 1.5;
+}
+
+.buyer-order-modal footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.buyer-order-modal footer button {
+  min-height: 42px;
+  border-radius: 6px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.buyer-order-modal footer button:first-child {
+  border: 1px solid #cfd6e2;
+  background: #fff;
+  color: #202636;
 }
 
 .buyer-order-actions a:nth-of-type(n + 2),

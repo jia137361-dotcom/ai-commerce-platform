@@ -320,6 +320,27 @@ type ApiOrderDetailResponse = {
   discount_total?: number | null
   tax_total?: number | null
   total?: number | null
+  cancellation?: ApiOrderCancellation
+}
+
+type ApiOrderCancellation = {
+  allowed?: boolean
+  code?: string | null
+  message?: string | null
+}
+
+type ApiOrderCancelResponse = {
+  order?: {
+    id?: string
+    display_id?: string | number | null
+    status?: string | null
+    payment_status?: string | null
+    fulfillment_status?: string | null
+    cancelled_at?: string | null
+  }
+  cancelled?: boolean
+  already_cancelled?: boolean
+  cancellation?: ApiOrderCancellation
 }
 
 type ApiMyOrderPreviewItem = {
@@ -461,6 +482,27 @@ export type BuyerOrderDetail = {
   discountTotal?: number | null
   taxTotal?: number | null
   total?: number | null
+  cancellation?: BuyerOrderCancellation
+}
+
+export type BuyerOrderCancellation = {
+  allowed: boolean
+  code?: string | null
+  message?: string | null
+}
+
+export type BuyerOrderCancelResult = {
+  order: {
+    id: string
+    displayId?: string
+    status?: string | null
+    paymentStatus?: string | null
+    fulfillmentStatus?: string | null
+    cancelledAt?: string | null
+  }
+  cancelled: boolean
+  alreadyCancelled?: boolean
+  cancellation?: BuyerOrderCancellation
 }
 
 export type BuyerOrderSummary = {
@@ -594,6 +636,12 @@ const apiFetchWithStatus = async <T>(path: string, init: RequestInit = {}): Prom
   })
   if (!response.ok) {
     const body = await response.text()
+    let parsed: { error?: { code?: string; message?: string } | string; cancellation?: ApiOrderCancellation } | undefined
+    try {
+      parsed = body ? JSON.parse(body) : undefined
+    } catch {
+      parsed = undefined
+    }
     if (import.meta.env.DEV) {
       console.warn("[buyer-api] response error", {
         path,
@@ -601,7 +649,19 @@ const apiFetchWithStatus = async <T>(path: string, init: RequestInit = {}): Prom
         raw_response: body,
       })
     }
-    throw new Error(`HTTP ${response.status}${body ? `: ${body.slice(0, 180)}` : ""}`)
+    const errorPayload = parsed?.error
+    const code = typeof errorPayload === "object" ? errorPayload.code : undefined
+    const message =
+      typeof errorPayload === "object" && errorPayload.message
+        ? errorPayload.message
+        : typeof errorPayload === "string"
+          ? errorPayload
+          : `HTTP ${response.status}${body ? `: ${body.slice(0, 180)}` : ""}`
+    throw Object.assign(new Error(message), {
+      status: response.status,
+      code,
+      payload: parsed,
+    })
   }
   const text = await response.text()
   return {
@@ -1098,6 +1158,19 @@ export const getOrderDetail = async (orderId: string, email?: string): Promise<B
   if (email) params.set("email", email.trim().toLowerCase())
   const query = params.toString()
   const payload = await apiFetch<ApiOrderDetailResponse>(`/store/orders/${encodeURIComponent(orderId)}/detail${query ? `?${query}` : ""}`)
+  return normalizeOrderDetail(payload, orderId)
+}
+
+const normalizeCancellation = (cancellation?: ApiOrderCancellation): BuyerOrderCancellation | undefined => {
+  if (!cancellation) return undefined
+  return {
+    allowed: Boolean(cancellation.allowed),
+    code: cancellation.code ?? null,
+    message: cancellation.message ?? null,
+  }
+}
+
+const normalizeOrderDetail = (payload: ApiOrderDetailResponse, orderId: string): BuyerOrderDetail => {
   return {
     orderId: payload.order_id ?? orderId,
     displayId: payload.display_id == null ? undefined : String(payload.display_id),
@@ -1127,6 +1200,28 @@ export const getOrderDetail = async (orderId: string, email?: string): Promise<B
     discountTotal: payload.discount_total ?? null,
     taxTotal: payload.tax_total ?? null,
     total: payload.total ?? null,
+    cancellation: normalizeCancellation(payload.cancellation),
+  }
+}
+
+export const cancelAuthenticatedOrder = async (orderId: string, reason?: string): Promise<BuyerOrderCancelResult> => {
+  const payload = await apiFetch<ApiOrderCancelResponse>(`/store/customers/me/orders/${encodeURIComponent(orderId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason?.trim() || undefined }),
+  })
+  const order = payload.order ?? {}
+  return {
+    order: {
+      id: order.id ?? orderId,
+      displayId: order.display_id == null ? undefined : String(order.display_id),
+      status: order.status ?? null,
+      paymentStatus: order.payment_status ?? null,
+      fulfillmentStatus: order.fulfillment_status ?? null,
+      cancelledAt: order.cancelled_at ?? null,
+    },
+    cancelled: Boolean(payload.cancelled),
+    alreadyCancelled: Boolean(payload.already_cancelled),
+    cancellation: normalizeCancellation(payload.cancellation),
   }
 }
 

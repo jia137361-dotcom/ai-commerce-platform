@@ -7,6 +7,7 @@ import { OrderDetailSummary } from "../../components/orders/OrderDetailSummary"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
+  cancelAuthenticatedOrder,
   fetchStoreSettings,
   getBuyerStoreId,
   getOrderDetail,
@@ -46,6 +47,11 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [cancelError, setCancelError] = useState<string | undefined>()
+  const [cancelSuccess, setCancelSuccess] = useState<string | undefined>()
 
   const params = new URLSearchParams(window.location.search)
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
@@ -96,6 +102,36 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   if (order?.displayId) trackingParams.set("display_id", order.displayId)
   const trackingQuery = trackingParams.toString()
   const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
+  const canCancel = Boolean(auth.customer && order?.cancellation?.allowed)
+
+  const submitCancel = async () => {
+    if (!order || !canCancel || cancelSubmitting) return
+    setCancelSubmitting(true)
+    setCancelError(undefined)
+    setCancelSuccess(undefined)
+    try {
+      const result = await cancelAuthenticatedOrder(order.orderId, cancelReason)
+      setOrder((current) => current ? {
+        ...current,
+        status: result.order.status ?? "cancelled",
+        paymentStatus: result.order.paymentStatus ?? current.paymentStatus,
+        fulfillmentStatus: result.order.fulfillmentStatus ?? current.fulfillmentStatus,
+        cancellation: result.cancellation ?? {
+          allowed: false,
+          code: "ORDER_ALREADY_CANCELLED",
+          message: "This order has already been cancelled.",
+        },
+      } : current)
+      setCancelSuccess(result.alreadyCancelled ? "Order was already cancelled." : "Order cancelled.")
+      setCancelOpen(false)
+      setCancelReason("")
+    } catch (cancelFailure) {
+      const message = cancelFailure instanceof Error ? cancelFailure.message : "Unable to cancel this order."
+      setCancelError(message)
+    } finally {
+      setCancelSubmitting(false)
+    }
+  }
 
   return (
     <div className="buyer-orders-page">
@@ -119,6 +155,23 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                   <p className="buyer-order-kicker">Actions</p>
                   <h2>Next steps</h2>
                   <a href={trackingHref}>Track order</a>
+                  {canCancel ? (
+                    <button
+                      type="button"
+                      className="buyer-order-danger-action"
+                      onClick={() => {
+                        setCancelOpen(true)
+                        setCancelError(undefined)
+                        setCancelSuccess(undefined)
+                      }}
+                    >
+                      Cancel order
+                    </button>
+                  ) : order.cancellation?.message && auth.customer ? (
+                    <p className="buyer-order-action-note">{order.cancellation.message}</p>
+                  ) : null}
+                  {cancelSuccess ? <p className="buyer-order-action-success">{cancelSuccess}</p> : null}
+                  {cancelError && !cancelOpen ? <p className="buyer-order-error">{cancelError}</p> : null}
                   <a href="/store">Back to store</a>
                   <a href="/orders/lookup">Search another order</a>
                 </section>
@@ -127,6 +180,40 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
           </>
         )}
       </main>
+      {cancelOpen && order ? (
+        <div className="buyer-order-modal-backdrop" role="presentation">
+          <div className="buyer-order-modal buyer-order-card" role="dialog" aria-modal="true" aria-labelledby="cancel-order-title">
+            <header>
+              <p className="buyer-order-kicker">Order action</p>
+              <h2 id="cancel-order-title">Cancel order?</h2>
+              <p>This action can only be completed for unpaid and unfulfilled orders.</p>
+            </header>
+            {cancelError ? <p className="buyer-order-error">{cancelError}</p> : null}
+            <label className="buyer-order-field">
+              <span>Reason optional</span>
+              <textarea
+                value={cancelReason}
+                maxLength={500}
+                onChange={(event) => setCancelReason(event.target.value)}
+                placeholder="Ordered by mistake"
+              />
+            </label>
+            <footer>
+              <button type="button" disabled={cancelSubmitting} onClick={() => setCancelOpen(false)}>
+                Keep order
+              </button>
+              <button
+                type="button"
+                className="buyer-order-danger-action"
+                disabled={cancelSubmitting}
+                onClick={() => void submitCancel()}
+              >
+                {cancelSubmitting ? "Cancelling..." : "Cancel order"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

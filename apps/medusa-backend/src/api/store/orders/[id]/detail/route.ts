@@ -6,6 +6,12 @@ import {
   ORDER_META_PAYMENT_STATUS,
   readOrderFulfillmentStatusMeta,
 } from "../../../../../lib/order-custom-metadata"
+import {
+  cancellationResponse,
+  evaluateCancellationEligibility,
+  loadCancellationContext,
+} from "../../../../../lib/order-cancellation"
+import { resolveCurrentStore } from "../../../../../lib/store-context"
 
 type OrderLineItem = {
   id?: string
@@ -130,6 +136,19 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     const metadata = order.metadata as Record<string, unknown> | null
+    const cancellation = hasAuthAccess
+      ? cancellationResponse(evaluateCancellationEligibility(
+        await loadCancellationContext(req, orderId, order),
+        {
+          authCustomerId: readAuthCustomerId(req),
+          requestedStoreId: resolveCurrentStore(req).store_id,
+        }
+      ))
+      : {
+        allowed: false,
+        code: "ORDER_ACCESS_DENIED",
+        message: "Guest order detail cannot cancel orders.",
+      }
 
     res.status(200).json({
       order_id: order.id,
@@ -149,6 +168,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       discount_total: readNumber(order.discount_total),
       tax_total: readNumber(order.tax_total),
       total: readNumber(order.total),
+      cancellation,
     })
   } catch (error: unknown) {
     if (error instanceof OrderStoreAccessError) {
