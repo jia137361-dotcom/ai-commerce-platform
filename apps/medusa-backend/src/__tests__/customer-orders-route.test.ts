@@ -166,9 +166,102 @@ describe("GET /store/customers/me/orders", () => {
     expect(res.body).toMatchObject({
       count: 2,
       orders: [
-        { order_id: "order_a1", item_count: 2 },
-        { order_id: "order_a2", item_count: 1 },
+        { order_id: "order_a1", display_id: 101, item_count: 2 },
+        { order_id: "order_a2", display_id: 102, item_count: 1 },
       ],
+    })
+  })
+
+  it("keeps display_id values from the order summary", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_display_number",
+          display_id: 70,
+          customer_id: "cus_a",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+        {
+          id: "order_display_string",
+          display_id: "71",
+          customer_id: "cus_a",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({
+      orders: [
+        { order_id: "order_display_number", display_id: 70 },
+        { order_id: "order_display_string", display_id: "71" },
+      ],
+    })
+  })
+
+  it("keeps zero display_id instead of converting it to null", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_display_zero",
+          display_id: 0,
+          customer_id: "cus_a",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({
+      orders: [{ order_id: "order_display_zero", display_id: 0 }],
+    })
+  })
+
+  it("reads camelCase displayId from Medusa list DTOs", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_display_camel",
+          displayId: 72,
+          customer_id: "cus_a",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({
+      orders: [{ order_id: "order_display_camel", display_id: 72 }],
+    })
+  })
+
+  it("returns null only when display id is missing", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_display_missing",
+          customer_id: "cus_a",
+          metadata: { store_id: "default_store" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({
+      orders: [{ order_id: "order_display_missing", display_id: null }],
     })
   })
 
@@ -182,6 +275,20 @@ describe("GET /store/customers/me/orders", () => {
       expect.objectContaining({ customer_id: "cus_a" }),
       expect.not.objectContaining({
         relations: expect.arrayContaining(["customer"]),
+      })
+    )
+  })
+
+  it("explicitly requests display_id from the order module list projection", async () => {
+    const { req, orderModule } = createReq()
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(orderModule.listOrders).toHaveBeenCalledWith(
+      expect.objectContaining({ customer_id: "cus_a" }),
+      expect.objectContaining({
+        select: expect.arrayContaining(["id", "display_id"]),
       })
     )
   })

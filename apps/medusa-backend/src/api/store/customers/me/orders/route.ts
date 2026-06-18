@@ -16,6 +16,7 @@ type OrderLineItem = {
 type CustomerOrder = {
   id?: string
   display_id?: string | number | null
+  displayId?: string | number | null
   customer_id?: string | null
   email?: string | null
   status?: string | null
@@ -79,6 +80,18 @@ const readNumber = (value: unknown): number | null => {
   return null
 }
 
+const readDisplayId = (order: CustomerOrder): string | number | null => {
+  if (order.display_id !== undefined && order.display_id !== null) {
+    return order.display_id
+  }
+
+  if (order.displayId !== undefined && order.displayId !== null) {
+    return order.displayId
+  }
+
+  return null
+}
+
 const dateValue = (value: unknown) => {
   if (typeof value === "string") return value
   if (value instanceof Date) return value.toISOString()
@@ -95,6 +108,8 @@ const readOrderCustomerId = (order: CustomerOrder): string | null => {
 
 const safeOrderShape = (order: CustomerOrder) => ({
   id: order.id,
+  display_id: order.display_id ?? null,
+  displayId: order.displayId ?? null,
   customer_id: order.customer_id ?? null,
   email: order.email ?? null,
   metadata_store_id: order.metadata?.store_id,
@@ -106,7 +121,7 @@ const normalizeOrderSummary = (order: CustomerOrder) => {
   const items = order.items ?? []
   return {
     order_id: order.id ?? "",
-    display_id: order.display_id ?? null,
+    display_id: readDisplayId(order),
     created_at: dateValue(order.created_at),
     email: order.email ?? null,
     status: order.status ?? null,
@@ -129,6 +144,16 @@ const loadOrdersWithOrderModule = async (
 ): Promise<CustomerOrder[]> => {
   const orderModule = req.scope.resolve(Modules.ORDER)
   return (await orderModule.listOrders(selector as never, {
+    select: [
+      "id",
+      "display_id",
+      "customer_id",
+      "email",
+      "status",
+      "created_at",
+      "currency_code",
+      "metadata",
+    ],
     relations: ["items"],
     order: { created_at: "DESC" },
     take: 500,
