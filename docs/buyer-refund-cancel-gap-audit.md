@@ -458,4 +458,13 @@ Recommended split:
 - Frontend success toasts without backend confirmation would create false financial state.
 - Store isolation must not rely on frontend-provided store/customer identifiers.
 - Existing custom metadata payment/fulfillment statuses are display-oriented and should not be the only source of refund/cancel truth.
+# Batch 12B Update — Buyer Refund Requests
+
+Batch 12B adds a safe request-only path for authenticated buyers. Paid/captured own-order requests are stored in the custom `buyer_refund_request` module with `pending` status. This does not call payment refund workflows or change order/payment refund state.
+
+- Authorized-not-captured orders remain in Batch 12A cancellation and are not refund eligible.
+- Cancelled, guest, cross-customer, and cross-store orders cannot create requests.
+- Duplicate pending/approved/processing requests return `ORDER_REFUND_REQUEST_EXISTS`.
+- Order detail exposes backend-derived cancel/refund capability and pending-review state.
+- Real provider execution, partial refund, returns, supplier cancellation, and reconciliation remain gaps for Batch 12C/12D.
 

@@ -321,6 +321,7 @@ type ApiOrderDetailResponse = {
   tax_total?: number | null
   total?: number | null
   cancellation?: ApiOrderCancellation
+  refund_request?: ApiRefundRequestCapability
 }
 
 type ApiOrderCancellation = {
@@ -341,6 +342,38 @@ type ApiOrderCancelResponse = {
   cancelled?: boolean
   already_cancelled?: boolean
   cancellation?: ApiOrderCancellation
+}
+
+type ApiRefundRequest = {
+  id?: string
+  order_id?: string
+  display_id?: string | number | null
+  status?: string
+  reason?: string
+  note?: string | null
+  requested_amount?: number
+  approved_amount?: number | null
+  currency_code?: string | null
+  payment_provider_id?: string | null
+  external_refund_id?: string | null
+  provider_status?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+type ApiRefundRequestCapability = {
+  allowed?: boolean
+  code?: string | null
+  message?: string | null
+  open_request?: ApiRefundRequest | null
+}
+
+type ApiRefundRequestResponse = {
+  refund_request?: ApiRefundRequest
+}
+
+type ApiRefundRequestsResponse = {
+  refund_requests?: ApiRefundRequest[]
 }
 
 type ApiMyOrderPreviewItem = {
@@ -483,6 +516,7 @@ export type BuyerOrderDetail = {
   taxTotal?: number | null
   total?: number | null
   cancellation?: BuyerOrderCancellation
+  refundRequest?: BuyerRefundRequestCapability
 }
 
 export type BuyerOrderCancellation = {
@@ -503,6 +537,30 @@ export type BuyerOrderCancelResult = {
   cancelled: boolean
   alreadyCancelled?: boolean
   cancellation?: BuyerOrderCancellation
+}
+
+export type BuyerRefundRequest = {
+  id: string
+  orderId: string
+  displayId?: string
+  status: string
+  reason: string
+  note?: string | null
+  requestedAmount: number
+  approvedAmount?: number | null
+  currencyCode?: string | null
+  paymentProviderId?: string | null
+  externalRefundId?: string | null
+  providerStatus?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export type BuyerRefundRequestCapability = {
+  allowed: boolean
+  code?: string | null
+  message?: string | null
+  openRequest?: BuyerRefundRequest | null
 }
 
 export type BuyerOrderSummary = {
@@ -1170,6 +1228,38 @@ const normalizeCancellation = (cancellation?: ApiOrderCancellation): BuyerOrderC
   }
 }
 
+const normalizeRefundRequest = (request?: ApiRefundRequest | null): BuyerRefundRequest | null => {
+  if (!request?.id) return null
+  return {
+    id: request.id,
+    orderId: request.order_id ?? "",
+    displayId: request.display_id == null ? undefined : String(request.display_id),
+    status: request.status ?? "pending",
+    reason: request.reason ?? "",
+    note: request.note ?? null,
+    requestedAmount: request.requested_amount ?? 0,
+    approvedAmount: request.approved_amount ?? null,
+    currencyCode: request.currency_code ?? null,
+    paymentProviderId: request.payment_provider_id ?? null,
+    externalRefundId: request.external_refund_id ?? null,
+    providerStatus: request.provider_status ?? "not_connected",
+    createdAt: request.created_at ?? null,
+    updatedAt: request.updated_at ?? null,
+  }
+}
+
+const normalizeRefundCapability = (
+  capability?: ApiRefundRequestCapability
+): BuyerRefundRequestCapability | undefined => {
+  if (!capability) return undefined
+  return {
+    allowed: Boolean(capability.allowed),
+    code: capability.code ?? null,
+    message: capability.message ?? null,
+    openRequest: normalizeRefundRequest(capability.open_request),
+  }
+}
+
 const normalizeOrderDetail = (payload: ApiOrderDetailResponse, orderId: string): BuyerOrderDetail => {
   return {
     orderId: payload.order_id ?? orderId,
@@ -1201,6 +1291,7 @@ const normalizeOrderDetail = (payload: ApiOrderDetailResponse, orderId: string):
     taxTotal: payload.tax_total ?? null,
     total: payload.total ?? null,
     cancellation: normalizeCancellation(payload.cancellation),
+    refundRequest: normalizeRefundCapability(payload.refund_request),
   }
 }
 
@@ -1223,6 +1314,34 @@ export const cancelAuthenticatedOrder = async (orderId: string, reason?: string)
     alreadyCancelled: Boolean(payload.already_cancelled),
     cancellation: normalizeCancellation(payload.cancellation),
   }
+}
+
+export const createRefundRequest = async (
+  orderId: string,
+  payload: { reason: string; note?: string }
+): Promise<BuyerRefundRequest> => {
+  const response = await apiFetch<ApiRefundRequestResponse>(
+    `/store/customers/me/orders/${encodeURIComponent(orderId)}/refund-requests`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reason: payload.reason.trim(),
+        note: payload.note?.trim() || undefined,
+      }),
+    }
+  )
+  const request = normalizeRefundRequest(response.refund_request)
+  if (!request) throw new Error("Refund request API did not return a request.")
+  return request
+}
+
+export const listRefundRequests = async (orderId: string): Promise<BuyerRefundRequest[]> => {
+  const response = await apiFetch<ApiRefundRequestsResponse>(
+    `/store/customers/me/orders/${encodeURIComponent(orderId)}/refund-requests`
+  )
+  return (response.refund_requests ?? [])
+    .map(normalizeRefundRequest)
+    .filter((request): request is BuyerRefundRequest => Boolean(request))
 }
 
 const createCustomerSession = async (token: string) => {

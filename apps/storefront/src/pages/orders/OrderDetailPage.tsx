@@ -8,6 +8,7 @@ import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   cancelAuthenticatedOrder,
+  createRefundRequest,
   fetchStoreSettings,
   getBuyerStoreId,
   getOrderDetail,
@@ -52,6 +53,12 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
   const [cancelError, setCancelError] = useState<string | undefined>()
   const [cancelSuccess, setCancelSuccess] = useState<string | undefined>()
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [refundReason, setRefundReason] = useState("")
+  const [refundNote, setRefundNote] = useState("")
+  const [refundSubmitting, setRefundSubmitting] = useState(false)
+  const [refundError, setRefundError] = useState<string | undefined>()
+  const [refundSuccess, setRefundSuccess] = useState<string | undefined>()
 
   const params = new URLSearchParams(window.location.search)
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
@@ -103,6 +110,7 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const trackingQuery = trackingParams.toString()
   const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
   const canCancel = Boolean(auth.customer && order?.cancellation?.allowed)
+  const canRequestRefund = Boolean(auth.customer && order?.refundRequest?.allowed)
 
   const submitCancel = async () => {
     if (!order || !canCancel || cancelSubmitting) return
@@ -130,6 +138,44 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
       setCancelError(message)
     } finally {
       setCancelSubmitting(false)
+    }
+  }
+
+  const submitRefundRequest = async () => {
+    if (!order || !canRequestRefund || refundSubmitting) return
+    if (!refundReason) {
+      setRefundError("Select a reason for the refund request.")
+      return
+    }
+    setRefundSubmitting(true)
+    setRefundError(undefined)
+    setRefundSuccess(undefined)
+    try {
+      const request = await createRefundRequest(order.orderId, {
+        reason: refundReason,
+        note: refundNote,
+      })
+      setOrder((current) => current ? {
+        ...current,
+        refundRequest: {
+          allowed: false,
+          code: "ORDER_REFUND_REQUEST_EXISTS",
+          message: "A refund request is already pending for this order.",
+          openRequest: request,
+        },
+      } : current)
+      setRefundSuccess("Refund request submitted. Status: Pending review.")
+      setRefundOpen(false)
+      setRefundReason("")
+      setRefundNote("")
+    } catch (refundFailure) {
+      setRefundError(
+        refundFailure instanceof Error
+          ? refundFailure.message
+          : "Unable to submit refund request."
+      )
+    } finally {
+      setRefundSubmitting(false)
     }
   }
 
@@ -170,8 +216,33 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                   ) : order.cancellation?.message && auth.customer ? (
                     <p className="buyer-order-action-note">{order.cancellation.message}</p>
                   ) : null}
+                  {canRequestRefund ? (
+                    <button
+                      type="button"
+                      className="buyer-order-secondary-action"
+                      onClick={() => {
+                        setRefundOpen(true)
+                        setRefundError(undefined)
+                        setRefundSuccess(undefined)
+                      }}
+                    >
+                      Request refund
+                    </button>
+                  ) : order.refundRequest?.openRequest ? (
+                    <div className="buyer-order-refund-status">
+                      <strong>Refund requested</strong>
+                      <span>Pending review</span>
+                      <small>
+                        Submitted {order.refundRequest.openRequest.createdAt
+                          ? new Date(order.refundRequest.openRequest.createdAt).toLocaleDateString()
+                          : "recently"}
+                      </small>
+                    </div>
+                  ) : null}
                   {cancelSuccess ? <p className="buyer-order-action-success">{cancelSuccess}</p> : null}
                   {cancelError && !cancelOpen ? <p className="buyer-order-error">{cancelError}</p> : null}
+                  {refundSuccess ? <p className="buyer-order-action-success">{refundSuccess}</p> : null}
+                  {refundError && !refundOpen ? <p className="buyer-order-error">{refundError}</p> : null}
                   <a href="/store">Back to store</a>
                   <a href="/orders/lookup">Search another order</a>
                 </section>
@@ -209,6 +280,54 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                 onClick={() => void submitCancel()}
               >
                 {cancelSubmitting ? "Cancelling..." : "Cancel order"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+      {refundOpen && order ? (
+        <div className="buyer-order-modal-backdrop" role="presentation">
+          <div className="buyer-order-modal buyer-order-card" role="dialog" aria-modal="true" aria-labelledby="refund-request-title">
+            <header>
+              <p className="buyer-order-kicker">Order support</p>
+              <h2 id="refund-request-title">Request refund</h2>
+              <p>This submits a request for review. It does not immediately return money.</p>
+            </header>
+            {refundError ? <p className="buyer-order-error">{refundError}</p> : null}
+            <label className="buyer-order-field">
+              <span>Reason</span>
+              <select
+                value={refundReason}
+                onChange={(event) => setRefundReason(event.target.value)}
+              >
+                <option value="">Select a reason</option>
+                <option value="Ordered by mistake">Ordered by mistake</option>
+                <option value="Wrong item">Wrong item</option>
+                <option value="Item damaged">Item damaged</option>
+                <option value="Item not received">Item not received</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label className="buyer-order-field">
+              <span>Additional note optional</span>
+              <textarea
+                value={refundNote}
+                maxLength={1000}
+                onChange={(event) => setRefundNote(event.target.value)}
+                placeholder="Add details for the review team"
+              />
+            </label>
+            <footer>
+              <button type="button" disabled={refundSubmitting} onClick={() => setRefundOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="buyer-order-secondary-action"
+                disabled={refundSubmitting || !refundReason}
+                onClick={() => void submitRefundRequest()}
+              >
+                {refundSubmitting ? "Submitting..." : "Submit request"}
               </button>
             </footer>
           </div>

@@ -11,7 +11,14 @@ import {
   evaluateCancellationEligibility,
   loadCancellationContext,
 } from "../../../../../lib/order-cancellation"
+import {
+  evaluateRefundRequestEligibility,
+  serializeBuyerRefundRequest,
+  type BuyerRefundRequestRecord,
+} from "../../../../../lib/order-refund-request"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
+import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../../modules/buyer-refund-requests"
+import type BuyerRefundRequestsModuleService from "../../../../../modules/buyer-refund-requests/service"
 
 type OrderLineItem = {
   id?: string
@@ -136,19 +143,58 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     const metadata = order.metadata as Record<string, unknown> | null
-    const cancellation = hasAuthAccess
-      ? cancellationResponse(evaluateCancellationEligibility(
-        await loadCancellationContext(req, orderId, order),
-        {
-          authCustomerId: readAuthCustomerId(req),
-          requestedStoreId: resolveCurrentStore(req).store_id,
-        }
-      ))
+    const storeId = resolveCurrentStore(req).store_id
+    const cancellationContext = hasAuthAccess
+      ? await loadCancellationContext(req, orderId, order)
+      : null
+    const cancellation = hasAuthAccess && cancellationContext
+      ? cancellationResponse(evaluateCancellationEligibility(cancellationContext, {
+        authCustomerId: readAuthCustomerId(req),
+        requestedStoreId: storeId,
+      }))
       : {
         allowed: false,
         code: "ORDER_ACCESS_DENIED",
         message: "Guest order detail cannot cancel orders.",
       }
+    let refundRequest: Record<string, unknown>
+    if (hasAuthAccess && cancellationContext) {
+      const service = req.scope.resolve(BUYER_REFUND_REQUESTS_MODULE) as BuyerRefundRequestsModuleService & {
+        listBuyerRefundRequests: (
+          filters: Record<string, unknown>,
+          config?: Record<string, unknown>
+        ) => Promise<BuyerRefundRequestRecord[]>
+      }
+      const existingRequests = await service.listBuyerRefundRequests(
+        {
+          order_id: orderId,
+          customer_id: readAuthCustomerId(req),
+          store_id: storeId,
+        },
+        { order: { created_at: "DESC" } }
+      )
+      const eligibility = evaluateRefundRequestEligibility(cancellationContext, {
+        authCustomerId: readAuthCustomerId(req),
+        requestedStoreId: storeId,
+        existingRequests,
+      })
+      const openRequest = existingRequests.find((request) =>
+        ["pending", "approved", "processing"].includes(request.status ?? "")
+      )
+      refundRequest = {
+        allowed: eligibility.allowed,
+        code: eligibility.allowed ? null : eligibility.code,
+        message: eligibility.allowed ? null : eligibility.message,
+        open_request: openRequest ? serializeBuyerRefundRequest(openRequest) : null,
+      }
+    } else {
+      refundRequest = {
+        allowed: false,
+        code: "ORDER_ACCESS_DENIED",
+        message: "Guest order detail cannot request refunds.",
+        open_request: null,
+      }
+    }
 
     res.status(200).json({
       order_id: order.id,
@@ -169,6 +215,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       tax_total: readNumber(order.tax_total),
       total: readNumber(order.total),
       cancellation,
+      refund_request: refundRequest,
     })
   } catch (error: unknown) {
     if (error instanceof OrderStoreAccessError) {

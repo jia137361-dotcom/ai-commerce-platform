@@ -69,7 +69,8 @@
   color: #202636;
 }
 
-.buyer-order-field input {
+.buyer-order-field input,
+.buyer-order-field select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #d5dbe6;
@@ -91,7 +92,8 @@
   background: #fff;
 }
 
-.buyer-order-field input:focus {
+.buyer-order-field input:focus,
+.buyer-order-field select:focus {
   outline: 2px solid rgba(239, 90, 20, 0.22);
   border-color: #ef5a14;
 }
@@ -405,6 +407,32 @@
 .buyer-order-danger-action:disabled {
   opacity: 0.58;
   cursor: not-allowed;
+}
+
+.buyer-order-secondary-action {
+  border: 1px solid #ef5a14;
+  background: #ef5a14;
+  color: #fff;
+}
+
+.buyer-order-secondary-action:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.buyer-order-refund-status {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #f0d59b;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #fffaf0;
+  color: #654813;
+}
+
+.buyer-order-refund-status span,
+.buyer-order-refund-status small {
+  color: #81652d;
 }
 
 .buyer-order-action-note {
