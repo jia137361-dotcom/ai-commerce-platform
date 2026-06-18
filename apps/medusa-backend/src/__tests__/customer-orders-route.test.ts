@@ -288,9 +288,32 @@ describe("GET /store/customers/me/orders", () => {
     expect(orderModule.listOrders).toHaveBeenCalledWith(
       expect.objectContaining({ customer_id: "cus_a" }),
       expect.objectContaining({
-        select: expect.arrayContaining(["id", "display_id"]),
+        select: expect.arrayContaining(["id", "display_id", "canceled_at"]),
       })
     )
+  })
+
+  it("maps canceled_at orders to cancelled status", async () => {
+    const { req } = createReq({
+      listedOrders: [
+        {
+          id: "order_cancelled",
+          display_id: 801,
+          customer_id: "cus_a",
+          status: "pending",
+          canceled_at: "2026-06-18T08:00:00.000Z",
+          metadata: { store_id: "default_store", payment_status: "pending", mc_fulfillment_status: "none" },
+          items: [],
+        },
+      ],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.body).toMatchObject({
+      orders: [{ order_id: "order_cancelled", status: "cancelled" }],
+    })
   })
 
   it("keeps selector-owned orders when DTO omits customer_id", async () => {

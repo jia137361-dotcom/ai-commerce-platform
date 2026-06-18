@@ -1,6 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { GET as getOrderDetail } from "../api/store/orders/[id]/detail/route"
+import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
 
 type MockRes = MedusaResponse & {
   statusCode?: number
@@ -66,18 +67,28 @@ const createReq = ({
   retrievedOrder = order as Record<string, unknown>,
   retrieveError,
   authCustomerId = undefined,
+  cancellationOrder,
+  customFulfillmentOrders = [],
 }: {
   query?: Record<string, unknown>
   headers?: Record<string, string>
   retrievedOrder?: Record<string, unknown>
   retrieveError?: Error
   authCustomerId?: string
+  cancellationOrder?: Record<string, unknown>
+  customFulfillmentOrders?: Record<string, unknown>[]
 } = {}) => {
   const orderModule = {
     retrieveOrder: jest.fn(async () => {
       if (retrieveError) throw retrieveError
       return retrievedOrder
     }),
+  }
+  const queryGraph = {
+    graph: jest.fn(async () => ({ data: [cancellationOrder ?? retrievedOrder] })),
+  }
+  const fulfillmentOrders = {
+    listFulfillmentOrders: jest.fn(async () => customFulfillmentOrders),
   }
   const req = {
     params: { id: "order_1" },
@@ -87,12 +98,14 @@ const createReq = ({
     scope: {
       resolve: jest.fn((key: string) => {
         if (key === Modules.ORDER) return orderModule
+        if (key === ContainerRegistrationKeys.QUERY) return queryGraph
+        if (key === FULFILLMENT_ORDERS_MODULE) return fulfillmentOrders
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
   } as unknown as MedusaRequest
 
-  return { req, orderModule }
+  return { req, orderModule, queryGraph, fulfillmentOrders }
 }
 
 describe("GET /store/orders/:order_id/detail", () => {
@@ -120,6 +133,10 @@ describe("GET /store/orders/:order_id/detail", () => {
         },
       ],
       total: 2125,
+      cancellation: {
+        allowed: false,
+        code: "ORDER_ACCESS_DENIED",
+      },
     })
   })
 
@@ -130,6 +147,35 @@ describe("GET /store/orders/:order_id/detail", () => {
     await getOrderDetail(req, res)
 
     expect(res.status).toHaveBeenCalledWith(200)
+  })
+
+  it("returns cancellation eligibility for authenticated unpaid unfulfilled orders", async () => {
+    const { req } = createReq({
+      query: {},
+      authCustomerId: "cus_a",
+      retrievedOrder: {
+        ...order,
+        metadata: { store_id: "default_store", payment_status: "pending", mc_fulfillment_status: "none" },
+      },
+      cancellationOrder: {
+        ...order,
+        metadata: { store_id: "default_store", payment_status: "pending", mc_fulfillment_status: "none" },
+        payment_collections: [{ id: "paycol_1", captured_amount: 0, payments: [] }],
+        fulfillments: [],
+      },
+    })
+    const res = createRes()
+
+    await getOrderDetail(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      cancellation: {
+        allowed: true,
+        code: null,
+        message: null,
+      },
+    })
   })
 
   it("rejects authenticated customer mismatch even when email matches", async () => {

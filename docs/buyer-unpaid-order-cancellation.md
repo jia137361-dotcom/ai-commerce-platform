@@ -190,7 +190,7 @@ Batch 12A now includes a local smoke setup script for creating a real unpaid/unf
 XDG_CONFIG_HOME="$PWD/.tmp/medusa-config" \
 BATCH12A_CANCEL_SMOKE_ENABLED=true \
 BATCH12A_CUSTOMER_EMAIL=sijingtamctsy@gmail.com \
-BATCH12A_CANCEL_SMOKE_VARIANT_ID=variant_01KSNA40DZZ79AW9Z8EHHXPWTX \
+BATCH12A_CANCEL_SMOKE_VARIANT_ID=variant_01KTKH18WFHSGH5MXG2YG74PXM \
 npm --workspace apps/medusa-backend exec -- \
 medusa exec ./src/scripts/batch12a-cancel-smoke-setup.ts
 ```
@@ -202,8 +202,11 @@ Latest local DB evidence:
 - Medusa v2 order line data is connected through `order_item.order_id` and `order_item.item_id -> order_line_item.id`; `order_line_item.order_id` is not the correct shape.
 - Batch 11 successful shippable orders `order_01KVCQGGD8Z9MSQF3RW77RVMA3`, `order_01KVCQP5W3ZX5F2DBEFE2RKKX3`, and `order_01KVCQSAK0VJ02DDMTH52CA987` used `sales_channel_id=sc_01KRECKG3QNQS36N4X1QGVRDVY`, `region_id=reg_01KRMT56X5MCH0A9DTSNZ81GFW`, `currency_code=usd`, `product_id=prod_01KSNA40DBV62HFP07PCNTGXTY`, `variant_id=variant_01KSNA40DZZ79AW9Z8EHHXPWTX`, and `unit_price=2250`.
 - That successful product currently has no `product_sales_channel` link, so missing product-sales-channel link is not sufficient to explain the Batch 12A smoke failure.
-- The actual Batch 12A failure was caused by calling `updateCartWorkflow` after a line item already existed on the cart. That triggered `update-cart -> refresh-cart-items -> get-variant-items-with-prices` and failed with `Cannot read properties of undefined (reading 'calculated_amount')`.
+- The first Batch 12A failure was caused by calling `updateCartWorkflow` after a line item already existed on the cart. That triggered `update-cart -> refresh-cart-items -> get-variant-items-with-prices` and failed with `Cannot read properties of undefined (reading 'calculated_amount')`.
 - The smoke setup now binds customer/email/metadata on the empty cart first, then adds the line item, and does not call `updateCartWorkflow` after items exist.
+- Latest runtime proved that post-item update is no longer the active blocker: `medusa exec` initialized successfully, entered business logic, and failed at `last_step=add_line_item`.
+- The remaining blocker for the originally requested variant `variant_01KTKH18WFHSGH5MXG2YG74PXM` is add-to-cart calculated price lookup. The variant has a raw USD price, but Medusa `add-to-cart -> get-variant-items-with-prices` still returned no usable `calculated_amount`.
+- The smoke setup now preflights store-core cart addability and Pricing Module `calculatePrices` before add-to-cart. If the requested variant is unavailable, it emits an explicit reason and can fall back to another non-shippable cart-addable variant. It fails with `SMOKE_VARIANT_PRICE_UNAVAILABLE`, `SMOKE_VARIANT_NOT_CART_ADDABLE`, or `NO_CART_ADDABLE_SMOKE_VARIANT_FOUND` instead of leaking Medusa's internal `undefined.calculated_amount`.
 
 Successful output shape:
 
@@ -214,10 +217,12 @@ Successful output shape:
   "cart_id": "cart_...",
   "order_id": "order_...",
   "display_id": 123,
+  "requested_variant_id": "variant_...",
+  "actual_variant_id": "variant_...",
+  "variant_resolution_source": "requested_variant",
   "sales_channel_id": "sc_...",
   "region_id": "reg_...",
   "currency_code": "usd",
-  "variant_id": "variant_...",
   "line_item_unit_price": 2250,
   "order_status": "pending",
   "payment_status": "pending",
