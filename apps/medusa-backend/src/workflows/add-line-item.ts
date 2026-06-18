@@ -18,6 +18,7 @@ export type AddLineItemWorkflowInput = {
   cart_id: string
   variant_id: string
   quantity?: number
+  unit_price?: number
 }
 
 function readStoreIdFromMetadata(
@@ -38,6 +39,83 @@ function readProductStoreId(product: Record<string, unknown> | null | undefined)
 function readProductStatus(product: Record<string, unknown> | null | undefined): string | undefined {
   const status = product?.status
   return typeof status === "string" ? status : undefined
+}
+
+function readNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  if (value && typeof value === "object") {
+    const objectValue = value as { value?: unknown; numeric?: unknown }
+    return readNumber(objectValue.value ?? objectValue.numeric)
+  }
+  return null
+}
+
+async function calculateVariantUnitPrice(
+  container: MedusaContainer,
+  input: {
+    priceSetId: string
+    cart: Record<string, unknown>
+    quantity: number
+  }
+) {
+  const pricingModule = container.resolve(Modules.PRICING) as unknown as {
+    calculatePrices: (
+      filters: Record<string, unknown>,
+      context?: Record<string, unknown>
+    ) => Promise<Array<Record<string, unknown>>>
+  }
+
+  const pricingContext = {
+    currency_code:
+      typeof input.cart.currency_code === "string" ? input.cart.currency_code : "usd",
+    region_id:
+      typeof input.cart.region_id === "string" ? input.cart.region_id : undefined,
+    sales_channel_id:
+      typeof input.cart.sales_channel_id === "string"
+        ? input.cart.sales_channel_id
+        : undefined,
+    customer_id:
+      typeof input.cart.customer_id === "string" ? input.cart.customer_id : undefined,
+    quantity: input.quantity,
+  }
+
+  const calculatedPrices = await pricingModule.calculatePrices(
+    { id: [input.priceSetId] },
+    { context: pricingContext }
+  )
+  const calculatedPrice = calculatedPrices.find(
+    (price) =>
+      price.id === input.priceSetId ||
+      price.price_set_id === input.priceSetId
+  )
+  const calculatedAmount = readNumber(
+    calculatedPrice?.calculated_amount ?? calculatedPrice?.amount
+  )
+
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[add-line-item] pricing context", {
+      cart_id: input.cart.id,
+      region_id: pricingContext.region_id,
+      sales_channel_id: pricingContext.sales_channel_id,
+      currency_code: pricingContext.currency_code,
+      customer_id: pricingContext.customer_id,
+      quantity: pricingContext.quantity,
+      price_set_id: input.priceSetId,
+      calculated_amount: calculatedAmount,
+    })
+  }
+
+  if (calculatedAmount === null) {
+    throw new Error(
+      `Unable to calculate unit price for price set ${input.priceSetId}`
+    )
+  }
+
+  return calculatedAmount
 }
 
 const addLineItemStep = createStep(
@@ -91,16 +169,39 @@ const addLineItemStep = createStep(
       typeof linkedProduct.price === "number" && linkedProduct.price > 0
         ? linkedProduct.price
         : 19.99
-    await ensureVariantHasPriceSet(container, {
+    const priceSetId = await ensureVariantHasPriceSet(container, {
       variantId: input.variant_id,
       amount: Math.round(linkedPrice * 100),
       currencyCode: cart.currency_code || "usd",
     })
 
+    const quantity = input.quantity ?? 1
+    const calculatedUnitPrice =
+      typeof input.unit_price === "number" && Number.isFinite(input.unit_price)
+        ? input.unit_price
+        : await calculateVariantUnitPrice(container, {
+            priceSetId,
+            cart: cart as unknown as Record<string, unknown>,
+            quantity,
+          })
+
     const productionMetadata = await buildLineItemProductionMetadata(
       storeCoreService,
       linkedProduct
     )
+
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[add-line-item] add-to-cart payload", {
+        cart_id: input.cart_id,
+        variant_id: input.variant_id,
+        quantity,
+        region_id: cart.region_id,
+        sales_channel_id: cart.sales_channel_id,
+        currency_code: cart.currency_code,
+        unit_price: calculatedUnitPrice,
+        price_set_id: priceSetId,
+      })
+    }
 
     await addToCartWorkflow(container).run({
       input: {
@@ -108,7 +209,8 @@ const addLineItemStep = createStep(
         items: [
           {
             variant_id: input.variant_id,
-            quantity: input.quantity ?? 1,
+            quantity,
+            unit_price: calculatedUnitPrice,
             metadata: productionMetadata as unknown as Record<string, unknown>,
           },
         ],

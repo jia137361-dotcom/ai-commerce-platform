@@ -769,7 +769,14 @@ export async function createBatch12aCancellationSmokeOrder({
     })
     const variantId = variantResolution.actual_variant_id
 
-    step("add_line_item", { cart_id: cartId, variant_id: variantId })
+    step("add_line_item", {
+      cart_id: cartId,
+      variant_id: variantId,
+      region_id: regionId,
+      sales_channel_id: salesChannelId,
+      currency_code: currencyCode,
+      unit_price: variantResolution.calculated_amount,
+    })
     let addLineResult: unknown
     try {
       const addLineRun = await addLineItemWorkflow(container).run({
@@ -777,6 +784,7 @@ export async function createBatch12aCancellationSmokeOrder({
           cart_id: cartId,
           variant_id: variantId,
           quantity: 1,
+          unit_price: variantResolution.calculated_amount,
         },
       })
       addLineResult = addLineRun.result

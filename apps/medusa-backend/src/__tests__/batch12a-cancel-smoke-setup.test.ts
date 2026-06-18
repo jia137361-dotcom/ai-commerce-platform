@@ -261,6 +261,14 @@ describe("Batch 12A cancel smoke setup", () => {
 
     expect(mockCreateCartRun).toHaveBeenCalledTimes(1)
     expect(mockAddLineItemRun).toHaveBeenCalledTimes(1)
+    expect(mockAddLineItemRun).toHaveBeenCalledWith({
+      input: expect.objectContaining({
+        cart_id: "cart_smoke",
+        variant_id: "variant_smoke",
+        quantity: 1,
+        unit_price: 2250,
+      }),
+    })
     expect(mockUpdateCartRun).toHaveBeenCalledWith({
       input: expect.objectContaining({
         id: "cart_smoke",
@@ -373,7 +381,10 @@ describe("Batch 12A cancel smoke setup", () => {
     })
 
     expect(mockAddLineItemRun).toHaveBeenCalledWith({
-      input: expect.objectContaining({ variant_id: "variant_smoke" }),
+      input: expect.objectContaining({
+        variant_id: "variant_smoke",
+        unit_price: 2250,
+      }),
     })
     expect(orderModule.updateOrders).toHaveBeenCalledWith(
       "order_smoke",

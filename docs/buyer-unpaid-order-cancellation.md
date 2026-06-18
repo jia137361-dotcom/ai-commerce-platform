@@ -207,6 +207,7 @@ Latest local DB evidence:
 - Latest runtime proved that post-item update is no longer the active blocker: `medusa exec` initialized successfully, entered business logic, and failed at `last_step=add_line_item`.
 - The remaining blocker for the originally requested variant `variant_01KTKH18WFHSGH5MXG2YG74PXM` is add-to-cart calculated price lookup. The variant has a raw USD price, but Medusa `add-to-cart -> get-variant-items-with-prices` still returned no usable `calculated_amount`.
 - The smoke setup now preflights store-core cart addability and Pricing Module `calculatePrices` before add-to-cart. If the requested variant is unavailable, it emits an explicit reason and can fall back to another non-shippable cart-addable variant. It fails with `SMOKE_VARIANT_PRICE_UNAVAILABLE`, `SMOKE_VARIANT_NOT_CART_ADDABLE`, or `NO_CART_ADDABLE_SMOKE_VARIANT_FOUND` instead of leaking Medusa's internal `undefined.calculated_amount`.
+- Batch 12A then passes the preflight `calculated_amount` as `unit_price` into the project `addLineItemWorkflow`. The workflow logs the actual add-to-cart payload context (`cart_id`, `variant_id`, `quantity`, `region_id`, `sales_channel_id`, `currency_code`, `unit_price`) and sends `unit_price` to Medusa core `addToCartWorkflow`, avoiding the core `get-variant-items-with-prices` branch that dereferences a missing `calculatedPriceSet`.
 
 Successful output shape:
 
