@@ -28,6 +28,7 @@ type PaymentRecord = {
   status?: unknown
   amount?: unknown
   raw_amount?: unknown
+  currency_code?: unknown
   captured_at?: unknown
   captures?: PaymentCapture[] | null
   refunds?: PaymentRefund[] | null
@@ -36,6 +37,8 @@ type PaymentRecord = {
 type PaymentCollectionRecord = {
   id?: string
   status?: unknown
+  currency_code?: unknown
+  amount?: unknown
   completed_at?: unknown
   authorized_amount?: unknown
   raw_authorized_amount?: unknown
@@ -381,6 +384,8 @@ const loadOrderFromGraph = async (
       "metadata",
       "payment_collections.id",
       "payment_collections.status",
+      "payment_collections.currency_code",
+      "payment_collections.amount",
       "payment_collections.completed_at",
       "payment_collections.authorized_amount",
       "payment_collections.raw_authorized_amount",
@@ -388,6 +393,9 @@ const loadOrderFromGraph = async (
       "payment_collections.raw_captured_amount",
       "payment_collections.payments.id",
       "payment_collections.payments.status",
+      "payment_collections.payments.amount",
+      "payment_collections.payments.raw_amount",
+      "payment_collections.payments.currency_code",
       "payment_collections.payments.captured_at",
       "payment_collections.payments.captures.id",
       "payment_collections.payments.captures.amount",

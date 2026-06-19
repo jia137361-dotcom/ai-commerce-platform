@@ -185,6 +185,8 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
         allowed: eligibility.allowed,
         code: eligibility.allowed ? null : eligibility.code,
         message: eligibility.allowed ? null : eligibility.message,
+        requested_amount: eligibility.allowed ? eligibility.requestedAmount : null,
+        currency_code: eligibility.allowed ? eligibility.currencyCode : null,
         open_request: openRequest ? serializeBuyerRefundRequest(openRequest) : null,
       }
     } else {

@@ -1219,6 +1219,13 @@ export const getOrderDetail = async (orderId: string, email?: string): Promise<B
   return normalizeOrderDetail(payload, orderId)
 }
 
+export const getAuthenticatedOrderDetail = async (orderId: string): Promise<BuyerOrderDetail> => {
+  const payload = await apiFetch<ApiOrderDetailResponse>(
+    `/store/customers/me/orders/${encodeURIComponent(orderId)}`
+  )
+  return normalizeOrderDetail(payload, orderId)
+}
+
 const normalizeCancellation = (cancellation?: ApiOrderCancellation): BuyerOrderCancellation | undefined => {
   if (!cancellation) return undefined
   return {

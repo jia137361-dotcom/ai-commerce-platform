@@ -11,10 +11,12 @@ import {
   createRefundRequest,
   fetchStoreSettings,
   getBuyerStoreId,
+  getAuthenticatedOrderDetail,
   getOrderDetail,
   type BuyerOrderDetail,
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
+import { resolveOrderDetailActions } from "./order-detail-state"
 
 type OrderDetailPageProps = {
   orderId: string
@@ -87,7 +89,9 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
         return
       }
       try {
-        const result = await getOrderDetail(orderId, email)
+        const result = auth.customer
+          ? await getAuthenticatedOrderDetail(orderId)
+          : await getOrderDetail(orderId, email)
         if (!active) return
         setOrder(result)
       } catch (detailError) {
@@ -109,8 +113,13 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   if (order?.displayId) trackingParams.set("display_id", order.displayId)
   const trackingQuery = trackingParams.toString()
   const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
-  const canCancel = Boolean(auth.customer && order?.cancellation?.allowed)
-  const canRequestRefund = Boolean(auth.customer && order?.refundRequest?.allowed)
+  const actionState = resolveOrderDetailActions({
+    isAuthenticated: Boolean(auth.customer),
+    cancellation: order?.cancellation,
+    refundRequest: order?.refundRequest,
+  })
+  const canCancel = actionState.showCancel
+  const canRequestRefund = actionState.showRequestRefund
 
   const submitCancel = async () => {
     if (!order || !canCancel || cancelSubmitting) return
@@ -228,7 +237,7 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                     >
                       Request refund
                     </button>
-                  ) : order.refundRequest?.openRequest ? (
+                  ) : actionState.showPendingRefund && order.refundRequest?.openRequest ? (
                     <div className="buyer-order-refund-status">
                       <strong>Refund requested</strong>
                       <span>Pending review</span>
@@ -244,7 +253,11 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                   {refundSuccess ? <p className="buyer-order-action-success">{refundSuccess}</p> : null}
                   {refundError && !refundOpen ? <p className="buyer-order-error">{refundError}</p> : null}
                   <a href="/store">Back to store</a>
-                  <a href="/orders/lookup">Search another order</a>
+                  {actionState.showSearchAnotherOrder ? (
+                    <a href="/orders/lookup">Search another order</a>
+                  ) : (
+                    <a href="/account/orders">Back to orders</a>
+                  )}
                 </section>
               </aside>
             </section>

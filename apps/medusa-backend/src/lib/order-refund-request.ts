@@ -78,6 +78,156 @@ const paymentStatus = (order: CancellationOrder) =>
     order.payment_status ?? order.metadata?.[ORDER_META_PAYMENT_STATUS]
   )
 
+const readCurrency = (value: unknown) =>
+  typeof value === "string" && value.trim()
+    ? value.trim().toLowerCase()
+    : null
+
+type RefundableAmountResolution = {
+  amount: number
+  currencyCode: string
+  source:
+    | "payment_collection_captured_amount"
+    | "completed_payment_collection_amount"
+    | "captured_payment_amount"
+    | "captured_record_amount"
+    | "paid_payment_amount"
+    | "order_total"
+}
+
+export function resolveRefundableAmount(
+  order: CancellationOrder & {
+    currency_code?: string | null
+    total?: unknown
+    summary?: { total?: unknown } | null
+  }
+): RefundableAmountResolution | null {
+  const orderCurrency = readCurrency(order.currency_code)
+  const orderTotal = readNumber(order.total) || readNumber(order.summary?.total)
+  const capToOrderTotal = (amount: number) =>
+    orderTotal > 0 ? Math.min(amount, orderTotal) : amount
+
+  for (const collection of order.payment_collections ?? []) {
+    const row = collection as Record<string, unknown>
+    const collectionCurrency = readCurrency(row.currency_code) ?? orderCurrency
+    const capturedAmount =
+      readNumber(row.captured_amount) || readNumber(row.raw_captured_amount)
+    if (capturedAmount > 0 && collectionCurrency) {
+      return {
+        amount: capToOrderTotal(capturedAmount),
+        currencyCode: collectionCurrency,
+        source: "payment_collection_captured_amount",
+      }
+    }
+  }
+
+  for (const collection of order.payment_collections ?? []) {
+    const row = collection as Record<string, unknown>
+    const collectionCurrency = readCurrency(row.currency_code) ?? orderCurrency
+    const collectionStatus = normalizeStatus(row.status)
+    const completed = Boolean(row.completed_at) || [
+      "completed",
+      "captured",
+      "paid",
+      "partially_captured",
+    ].includes(collectionStatus)
+    const amount = readNumber(row.amount)
+    if (completed && amount > 0 && collectionCurrency) {
+      return {
+        amount: capToOrderTotal(amount),
+        currencyCode: collectionCurrency,
+        source: "completed_payment_collection_amount",
+      }
+    }
+  }
+
+  const capturedPaymentTotals = new Map<string, number>()
+  for (const collection of order.payment_collections ?? []) {
+    const row = collection as Record<string, unknown>
+    const collectionCurrency = readCurrency(row.currency_code) ?? orderCurrency
+    for (const payment of collection.payments ?? []) {
+      if (!payment.captured_at) continue
+      const currency = readCurrency(payment.currency_code) ?? collectionCurrency
+      const amount = readNumber(payment.amount) || readNumber(payment.raw_amount)
+      if (currency && amount > 0) {
+        capturedPaymentTotals.set(
+          currency,
+          (capturedPaymentTotals.get(currency) ?? 0) + amount
+        )
+      }
+    }
+  }
+  const capturedPaymentTotal = [...capturedPaymentTotals.entries()][0]
+  if (capturedPaymentTotal) {
+    return {
+      amount: capToOrderTotal(capturedPaymentTotal[1]),
+      currencyCode: capturedPaymentTotal[0],
+      source: "captured_payment_amount",
+    }
+  }
+
+  const captureTotals = new Map<string, number>()
+  for (const collection of order.payment_collections ?? []) {
+    const row = collection as Record<string, unknown>
+    const collectionCurrency = readCurrency(row.currency_code) ?? orderCurrency
+    for (const payment of collection.payments ?? []) {
+      const currency = readCurrency(payment.currency_code) ?? collectionCurrency
+      if (!currency) continue
+      for (const capture of payment.captures ?? []) {
+        const amount = readNumber(capture.amount) || readNumber(capture.raw_amount)
+        if (amount > 0) {
+          captureTotals.set(currency, (captureTotals.get(currency) ?? 0) + amount)
+        }
+      }
+    }
+  }
+  const captureTotal = [...captureTotals.entries()][0]
+  if (captureTotal) {
+    return {
+      amount: capToOrderTotal(captureTotal[1]),
+      currencyCode: captureTotal[0],
+      source: "captured_record_amount",
+    }
+  }
+
+  const paidPaymentTotals = new Map<string, number>()
+  for (const collection of order.payment_collections ?? []) {
+    const row = collection as Record<string, unknown>
+    const collectionCurrency = readCurrency(row.currency_code) ?? orderCurrency
+    const collectionPaid = ["completed", "captured", "paid", "partially_captured"].includes(
+      normalizeStatus(row.status)
+    ) || Boolean(row.completed_at)
+    for (const payment of collection.payments ?? []) {
+      const paymentPaid = collectionPaid || ["completed", "captured", "paid", "partially_captured"].includes(
+        normalizeStatus(payment.status)
+      )
+      if (!paymentPaid) continue
+      const currency = readCurrency(payment.currency_code) ?? collectionCurrency
+      const amount = readNumber(payment.amount) || readNumber(payment.raw_amount)
+      if (currency && amount > 0) {
+        paidPaymentTotals.set(currency, (paidPaymentTotals.get(currency) ?? 0) + amount)
+      }
+    }
+  }
+  const paidPaymentTotal = [...paidPaymentTotals.entries()][0]
+  if (paidPaymentTotal) {
+    return {
+      amount: capToOrderTotal(paidPaymentTotal[1]),
+      currencyCode: paidPaymentTotal[0],
+      source: "paid_payment_amount",
+    }
+  }
+
+  if (orderTotal > 0 && orderCurrency) {
+    return {
+      amount: orderTotal,
+      currencyCode: orderCurrency,
+      source: "order_total",
+    }
+  }
+  return null
+}
+
 const paymentEvidence = (order: CancellationOrder) => {
   let capturedAmount = 0
   let capturedAt = false
@@ -141,11 +291,10 @@ export function evaluateRefundRequestEligibility(
   const order = context.order as CancellationOrder & {
     currency_code?: string | null
     total?: unknown
+    summary?: { total?: unknown } | null
   }
-  const currencyCode =
-    typeof order.currency_code === "string" && order.currency_code.trim()
-      ? order.currency_code.trim().toLowerCase()
-      : null
+  const amountResolution = resolveRefundableAmount(order)
+  const currencyCode = amountResolution?.currencyCode ?? readCurrency(order.currency_code)
 
   if (!order.id) return denied("ORDER_NOT_FOUND", "Order was not found.", currencyCode)
   if (!input.authCustomerId || order.customer_id !== input.authCustomerId) {
@@ -191,15 +340,7 @@ export function evaluateRefundRequestEligibility(
     return denied("ORDER_NOT_PAID", "Only paid or captured orders can request a refund.", currencyCode)
   }
 
-  const total = readNumber(order.total)
-  const requestedAmount =
-    evidence.capturedAmount > 0 && total > 0
-      ? Math.min(evidence.capturedAmount, total)
-      : evidence.capturedAmount > 0
-        ? evidence.capturedAmount
-        : total
-
-  if (!currencyCode || requestedAmount <= 0) {
+  if (!amountResolution) {
     return denied(
       "ORDER_REFUND_NOT_SUPPORTED",
       "Unable to determine a refundable amount for this order.",
@@ -211,8 +352,8 @@ export function evaluateRefundRequestEligibility(
     allowed: true,
     code: null,
     message: null,
-    requestedAmount,
-    currencyCode,
+    requestedAmount: amountResolution.amount,
+    currencyCode: amountResolution.currencyCode,
   }
 }
 

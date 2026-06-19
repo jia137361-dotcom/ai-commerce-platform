@@ -134,13 +134,41 @@ The model reserves payment provider, external payment/refund/transaction ids, pr
 
 ## 9. Runtime Evidence
 
-Runtime acceptance still requires applying the new custom-module migration and exercising a paid/captured authenticated order such as a Batch 11 order. Expected result:
+The terminal-only pipeline smoke does not require a browser session or customer cookie:
 
-1. detail returns `refund_request.allowed=true`
-2. POST creates one pending request
-3. refresh shows `Pending review`
-4. duplicate POST returns 409
-5. authorized-not-captured Batch 12A order remains cancel-only
+```bash
+BATCH12B_PIPELINE_SMOKE_ENABLED=true \
+BATCH12B_PIPELINE_SMOKE_VARIANT_ID="variant_01KTKH18WFHSGH5MXG2YG74PXM" \
+npm --workspace apps/medusa-backend exec -- \
+  medusa exec ./src/scripts/batch12b-order-pipeline-smoke.ts
+```
+
+Pipeline A creates an authenticated authorized-not-captured order through the same cart and complete workflows used by Batch 12A. It verifies refund-request rejection, cancellation eligibility, official order cancellation, zero captured amount, and removal of the active payment authorization.
+
+Pipeline B first searches for real capture evidence. If none exists, it may create a second authorized order and call Medusa's official `capturePaymentWorkflow`. It never updates payment state directly and never invokes a refund workflow. A captured order creates one `pending` buyer refund request; repeating the eligibility check produces `ORDER_REFUND_REQUEST_EXISTS`, equivalent to the authenticated route's HTTP 409 response.
+
+Expected positive evidence includes:
+
+```text
+AUTHORIZED_CANCEL_RESULT=PASS
+AUTHORIZED_CAPTURED_AMOUNT=0
+AUTHORIZED_REFUND_ALLOWED=false
+CAPTURED_REFUND_ALLOWED=true
+REFUND_REQUEST_STATUS=pending
+DUPLICATE_RESULT=409
+CAPTURED_REFUND_RESULT=PASS
+```
+
+If the local provider cannot produce a captured payment, the script reports this explicitly instead of fabricating payment evidence:
+
+```text
+CAPTURED_SMOKE_UNAVAILABLE=provider_does_not_capture
+CAPTURED_REFUND_RESULT=SKIPPED
+```
+
+`pp_system_default` may produce only authorized-not-captured orders depending on local provider configuration. In that case the terminal smoke fully verifies the cancellation pipeline and refund-request rejection, while positive refund-request runtime remains dependent on a captured payment fixture or provider.
+
+On 2026-06-19 the script was invoked against the current local workspace, but Medusa could not acquire a PostgreSQL connection and repeatedly returned `KnexTimeoutError` for `SELECT 1`, including after the running Medusa processes were stopped. No pipeline PASS or SKIPPED result was recorded from that attempt. Re-run the command after the database service or connection quota is restored; the script intentionally does not translate infrastructure failure into a smoke result.
 
 No real refund is triggered by this smoke.
 
