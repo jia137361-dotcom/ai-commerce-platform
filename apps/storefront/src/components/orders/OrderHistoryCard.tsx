@@ -1,4 +1,5 @@
 import { formatBuyerMoney, type BuyerOrderSummary } from "../../lib/buyer-api"
+import { authenticatedOrderDetailHref } from "../../pages/orders/order-detail-state"
 
 export function OrderHistoryCard({ order }: { order: BuyerOrderSummary }) {
   return (
@@ -43,7 +44,7 @@ export function OrderHistoryCard({ order }: { order: BuyerOrderSummary }) {
       <footer>
         <span>{order.itemCount} item{order.itemCount === 1 ? "" : "s"}</span>
         <nav aria-label={`Order ${order.displayId ?? order.orderId} actions`}>
-          <a href={`/account/orders/${encodeURIComponent(order.orderId)}`}>View order</a>
+          <a href={authenticatedOrderDetailHref(order.orderId)}>View order</a>
           <a href={`/account/orders/${encodeURIComponent(order.orderId)}/tracking`}>Track order</a>
         </nav>
       </footer>

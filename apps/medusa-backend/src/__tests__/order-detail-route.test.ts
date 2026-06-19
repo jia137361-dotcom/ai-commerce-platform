@@ -1,7 +1,9 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { GET as getOrderDetail } from "../api/store/orders/[id]/detail/route"
+import { GET as getAuthenticatedOrderDetail } from "../api/store/customers/me/orders/[id]/route"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
+import { BUYER_REFUND_REQUESTS_MODULE } from "../modules/buyer-refund-requests"
 
 type MockRes = MedusaResponse & {
   statusCode?: number
@@ -69,6 +71,7 @@ const createReq = ({
   authCustomerId = undefined,
   cancellationOrder,
   customFulfillmentOrders = [],
+  refundRequests = [],
 }: {
   query?: Record<string, unknown>
   headers?: Record<string, string>
@@ -77,6 +80,7 @@ const createReq = ({
   authCustomerId?: string
   cancellationOrder?: Record<string, unknown>
   customFulfillmentOrders?: Record<string, unknown>[]
+  refundRequests?: Record<string, unknown>[]
 } = {}) => {
   const orderModule = {
     retrieveOrder: jest.fn(async () => {
@@ -90,6 +94,9 @@ const createReq = ({
   const fulfillmentOrders = {
     listFulfillmentOrders: jest.fn(async () => customFulfillmentOrders),
   }
+  const refundRequestService = {
+    listBuyerRefundRequests: jest.fn(async () => refundRequests),
+  }
   const req = {
     params: { id: "order_1" },
     query,
@@ -100,12 +107,13 @@ const createReq = ({
         if (key === Modules.ORDER) return orderModule
         if (key === ContainerRegistrationKeys.QUERY) return queryGraph
         if (key === FULFILLMENT_ORDERS_MODULE) return fulfillmentOrders
+        if (key === BUYER_REFUND_REQUESTS_MODULE) return refundRequestService
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
   } as unknown as MedusaRequest
 
-  return { req, orderModule, queryGraph, fulfillmentOrders }
+  return { req, orderModule, queryGraph, fulfillmentOrders, refundRequestService }
 }
 
 describe("GET /store/orders/:order_id/detail", () => {
@@ -149,6 +157,25 @@ describe("GET /store/orders/:order_id/detail", () => {
     expect(res.status).toHaveBeenCalledWith(200)
   })
 
+  it("authenticated detail wrapper requires a customer session", async () => {
+    const { req } = createReq({ query: {}, authCustomerId: undefined })
+    const res = createRes()
+
+    await getAuthenticatedOrderDetail(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(401)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_ACCESS_DENIED" } })
+  })
+
+  it("authenticated detail wrapper returns the current customer's order", async () => {
+    const { req } = createReq({ query: {}, authCustomerId: "cus_a" })
+    const res = createRes()
+
+    await getAuthenticatedOrderDetail(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+  })
+
   it("returns cancellation eligibility for authenticated unpaid unfulfilled orders", async () => {
     const { req } = createReq({
       query: {},
@@ -174,6 +201,84 @@ describe("GET /store/orders/:order_id/detail", () => {
         allowed: true,
         code: null,
         message: null,
+      },
+      refund_request: {
+        allowed: false,
+        code: "ORDER_NOT_PAID",
+      },
+    })
+  })
+
+  it("returns refund request eligibility for authenticated captured orders", async () => {
+    const capturedOrder = {
+      ...order,
+      currency_code: null,
+      total: null,
+      subtotal: null,
+      payment_collections: [{
+        id: "paycol_1",
+        status: "completed",
+        completed_at: "2026-06-16T07:17:27.482Z",
+        currency_code: "usd",
+        captured_amount: 2125,
+        payments: [{ id: "pay_1", captured_at: "2026-06-16T07:17:27.482Z", captures: [] }],
+        payment_sessions: [{ status: "captured" }],
+      }],
+      fulfillments: [],
+    }
+    const { req } = createReq({
+      query: {},
+      authCustomerId: "cus_a",
+      retrievedOrder: capturedOrder,
+      cancellationOrder: capturedOrder,
+    })
+    const res = createRes()
+
+    await getOrderDetail(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      cancellation: { allowed: false },
+      refund_request: {
+        allowed: true,
+        code: null,
+        requested_amount: 2125,
+        currency_code: "usd",
+        open_request: null,
+      },
+    })
+  })
+
+  it("does not offer refund requests for authorized-not-captured orders", async () => {
+    const authorizedOrder = {
+      ...order,
+      metadata: { ...order.metadata, payment_status: "authorized", mc_fulfillment_status: "none" },
+      payment_collections: [{
+        id: "paycol_1",
+        status: "authorized",
+        authorized_amount: 2125,
+        captured_amount: 0,
+        completed_at: null,
+        payments: [{ id: "pay_1", status: "authorized", captured_at: null, captures: [] }],
+        payment_sessions: [{ status: "authorized" }],
+      }],
+      fulfillments: [],
+    }
+    const { req } = createReq({
+      query: {},
+      authCustomerId: "cus_a",
+      retrievedOrder: authorizedOrder,
+      cancellationOrder: authorizedOrder,
+    })
+    const res = createRes()
+
+    await getOrderDetail(req, res)
+
+    expect(res.body).toMatchObject({
+      cancellation: { allowed: true },
+      refund_request: {
+        allowed: false,
+        code: "ORDER_AUTHORIZED_NOT_CAPTURED",
       },
     })
   })

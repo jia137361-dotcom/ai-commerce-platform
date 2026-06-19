@@ -42,6 +42,9 @@ export default defineConfig({
       resolve: "./src/modules/shipments"
     },
     {
+      resolve: "./src/modules/buyer-refund-requests"
+    },
+    {
       resolve: "@medusajs/medusa/payment",
       options: {
         providers: stripePaymentProviders,
@@ -49,4 +52,3 @@ export default defineConfig({
     },
   ]
 })
-
