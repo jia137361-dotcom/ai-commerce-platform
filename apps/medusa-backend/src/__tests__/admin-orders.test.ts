@@ -1,4 +1,4 @@
-import { buildFulfillmentTimeline, parseAdminOrdersListQuery } from "../lib/admin-orders"
+import { buildFulfillmentTimeline, parseAdminOrdersListQuery, summarizeAdminOrderRow } from "../lib/admin-orders"
 
 describe("parseAdminOrdersListQuery", () => {
   it("parses limit offset email display_id", () => {
@@ -10,6 +10,19 @@ describe("parseAdminOrdersListQuery", () => {
       email: "a@b.com",
       display_id: 1001,
     })
+  })
+})
+
+describe("summarizeAdminOrderRow", () => {
+  it("computes items_count and total from line items", () => {
+    expect(
+      summarizeAdminOrderRow({
+        items: [
+          { quantity: 2, unit_price: 19.99 },
+          { quantity: 1, unit_price: 5 },
+        ],
+      })
+    ).toEqual({ items_count: 3, total: 44.98 })
   })
 })
 

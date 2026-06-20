@@ -35,6 +35,8 @@ jest.mock("../lib/s2bdiy/push-s2b-order", () => ({
 
 jest.mock("../modules/suppliers/s2bdiy/config", () => ({
   getS2bdiyConfig: () => null,
+  isS2bdiyEnabled: () => false,
+  isS2bdiyMockMode: () => false,
 }))
 
 import { POST as completeCart } from "../api/store/carts/[id]/complete/route"

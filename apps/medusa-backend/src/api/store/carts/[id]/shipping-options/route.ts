@@ -7,6 +7,7 @@ import {
 } from "../../../../../lib/assert-cart-store"
 import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
+import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
 
 type ShippingOptionResult = {
   id?: string
@@ -57,10 +58,17 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const cart_id = req.params.id as string
     const cartModule = req.scope.resolve(Modules.CART)
-    const cart = (await cartModule.retrieveCart(cart_id, {
+    let cart = (await cartModule.retrieveCart(cart_id, {
       relations: ["items", "shipping_address"],
     })) as CartForShippingOptions
     assertCartBelongsToCurrentStore(req, cart)
+
+    const synced = await syncCartLineItemShippingRequirements(req.scope, cart_id, cart.items)
+    if (synced) {
+      cart = (await cartModule.retrieveCart(cart_id, {
+        relations: ["items", "shipping_address"],
+      })) as CartForShippingOptions
+    }
 
     const requiresShipping = Boolean(cart.items?.some((item) => item.requires_shipping))
     if (requiresShipping && !cart.shipping_address?.country_code) {

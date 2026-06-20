@@ -177,6 +177,7 @@ export async function generateAndCreateDraft(
       marketplace_category: payload.marketplace_category ?? null,
       marketplace_category_label: payload.marketplace_category_label ?? null,
       gallery: Array.isArray(generated.gallery) ? generated.gallery : [],
+      requires_shipping: true,
     },
   })
 

@@ -21,9 +21,15 @@ export default defineConfig({
     databaseUrl: process.env.DATABASE_URL,
     redisUrl: process.env.REDIS_URL,
     http: {
-      storeCors: process.env.STORE_CORS || "http://localhost:8000,http://localhost:3000",
-      adminCors: process.env.ADMIN_CORS || "http://localhost:7000,http://localhost:7001,http://localhost:5173",
-      authCors: process.env.AUTH_CORS || "http://localhost:7000,http://localhost:7001,http://localhost:5173",
+      storeCors:
+        process.env.STORE_CORS ||
+        "http://127.0.0.1:5174,http://localhost:5174,http://localhost:8000,http://localhost:3000",
+      adminCors:
+        process.env.ADMIN_CORS ||
+        "http://127.0.0.1:5173,http://localhost:5173,http://localhost:7000,http://localhost:7001",
+      authCors:
+        process.env.AUTH_CORS ||
+        "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174,http://localhost:7000,http://localhost:7001",
       jwtSecret: process.env.JWT_SECRET || "development-jwt-secret",
       cookieSecret: process.env.COOKIE_SECRET || "development-cookie-secret"
     }

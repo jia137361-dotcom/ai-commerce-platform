@@ -17,6 +17,7 @@ const STATUSES = [
   { id: "published" as const, label: "Published" },
   { id: "draft" as const, label: "Draft" },
   { id: "failed" as const, label: "Failed" },
+  { id: "archived" as const, label: "Archived" },
 ]
 
 const isFailedProduct = (product: NormalizedProduct) => {
@@ -64,6 +65,9 @@ export function ProductListPage() {
       toast.push("Product archived", "success")
       setDeleteId(null)
     },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Archive failed", "error")
+    },
   })
 
   const publishMutation = useMutation({
@@ -72,12 +76,45 @@ export function ProductListPage() {
       queryClient.invalidateQueries({ queryKey: ["products"] })
       toast.push("Product published", "success")
     },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Publish failed", "error")
+    },
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(storeProductPath(id), {
+        method: "PUT",
+        body: JSON.stringify({ status: "draft" }),
+      }),
+    onSuccess: (_res, id) => {
+      queryClient.invalidateQueries({ queryKey: ["products"] })
+      toast.push("Product restored to draft", "success")
+      navigate(`/products/${id}/edit`)
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Restore failed", "error")
+    },
   })
 
   const duplicateMutation = useMutation({
     mutationFn: (id: string) =>
       apiFetch<{ product_id: string }>(`/admin/products/${id}/duplicate`, { method: "POST" }),
     onSuccess: (res) => navigate(`/products/${res.product_id}/edit`),
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Duplicate failed", "error")
+    },
+  })
+
+  const retryMutation = useMutation({
+    mutationFn: (jobId: string) => apiFetch(`/admin/ai/jobs/${jobId}/retry`, { method: "POST" }),
+    onSuccess: (_res, jobId) => {
+      toast.push("Retrying AI generation…", "info")
+      navigate(`/ai-studio/progress/${jobId}`)
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Retry failed", "error")
+    },
   })
 
   const products = data?.products ?? []
@@ -138,9 +175,11 @@ export function ProductListPage() {
           description={
             status === "all"
               ? "Create your first AI-powered product draft."
-              : status === "failed"
+                : status === "failed"
                 ? "Failed products are AI drafts with generation or S2B provisioning errors."
-                : `Switch to All to see every product, or create a new ${status}.`
+                : status === "archived"
+                  ? "Archived products are hidden from your storefront. Restore to draft to edit again."
+                  : `Switch to All to see every product, or create a new ${status}.`
           }
           actionLabel={status === "all" ? "New with AI" : undefined}
           onAction={status === "all" ? () => navigate("/ai-studio/create") : undefined}
@@ -159,6 +198,11 @@ export function ProductListPage() {
             <tbody>
               {products.map((product) => {
                 const displayStatus = isFailedProduct(product) ? "Failed" : product.status
+                const failedJobId =
+                  product.ai_job_id ??
+                  (typeof product.metadata?.ai_job_id === "string"
+                    ? product.metadata.ai_job_id
+                    : undefined)
                 const thumb =
                   product.mockup_image_url ||
                   product.design_image_url ||
@@ -191,22 +235,52 @@ export function ProductListPage() {
                         }
                         items={[
                           {
-                            label: "Edit",
+                            label: product.status === "archived" ? "View" : "Edit",
                             onClick: () => navigate(`/products/${productId}/edit`),
                           },
                           {
                             label: "Duplicate",
                             onClick: () => duplicateMutation.mutate(productId),
                           },
-                          {
-                            label: "Delete",
-                            variant: "danger",
-                            onClick: () => setDeleteId(productId),
-                          },
-                          ...(product.status === "draft"
+                          ...(product.status === "archived"
+                            ? [
+                                {
+                                  label: "Restore to draft",
+                                  variant: "primary" as const,
+                                  onClick: () => restoreMutation.mutate(productId),
+                                },
+                              ]
+                            : [
+                                {
+                                  label: "Archive",
+                                  variant: "danger" as const,
+                                  onClick: () => setDeleteId(productId),
+                                },
+                              ]),
+                          ...(isFailedProduct(product) && failedJobId
+                            ? [
+                                {
+                                  label: "Retry AI",
+                                  variant: "primary" as const,
+                                  onClick: () => retryMutation.mutate(failedJobId),
+                                },
+                              ]
+                            : []),
+                          ...(product.status === "draft" && !isFailedProduct(product)
                             ? [
                                 {
                                   label: "Publish",
+                                  variant: "primary" as const,
+                                  onClick: () => publishMutation.mutate(productId),
+                                },
+                              ]
+                            : []),
+                          ...(product.status === "published" &&
+                          product.is_cart_addable === false &&
+                          !isFailedProduct(product)
+                            ? [
+                                {
+                                  label: "Enable cart",
                                   variant: "primary" as const,
                                   onClick: () => publishMutation.mutate(productId),
                                 },

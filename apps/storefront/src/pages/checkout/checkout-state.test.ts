@@ -23,5 +23,10 @@ describe("checkout state", () => {
     const cart = { ...validCart, hasTotal: false, items: [{ ...validCart.items[0], hasTotal: false, hasUnitPrice: false }] }
     expect(resolveCheckoutState({ ...base, cart }).canPlaceOrder).toBe(false)
   })
-  it("allows a valid non-shipping order without address or shipping method", () => expect(resolveCheckoutState(base).canPlaceOrder).toBe(true))
+  it("allows guest checkout when contact is valid", () =>
+    expect(resolveCheckoutState({ ...base, authenticated: false }).canPlaceOrder).toBe(true)
+  )
+  it("allows a valid non-shipping order without address or shipping method", () =>
+    expect(resolveCheckoutState(base).canPlaceOrder).toBe(true)
+  )
 })

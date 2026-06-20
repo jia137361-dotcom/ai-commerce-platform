@@ -18,7 +18,6 @@ export const resolveCheckoutState = (input: CheckoutStateInput) => {
   if (!input.cart?.items.length) disabledReason = "Cart is empty."
   else if (!canCheckoutCart(input.cart)) disabledReason = "Resolve unavailable cart items or missing prices."
   else if (input.authLoading) disabledReason = "Checking account session."
-  else if (!input.authenticated) disabledReason = "Sign in before placing an authenticated order."
   else if (!input.contactValid) disabledReason = "Enter a valid email, phone, and receiver name."
   else if (input.placingOrder) disabledReason = "Placing order..."
   else if (input.requiresShippingMethod && !input.addressValid) disabledReason = "Enter a complete delivery address."

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiFetch, ApiError } from "../../lib/api-client"
+import { apiFetch, ApiError, STOREFRONT_URL } from "../../lib/api-client"
 import { storeProductPath } from "../../lib/store-product-api"
 import { buildProductGallery } from "../../lib/product-gallery"
 import { useToast } from "../../components/ToastProvider"
@@ -23,6 +23,7 @@ type SupplierVariant = {
 
 type EditLocationState = {
   product?: NormalizedProduct
+  generation?: Record<string, unknown>
 }
 
 const toVariantRows = (
@@ -69,6 +70,7 @@ export function EditDraftPage() {
   const [variantsInitialized, setVariantsInitialized] = useState(false)
 
   const stateProduct = (location.state as EditLocationState | null)?.product
+  const stateGeneration = (location.state as EditLocationState | null)?.generation
 
   const { data, isLoading } = useQuery({
     queryKey: ["product", id],
@@ -98,6 +100,7 @@ export function EditDraftPage() {
   const [price, setPrice] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
+  const [requiresShipping, setRequiresShipping] = useState(true)
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
 
   useEffect(() => {
@@ -108,6 +111,13 @@ export function EditDraftPage() {
     setDescription(p.description ?? "")
     setPrice(String(p.price ?? ""))
     setTags(Array.isArray(p.tags) ? p.tags : [])
+    setRequiresShipping(
+      typeof p.requires_shipping === "boolean"
+        ? p.requires_shipping
+        : typeof p.metadata?.requires_shipping === "boolean"
+          ? p.metadata.requires_shipping
+          : Boolean(p.supplier_product_id || p.platform_product_id)
+    )
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
@@ -131,7 +141,9 @@ export function EditDraftPage() {
     setVariantsInitialized(true)
   }, [supplierData, product, variants.length, variantsInitialized, price])
 
-  const { mockups, diyAssets } = buildProductGallery(product)
+  const { mockups, diyAssets } = buildProductGallery(product, stateGeneration, {
+    cacheKey: product?.ai_job_id ?? null,
+  })
   const previewOptions = mockups
 
   const activePreviewUrl =
@@ -156,6 +168,11 @@ export function EditDraftPage() {
     price: parsePrice(),
     tags,
     variants,
+    requires_shipping: requiresShipping,
+    metadata: {
+      ...(product?.metadata ?? {}),
+      requires_shipping: requiresShipping,
+    },
   })
 
   const formatError = (err: unknown) => {
@@ -218,6 +235,31 @@ export function EditDraftPage() {
     },
   })
 
+  const restoreMutation = useMutation({
+    mutationFn: () =>
+      apiFetch(storeProductPath(id!), {
+        method: "PUT",
+        body: JSON.stringify({ status: "draft" }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] })
+      queryClient.invalidateQueries({ queryKey: ["product", id] })
+      toast.push("Restored to draft — you can edit again", "success")
+    },
+    onError: (err: unknown) => {
+      toast.push(formatError(err), "error")
+    },
+  })
+
+  const duplicateMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ product_id: string }>(`/admin/products/${id}/duplicate`, { method: "POST" }),
+    onSuccess: (res) => navigate(`/products/${res.product_id}/edit`),
+    onError: (err: unknown) => {
+      toast.push(formatError(err), "error")
+    },
+  })
+
   const updateVariant = (
     index: number,
     field: keyof ProductVariantRow,
@@ -253,7 +295,20 @@ export function EditDraftPage() {
     return <p className="text-slate-600">Product not found</p>
   }
 
-  const isBusy = saveMutation.isPending || publishMutation.isPending
+  const openPreview = () => {
+    if (product.status !== "published") {
+      toast.push("Publish the product first to preview it on the buyer storefront.", "info")
+      return
+    }
+    window.open(`${STOREFRONT_URL}/products/${product.product_id}`, "_blank", "noopener,noreferrer")
+  }
+
+  const isArchived = product.status === "archived"
+  const isBusy =
+    saveMutation.isPending ||
+    publishMutation.isPending ||
+    restoreMutation.isPending ||
+    duplicateMutation.isPending
 
   return (
     <div>
@@ -262,23 +317,58 @@ export function EditDraftPage() {
           <Link to="/products" className="text-slate-500 hover:text-brand">
             ← Back
           </Link>
-          <h1 className="text-2xl font-bold">Edit Draft</h1>
+          <h1 className="text-2xl font-bold">{isArchived ? "Archived product" : "Edit Draft"}</h1>
           <Badge label={product.status} />
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">Preview</Button>
-          {product.status === "draft" ? (
-            <Button
-              disabled={isBusy}
-              onClick={() => {
-                if (validateBeforeSave()) publishMutation.mutate()
-              }}
-            >
-              {publishMutation.isPending ? "Publishing…" : "Publish"}
-            </Button>
-          ) : null}
+          {!isArchived ? (
+            <>
+              <Button variant="outline" type="button" onClick={openPreview}>
+                Preview
+              </Button>
+              {product.status === "draft" ? (
+                <Button
+                  disabled={isBusy}
+                  onClick={() => {
+                    if (validateBeforeSave()) publishMutation.mutate()
+                  }}
+                >
+                  {publishMutation.isPending ? "Publishing…" : "Publish"}
+                </Button>
+              ) : product.is_cart_addable === false ? (
+                <Button
+                  disabled={isBusy}
+                  onClick={() => {
+                    if (validateBeforeSave()) publishMutation.mutate()
+                  }}
+                >
+                  {publishMutation.isPending ? "Enabling…" : "Enable cart"}
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                disabled={isBusy}
+                onClick={() => duplicateMutation.mutate()}
+              >
+                {duplicateMutation.isPending ? "Duplicating…" : "Duplicate"}
+              </Button>
+              <Button disabled={isBusy} onClick={() => restoreMutation.mutate()}>
+                {restoreMutation.isPending ? "Restoring…" : "Restore to draft"}
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {isArchived ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          This product is archived and cannot be edited. Restore it to draft or duplicate to create
+          a new editable copy.
+        </div>
+      ) : null}
 
       <form onSubmit={onSubmit} className="grid gap-8 lg:grid-cols-2">
         <div className="space-y-4">
@@ -379,6 +469,7 @@ export function EditDraftPage() {
             <Input
               className="mt-1 text-lg font-semibold"
               value={title}
+              disabled={isArchived}
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
@@ -388,6 +479,7 @@ export function EditDraftPage() {
               className="mt-1"
               rows={5}
               value={description}
+              disabled={isArchived}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
@@ -399,6 +491,7 @@ export function EditDraftPage() {
                 type="number"
                 step="0.01"
                 value={price}
+                disabled={isArchived}
                 onChange={(e) => setPrice(e.target.value)}
               />
             </div>
@@ -416,11 +509,14 @@ export function EditDraftPage() {
                   className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm"
                 >
                   {tag}
-                  <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))}>
-                    ×
-                  </button>
+                  {!isArchived ? (
+                    <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))}>
+                      ×
+                    </button>
+                  ) : null}
                 </span>
               ))}
+              {!isArchived ? (
               <button
                 type="button"
                 className="rounded-full border border-dashed border-brand px-3 py-1 text-sm text-brand"
@@ -431,7 +527,30 @@ export function EditDraftPage() {
               >
                 + Add tag
               </button>
+              ) : null}
             </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-900">Fulfillment</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Controls whether buyers must enter a delivery address and shipping method at checkout.
+            </p>
+            <label className="mt-4 flex items-start gap-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300"
+                checked={requiresShipping}
+                disabled={isArchived}
+                onChange={(e) => setRequiresShipping(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-slate-900">Requires physical delivery</span>
+                <span className="mt-1 block text-slate-500">
+                  Turn off only for digital goods that never ship.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="rounded-lg border border-slate-200">
@@ -454,12 +573,14 @@ export function EditDraftPage() {
                       <td className="px-4 py-2">
                         <Input
                           value={variant.color}
+                          disabled={isArchived}
                           onChange={(e) => updateVariant(index, "color", e.target.value)}
                         />
                       </td>
                       <td className="px-4 py-2">
                         <Input
                           value={variant.size}
+                          disabled={isArchived}
                           onChange={(e) => updateVariant(index, "size", e.target.value)}
                         />
                       </td>
@@ -468,6 +589,7 @@ export function EditDraftPage() {
                           type="number"
                           min={0}
                           value={variant.stock}
+                          disabled={isArchived}
                           onChange={(e) => updateVariant(index, "stock", e.target.value)}
                         />
                       </td>
@@ -477,6 +599,7 @@ export function EditDraftPage() {
                           step="0.01"
                           min={0}
                           value={variant.price}
+                          disabled={isArchived}
                           onChange={(e) => updateVariant(index, "price", e.target.value)}
                         />
                       </td>
@@ -489,6 +612,7 @@ export function EditDraftPage() {
             )}
           </div>
 
+          {!isArchived ? (
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button type="submit" variant="outline" disabled={isBusy}>
               Save as Draft
@@ -503,11 +627,22 @@ export function EditDraftPage() {
               >
                 {publishMutation.isPending ? "Publishing…" : "Publish to Storefront"}
               </Button>
+            ) : product.is_cart_addable === false ? (
+              <Button
+                type="button"
+                disabled={isBusy}
+                onClick={() => {
+                  if (validateBeforeSave()) publishMutation.mutate()
+                }}
+              >
+                {publishMutation.isPending ? "Enabling…" : "Enable cart checkout"}
+              </Button>
             ) : null}
             <Button type="button" variant="danger" onClick={() => setConfirmArchive(true)}>
               Archive
             </Button>
           </div>
+          ) : null}
         </Card>
       </form>
 

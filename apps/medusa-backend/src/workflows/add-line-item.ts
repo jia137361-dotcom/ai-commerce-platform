@@ -8,8 +8,10 @@ import {
 import { Modules } from "@medusajs/framework/utils"
 import { addToCartWorkflow } from "@medusajs/medusa/core-flows"
 import { CartStoreMismatchError } from "../lib/cart-store-error"
+import { ensureDefaultSalesChannelStockLocation } from "../lib/ensure-native-bridge-cartable"
 import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
 import { buildLineItemProductionMetadata } from "../lib/line-item-production-metadata"
+import { resolveProductRequiresShipping } from "../lib/product-shipping"
 import { resolveLinkedProductForVariant } from "../lib/resolve-linked-product"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
@@ -121,6 +123,7 @@ async function calculateVariantUnitPrice(
 const addLineItemStep = createStep(
   "add-line-item-step",
   async (input: AddLineItemWorkflowInput, { container }: { container: MedusaContainer }) => {
+    await ensureDefaultSalesChannelStockLocation(container)
     const cartModule = container.resolve(Modules.CART)
     const productModule = container.resolve(Modules.PRODUCT)
     const storeCoreService = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
@@ -189,6 +192,9 @@ const addLineItemStep = createStep(
       storeCoreService,
       linkedProduct
     )
+    const requiresShipping = resolveProductRequiresShipping(
+      linkedProduct as Record<string, unknown>
+    )
 
     if (process.env.NODE_ENV !== "production") {
       console.info("[add-line-item] add-to-cart payload", {
@@ -200,6 +206,7 @@ const addLineItemStep = createStep(
         currency_code: cart.currency_code,
         unit_price: calculatedUnitPrice,
         price_set_id: priceSetId,
+        requires_shipping: requiresShipping,
       })
     }
 
@@ -211,6 +218,7 @@ const addLineItemStep = createStep(
             variant_id: input.variant_id,
             quantity,
             unit_price: calculatedUnitPrice,
+            requires_shipping: requiresShipping,
             metadata: productionMetadata as unknown as Record<string, unknown>,
           },
         ],

@@ -88,6 +88,15 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
     return () => { active = false }
   }, [loadStore, loadVersion])
 
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab")
+    if (!tab) return
+    const targetId = tab === "category" ? "products" : tab
+    window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [loadVersion])
+
   const visibleCategories = useMemo(() => {
     const usedIds = new Set(products.flatMap((product) => product.categoryIds ?? []))
     const all = categories.find((category) => category.id === "all") ?? { id: "all", name: "All items" }
@@ -158,6 +167,21 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
           hasFilters={hasFilters}
           onRetry={() => setLoadVersion((version) => version + 1)}
         />
+      </section>
+
+      <section className="buyer-shop-about" id="about">
+        <SectionHeader eyebrow="About" title={settings.brandName} description="Curated products with protected checkout and order support." />
+        <p className="buyer-shop-about-copy">
+          Browse published items from our seller studio, add to cart, and check out with your buyer account.
+          Questions? Visit the <a href="/help">Help Center</a>.
+        </p>
+      </section>
+
+      <section className="buyer-shop-reviews" id="reviews">
+        <SectionHeader eyebrow="Reviews" title="Customer feedback" description="Ratings appear on each product detail page." />
+        <p className="buyer-shop-about-copy">
+          Open any product to read reviews and share your experience after delivery.
+        </p>
       </section>
     </PageShell>
   )

@@ -65,9 +65,9 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
 
     setSettings(settingsResult.data)
     setReviewSource(reviewsResult.source)
-    setReviews(reviewsResult.source === "backend" ? reviewsResult.data : null)
+    setReviews(reviewsResult.data)
 
-    if (productResult.source !== "backend") {
+    if (!productResult.data) {
       setProduct(null)
       setShare(null)
       setRecommendations([])
@@ -78,15 +78,23 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     }
 
     const realProduct = productResult.data
-    const shareResult = await fetchProductShare(realProduct)
+    const shareResult =
+      productResult.source === "backend"
+        ? await fetchProductShare(realProduct)
+        : { data: null as BuyerShareInfo | null, source: productResult.source as DataSource, error: undefined }
     if (!isActive()) return
     setProduct(realProduct)
     setSelectedVariantId(realProduct.variants?.[0]?.id ?? realProduct.medusaVariantId)
-    setRecommendations(productsResult.source === "backend" ? productsResult.data.filter((item) => item.id !== realProduct.id).slice(0, 4) : [])
+    setRecommendations(
+      productsResult.data.filter((item) => item.id !== realProduct.id).slice(0, 4)
+    )
     setShare(shareResult.data)
     setShareSource(shareResult.source)
     setShareError(shareResult.error)
     setNotices([
+      ...(productResult.source !== "backend"
+        ? [{ label: "product", message: productResult.error ?? "Showing fallback product data." }]
+        : []),
       { label: "reviews", message: reviewsResult.error },
       { label: "store", message: settingsResult.error },
       { label: "recommendations", message: productsResult.error },
@@ -98,7 +106,9 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   useEffect(() => {
     let active = true
     void loadProduct(() => active)
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [loadProduct, loadVersion])
 
   const galleryImages = useMemo(() => product ? [product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[] : [], [product])

@@ -55,14 +55,21 @@ const createReq = ({
   headers = baseHeaders,
   cart = baseCart,
   cartAfter = { ...baseCart, shipping_methods: [{ id: "sm_1", shipping_option_id: "so_1" }] },
+  listProducts = jest.fn().mockResolvedValue([]),
 }: {
   body?: Record<string, unknown>
   headers?: Record<string, string>
   cart?: Record<string, unknown>
   cartAfter?: Record<string, unknown>
+  listProducts?: jest.Mock
 } = {}) => {
   const cartModule = {
-    retrieveCart: jest.fn().mockResolvedValueOnce(cart).mockResolvedValueOnce(cartAfter),
+    retrieveCart: jest
+      .fn()
+      .mockResolvedValueOnce(cart)
+      .mockResolvedValueOnce(cartAfter)
+      .mockResolvedValue(cartAfter),
+    updateLineItems: jest.fn().mockResolvedValue(undefined),
   }
   const req = {
     params: { id: "cart_1" },
@@ -71,12 +78,13 @@ const createReq = ({
     scope: {
       resolve: jest.fn((key: string) => {
         if (key === Modules.CART) return cartModule
+        if (key === "store_core") return { listProducts }
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
   } as unknown as MedusaRequest
 
-  return { req, cartModule }
+  return { req, cartModule, listProducts }
 }
 
 describe("GET /store/carts/:cart_id/shipping-options", () => {

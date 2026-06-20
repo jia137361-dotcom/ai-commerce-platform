@@ -10,7 +10,7 @@ import {
   ORDER_META_FULFILLMENT_STATUS,
   normalizeOrderMetadata,
 } from "../order-custom-metadata"
-import { requireS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { getS2bdiyConfig, isS2bdiyEnabled, isS2bdiyMockMode } from "../../modules/suppliers/s2bdiy/config"
 import { S2bdiyClient } from "../../modules/suppliers/s2bdiy/s2bdiy-client"
 import { getOrderDetailClient } from "../../modules/suppliers/s2bdiy/s2bdiy-order"
 import {
@@ -31,7 +31,10 @@ export async function syncSupplierOrderById(
     return
   }
 
-  const config = requireS2bdiyConfig()
+  const config = getS2bdiyConfig()
+  if (!config) {
+    return
+  }
   const client = new S2bdiyClient(config)
   const detail = await getOrderDetailClient(client, row.supplier_order_id)
 
@@ -103,7 +106,7 @@ export async function syncSupplierOrderById(
 }
 
 export async function syncPendingSupplierOrders(container: MedusaContainer): Promise<number> {
-  if (!process.env.S2BDIY_API_BASE_URL) {
+  if (!isS2bdiyEnabled() || isS2bdiyMockMode()) {
     return 0
   }
   const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService

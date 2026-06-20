@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiFetch } from "../lib/api-client"
+import { apiFetch, STOREFRONT_URL } from "../lib/api-client"
 import { useAuthStore } from "../lib/auth-store"
 import { cn } from "../lib/cn"
 import type { StoreNotification } from "@ai-commerce/shared-types"
@@ -103,6 +103,7 @@ export function Navbar() {
   const navigate = useNavigate()
   const location = useLocation()
   const { email, logout } = useAuthStore()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const isActive = (to: string) => {
     if (to === "/products") return location.pathname.startsWith("/products")
@@ -135,6 +136,14 @@ export function Navbar() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+            aria-label="Open navigation"
+            onClick={() => setMobileOpen((open) => !open)}
+          >
+            ☰
+          </button>
           <Link to="/products" className="hidden text-sm text-slate-500 hover:text-brand sm:inline">
             ← Back to Dashboard
           </Link>
@@ -154,6 +163,23 @@ export function Navbar() {
           </button>
         </div>
       </div>
+      {mobileOpen ? (
+        <nav className="flex flex-col gap-2 border-t border-slate-200 px-6 py-4 md:hidden">
+          {NAV.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={cn(
+                "rounded-lg px-3 py-2 text-sm font-medium",
+                isActive(item.to) ? "bg-brand-light text-brand" : "text-slate-600"
+              )}
+              onClick={() => setMobileOpen(false)}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
     </header>
   )
 }
@@ -163,12 +189,20 @@ export function Footer() {
     <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
       <p className="font-medium text-slate-700">Citigoo x Nespresso</p>
       <div className="mt-2 flex flex-wrap justify-center gap-4">
-        <span>Privacy Policy</span>
-        <span>Terms of Service</span>
-        <span>AI Ethics</span>
-        <span>Contact Support</span>
+        <a href={`${STOREFRONT_URL}/privacy`} target="_blank" rel="noreferrer">
+          Privacy Policy
+        </a>
+        <a href={`${STOREFRONT_URL}/terms`} target="_blank" rel="noreferrer">
+          Terms of Service
+        </a>
+        <a href={`${STOREFRONT_URL}/help`} target="_blank" rel="noreferrer">
+          Contact Support
+        </a>
+        <a href={`${STOREFRONT_URL}/store`} target="_blank" rel="noreferrer">
+          Buyer Storefront
+        </a>
       </div>
-      <p className="mt-2">© 2024 Citigoo. All Rights Reserved.</p>
+      <p className="mt-2">© 2026 Citigoo. All Rights Reserved.</p>
     </footer>
   )
 }

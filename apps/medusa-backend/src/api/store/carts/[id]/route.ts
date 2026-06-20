@@ -5,16 +5,24 @@ import {
   readCartStoreId,
 } from "../../../../lib/assert-cart-store"
 import { CartStoreAccessError } from "../../../../lib/cart-store-error"
+import { syncCartLineItemShippingRequirements } from "../../../../lib/sync-cart-line-item-shipping"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const cartId = req.params.id as string
     const cartModule = req.scope.resolve(Modules.CART)
-    const cart = await cartModule.retrieveCart(cartId, {
+    let cart = await cartModule.retrieveCart(cartId, {
       relations: ["items", "shipping_address", "billing_address"],
     })
 
     assertCartBelongsToCurrentStore(req, cart)
+
+    const synced = await syncCartLineItemShippingRequirements(req.scope, cartId, cart.items)
+    if (synced) {
+      cart = await cartModule.retrieveCart(cartId, {
+        relations: ["items", "shipping_address", "billing_address"],
+      })
+    }
 
     const store_id = readCartStoreId(cart)
     res.status(200).json({

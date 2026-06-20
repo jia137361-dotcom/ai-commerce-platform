@@ -30,6 +30,7 @@ export function GenerationProgressPage() {
   const [job, setJob] = useState<JobResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
+  const [showErrorLogs, setShowErrorLogs] = useState(false)
   const state = (location.state ?? {}) as ProgressLocationState
   const displayPrompt = job?.prompt ?? state.prompt ?? "—"
   const displayProductName = state.productName ?? "Custom merchandise"
@@ -139,6 +140,12 @@ export function GenerationProgressPage() {
 
   const status = error ? "failed" : job?.status === "queued" ? "queued" : "running"
   const progress = job?.progress ?? (status === "queued" ? 5 : 10)
+  const estimatedLabel =
+    job?.estimated_seconds != null
+      ? `~${Math.max(1, Math.round(job.estimated_seconds))} seconds`
+      : status === "queued"
+        ? "Waiting in queue"
+        : "In progress"
 
   if (error) {
     return (
@@ -164,8 +171,15 @@ export function GenerationProgressPage() {
               <Button onClick={() => void retry()} disabled={retrying}>
                 Retry Generation
               </Button>
-              <Button variant="outline">View Error Logs</Button>
+              <Button variant="outline" type="button" onClick={() => setShowErrorLogs(true)}>
+                View Error Logs
+              </Button>
             </div>
+            {showErrorLogs ? (
+              <pre className="mt-4 max-h-48 overflow-auto rounded-lg bg-slate-900 p-3 text-left text-xs text-slate-100">
+                {job?.error ?? error}
+              </pre>
+            ) : null}
           </Card>
         </div>
       </div>
@@ -226,7 +240,7 @@ export function GenerationProgressPage() {
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Estimated Time</dt>
-              <dd>~14 seconds</dd>
+              <dd>{estimatedLabel}</dd>
             </div>
           </dl>
         </Card>

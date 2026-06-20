@@ -1,6 +1,6 @@
 # Seller Dashboard
 
-Vite + React seller SPA at `http://localhost:5173`.
+Vite + React seller SPA at `http://127.0.0.1:5173` (also works via `http://localhost:5173`).
 
 ## Prerequisites
 

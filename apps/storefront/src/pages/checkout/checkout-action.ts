@@ -9,6 +9,17 @@ type CheckoutCompletionInput = {
   complete: (cartId: string) => Promise<CompleteCartResponse>
 }
 
+export async function completeGuestCheckoutOrder(input: {
+  cart: StoreCart
+  saveContact: (cart: StoreCart) => Promise<StoreCart>
+  complete: (cartId: string) => Promise<CompleteCartResponse>
+}) {
+  const contactCart = await input.saveContact(input.cart)
+  const result = await input.complete(contactCart.id)
+  if (!result.orderId) throw new Error("Complete cart succeeded without an order_id.")
+  return { contactCart, result }
+}
+
 export async function completeCheckoutOrder(input: CheckoutCompletionInput) {
   const boundCart = await input.bindCustomer(input.cart.id)
   if (boundCart.customerId !== input.customerId) {

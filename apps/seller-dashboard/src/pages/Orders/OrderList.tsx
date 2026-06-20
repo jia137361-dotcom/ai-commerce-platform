@@ -45,6 +45,14 @@ function mapStepStatus(fulfillmentStatus: string, index: number): "done" | "curr
   return "pending"
 }
 
+const formatOrderMoney = (amount: number | undefined, currency = "USD") => {
+  if (amount == null || !Number.isFinite(amount)) return "—"
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount)
+}
+
 function OrderExpandedPanel({ orderId }: { orderId: string }) {
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -67,6 +75,9 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
       queryClient.invalidateQueries({ queryKey: ["order-fulfillment", orderId] })
       toast.push("Pushed to fulfillment", "success")
     },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Push failed", "error")
+    },
   })
 
   const shipMutation = useMutation({
@@ -75,6 +86,9 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
       queryClient.invalidateQueries({ queryKey: ["order", orderId] })
       queryClient.invalidateQueries({ queryKey: ["order-fulfillment", orderId] })
       toast.push("Mock shipment recorded", "success")
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Shipment update failed", "error")
     },
   })
 
@@ -88,10 +102,20 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
         <ul className="space-y-3">
           {(order?.items as Array<Record<string, unknown>> | undefined)?.map((item) => (
             <li key={String(item.id)} className="flex items-center gap-3 rounded-lg border bg-white p-3">
-              <div className="h-12 w-12 rounded bg-slate-100" />
+              {item.thumbnail ? (
+                <img
+                  src={String(item.thumbnail)}
+                  alt=""
+                  className="h-12 w-12 rounded object-cover"
+                />
+              ) : (
+                <div className="h-12 w-12 rounded bg-slate-100" />
+              )}
               <div className="flex-1">
                 <p className="font-medium">{String(item.title)}</p>
-                <p className="text-xs text-slate-400">SKU: {String(item.variant_sku ?? "—")}</p>
+                <p className="text-xs text-slate-400">
+                  Variant: {String(item.variant_id ?? "—")}
+                </p>
               </div>
               <p className="text-brand">{String(item.quantity)}×</p>
             </li>
@@ -215,7 +239,7 @@ export function OrderListPage() {
                     <td className="px-4 py-3 capitalize">{o.fulfillment_status}</td>
                     <td className="px-4 py-3">{o.items_count ?? "—"}× Items</td>
                     <td className="px-4 py-3">
-                      {o.total != null ? `$${Number(o.total).toFixed(2)}` : "—"}
+                      {formatOrderMoney(o.total, o.currency_code)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button

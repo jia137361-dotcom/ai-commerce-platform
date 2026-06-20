@@ -102,6 +102,43 @@ export const parseAdminOrdersListQuery = (query: Record<string, unknown>) => {
   return { limit, offset, email, display_id }
 }
 
+const readOrderNumeric = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const normalizeMoney = (value: number | null) => {
+  if (value == null) return null
+  return value > 999 ? value / 100 : value
+}
+
+export const summarizeAdminOrderRow = (order: Record<string, unknown>) => {
+  const items = Array.isArray(order.items) ? order.items : []
+  const items_count = items.reduce((sum, item) => {
+    const row = item as Record<string, unknown>
+    return sum + (readOrderNumeric(row.quantity) ?? 0)
+  }, 0)
+
+  let total = normalizeMoney(readOrderNumeric(order.total))
+  if (total == null && items.length) {
+    const computed = items.reduce((sum, item) => {
+      const row = item as Record<string, unknown>
+      const lineTotal = normalizeMoney(readOrderNumeric(row.total))
+      if (lineTotal != null) return sum + lineTotal
+      const unit = normalizeMoney(readOrderNumeric(row.unit_price)) ?? 0
+      const qty = readOrderNumeric(row.quantity) ?? 0
+      return sum + unit * qty
+    }, 0)
+    total = computed > 0 ? computed : null
+  }
+
+  return { items_count, total }
+}
+
 export const normalizeOrderLineItem = (item: Record<string, unknown>) => {
   const meta =
     item.metadata && typeof item.metadata === "object"

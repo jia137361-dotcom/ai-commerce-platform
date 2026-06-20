@@ -61,6 +61,10 @@ export function hasDedicatedNativeBridge(
   )
 }
 
+export function productNeedsCartBridgeBackfill(product: StoreCoreProductLike): boolean {
+  return product.status === "published" && !readString(product.medusa_variant_id)
+}
+
 export function findPublishedVariantDuplicates(
   products: StoreCoreProductLike[]
 ): Array<{ store_id: string; medusa_variant_id: string; product_ids: string[] }> {

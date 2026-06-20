@@ -19,7 +19,8 @@ import {
 import { readOrderFulfillmentStatusMeta } from "../../../../../lib/order-custom-metadata"
 import { syncFulfillmentPayloadFromOrder } from "../../../../../lib/sync-fulfillment-line-items"
 import { pushOrderToS2bdiy } from "../../../../../lib/s2bdiy/push-s2b-order"
-import { getS2bdiyConfig } from "../../../../../modules/suppliers/s2bdiy/config"
+import { isS2bdiyEnabled } from "../../../../../modules/suppliers/s2bdiy/config"
+import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 
@@ -76,12 +77,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const providerId = body.payment_provider_id?.trim() || DEFAULT_PAYMENT_PROVIDER
 
     const cartModule = req.scope.resolve(Modules.CART)
-    const cart = (await cartModule.retrieveCart(cartId, {
+    let cart = (await cartModule.retrieveCart(cartId, {
       relations: ["items", "shipping_address", "shipping_methods"],
     })) as CompleteCart
 
     assertCartBelongsToCurrentStore(req, cart)
     const storeId = readCartStoreId(cart)
+
+    const synced = await syncCartLineItemShippingRequirements(req.scope, cartId, cart.items)
+    if (synced) {
+      cart = (await cartModule.retrieveCart(cartId, {
+        relations: ["items", "shipping_address", "shipping_methods"],
+      })) as CompleteCart
+    }
+
     const authCustomerId = readAuthCustomerId(req)
     const requiresShipping = Boolean(cart.items?.some((item) => item.requires_shipping))
     const addressPresent = Boolean(cart.shipping_address)
@@ -190,7 +199,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     if (!providerDefersPaidUntilCapture(providerId)) {
       await markOrderPaidAndFulfillmentWaiting(req.scope, orderId, "non_stripe_provider_after_complete")
-      if (getS2bdiyConfig()) {
+      if (isS2bdiyEnabled()) {
         try {
           await pushOrderToS2bdiy(req.scope, orderId)
         } catch (error) {

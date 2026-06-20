@@ -114,7 +114,30 @@ export function GenerationCompletePage() {
       queryClient.invalidateQueries({ queryKey: ["product", productId] })
       toast.push("Draft saved", "success")
     },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Unable to save draft", "error")
+    },
   })
+
+  const goToEditDraft = async () => {
+    try {
+      await saveMutation.mutateAsync()
+      navigate(`/products/${productId}/edit`, {
+        state: {
+          product: {
+            ...(product ?? (jobData?.result?.product as NormalizedProduct | undefined)),
+            title,
+            description,
+            price: Number(price) || undefined,
+            tags,
+          },
+          generation,
+        },
+      })
+    } catch {
+      // toast handled in mutation
+    }
+  }
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -252,24 +275,7 @@ export function GenerationCompletePage() {
             <Button type="submit" variant="outline">
               Save Draft
             </Button>
-            <Button
-              type="button"
-              onClick={() =>
-                navigate(`/products/${productId}/edit`, {
-                  state: {
-                    product: {
-                      ...(product ??
-                        (jobData?.result?.product as NormalizedProduct | undefined)),
-                      title,
-                      description,
-                      price: Number(price) || undefined,
-                      tags,
-                    },
-                    generation,
-                  },
-                })
-              }
-            >
+            <Button type="button" onClick={() => void goToEditDraft()}>
               Edit & Publish →
             </Button>
           </div>

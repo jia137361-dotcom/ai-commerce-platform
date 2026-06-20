@@ -1,5 +1,6 @@
 const MEDUSA_URL = import.meta.env.VITE_MEDUSA_URL ?? "http://localhost:9000"
 const STORE_ID = import.meta.env.VITE_STORE_ID ?? "default_store"
+export const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL ?? "http://127.0.0.1:5174"
 
 export class ApiError extends Error {
   code: string
@@ -35,6 +36,9 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (response.status === 401) {
     setToken(null)
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.assign("/login")
+    }
     throw new ApiError(401, "UNAUTHORIZED", "Session expired")
   }
 

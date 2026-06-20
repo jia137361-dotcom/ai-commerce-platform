@@ -18,7 +18,12 @@ export function CheckoutSummaryCard({ cart, canPlaceOrder, disabledReason, onPla
         <div className="total"><dt>Total</dt><dd><MoneyText amount={cart.hasTotal === false ? undefined : cart.total} currencyCode={cart.currencyCode} /></dd></div>
       </dl>
       <Button loading={placing} disabled={!canPlaceOrder || placing} onClick={onPlaceOrder}>{placing ? "Placing order..." : "Place order"}</Button>
-      <p>{canPlaceOrder ? "Order creation will authorize payment using the configured local provider. Funds are not captured." : disabledReason}</p>
+      <p>{canPlaceOrder ? "Guest checkout is available with a valid contact email. Order creation will authorize payment using the configured local provider." : disabledReason}</p>
+      {!canPlaceOrder ? (
+        <a className="buyer-checkout-sign-in-link" href="/account/sign-in?returnTo=/checkout">
+          Sign in for saved order history
+        </a>
+      ) : null}
       <Button variant="ghost" href="/cart">Back to cart</Button>
     </Card>
   )

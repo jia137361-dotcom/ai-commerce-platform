@@ -1,6 +1,6 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../../lib/store-context"
+import { resolveProductRequiresShipping } from "../../../../lib/product-shipping"
 import {
   getProductReviewSummaries,
   getStoreCoreService,
@@ -25,29 +25,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
   }
 
-  let productWithShipping = product
-  if (product.medusa_variant_id) {
-    try {
-      const productModule = req.scope.resolve(Modules.PRODUCT)
-      const variant = await productModule.retrieveProductVariant(product.medusa_variant_id, {
-        select: ["id", "requires_shipping"],
-      })
-      productWithShipping = {
-        ...product,
-        requires_shipping:
-          typeof variant?.requires_shipping === "boolean"
-            ? variant.requires_shipping
-            : undefined,
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[store-product-detail] unable to read variant requires_shipping", {
-          product_id: product.id,
-          medusa_variant_id: product.medusa_variant_id,
-          message: error instanceof Error ? error.message : String(error),
-        })
-      }
-    }
+  const productWithShipping = {
+    ...product,
+    requires_shipping: resolveProductRequiresShipping(product as Record<string, unknown>),
   }
 
   const summaries = await getProductReviewSummaries(storeCoreService, storeId, [

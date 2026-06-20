@@ -10,6 +10,7 @@ export type BuyerStoreSettings = {
   supportEmail?: string
   seoTitle?: string
   seoDescription?: string
+  followerCount?: number
   metadata: Record<string, unknown>
 }
 
@@ -69,6 +70,7 @@ type ApiStoreSettings = {
     support_email?: string | null
     seo_title?: string | null
     seo_description?: string | null
+    follower_count?: number | null
     metadata?: Record<string, unknown> | null
   }
 }
@@ -710,6 +712,7 @@ const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
     supportEmail: settings?.support_email ?? undefined,
     seoTitle: settings?.seo_title ?? undefined,
     seoDescription: settings?.seo_description ?? undefined,
+    followerCount: typeof settings?.follower_count === "number" ? settings.follower_count : undefined,
     metadata: settings?.metadata ?? {},
   }
 }
@@ -1358,3 +1361,18 @@ export const signOutCustomer = async () => {
     method: "DELETE",
   })
 }
+
+export const subscribeNewsletter = async (email: string) =>
+  apiFetch<{ email: string; created: boolean; message: string }>("/store/newsletter/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  })
+
+export const fetchStoreFollowState = async () =>
+  apiFetch<{ store_id: string; follower_count: number; following: boolean }>("/store/follow")
+
+export const updateStoreFollowState = async (following: boolean) =>
+  apiFetch<{ store_id: string; follower_count: number; following: boolean }>("/store/follow", {
+    method: "POST",
+    body: JSON.stringify({ following }),
+  })

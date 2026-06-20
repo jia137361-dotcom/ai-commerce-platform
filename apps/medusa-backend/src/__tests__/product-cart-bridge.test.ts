@@ -3,6 +3,7 @@ import {
   findPublishedVariantDuplicates,
   hasDedicatedNativeBridge,
   isSharedSkuProduct,
+  productNeedsCartBridgeBackfill,
 } from "../lib/product-cart-bridge"
 
 describe("product cart bridge guards", () => {
@@ -45,6 +46,27 @@ describe("product cart bridge guards", () => {
         "prod_other",
         "default_store"
       )
+    ).toBe(false)
+  })
+
+  it("detects when published products still need a cart bridge", () => {
+    expect(
+      productNeedsCartBridgeBackfill({
+        status: "published",
+        medusa_variant_id: null,
+      })
+    ).toBe(true)
+    expect(
+      productNeedsCartBridgeBackfill({
+        status: "published",
+        medusa_variant_id: "variant_1",
+      })
+    ).toBe(false)
+    expect(
+      productNeedsCartBridgeBackfill({
+        status: "draft",
+        medusa_variant_id: null,
+      })
     ).toBe(false)
   })
 

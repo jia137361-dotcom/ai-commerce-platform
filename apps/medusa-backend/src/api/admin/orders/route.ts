@@ -8,7 +8,7 @@ import {
   toMedusaAdminOrderFulfillmentStatus,
   toMedusaAdminOrderPaymentStatus,
 } from "../../../lib/order-custom-metadata"
-import { parseAdminOrdersListQuery } from "../../../lib/admin-orders"
+import { parseAdminOrdersListQuery, summarizeAdminOrderRow } from "../../../lib/admin-orders"
 import { FULFILLMENT_ORDERS_MODULE } from "../../../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../../../modules/fulfillment-orders/service"
 import { SHIPMENTS_MODULE } from "../../../modules/shipments"
@@ -39,6 +39,8 @@ const enrichOrderSummary = async (
   const meta = o.metadata as Record<string, unknown> | null
   const mcPayment = meta?.[ORDER_META_PAYMENT_STATUS] ?? null
 
+  const { items_count, total } = summarizeAdminOrderRow(o)
+
   return {
     id: o.id,
     display_id: o.display_id,
@@ -49,6 +51,8 @@ const enrichOrderSummary = async (
     mc_payment_status: mcPayment ?? null,
     fulfillment_status: toMedusaAdminOrderFulfillmentStatus(mcFulfillment),
     mc_fulfillment_status: mcFulfillment ?? null,
+    items_count,
+    total,
     fulfillment_order: fo,
     latest_shipment: latestShipment,
   }
@@ -74,7 +78,8 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const orders = await orderModule.listOrders(listFilters, {
       take: 500,
       order: { created_at: "DESC" },
-    })
+      relations: ["items"],
+    } as never)
 
     const scoped = orders.filter((o) => readOrderStoreId(o) === storeId)
     const page = scoped.slice(query.offset, query.offset + query.limit)

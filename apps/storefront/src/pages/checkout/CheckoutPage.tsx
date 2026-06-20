@@ -26,7 +26,7 @@ import {
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
 import type { StoreCart } from "../../lib/mock-data"
-import { completeCheckoutOrder } from "./checkout-action"
+import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
 import { resolveCheckoutState } from "./checkout-state"
 
 type CheckoutPageProps = {
@@ -163,7 +163,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   useEffect(() => {
     if (!auth.customer || contactTouched || contact.email || contact.name || contact.phone) return
     setContact({
-      email: auth.customer.email,
+      email: auth.customer?.email ?? "",
       phone: auth.customer.phone ?? "",
       name: [auth.customer.firstName, auth.customer.lastName].filter(Boolean).join(" "),
     })
@@ -256,16 +256,21 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setPlacingOrder(true)
     setCompleteError(undefined)
     try {
-      if (!auth.customer) {
-        throw new Error("Sign in before placing an authenticated order.")
-      }
-      const { result } = await completeCheckoutOrder({
-        cart,
-        customerId: auth.customer.id,
-        bindCustomer: attachCustomerToCart,
-        saveContact: saveContactForCart,
-        complete: completeCart,
-      })
+      const result = auth.customer
+        ? (
+            await completeCheckoutOrder({
+              cart,
+              customerId: auth.customer.id,
+              bindCustomer: attachCustomerToCart,
+              saveContact: saveContactForCart,
+              complete: completeCart,
+            })
+          ).result
+        : (await completeGuestCheckoutOrder({
+            cart,
+            saveContact: saveContactForCart,
+            complete: completeCart,
+          })).result
       if (!result.email) {
         console.warn("[checkout] complete cart returned an order without email", result)
       }

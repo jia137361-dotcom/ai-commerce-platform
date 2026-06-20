@@ -39,6 +39,8 @@ export type NormalizedProduct = {
   description?: string | null
   status: string
   source?: string | null
+  ai_job_id?: string | null
+  prompt?: string | null
   price?: number | null
   cost?: number | null
   tags?: string[]
@@ -46,6 +48,9 @@ export type NormalizedProduct = {
   platform_product_id?: string | null
   supplier_product_id?: string | null
   supplier_variant_id?: string | null
+  medusa_variant_id?: string | null
+  is_cart_addable?: boolean
+  requires_shipping?: boolean
   variants?: ProductVariantRow[]
   design_image_url?: string | null
   mockup_image_url?: string | null
