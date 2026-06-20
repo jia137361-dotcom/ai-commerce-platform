@@ -21,6 +21,16 @@ export type StoreProduct = {
   averageRating?: number | null
   reviewCount?: number
   tags?: string[]
+  variants?: BuyerProductVariant[]
+}
+
+export type BuyerProductVariant = {
+  id: string
+  title: string
+  inventoryQuantity?: number
+  manageInventory?: boolean
+  allowBackorder?: boolean
+  isPurchasable: boolean
 }
 
 export type CartLineItem = {

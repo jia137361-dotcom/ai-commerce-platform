@@ -1,25 +1,16 @@
 import type { BuyerShareInfo, DataSource } from "../../lib/buyer-api"
+import { Button } from "../ui/Button"
 
-type ProductSharePanelProps = {
-  share: BuyerShareInfo
-  source: DataSource
-  error?: string
-}
+type ProductSharePanelProps = { share: BuyerShareInfo; source: DataSource; error?: string }
 
 export function ProductSharePanel({ share, source, error }: ProductSharePanelProps) {
   const copyLink = share.channels.copy_link?.value ?? share.productUrl
-
-  const copy = async () => {
-    await navigator.clipboard?.writeText(copyLink)
-  }
-
+  const copy = async () => { await navigator.clipboard?.writeText(copyLink) }
   return (
     <section className="buyer-product-share" aria-label="Share product">
-      {error && <p>Share fallback: {error}</p>}
-      <button type="button" onClick={() => void copy()}>
-        Share
-      </button>
-      <span>{source === "backend" ? "Share this page with your friends." : "Fallback share link is available."}</span>
+      <Button variant="secondary" type="button" onClick={() => void copy()}>Share product</Button>
+      <span>{source === "backend" ? "Copy a link to this product." : "Fallback product link"}</span>
+      {error ? <small>Share service unavailable; the local product link will be copied.</small> : null}
     </section>
   )
 }

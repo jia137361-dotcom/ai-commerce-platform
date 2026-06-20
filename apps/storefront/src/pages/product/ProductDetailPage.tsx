@@ -1,269 +1,163 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { PageShell } from "../../components/layout/PageShell"
+import { ProductCard } from "../../components/products/ProductCard"
+import { ProductDetailStatus } from "../../components/product-detail/ProductDetailStatus"
+import { ProductDetailsSection } from "../../components/product-detail/ProductDetailsSection"
 import { ProductMediaGallery } from "../../components/product-detail/ProductMediaGallery"
 import { ProductPurchasePanel } from "../../components/product-detail/ProductPurchasePanel"
 import { ProductReviewSection } from "../../components/product-detail/ProductReviewSection"
 import { ProductSharePanel } from "../../components/product-detail/ProductSharePanel"
-import { StoreCategoryNav } from "../../components/store-home/StoreCategoryNav"
-import { StoreHero } from "../../components/store-home/StoreHero"
-import { StoreProductGrid } from "../../components/store-home/StoreProductGrid"
+import { ProductStoreCard } from "../../components/product-detail/ProductStoreCard"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { StoreFooter } from "../../components/layout/StoreFooter"
 import {
   addCartLineItem,
   createCart,
-  fetchProductCategories,
   fetchProductDetail,
   fetchProductReviews,
   fetchProducts,
   fetchProductShare,
   fetchStoreSettings,
   getBuyerCartStorageKey,
-  type BuyerCategory,
   type BuyerReviewsSummary,
   type BuyerShareInfo,
   type BuyerStoreSettings,
   type DataSource,
 } from "../../lib/buyer-api"
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
+import { addProductSelectionToCart } from "./product-cart-action"
+import { resolveProductPurchaseState, resolveSelectedProductVariant } from "./product-detail-state"
 
-type ProductDetailPageProps = {
-  productId: string
-  cartCount: number
-  onCartUpdated: (cart: StoreCart) => void
-}
+type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
+type Notice = { label: string; message: string }
 
-type Notice = {
-  label: string
-  message: string
-}
-
-const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
-  brandName: "Nespresso",
-  metadata: {},
-}
-
-const defaultCategories: BuyerCategory[] = [{ id: "all", name: "All", slug: "all" }]
+const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo Official Store", metadata: {} }
 
 export function ProductDetailPage({ productId, cartCount, onCartUpdated }: ProductDetailPageProps) {
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
-  const [categories, setCategories] = useState<BuyerCategory[]>(defaultCategories)
   const [product, setProduct] = useState<StoreProduct | null>(null)
   const [reviews, setReviews] = useState<BuyerReviewsSummary | null>(null)
   const [share, setShare] = useState<BuyerShareInfo | null>(null)
   const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [fatalError, setFatalError] = useState<string | undefined>()
   const [notices, setNotices] = useState<Notice[]>([])
   const [reviewSource, setReviewSource] = useState<DataSource>("backend")
   const [shareSource, setShareSource] = useState<DataSource>("backend")
   const [shareError, setShareError] = useState<string | undefined>()
-  const [query, setQuery] = useState("")
-  const [activeCategoryId, setActiveCategoryId] = useState("all")
+  const [selectedVariantId, setSelectedVariantId] = useState<string | undefined>()
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
-  const [addNotice, setAddNotice] = useState<string | undefined>()
+  const [addNotice, setAddNotice] = useState<{ tone: "success" | "error"; message: string } | undefined>()
+  const [loadVersion, setLoadVersion] = useState(0)
 
-  useEffect(() => {
-    let active = true
+  const loadProduct = useCallback(async (isActive: () => boolean) => {
+    setLoading(true)
+    setFatalError(undefined)
+    setAddNotice(undefined)
+    const [productResult, reviewsResult, settingsResult, productsResult] = await Promise.all([
+      fetchProductDetail(productId),
+      fetchProductReviews(productId),
+      fetchStoreSettings(),
+      fetchProducts(),
+    ])
+    if (!isActive()) return
 
-    const load = async () => {
-      setLoading(true)
-      setAddNotice(undefined)
-      const [productResult, reviewsResult, settingsResult, categoriesResult, productsResult] = await Promise.all([
-        fetchProductDetail(productId),
-        fetchProductReviews(productId),
-        fetchStoreSettings(),
-        fetchProductCategories(),
-        fetchProducts(),
-      ])
-      const shareResult = await fetchProductShare(productResult.data)
+    setSettings(settingsResult.data)
+    setReviewSource(reviewsResult.source)
+    setReviews(reviewsResult.source === "backend" ? reviewsResult.data : null)
 
-      if (!active) return
-
-      setProduct(productResult.data)
-      setReviews(reviewsResult.data)
-      setSettings(settingsResult.data)
-      setCategories(categoriesResult.data)
-      setRecommendations(productsResult.data.filter((item) => item.id !== productResult.data.id).slice(0, 3))
-      setShare(shareResult.data)
-      setReviewSource(reviewsResult.source)
-      setShareSource(shareResult.source)
-      setShareError(shareResult.error)
-      setNotices(
-        [
-          { label: "product", result: productResult },
-          { label: "reviews", result: reviewsResult },
-          { label: "settings", result: settingsResult },
-          { label: "categories", result: categoriesResult },
-          { label: "recommendations", result: productsResult },
-          { label: "share", result: shareResult },
-        ]
-          .filter((item) => item.result.error)
-          .map((item) => ({ label: item.label, message: item.result.error ?? "" }))
-      )
+    if (productResult.source !== "backend") {
+      setProduct(null)
+      setShare(null)
+      setRecommendations([])
+      setFatalError(productResult.error ?? "Product not found")
+      setNotices([])
       setLoading(false)
-    }
-
-    void load()
-    return () => {
-      active = false
-    }
-  }, [productId])
-
-  const galleryImages = useMemo(() => {
-    if (!product) return []
-    return [product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[]
-  }, [product])
-
-  const addToCart = async () => {
-    if (!product?.medusaVariantId) {
-      setAddNotice("This product is missing a Medusa variant id.")
       return
     }
 
+    const realProduct = productResult.data
+    const shareResult = await fetchProductShare(realProduct)
+    if (!isActive()) return
+    setProduct(realProduct)
+    setSelectedVariantId(realProduct.variants?.[0]?.id ?? realProduct.medusaVariantId)
+    setRecommendations(productsResult.source === "backend" ? productsResult.data.filter((item) => item.id !== realProduct.id).slice(0, 4) : [])
+    setShare(shareResult.data)
+    setShareSource(shareResult.source)
+    setShareError(shareResult.error)
+    setNotices([
+      { label: "reviews", message: reviewsResult.error },
+      { label: "store", message: settingsResult.error },
+      { label: "recommendations", message: productsResult.error },
+      { label: "share", message: shareResult.error },
+    ].filter((notice): notice is Notice => Boolean(notice.message)))
+    setLoading(false)
+  }, [productId])
+
+  useEffect(() => {
+    let active = true
+    void loadProduct(() => active)
+    return () => { active = false }
+  }, [loadProduct, loadVersion])
+
+  const galleryImages = useMemo(() => product ? [product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[] : [], [product])
+  const variants = product?.variants ?? []
+  const selectedVariant = product ? resolveSelectedProductVariant(product, selectedVariantId) : undefined
+  const purchaseState = product ? resolveProductPurchaseState(product, selectedVariant) : { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" as const }
+
+  const addToCart = async () => {
+    if (!product || !selectedVariant?.id || !purchaseState.canAdd || adding) return
     setAdding(true)
     setAddNotice(undefined)
     try {
-      const storageKey = getBuyerCartStorageKey(settings.storeId)
-      let cartId = window.localStorage.getItem(storageKey)
-      if (!cartId) {
-        const created = await createCart()
-        cartId = created.id
-        window.localStorage.setItem(storageKey, created.id)
-      }
-
-      let updated: StoreCart
-      try {
-        updated = await addCartLineItem(cartId, product.medusaVariantId, quantity)
-      } catch (error) {
-        console.warn("[buyer-api] add to cart failed, creating a fresh store-scoped cart", {
-          message: error instanceof Error ? error.message : String(error),
-          storageKey,
-        })
-        const created = await createCart()
-        window.localStorage.setItem(storageKey, created.id)
-        updated = await addCartLineItem(created.id, product.medusaVariantId, quantity)
-      }
-      window.localStorage.setItem(storageKey, updated.id)
+      const updated = await addProductSelectionToCart({
+        variantId: selectedVariant.id,
+        quantity,
+        storageKey: getBuyerCartStorageKey(settings.storeId),
+        storage: window.localStorage,
+        createCart,
+        addLineItem: addCartLineItem,
+      })
       onCartUpdated(updated)
-      setAddNotice("Added to cart.")
+      setAddNotice({ tone: "success", message: "Added to cart." })
     } catch (error) {
-      setAddNotice(error instanceof Error ? error.message : "Unable to add this product to cart.")
+      setAddNotice({ tone: "error", message: error instanceof Error ? error.message : "Unable to add this product to cart." })
     } finally {
       setAdding(false)
     }
   }
 
   return (
-    <div className="buyer-product-page">
-      <StoreTopBar settings={settings} cartCount={cartCount} />
-      <StoreHero brandName={settings.brandName} />
-      <StoreCategoryNav
-        categories={categories}
-        activeCategoryId={activeCategoryId}
-        onCategoryChange={setActiveCategoryId}
-        query={query}
-        onQueryChange={setQuery}
-      />
+    <PageShell className="buyer-product-page" contentClassName="buyer-product-shell-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
+      <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb"><a href="/store">Store</a><span>/</span><span>{product?.title ?? "Product"}</span></nav>
+      {notices.length ? <aside className="buyer-product-api-notices" role="status">{notices.map((notice) => <p key={`${notice.label}-${notice.message}`}>{notice.label} fallback: {notice.message}</p>)}</aside> : null}
 
-      <main className="buyer-product-main">
-        {notices.length > 0 && (
-          <div className="buyer-product-api-notices" role="status">
-            {notices.map((notice) => (
-              <p key={`${notice.label}-${notice.message}`}>{notice.label}: {notice.message}</p>
-            ))}
-          </div>
-        )}
+      <ProductDetailStatus loading={loading} error={fatalError} onRetry={() => setLoadVersion((version) => version + 1)} />
 
-        <p className="buyer-product-breadcrumb">Nespresso Samra Origins</p>
-
-        {loading || !product ? (
-          <section className="buyer-product-loading" role="status">Loading product detail...</section>
-        ) : (
-          <>
-            <section className="buyer-product-campaign">
-              <div className="buyer-product-campaign-hero">
-                <strong>Nespresso</strong>
-                <span>Samra Origins</span>
-                <p>Experience a taste that moves you</p>
-              </div>
-              <div className="buyer-product-campaign-tiles">
-                <article>Shop Machines</article>
-                <article>Shop Coffee</article>
-              </div>
-            </section>
-
-            <section className="buyer-product-detail-row">
-              <ProductMediaGallery images={galleryImages} title={product.title} />
-              <ProductPurchasePanel
-                product={product}
-                quantity={quantity}
-                setQuantity={setQuantity}
-                adding={adding}
-                addNotice={addNotice}
-                onAddToCart={() => void addToCart()}
-              />
-            </section>
-
-            <section className="buyer-product-story buyer-product-story-flipped">
-              <div>
-                <h2>{product.title}</h2>
-                <p>{product.description ?? "Nespresso Samra Origins brings a premium tasting ritual into a clear, commerce-ready product experience."}</p>
-                <a href={`/products/${encodeURIComponent(product.id)}`}>See all details</a>
-              </div>
-              <ProductMediaGallery images={galleryImages} title={product.title} />
-            </section>
-
-            {recommendations.length > 0 && (
-              <section className="buyer-product-recommendations">
-                <div className="buyer-product-section-title">
-                  <span>Recommendations from Nespresso</span>
-                </div>
-                <StoreProductGrid products={recommendations} />
-              </section>
-            )}
-
-            <section className="buyer-product-wide-banner" aria-label="Nespresso Samra Origins banner">
-              <strong>Nespresso</strong>
-              <span>Samra Origins</span>
-            </section>
-
-            {reviews && <ProductReviewSection summary={reviews} source={reviewSource} error={notices.find((notice) => notice.label === "reviews")?.message} />}
-            {share && <ProductSharePanel share={share} source={shareSource} error={shareError} />}
-          </>
-        )}
-      </main>
-
-      <footer className="buyer-product-footer">
-        <section>
-          <h2>Citigoo</h2>
-          <p><strong>Hongkong:</strong> Citigoo Limited,<br />Rm 1805-06, 18/F, Hollywood<br />Plaza, 610 Nathan Road,<br />Kowloon, HK</p>
+      {!loading && product ? <>
+        <section className="buyer-product-primary">
+          <ProductMediaGallery images={galleryImages} title={product.title} />
+          <ProductPurchasePanel
+            product={product}
+            variants={variants}
+            selectedVariantId={selectedVariant?.id}
+            onVariantChange={setSelectedVariantId}
+            purchaseState={purchaseState}
+            quantity={quantity}
+            setQuantity={setQuantity}
+            adding={adding}
+            addNotice={addNotice}
+            onAddToCart={() => void addToCart()}
+          />
         </section>
-        <section>
-          <h2>Information</h2>
-          <a href="/about">About Us</a>
-          <a href="/store/about">Policies</a>
-          <a href="/store">Affiliate & Influencer Program</a>
-        </section>
-        <section>
-          <h2>Customer Service</h2>
-          <a href="/help">Refund And Replacement</a>
-          <a href="/help">Shipping Information</a>
-          <a href="/help">Payment Method</a>
-          <a href="/account/orders">Order Status</a>
-        </section>
-        <section>
-          <h2>Help</h2>
-          <a href="/help">Help Center</a>
-          <a href="/help">Contact Us</a>
-          <a href="/help">Citigoo Purchase Protection</a>
-        </section>
-        <div className="buyer-product-legal">
-          <span>© 2024 Citigoo Limited</span>
-          <a href="/terms">Term of Service</a>
-          <a href="/privacy">Privacy policy</a>
-          <span>AMEX MC PayPal DISC Visa</span>
-        </div>
-      </footer>
-    </div>
+        <ProductStoreCard settings={settings} />
+        <ProductDetailsSection product={product} />
+
+        {recommendations.length ? <section className="buyer-product-recommendations"><header><p>More from this store</p><h2>You may also like</h2></header><div className="buyer-product-recommendation-grid">{recommendations.map((item) => <div key={item.id}><ProductCard product={item} /></div>)}</div></section> : null}
+        <ProductReviewSection summary={reviews} source={reviewSource} error={notices.find((notice) => notice.label === "reviews")?.message} />
+        {share ? <ProductSharePanel share={share} source={shareSource} error={shareError} /> : null}
+      </> : null}
+    </PageShell>
   )
 }

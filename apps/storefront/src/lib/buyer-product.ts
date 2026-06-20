@@ -1,4 +1,14 @@
-import type { StoreProduct } from "./mock-data"
+import type { BuyerProductVariant, StoreProduct } from "./mock-data"
+
+export type BuyerProductApiVariant = {
+  id?: string
+  variant_id?: string
+  title?: string | null
+  inventory_quantity?: number | null
+  manage_inventory?: boolean | null
+  allow_backorder?: boolean | null
+  prices?: Array<{ amount?: number }>
+}
 
 export type BuyerProductApiInput = {
   id?: string
@@ -14,7 +24,7 @@ export type BuyerProductApiInput = {
   thumbnail?: string | null
   images?: Array<{ url?: string | null }>
   price?: number | string | null
-  variants?: Array<{ prices?: Array<{ amount?: number }> }>
+  variants?: BuyerProductApiVariant[]
   tags?: string[] | null
   metadata?: Record<string, unknown> | null
   medusa_product_id?: string | null
@@ -41,6 +51,32 @@ export const normalizeBuyerProductPrice = (product: BuyerProductApiInput) => {
   const numeric = typeof value === "number" ? value : Number(value)
   if (!Number.isFinite(numeric)) return undefined
   return numeric > 999 ? numeric / 100 : numeric
+}
+
+export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): BuyerProductVariant[] => {
+  const variants = (product.variants ?? []).flatMap((variant, index) => {
+    const id = variant.variant_id ?? variant.id
+    if (!id) return []
+    const inventoryQuantity = typeof variant.inventory_quantity === "number" ? variant.inventory_quantity : undefined
+    const manageInventory = variant.manage_inventory ?? undefined
+    const allowBackorder = variant.allow_backorder ?? undefined
+    const hasInventory = manageInventory === false || inventoryQuantity == null || inventoryQuantity > 0 || allowBackorder === true
+    return [{
+      id,
+      title: variant.title?.trim() || `Option ${index + 1}`,
+      inventoryQuantity,
+      manageInventory,
+      allowBackorder,
+      isPurchasable: Boolean(product.is_cart_addable && hasInventory),
+    }]
+  })
+
+  if (variants.length || !product.medusa_variant_id) return variants
+  return [{
+    id: product.medusa_variant_id,
+    title: "Default option",
+    isPurchasable: Boolean(product.is_cart_addable),
+  }]
 }
 
 const formatPrice = (amount?: number) => {
@@ -77,5 +113,6 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     averageRating: product.average_rating ?? null,
     reviewCount: product.review_count ?? 0,
     tags: Array.isArray(product.tags) ? product.tags : [],
+    variants: normalizeBuyerProductVariants(product),
   }
 }

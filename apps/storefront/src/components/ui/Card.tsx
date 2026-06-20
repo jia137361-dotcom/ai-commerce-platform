@@ -2,7 +2,7 @@ import type { AriaRole, ReactNode } from "react"
 
 type CardProps = {
   children: ReactNode
-  as?: "div" | "section" | "article"
+  as?: "div" | "section" | "article" | "aside" | "dl"
   variant?: "default" | "muted" | "outlined"
   className?: string
   ariaLabel?: string
