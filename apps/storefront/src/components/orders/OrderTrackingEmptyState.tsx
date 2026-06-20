@@ -1,3 +1,6 @@
+import { Button } from "../ui/Button"
+import { Card } from "../ui/Card"
+
 type OrderTrackingEmptyStateProps = {
   title: string
   message: string
@@ -12,13 +15,13 @@ export function OrderTrackingEmptyState({
   actionLabel = "Search order",
 }: OrderTrackingEmptyStateProps) {
   return (
-    <section className="buyer-order-card buyer-order-empty">
+    <Card as="section" className="buyer-order-card buyer-order-empty">
       <h1>{title}</h1>
       <p>{message}</p>
       <div className="buyer-order-empty-actions">
-        <a href={actionHref}>{actionLabel}</a>
-        <a href="/store">Back to store</a>
+        <Button href={actionHref}>{actionLabel}</Button>
+        <Button variant="secondary" href="/store">Back to store</Button>
       </div>
-    </section>
+    </Card>
   )
 }

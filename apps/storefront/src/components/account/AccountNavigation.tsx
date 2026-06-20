@@ -1,6 +1,14 @@
 import type { BuyerCustomer } from "../../lib/buyer-api"
 
-export function AccountNavigation({ customer, onSignOut }: { customer: BuyerCustomer; onSignOut: () => void }) {
+export function AccountNavigation({
+  customer,
+  onSignOut,
+  onSwitchAccount,
+}: {
+  customer: BuyerCustomer
+  onSignOut: () => void
+  onSwitchAccount: () => void
+}) {
   const display = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "Account"
   return (
     <aside className="buyer-account-nav">
@@ -12,6 +20,7 @@ export function AccountNavigation({ customer, onSignOut }: { customer: BuyerCust
         <a href="/account/profile">Profile</a>
         <a href="/account/orders">Orders</a>
         <button type="button" onClick={onSignOut}>Sign out</button>
+        <button type="button" onClick={onSwitchAccount}>Switch account</button>
       </nav>
     </aside>
   )

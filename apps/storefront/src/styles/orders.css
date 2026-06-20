@@ -430,6 +430,22 @@
   color: #654813;
 }
 
+.buyer-order-payment-note {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #f0d59b;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #fffaf0;
+}
+
+.buyer-order-payment-note p {
+  margin: 0;
+  color: #654813;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .buyer-order-refund-status span,
 .buyer-order-refund-status small {
   color: #81652d;

@@ -75,8 +75,9 @@ describe("authenticated order detail navigation and actions", () => {
   it("hides both actions for cancelled orders", () => {
     expect(resolveOrderDetailActions({
       isAuthenticated: true,
-      cancellation: { allowed: false, code: "ORDER_ALREADY_CANCELLED", message: null },
-      refundRequest: { allowed: false, code: "ORDER_CANCELLED", message: null },
+      orderStatus: "cancelled",
+      cancellation: { allowed: true, code: null, message: null },
+      refundRequest: { allowed: true, code: null, message: null },
     })).toMatchObject({
       showCancel: false,
       showRequestRefund: false,

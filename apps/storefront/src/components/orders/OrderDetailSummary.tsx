@@ -1,22 +1,21 @@
-import { formatBuyerMoney, type BuyerOrderDetail } from "../../lib/buyer-api"
-
-const money = (value: number | null | undefined, currency?: string | null) =>
-  value == null ? "Not available" : formatBuyerMoney(value, currency ?? undefined)
+import type { BuyerOrderDetail } from "../../lib/buyer-api"
+import { Card } from "../ui/Card"
+import { MoneyText } from "../ui/MoneyText"
 
 export function OrderDetailSummary({ order }: { order: BuyerOrderDetail }) {
   return (
-    <section className="buyer-order-card buyer-order-detail-section buyer-order-detail-summary">
+    <Card as="section" className="buyer-order-card buyer-order-detail-section buyer-order-detail-summary">
       <header>
         <p className="buyer-order-kicker">Payment details</p>
         <h2>Order summary</h2>
       </header>
       <dl>
-        <div><dt>Subtotal</dt><dd>{money(order.subtotal, order.currencyCode)}</dd></div>
-        <div><dt>Shipping</dt><dd>{money(order.shippingTotal, order.currencyCode)}</dd></div>
-        <div><dt>Discount</dt><dd>{money(order.discountTotal, order.currencyCode)}</dd></div>
-        <div><dt>Tax</dt><dd>{money(order.taxTotal, order.currencyCode)}</dd></div>
-        <div className="total"><dt>Total</dt><dd>{money(order.total, order.currencyCode)}</dd></div>
+        <div><dt>Subtotal</dt><dd><MoneyText amount={order.subtotal} currencyCode={order.currencyCode} /></dd></div>
+        <div><dt>Shipping</dt><dd><MoneyText amount={order.shippingTotal} currencyCode={order.currencyCode} /></dd></div>
+        <div><dt>Discount</dt><dd><MoneyText amount={order.discountTotal} currencyCode={order.currencyCode} /></dd></div>
+        <div><dt>Tax</dt><dd><MoneyText amount={order.taxTotal} currencyCode={order.currencyCode} /></dd></div>
+        <div className="total"><dt>Total</dt><dd><MoneyText amount={order.total} currencyCode={order.currencyCode} /></dd></div>
       </dl>
-    </section>
+    </Card>
   )
 }

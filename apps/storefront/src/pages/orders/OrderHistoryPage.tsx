@@ -6,6 +6,9 @@ import { OrderHistoryHeader } from "../../components/orders/OrderHistoryHeader"
 import { OrderHistoryPagination } from "../../components/orders/OrderHistoryPagination"
 import { OrderHistoryTabs, orderHistoryFilters, type OrderHistoryFilter } from "../../components/orders/OrderHistoryTabs"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { PageShell } from "../../components/layout/PageShell"
+import { StoreFooter } from "../../components/layout/StoreFooter"
+import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { fetchStoreSettings, getMyOrders, type BuyerOrdersPage, type BuyerStoreSettings } from "../../lib/buyer-api"
 
@@ -85,18 +88,25 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
   }
 
   return (
-    <div className="buyer-orders-page">
-      <StoreTopBar settings={settings} cartCount={cartCount} />
-      <main className="buyer-orders-main buyer-order-history-main">
+    <PageShell
+      className="buyer-orders-page"
+      contentClassName="buyer-orders-main buyer-order-history-main"
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      footer={<StoreFooter />}
+    >
         <OrderHistoryHeader signedInEmail={auth.customer?.email} />
         <OrderHistoryTabs activeKey={activeFilter.key} onChange={changeFilter} />
         {auth.isLoading ? (
-          <section className="buyer-order-history-auth-card" role="status">Checking account session...</section>
+          <LoadingState label="Checking account session..." />
         ) : auth.customer ? (
           ordersLoading ? (
-            <section className="buyer-order-history-auth-card" role="status">Loading your orders...</section>
+            <LoadingState label="Loading your orders..." />
           ) : ordersError ? (
-            <OrderHistoryEmptyState title="Orders unavailable" message={ordersError} />
+            <ErrorState
+              title="Orders unavailable"
+              message={ordersError}
+              action={{ label: "Retry", onClick: () => window.location.reload() }}
+            />
           ) : ordersPage?.orders.length ? (
             <>
               <section className="buyer-order-history-list" aria-label="Authenticated order history">
@@ -114,7 +124,6 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
         ) : (
           <OrderHistoryAuthRequired />
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

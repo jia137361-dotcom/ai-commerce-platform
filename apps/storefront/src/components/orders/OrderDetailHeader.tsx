@@ -1,6 +1,7 @@
 import type { BuyerOrderDetail } from "../../lib/buyer-api"
-
-const show = (value?: string | null) => value?.trim() || "Not available"
+import { humanizeOrderStatus, paymentStatusPresentation } from "../../pages/orders/order-status"
+import { Card } from "../ui/Card"
+import { StatusBadge, statusToneFor } from "../ui/StatusBadge"
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not available"
@@ -9,8 +10,9 @@ const formatDate = (value?: string | null) => {
 }
 
 export function OrderDetailHeader({ order }: { order: BuyerOrderDetail }) {
+  const payment = paymentStatusPresentation(order.paymentStatus)
   return (
-    <section className="buyer-order-card buyer-order-detail-header">
+    <Card as="section" className="buyer-order-card buyer-order-detail-header">
       <div>
         <p className="buyer-order-kicker">Order detail</p>
         <h1>Order {order.displayId ? `#${order.displayId}` : order.orderId}</h1>
@@ -19,17 +21,17 @@ export function OrderDetailHeader({ order }: { order: BuyerOrderDetail }) {
       <dl className="buyer-order-status-pills">
         <div>
           <dt>Status</dt>
-          <dd className="buyer-order-status-pill">{show(order.status)}</dd>
+          <dd><StatusBadge tone={statusToneFor(order.status)}>{humanizeOrderStatus(order.status)}</StatusBadge></dd>
         </div>
         <div>
           <dt>Payment</dt>
-          <dd className="buyer-order-status-pill">{show(order.paymentStatus)}</dd>
+          <dd><StatusBadge tone={payment.tone} title={payment.description}>{payment.label}</StatusBadge></dd>
         </div>
         <div>
           <dt>Fulfillment</dt>
-          <dd className="buyer-order-status-pill">{show(order.fulfillmentStatus)}</dd>
+          <dd><StatusBadge tone={statusToneFor(order.fulfillmentStatus)}>{humanizeOrderStatus(order.fulfillmentStatus)}</StatusBadge></dd>
         </div>
       </dl>
-    </section>
+    </Card>
   )
 }

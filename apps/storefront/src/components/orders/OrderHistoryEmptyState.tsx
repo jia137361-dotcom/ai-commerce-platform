@@ -1,9 +1,12 @@
+import { EmptyState } from "../ui/States"
+
 export function OrderHistoryEmptyState({ title = "No orders yet", message = "Orders placed while signed in will appear here." }: { title?: string; message?: string }) {
   return (
-    <section className="buyer-order-card buyer-order-history-empty">
-      <h2>{title}</h2>
-      <p>{message}</p>
-      <a href="/store">Continue shopping</a>
-    </section>
+    <EmptyState
+      className="buyer-order-card buyer-order-history-empty"
+      title={title}
+      message={message}
+      action={{ label: "Continue shopping", href: "/store" }}
+    />
   )
 }

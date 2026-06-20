@@ -1,3 +1,6 @@
+import { Button } from "../ui/Button"
+import { Card } from "../ui/Card"
+
 type OrderLookupFormProps = {
   email: string
   displayId: string
@@ -18,7 +21,7 @@ export function OrderLookupForm({
   onSubmit,
 }: OrderLookupFormProps) {
   return (
-    <section className="buyer-order-card buyer-order-lookup-card">
+    <Card as="section" className="buyer-order-card buyer-order-lookup-card">
       <div>
         <p className="buyer-order-kicker">Guest order lookup</p>
         <h1>Find your order</h1>
@@ -52,10 +55,10 @@ export function OrderLookupForm({
             onChange={(event) => onDisplayIdChange(event.target.value)}
           />
         </label>
-        <button type="submit" disabled={loading}>
+        <Button type="submit" loading={loading}>
           {loading ? "Searching..." : "Find order"}
-        </button>
+        </Button>
       </form>
-    </section>
+    </Card>
   )
 }

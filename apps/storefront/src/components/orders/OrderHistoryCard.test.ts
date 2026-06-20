@@ -21,7 +21,12 @@ describe("OrderHistoryCard design-system integration", () => {
 
     expect(html).toContain('href="/account/orders/order_123"')
     expect(html).toContain('href="/account/orders/order_123/tracking"')
+    expect(html).toContain("#75")
+    expect(html).toContain("Pending")
+    expect(html).toContain("View order")
+    expect(html).toContain("Track order")
     expect(html).toContain("buyer-ui-card")
-    expect(html).toContain("authorized")
+    expect(html).toContain("Payment authorized, not captured")
+    expect(html).not.toContain(">Payment captured<")
   })
 })

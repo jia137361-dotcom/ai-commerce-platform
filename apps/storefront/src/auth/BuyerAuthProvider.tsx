@@ -11,6 +11,7 @@ import {
   type BuyerSignInInput,
 } from "../lib/buyer-api"
 import { BuyerAuthContext } from "./useBuyerAuth"
+import { clearBuyerAuthClientState } from "./buyer-auth-state"
 
 export function BuyerAuthProvider({ children }: { children: ReactNode }) {
   const [customer, setCustomer] = useState<BuyerCustomer | null>(null)
@@ -77,6 +78,7 @@ export function BuyerAuthProvider({ children }: { children: ReactNode }) {
       signOut: async () => {
         setError(undefined)
         await signOutCustomer().catch(() => undefined)
+        clearBuyerAuthClientState(window.localStorage, window.sessionStorage)
         setCustomer(null)
       },
       refreshCustomer,

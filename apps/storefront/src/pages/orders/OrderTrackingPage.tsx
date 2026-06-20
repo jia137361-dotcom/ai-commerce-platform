@@ -4,6 +4,11 @@ import { OrderTrackingHeader } from "../../components/orders/OrderTrackingHeader
 import { OrderTrackingShipment } from "../../components/orders/OrderTrackingShipment"
 import { OrderTrackingTimeline } from "../../components/orders/OrderTrackingTimeline"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { PageShell } from "../../components/layout/PageShell"
+import { StoreFooter } from "../../components/layout/StoreFooter"
+import { Button } from "../../components/ui/Button"
+import { Card } from "../../components/ui/Card"
+import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   fetchStoreSettings,
@@ -12,6 +17,7 @@ import {
   type BuyerOrderTracking,
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
+import { hasOrderTrackingData } from "./order-tracking-state"
 
 type OrderTrackingPageProps = {
   orderId: string
@@ -97,15 +103,26 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
     : guestEmail
       ? `/account/orders/${encodeURIComponent(orderId)}?${new URLSearchParams({ email: guestEmail }).toString()}`
       : "/orders/lookup"
+  const hasTracking = hasOrderTrackingData(tracking)
 
   return (
-    <div className="buyer-orders-page">
-      <StoreTopBar settings={settings} cartCount={cartCount} />
-      <main className="buyer-orders-main">
+    <PageShell
+      className="buyer-orders-page"
+      contentClassName="buyer-orders-main"
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      footer={<StoreFooter />}
+    >
         {loading ? (
-          <OrderTrackingEmptyState title="Loading tracking" message="Checking the order tracking API." />
+          <LoadingState label="Loading tracking..." />
         ) : error || !tracking ? (
-          <OrderTrackingEmptyState title="Tracking unavailable" message={error ?? "No tracking data was returned."} />
+          <ErrorState title="Tracking unavailable" message={error ?? "No tracking data was returned."} />
+        ) : !hasTracking ? (
+          <OrderTrackingEmptyState
+            title="Tracking not available yet"
+            message="No carrier, tracking number, shipment, or delivery events have been reported for this order."
+            actionHref={detailHref}
+            actionLabel="View order details"
+          />
         ) : (
           <>
             <OrderTrackingHeader orderId={tracking.orderId} displayId={displayId} tracking={tracking} />
@@ -114,17 +131,16 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
                 <OrderTrackingShipment shipment={firstShipment} />
                 <OrderTrackingTimeline events={tracking.events} />
               </div>
-              <aside className="buyer-order-card buyer-order-actions">
+              <Card as="aside" className="buyer-order-card buyer-order-actions">
                 <p className="buyer-order-kicker">Actions</p>
                 <h2>Next steps</h2>
-                <a href="/store">Back to store</a>
-                <a href={detailHref}>View order details</a>
-                <a href="/orders/lookup">Search another order</a>
-              </aside>
+                <Button href="/store">Back to store</Button>
+                <Button variant="secondary" href={detailHref}>View order details</Button>
+                {!auth.customer ? <Button variant="ghost" href="/orders/lookup">Search another order</Button> : null}
+              </Card>
             </section>
           </>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

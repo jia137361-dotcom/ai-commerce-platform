@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { OrderLookupForm } from "../../components/orders/OrderLookupForm"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { PageShell } from "../../components/layout/PageShell"
+import { StoreFooter } from "../../components/layout/StoreFooter"
 import {
   fetchStoreSettings,
   lookupOrder,
@@ -62,9 +64,12 @@ export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
   }
 
   return (
-    <div className="buyer-orders-page">
-      <StoreTopBar settings={settings} cartCount={cartCount} />
-      <main className="buyer-orders-main buyer-order-lookup-main">
+    <PageShell
+      className="buyer-orders-page"
+      contentClassName="buyer-orders-main buyer-order-lookup-main"
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      footer={<StoreFooter />}
+    >
         <OrderLookupForm
           email={email}
           displayId={displayId}
@@ -74,7 +79,6 @@ export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
           onDisplayIdChange={setDisplayId}
           onSubmit={handleSubmit}
         />
-      </main>
-    </div>
+    </PageShell>
   )
 }

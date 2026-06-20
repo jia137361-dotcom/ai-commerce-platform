@@ -23,11 +23,15 @@ export function AccountHomePage({ cartCount }: { cartCount: number }) {
         <AccountAuthRequired />
       ) : (
         <section className="buyer-account-layout">
-          <AccountNavigation customer={auth.customer} onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))} />
+          <AccountNavigation
+            customer={auth.customer}
+            onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))}
+            onSwitchAccount={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))}
+          />
           <div className="buyer-account-card buyer-account-overview">
             <p className="buyer-account-kicker">Overview</p>
             <h1>Welcome back</h1>
-            <p>Your secure buyer session is active. Authenticated order history will be added in the next order-list batch.</p>
+            <p>Your secure buyer session is active. View your authenticated order history or switch accounts from the account navigation.</p>
             <div>
               <a href="/account/profile">Edit profile</a>
               <a href="/account/orders">Orders</a>

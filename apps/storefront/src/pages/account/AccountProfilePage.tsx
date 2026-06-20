@@ -41,7 +41,11 @@ export function AccountProfilePage({ cartCount }: { cartCount: number }) {
         <AccountAuthRequired />
       ) : (
         <section className="buyer-account-layout">
-          <AccountNavigation customer={auth.customer} onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))} />
+          <AccountNavigation
+            customer={auth.customer}
+            onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))}
+            onSwitchAccount={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))}
+          />
           <AccountProfileForm customer={auth.customer} loading={saving} saved={saved} error={error} onSubmit={submit} />
         </section>
       )}

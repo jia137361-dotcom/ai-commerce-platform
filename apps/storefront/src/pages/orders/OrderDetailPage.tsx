@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react"
 import { OrderDetailAddress } from "../../components/orders/OrderDetailAddress"
+import { OrderDetailActions } from "../../components/orders/OrderDetailActions"
 import { OrderDetailEmptyState } from "../../components/orders/OrderDetailEmptyState"
 import { OrderDetailHeader } from "../../components/orders/OrderDetailHeader"
 import { OrderDetailItems } from "../../components/orders/OrderDetailItems"
 import { OrderDetailSummary } from "../../components/orders/OrderDetailSummary"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { PageShell } from "../../components/layout/PageShell"
+import { StoreFooter } from "../../components/layout/StoreFooter"
 import { Button } from "../../components/ui/Button"
-import { Card } from "../../components/ui/Card"
 import { Modal } from "../../components/ui/Modal"
 import { SelectField } from "../../components/ui/SelectField"
-import { StatusBadge } from "../../components/ui/StatusBadge"
 import { TextArea } from "../../components/ui/TextArea"
+import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   cancelAuthenticatedOrder,
@@ -121,6 +123,7 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
   const actionState = resolveOrderDetailActions({
     isAuthenticated: Boolean(auth.customer),
+    orderStatus: order?.status,
     cancellation: order?.cancellation,
     refundRequest: order?.refundRequest,
   })
@@ -195,13 +198,19 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   }
 
   return (
-    <div className="buyer-orders-page">
-      <StoreTopBar settings={settings} cartCount={cartCount} />
-      <main className="buyer-orders-main">
+    <PageShell
+      className="buyer-orders-page"
+      contentClassName="buyer-orders-main"
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      footer={<StoreFooter />}
+    >
         {loading ? (
-          <OrderDetailEmptyState title="Loading order" message="Checking the order detail API." />
+          <LoadingState label="Loading order..." />
         ) : error || !order ? (
-          <OrderDetailEmptyState title="Order detail unavailable" message={error ?? "No order detail was returned."} />
+          <>
+            <ErrorState title="Order detail unavailable" message={error ?? "No order detail was returned."} />
+            <OrderDetailEmptyState title="Find another order" message="Guest buyers can search again with their checkout email and display id." />
+          </>
         ) : (
           <>
             <OrderDetailHeader order={order} />
@@ -212,62 +221,29 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
               </div>
               <aside className="buyer-order-detail-side">
                 <OrderDetailSummary order={order} />
-                <Card as="section" className="buyer-order-actions">
-                  <p className="buyer-order-kicker">Actions</p>
-                  <h2>Next steps</h2>
-                  <Button href={trackingHref}>Track order</Button>
-                  {canCancel ? (
-                    <Button
-                      variant="danger"
-                      onClick={() => {
-                        setCancelOpen(true)
-                        setCancelError(undefined)
-                        setCancelSuccess(undefined)
-                      }}
-                    >
-                      Cancel order
-                    </Button>
-                  ) : order.cancellation?.message && auth.customer ? (
-                    <p className="buyer-order-action-note">{order.cancellation.message}</p>
-                  ) : null}
-                  {canRequestRefund ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setRefundOpen(true)
-                        setRefundError(undefined)
-                        setRefundSuccess(undefined)
-                      }}
-                    >
-                      Request refund
-                    </Button>
-                  ) : actionState.showPendingRefund && order.refundRequest?.openRequest ? (
-                    <div className="buyer-order-refund-status">
-                      <strong>Refund requested</strong>
-                      <StatusBadge tone="warning">Pending review</StatusBadge>
-                      <small>
-                        Submitted {order.refundRequest.openRequest.createdAt
-                          ? new Date(order.refundRequest.openRequest.createdAt).toLocaleDateString()
-                          : "recently"}
-                      </small>
-                    </div>
-                  ) : null}
-                  {cancelSuccess ? <p className="buyer-order-action-success">{cancelSuccess}</p> : null}
-                  {cancelError && !cancelOpen ? <p className="buyer-order-error">{cancelError}</p> : null}
-                  {refundSuccess ? <p className="buyer-order-action-success">{refundSuccess}</p> : null}
-                  {refundError && !refundOpen ? <p className="buyer-order-error">{refundError}</p> : null}
-                  <Button variant="secondary" href="/store">Back to store</Button>
-                  {actionState.showSearchAnotherOrder ? (
-                    <Button variant="ghost" href="/orders/lookup">Search another order</Button>
-                  ) : (
-                    <Button variant="ghost" href="/account/orders">Back to orders</Button>
-                  )}
-                </Card>
+                <OrderDetailActions
+                  order={order}
+                  isAuthenticated={Boolean(auth.customer)}
+                  trackingHref={trackingHref}
+                  onCancel={() => {
+                    setCancelOpen(true)
+                    setCancelError(undefined)
+                    setCancelSuccess(undefined)
+                  }}
+                  onRequestRefund={() => {
+                    setRefundOpen(true)
+                    setRefundError(undefined)
+                    setRefundSuccess(undefined)
+                  }}
+                  cancelSuccess={cancelSuccess}
+                  cancelError={!cancelOpen ? cancelError : undefined}
+                  refundSuccess={refundSuccess}
+                  refundError={!refundOpen ? refundError : undefined}
+                />
               </aside>
             </section>
           </>
         )}
-      </main>
       {order ? (
         <Modal
           open={cancelOpen}
@@ -341,6 +317,6 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
             />
         </Modal>
       ) : null}
-    </div>
+    </PageShell>
   )
 }

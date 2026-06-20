@@ -1,11 +1,13 @@
 import type { BuyerOrderSummary } from "../../lib/buyer-api"
 import { authenticatedOrderDetailHref } from "../../pages/orders/order-detail-state"
+import { humanizeOrderStatus, paymentStatusPresentation } from "../../pages/orders/order-status"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { StatusBadge, statusToneFor } from "../ui/StatusBadge"
 
 export function OrderHistoryCard({ order }: { order: BuyerOrderSummary }) {
+  const payment = paymentStatusPresentation(order.paymentStatus)
   return (
     <Card as="article" className="buyer-order-card buyer-order-history-card">
       <header>
@@ -19,15 +21,15 @@ export function OrderHistoryCard({ order }: { order: BuyerOrderSummary }) {
       <dl className="buyer-order-history-status">
         <div>
           <dt>Payment</dt>
-          <dd><StatusBadge tone={statusToneFor(order.paymentStatus)}>{order.paymentStatus ?? "Not available"}</StatusBadge></dd>
+          <dd><StatusBadge tone={payment.tone} title={payment.description}>{payment.label}</StatusBadge></dd>
         </div>
         <div>
           <dt>Fulfillment</dt>
-          <dd><StatusBadge tone={statusToneFor(order.fulfillmentStatus)}>{order.fulfillmentStatus ?? "Not available"}</StatusBadge></dd>
+          <dd><StatusBadge tone={statusToneFor(order.fulfillmentStatus)}>{humanizeOrderStatus(order.fulfillmentStatus)}</StatusBadge></dd>
         </div>
         <div>
           <dt>Status</dt>
-          <dd><StatusBadge tone={statusToneFor(order.status)}>{order.status ?? "Not available"}</StatusBadge></dd>
+          <dd><StatusBadge tone={statusToneFor(order.status)}>{humanizeOrderStatus(order.status)}</StatusBadge></dd>
         </div>
       </dl>
       <div className="buyer-order-history-preview">
