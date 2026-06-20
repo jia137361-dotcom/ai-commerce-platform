@@ -52,6 +52,26 @@ describe("authenticated order detail navigation and actions", () => {
     })
   })
 
+  it("derives the refund button only from authenticated refundRequest.allowed", () => {
+    expect(resolveOrderDetailActions({
+      isAuthenticated: true,
+      cancellation: { allowed: true, code: null, message: null },
+      refundRequest: { allowed: true, code: null, message: null },
+    })).toMatchObject({
+      showCancel: true,
+      showRequestRefund: true,
+    })
+
+    expect(resolveOrderDetailActions({
+      isAuthenticated: true,
+      cancellation: { allowed: false, code: "ORDER_ALREADY_PAID", message: "Paid" },
+      refundRequest: { allowed: false, code: "ORDER_REFUND_NOT_SUPPORTED", message: "Unavailable" },
+    })).toMatchObject({
+      showCancel: false,
+      showRequestRefund: false,
+    })
+  })
+
   it("hides both actions for cancelled orders", () => {
     expect(resolveOrderDetailActions({
       isAuthenticated: true,

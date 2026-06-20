@@ -5,6 +5,12 @@ import { OrderDetailHeader } from "../../components/orders/OrderDetailHeader"
 import { OrderDetailItems } from "../../components/orders/OrderDetailItems"
 import { OrderDetailSummary } from "../../components/orders/OrderDetailSummary"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { Button } from "../../components/ui/Button"
+import { Card } from "../../components/ui/Card"
+import { Modal } from "../../components/ui/Modal"
+import { SelectField } from "../../components/ui/SelectField"
+import { StatusBadge } from "../../components/ui/StatusBadge"
+import { TextArea } from "../../components/ui/TextArea"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   cancelAuthenticatedOrder,
@@ -206,14 +212,13 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
               </div>
               <aside className="buyer-order-detail-side">
                 <OrderDetailSummary order={order} />
-                <section className="buyer-order-card buyer-order-actions">
+                <Card as="section" className="buyer-order-actions">
                   <p className="buyer-order-kicker">Actions</p>
                   <h2>Next steps</h2>
-                  <a href={trackingHref}>Track order</a>
+                  <Button href={trackingHref}>Track order</Button>
                   {canCancel ? (
-                    <button
-                      type="button"
-                      className="buyer-order-danger-action"
+                    <Button
+                      variant="danger"
                       onClick={() => {
                         setCancelOpen(true)
                         setCancelError(undefined)
@@ -221,14 +226,13 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                       }}
                     >
                       Cancel order
-                    </button>
+                    </Button>
                   ) : order.cancellation?.message && auth.customer ? (
                     <p className="buyer-order-action-note">{order.cancellation.message}</p>
                   ) : null}
                   {canRequestRefund ? (
-                    <button
-                      type="button"
-                      className="buyer-order-secondary-action"
+                    <Button
+                      variant="secondary"
                       onClick={() => {
                         setRefundOpen(true)
                         setRefundError(undefined)
@@ -236,11 +240,11 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                       }}
                     >
                       Request refund
-                    </button>
+                    </Button>
                   ) : actionState.showPendingRefund && order.refundRequest?.openRequest ? (
                     <div className="buyer-order-refund-status">
                       <strong>Refund requested</strong>
-                      <span>Pending review</span>
+                      <StatusBadge tone="warning">Pending review</StatusBadge>
                       <small>
                         Submitted {order.refundRequest.openRequest.createdAt
                           ? new Date(order.refundRequest.openRequest.createdAt).toLocaleDateString()
@@ -252,99 +256,90 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                   {cancelError && !cancelOpen ? <p className="buyer-order-error">{cancelError}</p> : null}
                   {refundSuccess ? <p className="buyer-order-action-success">{refundSuccess}</p> : null}
                   {refundError && !refundOpen ? <p className="buyer-order-error">{refundError}</p> : null}
-                  <a href="/store">Back to store</a>
+                  <Button variant="secondary" href="/store">Back to store</Button>
                   {actionState.showSearchAnotherOrder ? (
-                    <a href="/orders/lookup">Search another order</a>
+                    <Button variant="ghost" href="/orders/lookup">Search another order</Button>
                   ) : (
-                    <a href="/account/orders">Back to orders</a>
+                    <Button variant="ghost" href="/account/orders">Back to orders</Button>
                   )}
-                </section>
+                </Card>
               </aside>
             </section>
           </>
         )}
       </main>
-      {cancelOpen && order ? (
-        <div className="buyer-order-modal-backdrop" role="presentation">
-          <div className="buyer-order-modal buyer-order-card" role="dialog" aria-modal="true" aria-labelledby="cancel-order-title">
-            <header>
-              <p className="buyer-order-kicker">Order action</p>
-              <h2 id="cancel-order-title">Cancel order?</h2>
-              <p>This action can only be completed for unpaid and unfulfilled orders.</p>
-            </header>
-            {cancelError ? <p className="buyer-order-error">{cancelError}</p> : null}
-            <label className="buyer-order-field">
-              <span>Reason optional</span>
-              <textarea
-                value={cancelReason}
-                maxLength={500}
-                onChange={(event) => setCancelReason(event.target.value)}
-                placeholder="Ordered by mistake"
-              />
-            </label>
-            <footer>
-              <button type="button" disabled={cancelSubmitting} onClick={() => setCancelOpen(false)}>
+      {order ? (
+        <Modal
+          open={cancelOpen}
+          eyebrow="Order action"
+          title="Cancel order?"
+          description="This action can only be completed for unpaid and unfulfilled orders."
+          onClose={() => setCancelOpen(false)}
+          footer={(
+            <>
+              <Button variant="secondary" disabled={cancelSubmitting} onClick={() => setCancelOpen(false)}>
                 Keep order
-              </button>
-              <button
-                type="button"
-                className="buyer-order-danger-action"
-                disabled={cancelSubmitting}
-                onClick={() => void submitCancel()}
-              >
+              </Button>
+              <Button variant="danger" loading={cancelSubmitting} onClick={() => void submitCancel()}>
                 {cancelSubmitting ? "Cancelling..." : "Cancel order"}
-              </button>
-            </footer>
-          </div>
-        </div>
+              </Button>
+            </>
+          )}
+        >
+            {cancelError ? <p className="buyer-order-error">{cancelError}</p> : null}
+            <TextArea
+              label="Reason optional"
+              value={cancelReason}
+              maxLength={500}
+              onChange={(event) => setCancelReason(event.target.value)}
+              placeholder="Ordered by mistake"
+            />
+        </Modal>
       ) : null}
-      {refundOpen && order ? (
-        <div className="buyer-order-modal-backdrop" role="presentation">
-          <div className="buyer-order-modal buyer-order-card" role="dialog" aria-modal="true" aria-labelledby="refund-request-title">
-            <header>
-              <p className="buyer-order-kicker">Order support</p>
-              <h2 id="refund-request-title">Request refund</h2>
-              <p>This submits a request for review. It does not immediately return money.</p>
-            </header>
-            {refundError ? <p className="buyer-order-error">{refundError}</p> : null}
-            <label className="buyer-order-field">
-              <span>Reason</span>
-              <select
-                value={refundReason}
-                onChange={(event) => setRefundReason(event.target.value)}
+      {order ? (
+        <Modal
+          open={refundOpen}
+          eyebrow="Order support"
+          title="Request refund"
+          description="This submits a request for review. It does not immediately return money."
+          onClose={() => setRefundOpen(false)}
+          footer={(
+            <>
+              <Button variant="secondary" disabled={refundSubmitting} onClick={() => setRefundOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                loading={refundSubmitting}
+                disabled={!refundReason}
+                onClick={() => void submitRefundRequest()}
               >
+                {refundSubmitting ? "Submitting..." : "Submit request"}
+              </Button>
+            </>
+          )}
+        >
+            {refundError ? <p className="buyer-order-error">{refundError}</p> : null}
+            <SelectField
+              label="Reason"
+              value={refundReason}
+              onChange={(event) => setRefundReason(event.target.value)}
+            >
                 <option value="">Select a reason</option>
                 <option value="Ordered by mistake">Ordered by mistake</option>
                 <option value="Wrong item">Wrong item</option>
                 <option value="Item damaged">Item damaged</option>
                 <option value="Item not received">Item not received</option>
                 <option value="Other">Other</option>
-              </select>
-            </label>
-            <label className="buyer-order-field">
-              <span>Additional note optional</span>
-              <textarea
-                value={refundNote}
-                maxLength={1000}
-                onChange={(event) => setRefundNote(event.target.value)}
-                placeholder="Add details for the review team"
-              />
-            </label>
-            <footer>
-              <button type="button" disabled={refundSubmitting} onClick={() => setRefundOpen(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="buyer-order-secondary-action"
-                disabled={refundSubmitting || !refundReason}
-                onClick={() => void submitRefundRequest()}
-              >
-                {refundSubmitting ? "Submitting..." : "Submit request"}
-              </button>
-            </footer>
-          </div>
-        </div>
+            </SelectField>
+            <TextArea
+              label="Additional note optional"
+              value={refundNote}
+              maxLength={1000}
+              onChange={(event) => setRefundNote(event.target.value)}
+              placeholder="Add details for the review team"
+            />
+        </Modal>
       ) : null}
     </div>
   )
