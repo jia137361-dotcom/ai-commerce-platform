@@ -238,6 +238,50 @@ export const parseOptionalNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+/** Load one mc_product by id within a store. Prefer retrieveProduct over list filters. */
+export const getMcProductById = async (
+  storeCoreService: StoreCoreModuleService,
+  productId: string,
+  storeId: string
+) => {
+  const svc = storeCoreService as StoreCoreModuleService & {
+    retrieveProduct?: (id: string) => Promise<Record<string, unknown> | null>
+  }
+
+  if (typeof svc.retrieveProduct === "function") {
+    try {
+      const product = await svc.retrieveProduct(productId)
+      if (product && product.store_id === storeId) {
+        return product
+      }
+      if (product) {
+        return null
+      }
+    } catch {
+      // fall through to list-based lookup
+    }
+  }
+
+  const scoped = await storeCoreService.listProducts({
+    id: productId,
+    store_id: storeId,
+  })
+  if (scoped[0]) {
+    return scoped[0]
+  }
+
+  const scopedArray = await storeCoreService.listProducts({
+    id: [productId],
+    store_id: storeId,
+  })
+  if (scopedArray[0]) {
+    return scopedArray[0]
+  }
+
+  const storeProducts = await storeCoreService.listProducts({ store_id: storeId })
+  return storeProducts.find((row: { id?: string }) => row.id === productId) ?? null
+}
+
 /** MedusaService.createProducts expects an array (see phase1-dev2-bootstrap.ts). */
 export const createMcProduct = async (
   storeCoreService: StoreCoreModuleService,

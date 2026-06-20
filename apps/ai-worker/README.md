@@ -38,10 +38,45 @@ pip install -r requirements.txt
 
 Configure keys in `[apps/medusa-backend/.env](../medusa-backend/.env)` (copy from `[../medusa-backend/.env.example](../medusa-backend/.env.example)`):
 
-- `FAL_KEY` — image generation
-- `DEEPSEEK_API_KEY` — product copy
+### Image generation providers
+
+| Variable | Provider | Description |
+| -------- | -------- | ----------- |
+| `IMAGE_GEN_PROVIDER` | all | `fal`, `openai`, `dashscope`, or `mock` |
+| `AI_WORKER_MOCK_GENERATION` | all | `true` skips external APIs entirely |
+| `DASHSCOPE_API_KEY` | dashscope | Alibaba Bailian API key |
+| `DASHSCOPE_IMAGE_MODEL` | dashscope | e.g. `wan2.7-image-pro` (HTTP sync API) |
+| `DASHSCOPE_IMAGE_SIZE` | dashscope | e.g. `2K` |
+| `COPY_GEN_PROVIDER` | copy | `deepseek` or `dashscope` |
+| `DASHSCOPE_CHAT_BASE_URL` | dashscope copy | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `DASHSCOPE_CHAT_MODEL` | dashscope copy | e.g. `qwen-plus`, `qwen-max` |
+| `FAL_KEY` | fal | Fal.ai API key — [fal.ai](https://fal.ai) |
+| `FAL_MODEL` | fal | Endpoint, default `fal-ai/flux-2-pro` |
+| `FAL_UPSCALE_MODEL` | fal | Upscale endpoint, default `fal-ai/esrgan` |
+| `OPENAI_API_KEY` | openai | OpenAI API key |
+| `OPENAI_IMAGE_MODEL` | openai | e.g. `dall-e-3` |
+| `OPENAI_IMAGE_SIZE` | openai | e.g. `1024x1024` |
+
+### Copy generation
+
+- `COPY_GEN_PROVIDER=deepseek` + `DEEPSEEK_API_KEY` — DeepSeek chat
+- `COPY_GEN_PROVIDER=dashscope` + `DASHSCOPE_API_KEY` — Qwen via OpenAI-compatible `/compatible-mode/v1`
+
+### Other
+
 - `PUBLISHABLE_API_KEY` — optional, to load supplier specs from Medusa
 - `AI_WORKER_MOCK_GENERATION=true` — skip external APIs (local dev without keys)
+
+If `AI_WORKER_MOCK_GENERATION=false` but the selected provider key is missing, the worker auto-falls back to mock and logs a warning.
+
+### Real generation checklist
+
+1. Set `AI_WORKER_MOCK_GENERATION=false`
+2. **DashScope (Qwen + 万相):** `IMAGE_GEN_PROVIDER=dashscope`, `DASHSCOPE_API_KEY=...`, `COPY_GEN_PROVIDER=dashscope`, `DASHSCOPE_CHAT_MODEL=qwen-plus`
+3. **Or Fal:** `IMAGE_GEN_PROVIDER=fal` and `FAL_KEY=...`
+4. **Or OpenAI images:** `IMAGE_GEN_PROVIDER=openai` and `OPENAI_API_KEY=...`
+5. Start ai-worker: `uvicorn app.main:app --port 8001`
+6. Verify: `curl -X POST localhost:8001/ai/generate-product ...` → `"mock_mode": false`
 
 ## Run
 

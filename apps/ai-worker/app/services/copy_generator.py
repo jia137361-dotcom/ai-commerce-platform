@@ -47,7 +47,14 @@ async def generate_product_copy(
     size: str | None,
 ) -> dict[str, Any]:
     settings = get_settings()
-    if settings.mock_generation or not settings.deepseek_api_key.strip():
+    copy_provider = (settings.copy_gen_provider or "deepseek").strip().lower()
+
+    if copy_provider == "dashscope":
+        has_key = bool(settings.dashscope_api_key.strip())
+    else:
+        has_key = bool(settings.deepseek_api_key.strip())
+
+    if settings.mock_generation or not has_key:
         return _mock_copy(prompt, base_cost)
 
     variant_bits = []
@@ -78,7 +85,14 @@ Rules:
 - JSON only.
 """.strip()
 
-    client = DeepSeekClient()
+    if copy_provider == "dashscope":
+        client = DeepSeekClient(
+            api_key=settings.dashscope_api_key,
+            model=settings.dashscope_chat_model,
+            base_url=settings.dashscope_chat_base_url,
+        )
+    else:
+        client = DeepSeekClient()
     try:
         raw = await client.agenerate_text(
             user_prompt,

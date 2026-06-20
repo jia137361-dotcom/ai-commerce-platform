@@ -4,6 +4,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { createProductsWorkflow } from "@medusajs/medusa/core-flows"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
 import {
+  getMcProductById,
   getStoreCoreService,
   normalizeProduct,
   sendError
@@ -247,8 +248,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: currentStoreId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
 
-  const products = await storeCoreService.listProducts({ id: productId })
-  const product = products[0]
+  const product = await getMcProductById(storeCoreService, productId, currentStoreId)
 
   if (!product) {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
@@ -261,6 +261,24 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       "PRODUCT_STORE_MISMATCH",
       "Product does not belong to current store"
     )
+  }
+
+  if (product.status === "archived") {
+    return sendError(res, 400, "VALIDATION_ERROR", "Cannot publish archived product")
+  }
+
+  if (product.status === "published") {
+    return res.json({
+      product_id: product.id,
+      store_id: product.store_id,
+      status: product.status,
+      product: normalizeProduct(product),
+    })
+  }
+
+  const title = readString(product.title)
+  if (!title) {
+    return sendError(res, 400, "VALIDATION_ERROR", "title is required before publish")
   }
 
   let bridge
@@ -281,22 +299,27 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     )
   }
 
-  const [updatedProduct] = await storeCoreService.updateProducts({
+  const updated = await storeCoreService.updateProducts({
     selector: {
       id: productId,
-      store_id: currentStoreId
+      store_id: currentStoreId,
     },
     data: {
       status: "published",
       medusa_product_id: bridge.medusaProductId,
       medusa_variant_id: bridge.medusaVariantId,
-    }
+    },
   })
+
+  const updatedProduct = Array.isArray(updated) ? updated[0] : updated
+  if (!updatedProduct?.id) {
+    return sendError(res, 500, "VALIDATION_ERROR", "Failed to update product status")
+  }
 
   return res.json({
     product_id: updatedProduct.id,
     store_id: updatedProduct.store_id,
     status: updatedProduct.status,
-    product: normalizeProduct(updatedProduct)
+    product: normalizeProduct(updatedProduct),
   })
 }
