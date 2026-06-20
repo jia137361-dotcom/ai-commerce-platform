@@ -1,217 +1,140 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { CartDeleteConfirm } from "../../components/cart/CartDeleteConfirm"
-import { CartEmptyState } from "../../components/cart/CartEmptyState"
-import { CartLine } from "../../components/cart/CartLine"
-import { CartSummary } from "../../components/cart/CartSummary"
-import { StoreProductGrid } from "../../components/store-home/StoreProductGrid"
+import { CartItemCard } from "../../components/cart/CartItemCard"
+import { CartPageStatus } from "../../components/cart/CartPageStatus"
+import { CartSummaryCard } from "../../components/cart/CartSummaryCard"
+import { PageShell } from "../../components/layout/PageShell"
+import { StoreFooter } from "../../components/layout/StoreFooter"
+import { ProductCard } from "../../components/products/ProductCard"
+import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { normalizeBuyerCartItem } from "../../lib/buyer-cart"
 import {
   deleteCartLineItem,
   fetchCart,
   fetchProducts,
   getBuyerCartStorageKey,
   getBuyerStoreId,
+  updateCartLineItem,
+  type BuyerStoreSettings,
 } from "../../lib/buyer-api"
-import { updateCartLineItem } from "../../lib/buyer-api"
-import type { CartLineItem, StoreCart, StoreProduct } from "../../lib/mock-data"
+import type { StoreCart, StoreProduct } from "../../lib/mock-data"
+import { removeCartItem, updateCartItemQuantity } from "./cart-actions"
 
-type CartPageProps = {
-  onCartUpdated: (cart: StoreCart | null) => void
-}
+type CartPageProps = { onCartUpdated: (cart: StoreCart | null) => void }
+
+const cartSettings: BuyerStoreSettings = { storeId: getBuyerStoreId(), brandName: "Citigoo Official Store", metadata: {} }
+const cartDependencies = { updateLineItem: updateCartLineItem, deleteLineItem: deleteCartLineItem }
 
 export function CartPage({ onCartUpdated }: CartPageProps) {
   const [cart, setCart] = useState<StoreCart | null>(null)
   const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | undefined>()
+  const [loadError, setLoadError] = useState<string | undefined>()
+  const [lineErrors, setLineErrors] = useState<Record<string, string>>({})
   const [updatingLineId, setUpdatingLineId] = useState<string | undefined>()
-  const [deleteTarget, setDeleteTarget] = useState<CartLineItem | null>(null)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | undefined>()
+  const [deleteError, setDeleteError] = useState<string | undefined>()
   const [deleting, setDeleting] = useState(false)
+  const [loadVersion, setLoadVersion] = useState(0)
 
-  const storeId = getBuyerStoreId()
-  const storageKey = getBuyerCartStorageKey(storeId)
+  const storageKey = getBuyerCartStorageKey(getBuyerStoreId())
 
-  const loadCart = async () => {
+  const loadCart = useCallback(async (isActive: () => boolean) => {
     setLoading(true)
-    setError(undefined)
+    setLoadError(undefined)
     const cartId = window.localStorage.getItem(storageKey)
-
     if (!cartId) {
-      setCart(null)
-      onCartUpdated(null)
-      setLoading(false)
+      if (isActive()) { setCart(null); onCartUpdated(null); setLoading(false) }
       return
     }
-
     try {
       const loaded = await fetchCart(cartId)
-      setCart(loaded)
-      onCartUpdated(loaded)
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load cart.")
-      setCart(null)
-      onCartUpdated(null)
+      if (isActive()) { setCart(loaded); onCartUpdated(loaded) }
+    } catch (error) {
+      if (isActive()) {
+        setLoadError(error instanceof Error ? error.message : "Unable to load cart.")
+        setCart(null)
+        onCartUpdated(null)
+      }
     } finally {
-      setLoading(false)
+      if (isActive()) setLoading(false)
     }
-  }
+  }, [onCartUpdated, storageKey])
 
   useEffect(() => {
-    void loadCart()
+    let active = true
+    void loadCart(() => active)
     void fetchProducts().then((result) => {
-      if (result.source === "backend") {
-        setRecommendations(result.data.slice(0, 6))
-      }
+      if (active && result.source === "backend") setRecommendations(result.data.slice(0, 4))
     })
-  }, [])
+    return () => { active = false }
+  }, [loadCart, loadVersion])
 
-  const itemCount = useMemo(() => cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0, [cart])
+  const items = useMemo(() => cart?.items.map(normalizeBuyerCartItem) ?? [], [cart])
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+  const deleteTarget = items.find((item) => item.id === deleteTargetId) ?? null
 
   const updateQuantity = async (lineId: string, quantity: number) => {
-    if (!cart?.id) return
+    if (!cart?.id || updatingLineId) return
     setUpdatingLineId(lineId)
-    setError(undefined)
+    setLineErrors((errors) => ({ ...errors, [lineId]: "" }))
     try {
-      const updated = await updateCartLineItem(cart.id, lineId, quantity)
+      const updated = await updateCartItemQuantity(cart.id, lineId, quantity, cartDependencies)
       setCart(updated)
       onCartUpdated(updated)
-    } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Unable to update item quantity.")
+    } catch (error) {
+      setLineErrors((errors) => ({ ...errors, [lineId]: error instanceof Error ? error.message : "Unable to update quantity." }))
     } finally {
       setUpdatingLineId(undefined)
     }
   }
 
   const confirmDelete = async () => {
-    if (!cart?.id || !deleteTarget) return
+    if (!cart?.id || !deleteTarget || deleting) return
     setDeleting(true)
-    setError(undefined)
+    setDeleteError(undefined)
     try {
-      const updated = await deleteCartLineItem(cart.id, deleteTarget.id)
+      const updated = await removeCartItem(cart.id, deleteTarget.id, cartDependencies)
       setCart(updated)
       onCartUpdated(updated)
-      setDeleteTarget(null)
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete this item.")
+      setDeleteTargetId(undefined)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to remove this item.")
     } finally {
       setDeleting(false)
     }
   }
 
+  const empty = !cart || !items.length
   return (
-    <div className="buyer-cart-page">
-      <main className="buyer-cart-main">
-        {loading ? (
-          <section className="buyer-cart-loading" role="status">Loading cart...</section>
-        ) : !cart || !cart.items.length ? (
-          <>
-            {error && <CartError message={error} onRetry={() => void loadCart()} />}
-            <CartEmptyState />
-          </>
-        ) : (
-          <section className="buyer-cart-layout">
-            <div className="buyer-cart-content">
-              <section className="buyer-cart-panel">
-                <header className="buyer-cart-header">
-                  <div>
-                    <h1>Shopping Cart</h1>
-                    <button type="button">Deselect all items</button>
-                  </div>
-                  <span>Price</span>
-                </header>
-                {error && <CartError message={error} onRetry={() => void loadCart()} />}
-                <div className="buyer-cart-lines">
-                  {cart.items.map((item) => (
-                    <div className="buyer-cart-line-shell" key={item.id}>
-                      <CartLine
-                        item={item}
-                        currencyCode={cart.currencyCode}
-                        updating={updatingLineId === item.id}
-                        onQuantityChange={(lineId, quantity) => void updateQuantity(lineId, quantity)}
-                        onDeleteRequest={setDeleteTarget}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="buyer-cart-subtotal-line">
-                  <span>Subtotal ({itemCount} items):</span>
-                  <strong>{cart.total.toLocaleString(undefined, { style: "currency", currency: cart.currencyCode.toUpperCase() })}</strong>
-                </div>
-              </section>
+    <PageShell
+      className="buyer-cart-page"
+      contentClassName="buyer-cart-shell-content"
+      header={<StoreTopBar settings={cartSettings} cartCount={itemCount} />}
+      footer={<StoreFooter />}
+    >
+      <header className="buyer-cart-page-header"><div><p>Your basket</p><h1>Shopping cart</h1></div><a href="/store">Continue shopping</a></header>
+      <CartPageStatus loading={loading} error={loadError} empty={empty} onRetry={() => setLoadVersion((version) => version + 1)} />
 
-              <section className="buyer-cart-saved">
-                <h2>Your Items</h2>
-                <nav>
-                  <span>No items saved for later</span>
-                  <button type="button">Buy it again</button>
-                </nav>
-                <p>No items</p>
-              </section>
-            </div>
-            <CartSummary cart={cart} />
-          </section>
-        )}
-
-        {recommendations.length > 0 && (
-          <section className="buyer-cart-recommendations">
-            <header>
-              <h2>Recommendations based on items in your cart</h2>
-              <span>Page 1 of 5</span>
-            </header>
-            <StoreProductGrid products={recommendations} />
-          </section>
-        )}
-      </main>
-
-      <footer className="buyer-cart-footer">
-        <section>
-          <h2>Citigoo</h2>
-          <p><strong>Hongkong:</strong> Citigoo Limited,<br />Rm 1805-06, 18/F, Hollywood<br />Plaza, 610 Nathan Road,<br />Kowloon, HK</p>
+      {!loading && !loadError && cart && items.length ? (
+        <section className="buyer-cart-layout">
+          <div className="buyer-cart-list" aria-label="Cart items">
+            {items.map((item) => <div key={item.id}><CartItemCard
+              item={item}
+              currencyCode={cart.currencyCode}
+              updating={updatingLineId === item.id}
+              error={lineErrors[item.id] || undefined}
+              onQuantityChange={(lineId, quantity) => void updateQuantity(lineId, quantity)}
+              onDeleteRequest={(lineId) => { setDeleteTargetId(lineId); setDeleteError(undefined) }}
+            /></div>)}
+          </div>
+          <CartSummaryCard cart={cart} />
         </section>
-        <section>
-          <h2>Information</h2>
-          <a href="/about">About Us</a>
-          <a href="/store/about">Policies</a>
-          <a href="/store">Affiliate & Influencer Program</a>
-        </section>
-        <section>
-          <h2>Customer Service</h2>
-          <a href="/help">Refund And Replacement</a>
-          <a href="/help">Shipping Information</a>
-          <a href="/help">Payment Method</a>
-          <a href="/account/orders">Order Status</a>
-        </section>
-        <section>
-          <h2>Help</h2>
-          <a href="/help">Help Center</a>
-          <a href="/help">Contact Us</a>
-          <a href="/help">Citigoo Purchase Protection</a>
-        </section>
-        <div className="buyer-cart-legal">
-          <span>© 2024 Citigoo Limited</span>
-          <a href="/terms">Term of Service</a>
-          <a href="/privacy">Privacy policy</a>
-          <span>AMEX MC PayPal DISC Visa</span>
-        </div>
-      </footer>
+      ) : null}
 
-      {deleteTarget && (
-        <CartDeleteConfirm
-          item={deleteTarget}
-          deleting={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={() => void confirmDelete()}
-        />
-      )}
-    </div>
-  )
-}
+      {recommendations.length && !loading ? <section className="buyer-cart-recommendations-new"><header><p>More to discover</p><h2>Recommended for you</h2></header><div>{recommendations.map((product) => <div key={product.id}><ProductCard product={product} /></div>)}</div></section> : null}
 
-function CartError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <section className="buyer-cart-error" role="alert">
-      <strong>Cart is unavailable</strong>
-      <p>{message}</p>
-      <button type="button" onClick={onRetry}>Retry</button>
-    </section>
+      <CartDeleteConfirm item={deleteTarget} deleting={deleting} error={deleteError} onCancel={() => { if (!deleting) setDeleteTargetId(undefined) }} onConfirm={() => void confirmDelete()} />
+    </PageShell>
   )
 }

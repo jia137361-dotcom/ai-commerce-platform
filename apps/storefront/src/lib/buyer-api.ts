@@ -788,9 +788,11 @@ const normalizeShare = (payload: ApiShare, product: StoreProduct): BuyerShareInf
 }
 
 const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
-  const quantity = item.quantity ?? 1
-  const unitPrice = readNumber(item.unit_price) ?? readNumber(item.total) ?? 0
-  const total = readNumber(item.total) ?? unitPrice * quantity
+  const quantity = Math.max(1, Math.floor(item.quantity ?? 1))
+  const rawUnitPrice = readNumber(item.unit_price)
+  const rawTotal = readNumber(item.total)
+  const unitPrice = rawUnitPrice ?? (rawTotal != null ? rawTotal / quantity : 0)
+  const total = rawTotal ?? (rawUnitPrice != null ? rawUnitPrice * quantity : 0)
   return {
     id: item.id ?? item.variant_id ?? `line-${Math.random().toString(36).slice(2)}`,
     title: item.title ?? readString(item.metadata?.mc_product_title) ?? "Cart item",
@@ -798,6 +800,8 @@ const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
     quantity,
     unitPrice,
     total,
+    hasUnitPrice: rawUnitPrice != null || rawTotal != null,
+    hasTotal: rawTotal != null || rawUnitPrice != null,
     variantId: item.variant_id,
     variantTitle: readString(item.metadata?.variant_title) ?? readString(item.metadata?.supplier_variant_title),
     productId: item.product_id ?? readString(item.metadata?.mc_product_id),
@@ -808,8 +812,11 @@ const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
 
 const normalizeCart = (cart: ApiCart): StoreCart => {
   const items = (cart.items ?? []).map(normalizeCartLineItem)
-  const subtotal = readNumber(cart.subtotal) ?? items.reduce((sum, item) => sum + item.total, 0)
-  const total = readNumber(cart.total) ?? subtotal
+  const rawSubtotal = readNumber(cart.subtotal)
+  const rawTotal = readNumber(cart.total)
+  const derivedSubtotalAvailable = items.length > 0 && items.every((item) => item.hasTotal)
+  const subtotal = rawSubtotal ?? (derivedSubtotalAvailable ? items.reduce((sum, item) => sum + item.total, 0) : 0)
+  const total = rawTotal ?? subtotal
   return {
     id: cart.cart_id ?? cart.id ?? "",
     storeId: cart.store_id,
@@ -819,6 +826,8 @@ const normalizeCart = (cart: ApiCart): StoreCart => {
     items,
     subtotal,
     total,
+    hasSubtotal: rawSubtotal != null || derivedSubtotalAvailable,
+    hasTotal: rawTotal != null || rawSubtotal != null || derivedSubtotalAvailable,
   }
 }
 
