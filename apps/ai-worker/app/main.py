@@ -27,6 +27,14 @@ upload_path = settings.upload_path
 upload_path.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(upload_path)), name="static")
 
+mockup_template_path = Path(__file__).resolve().parent / "assets" / "mockup-templates"
+if mockup_template_path.is_dir():
+    app.mount(
+        "/mockup-templates",
+        StaticFiles(directory=str(mockup_template_path)),
+        name="mockup-templates",
+    )
+
 app.include_router(ai_router)
 
 
@@ -42,8 +50,15 @@ def root() -> dict[str, str]:
 
 
 @app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok", "service": "ai-worker"}
+def health_check() -> dict[str, str | bool]:
+    cfg = get_settings()
+    return {
+        "status": "ok",
+        "service": "ai-worker",
+        "mock_generation": cfg.mock_generation,
+        "image_gen_provider": cfg.image_gen_provider,
+        "dashscope_configured": bool(cfg.dashscope_api_key.strip()),
+    }
 
 
 def main() -> None:

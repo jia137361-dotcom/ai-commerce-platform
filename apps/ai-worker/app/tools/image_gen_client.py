@@ -15,8 +15,6 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-BASE_IMAGE_ENDPOINT = "fal-ai/flux-2-pro"
-UPSCALE_ENDPOINT = "fal-ai/esrgan"
 DEFAULT_TIMEOUT_SECONDS = 360.0
 DEFAULT_START_TIMEOUT_SECONDS = 60.0
 
@@ -37,6 +35,8 @@ class ImageGenClient:
         settings = get_settings()
         timeout_seconds = timeout_seconds if timeout_seconds is not None else settings.fal_timeout_seconds
         upscale_scale = upscale_scale if upscale_scale is not None else settings.fal_upscale_scale
+        self.base_model = settings.fal_model
+        self.upscale_model = settings.fal_upscale_model
         if upscale_scale not in {2, 4}:
             raise ValueError("upscale_scale must be 2 or 4")
 
@@ -65,7 +65,7 @@ class ImageGenClient:
     async def _generate_base_image(self, prompt: str, image_size: str) -> str:
         size = _parse_image_size(image_size)
         result = await self.client.subscribe(
-            BASE_IMAGE_ENDPOINT,
+            self.base_model,
             arguments={
                 "prompt": prompt,
                 "image_size": size,
@@ -88,7 +88,7 @@ class ImageGenClient:
 
     async def _upscale_image(self, image_url: str) -> str:
         result = await self.client.subscribe(
-            UPSCALE_ENDPOINT,
+            self.upscale_model,
             arguments={
                 "image_url": image_url,
                 "scale": self.upscale_scale,

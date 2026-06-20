@@ -9,6 +9,7 @@ export type AiWorkerGenerateResult = {
   design_image_url: string
   print_file_url: string
   mockup_image_url: string
+  gallery?: Array<{ id: string; label: string; url: string; kind: string }>
   title: string
   description: string
   tags: string[]
@@ -24,6 +25,7 @@ export type AiWorkerGenerateInput = {
   supplier_variant_id?: string | null
   print_position?: string
   base_cost?: number | null
+  generation_request_id?: string | null
 }
 
 export async function callAiWorkerGenerateProduct(
@@ -43,6 +45,7 @@ export async function callAiWorkerGenerateProduct(
       supplier_variant_id: input.supplier_variant_id ?? null,
       print_position: input.print_position ?? "front",
       base_cost: input.base_cost ?? null,
+      generation_request_id: input.generation_request_id ?? null,
     }),
   })
 

@@ -27,10 +27,12 @@ class MedusaClient:
     async def fetch_supplier_products(
         self,
         *,
-        platform_product_id: str,
+        platform_product_id: str | None = None,
     ) -> dict[str, Any]:
         url = f"{self.base_url}/store/supplier-products"
-        params = {"platform_product_id": platform_product_id}
+        params: dict[str, str] = {}
+        if platform_product_id:
+            params["platform_product_id"] = platform_product_id
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, params=params, headers=self._store_headers())
             if response.status_code >= 400:

@@ -17,3 +17,77 @@ export type ProductSource = (typeof ProductSources)[number]
 export type OrderPaymentStatus = (typeof OrderPaymentStatuses)[number]
 export type FulfillmentStatus = (typeof FulfillmentStatuses)[number]
 
+export type ProductVariantRow = {
+  supplier_variant_id: string
+  color: string
+  size: string
+  price: number
+  stock: number
+}
+
+export type ProductGalleryItem = {
+  id: string
+  label: string
+  url: string
+  kind: "mockup" | "design" | "print_file"
+}
+
+export type NormalizedProduct = {
+  product_id: string
+  store_id: string
+  title: string
+  description?: string | null
+  status: string
+  source?: string | null
+  price?: number | null
+  cost?: number | null
+  tags?: string[]
+  category_ids?: string[]
+  platform_product_id?: string | null
+  supplier_product_id?: string | null
+  supplier_variant_id?: string | null
+  variants?: ProductVariantRow[]
+  design_image_url?: string | null
+  mockup_image_url?: string | null
+  print_file_url?: string | null
+  image_url?: string | null
+  metadata?: Record<string, unknown>
+}
+
+export type AiJobProgress = {
+  job_id: string
+  store_id: string
+  status: string
+  progress: number
+  current_step: string | null
+  estimated_seconds: number | null
+  product_id: string | null
+  error: string | null
+}
+
+export type FulfillmentTimelineStep = {
+  key: string
+  label: string
+  status: "pending" | "active" | "completed"
+  timestamp: string | null
+}
+
+export type StoreNotification = {
+  id: string
+  type: string
+  title: string
+  body: string | null
+  read: boolean
+  created_at?: string
+}
+
+export type StoreSettings = {
+  store_id: string
+  brand_name: string | null
+  logo_url: string | null
+  support_email: string | null
+  seo_title: string | null
+  seo_description: string | null
+  metadata: Record<string, unknown>
+}
+

@@ -20,6 +20,13 @@ async def test_generate_product_mock_pipeline() -> None:
     assert result["design_image_url"]
     assert result["print_file_url"]
     assert result["mockup_image_url"]
+    assert len(result.get("gallery") or []) >= 4
+    ids = {item["id"] for item in result["gallery"]}
+    assert "design" in ids
+    assert "mockup_front" in ids
+    assert "mockup_back" in ids
+    mockup_urls = [item["url"] for item in result["gallery"] if item["kind"] == "mockup"]
+    assert len(mockup_urls) == len(set(mockup_urls))
     assert result["title"]
     assert result["description"]
     assert result["tags"]

@@ -8,6 +8,10 @@ import { markOrderPaidAndFulfillmentWaiting } from "../lib/sync-order-paid-fulfi
 import { tryRegisterWebhookDedupe } from "../lib/webhook-dedupe"
 import { pushOrderToS2bdiy } from "../lib/s2bdiy/push-s2b-order"
 import { getS2bdiyConfig } from "../modules/suppliers/s2bdiy/config"
+import { STORE_CORE_MODULE } from "../modules/store-core"
+import type StoreCoreModuleService from "../modules/store-core/service"
+import { readOrderStoreId } from "../lib/order-store-context"
+import { notifyFulfillmentFailed, notifyOrderPaid } from "../lib/notifications"
 
 async function resolveOrderIdFromPayment(
   container: MedusaContainer,
@@ -48,11 +52,41 @@ export default async function paymentCapturedSyncHandler({
 
   await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment.captured_event")
 
+  try {
+    const orderModule = container.resolve(Modules.ORDER)
+    const order = await orderModule.retrieveOrder(orderId)
+    const storeId = readOrderStoreId(order)
+    if (storeId) {
+      const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+      await notifyOrderPaid(storeCore, storeId, {
+        orderId,
+        displayId: typeof order.display_id === "number" ? order.display_id : null,
+        email: typeof order.email === "string" ? order.email : null,
+      })
+    }
+  } catch (error) {
+    console.error("Failed to create order_paid notification:", error)
+  }
+
   if (getS2bdiyConfig()) {
     try {
       await pushOrderToS2bdiy(container, orderId)
     } catch (error) {
       console.error("S2BDIY push order failed after payment.captured:", error)
+      try {
+        const orderModule = container.resolve(Modules.ORDER)
+        const order = await orderModule.retrieveOrder(orderId)
+        const storeId = readOrderStoreId(order)
+        if (storeId) {
+          const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+          await notifyFulfillmentFailed(storeCore, storeId, {
+            orderId,
+            reason: error instanceof Error ? error.message : "S2BDIY push failed",
+          })
+        }
+      } catch (notifyError) {
+        console.error("Failed to create fulfillment_failed notification:", notifyError)
+      }
     }
   }
 }

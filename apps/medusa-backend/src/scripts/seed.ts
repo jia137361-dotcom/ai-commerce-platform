@@ -202,11 +202,41 @@ const supplierProducts: SupplierProductSeed[] = [
       printable: true,
       supported_positions: ["front"]
     }
+  },
+  {
+    id: "sp_hoodie",
+    supplier_id: "sup_citigoo_mock",
+    supplier_product_id: "mock_hoodie_001",
+    platform_product_id: "pp_hoodie",
+    name: "Mock Pullover Hoodie",
+    category: "apparel",
+    base_cost: 18,
+    currency: "usd",
+    status: "active",
+    raw_json: {
+      printable: true,
+      supported_positions: ["front"]
+    }
+  },
+  {
+    id: "sp_mug",
+    supplier_id: "sup_citigoo_mock",
+    supplier_product_id: "mock_mug_001",
+    platform_product_id: "pp_mug",
+    name: "Mock Ceramic Mug",
+    category: "home",
+    base_cost: 4.25,
+    currency: "usd",
+    status: "active",
+    raw_json: {
+      printable: true,
+      supported_positions: ["wrap"]
+    }
   }
 ]
 
-const supplierProductVariants: SupplierProductVariantSeed[] = ["black", "white"].flatMap(
-  (color) =>
+const supplierProductVariants: SupplierProductVariantSeed[] = [
+  ...["black", "white"].flatMap((color) =>
     ["S", "M", "L", "XL"].map((size) => ({
       id: `spv_tshirt_${color}_${size.toLowerCase()}`,
       supplier_product_id: "sp_tshirt",
@@ -221,7 +251,38 @@ const supplierProductVariants: SupplierProductVariantSeed[] = ["black", "white"]
         print_position: "front"
       }
     }))
-)
+  ),
+  ...["black", "navy"].flatMap((color) =>
+    ["S", "M", "L", "XL"].map((size) => ({
+      id: `spv_hoodie_${color}_${size.toLowerCase()}`,
+      supplier_product_id: "sp_hoodie",
+      supplier_variant_id: `mock_hoodie_${color}_${size.toLowerCase()}`,
+      color,
+      size,
+      sku: `MOCK-HOODIE-${color.toUpperCase()}-${size}`,
+      cost: 18,
+      stock_status: "in_stock" as const,
+      raw_json: {
+        phase: "2A",
+        print_position: "front"
+      }
+    }))
+  ),
+  ...["11oz", "15oz"].map((size) => ({
+    id: `spv_mug_white_${size}`,
+    supplier_product_id: "sp_mug",
+    supplier_variant_id: `mock_mug_white_${size}`,
+    color: "white",
+    size,
+    sku: `MOCK-MUG-WHITE-${size.toUpperCase()}`,
+    cost: 4.25,
+    stock_status: "in_stock" as const,
+    raw_json: {
+      phase: "2A",
+      print_position: "wrap"
+    }
+  }))
+]
 
 const supplierPrintSpecs: SupplierPrintSpecSeed[] = [
   {
@@ -235,6 +296,36 @@ const supplierPrintSpecs: SupplierPrintSpecSeed[] = [
     accepted_formats: ["png"],
     background_required: false,
     safe_margin: 120,
+    bleed: 0,
+    color_mode: "RGB",
+    status: "active"
+  },
+  {
+    id: "sps_hoodie_front_png",
+    supplier_product_id: "sp_hoodie",
+    supplier_variant_id: null,
+    print_position: "front",
+    print_file_width: 4500,
+    print_file_height: 4500,
+    dpi: 300,
+    accepted_formats: ["png"],
+    background_required: false,
+    safe_margin: 120,
+    bleed: 0,
+    color_mode: "RGB",
+    status: "active"
+  },
+  {
+    id: "sps_mug_wrap_png",
+    supplier_product_id: "sp_mug",
+    supplier_variant_id: null,
+    print_position: "wrap",
+    print_file_width: 2550,
+    print_file_height: 1050,
+    dpi: 300,
+    accepted_formats: ["png"],
+    background_required: false,
+    safe_margin: 60,
     bleed: 0,
     color_mode: "RGB",
     status: "active"
@@ -252,7 +343,33 @@ const platformDesignTemplates: PlatformDesignTemplateSeed[] = [
     design_area_y: 420,
     design_area_width: 3600,
     design_area_height: 4200,
-    preview_background_url: "https://cdn.example.com/mockups/tshirt-front.png",
+    preview_background_url: "http://localhost:8001/mockup-templates/tshirt-front.png",
+    status: "active"
+  },
+  {
+    id: "pdt_hoodie_front",
+    platform_product_id: "pp_hoodie",
+    name: "Hoodie Front Print",
+    canvas_width: 4500,
+    canvas_height: 4500,
+    design_area_x: 450,
+    design_area_y: 420,
+    design_area_width: 3600,
+    design_area_height: 3300,
+    preview_background_url: "https://cdn.example.com/mockups/hoodie-front.png",
+    status: "active"
+  },
+  {
+    id: "pdt_mug_wrap",
+    platform_product_id: "pp_mug",
+    name: "Mug Wrap Print",
+    canvas_width: 2550,
+    canvas_height: 1050,
+    design_area_x: 120,
+    design_area_y: 120,
+    design_area_width: 2310,
+    design_area_height: 810,
+    preview_background_url: "https://cdn.example.com/mockups/mug-wrap.png",
     status: "active"
   }
 ]

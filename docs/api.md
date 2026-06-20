@@ -161,6 +161,59 @@ Response:
 }
 ```
 
+#### `GET /admin/products`
+
+Lists products for the current store (all statuses). Supports filtering and pagination.
+
+Query parameters:
+
+- `status`: `all` (default), `draft`, `published`, `unpublished`, `archived`
+- `limit`: default `20`, max `100`
+- `offset`: default `0`
+- `q`: optional title substring search (case-insensitive)
+
+Response:
+
+```json
+{
+  "store_id": "default_store",
+  "count": 1,
+  "limit": 20,
+  "offset": 0,
+  "products": []
+}
+```
+
+#### `GET /admin/store-products/:product_id`
+
+Returns one store-core product for the current store. Use this instead of `GET /admin/products/:product_id` (conflicts with Medusa native admin products API).
+
+#### `PUT /admin/store-products/:product_id`
+
+Updates a store-core product (same field rules as below).
+
+#### `DELETE /admin/store-products/:product_id`
+
+Archives a store-core product.
+
+#### `GET /admin/products/:product_id`
+
+Legacy alias — prefer `/admin/store-products/:product_id` when Medusa native route returns 404.
+
+Returns one product for the current store.
+
+#### `PUT /admin/products/:product_id`
+
+Updates a product. Draft products allow full editable fields; published products restrict updates to title, description, price, tags, category_ids, image URLs, and metadata.
+
+#### `DELETE /admin/products/:product_id`
+
+Archives a product (`status: archived`).
+
+#### `POST /admin/products/:product_id/duplicate`
+
+Creates a new draft copy of the product.
+
 #### `POST /admin/products/:product_id/publish`
 
 Publishes a draft product. The product must belong to the current store.
@@ -175,6 +228,73 @@ Response:
   "product": {}
 }
 ```
+
+### Orders
+
+#### `GET /admin/orders`
+
+Lists orders for the current store with pagination and optional filters.
+
+Query parameters:
+
+- `limit`: default `50`, max `200`
+- `offset`: default `0`
+- `email`: optional buyer email (exact match, case-insensitive)
+- `display_id`: optional order display number
+
+Response:
+
+```json
+{
+  "store_id": "default_store",
+  "count": 1,
+  "limit": 50,
+  "offset": 0,
+  "orders": [
+    {
+      "id": "order_123",
+      "display_id": 1001,
+      "email": "buyer@example.com",
+      "payment_status": "paid",
+      "fulfillment_status": "shipped",
+      "mc_payment_status": "paid",
+      "mc_fulfillment_status": "shipped"
+    }
+  ]
+}
+```
+
+#### `GET /admin/orders/:order_id`
+
+Returns order detail including line items (with production metadata), shipping address, fulfillment order, latest shipment, and supplier order summary.
+
+#### `GET /admin/orders/:order_id/fulfillment`
+
+Returns fulfillment timeline steps for the order UI (Waiting → Pushed → In Production → Shipped → Delivered).
+
+Response:
+
+```json
+{
+  "order_id": "order_123",
+  "store_id": "default_store",
+  "mc_fulfillment_status": "shipped",
+  "steps": [
+    {
+      "key": "waiting",
+      "label": "Waiting",
+      "status": "completed",
+      "timestamp": "2026-05-24T08:00:00.000Z"
+    }
+  ]
+}
+```
+
+Existing fulfillment actions (unchanged):
+
+- `POST /admin/orders/:order_id/push-fulfillment`
+- `POST /admin/orders/:order_id/mock-shipment`
+- `GET /admin/orders/:order_id/supplier-order`
 
 ### Platform Products
 
@@ -302,7 +422,7 @@ Environment: `FAL_KEY`, `DEEPSEEK_API_KEY`, or `AI_WORKER_MOCK_GENERATION=true` 
 
 #### `POST /admin/ai/generate-and-draft` (Medusa)
 
-Calls AI Worker then creates `mc_product` draft with `source: "ai"`.
+Calls AI Worker then creates `mc_product` draft with `source: "ai"`. **Legacy synchronous endpoint** — prefer async flow below for Progress UI.
 
 Required headers:
 
@@ -322,6 +442,42 @@ Request body:
   "print_position": "front"
 }
 ```
+
+#### `POST /admin/ai/generate`
+
+Creates an async AI generation job. Returns immediately with `job_id`.
+
+Response:
+
+```json
+{
+  "job_id": "aij_123",
+  "store_id": "default_store",
+  "status": "queued"
+}
+```
+
+#### `GET /admin/ai/jobs/:job_id`
+
+Poll job status: `progress`, `current_step`, `status`, `product_id`, `result`, `error`.
+
+#### `GET /admin/ai/jobs/:job_id/stream`
+
+SSE stream. Events: `progress`, `complete`, `error`.
+
+#### `POST /admin/ai/jobs/:job_id/retry`
+
+Retries a failed job with the same payload.
+
+#### Notifications
+
+- `GET /admin/notifications` — query: `limit`, `offset`, `unread_only`
+- `PATCH /admin/notifications/:id/read`
+- `PATCH /admin/notifications/read-all`
+
+#### Store logo upload
+
+- `POST /admin/store-settings/logo` — JSON body: `{ "file_base64": "...", "content_type": "image/png" }` (max 2MB)
 
 Cart line items created via `POST /store/carts/:id/line-items` copy production fields into `line_item.metadata`:
 
