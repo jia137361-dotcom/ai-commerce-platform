@@ -1,54 +1,24 @@
-export type CheckoutContact = {
-  email: string
-  phone: string
-  name: string
-}
+import { Button } from "../ui/Button"
+import { Card } from "../ui/Card"
+import { FormField } from "../ui/FormField"
+import { StatusBadge } from "../ui/StatusBadge"
 
-type CheckoutContactFormProps = {
-  value: CheckoutContact
-  onChange: (value: CheckoutContact) => void
-  status: "idle" | "saving" | "saved" | "error"
-  error?: string
-}
+export type CheckoutContact = { email: string; phone: string; name: string }
+type Props = { value: CheckoutContact; onChange: (value: CheckoutContact) => void; onSave: () => void; status: "idle" | "saving" | "saved" | "error"; error?: string }
 
-export function CheckoutContactForm({ value, onChange, status, error }: CheckoutContactFormProps) {
-  const update = (field: keyof CheckoutContact, fieldValue: string) => {
-    onChange({ ...value, [field]: fieldValue })
-  }
-
+export function CheckoutContactForm({ value, onChange, onSave, status, error }: Props) {
+  const update = (field: keyof CheckoutContact, fieldValue: string) => onChange({ ...value, [field]: fieldValue })
+  const tone = status === "saved" ? "success" : status === "error" ? "danger" : status === "saving" ? "warning" : "neutral"
   return (
-    <section className="buyer-checkout-panel">
-      <header>
-        <span>1</span>
-        <div>
-          <h2>Contact information</h2>
-          <p>
-            {status === "saving"
-              ? "Saving contact to checkout cart..."
-              : status === "saved"
-                ? "Contact saved to checkout cart."
-                : status === "error"
-                  ? "Contact could not be saved."
-                  : "Used for delivery updates and order lookup."}
-          </p>
-        </div>
-        <strong className={`buyer-checkout-save-status ${status}`}>{status}</strong>
-      </header>
-      {error && <p className="buyer-checkout-inline-error buyer-checkout-contact-error">{error}</p>}
+    <Card as="section" className="buyer-checkout-card">
+      <header><div><p>Step 1</p><h2>Contact information</h2></div><StatusBadge tone={tone}>{status === "idle" ? "Not saved" : status}</StatusBadge></header>
+      {error ? <p className="buyer-checkout-inline-error" role="alert">{error}</p> : null}
       <div className="buyer-checkout-form-grid">
-        <label>
-          Email
-          <input type="email" value={value.email} onChange={(event) => update("email", event.target.value)} placeholder="buyer@example.com" />
-        </label>
-        <label>
-          Phone
-          <input type="tel" value={value.phone} onChange={(event) => update("phone", event.target.value)} placeholder="+1 555 0100" />
-        </label>
-        <label className="wide">
-          Full name
-          <input value={value.name} onChange={(event) => update("name", event.target.value)} placeholder="Receiver name" />
-        </label>
+        <FormField label="Email" type="email" value={value.email} onChange={(event) => update("email", event.target.value)} placeholder="buyer@example.com" />
+        <FormField label="Phone" type="tel" value={value.phone} onChange={(event) => update("phone", event.target.value)} placeholder="+86 138 0000 0000" />
+        <FormField className="wide" label="Receiver name" value={value.name} onChange={(event) => update("name", event.target.value)} />
       </div>
-    </section>
+      <footer><Button variant="secondary" loading={status === "saving"} onClick={onSave}>{status === "saved" ? "Save changes" : "Save contact"}</Button></footer>
+    </Card>
   )
 }

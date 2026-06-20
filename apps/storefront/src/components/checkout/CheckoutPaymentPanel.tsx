@@ -1,27 +1,15 @@
+import { Card } from "../ui/Card"
+import { StatusBadge } from "../ui/StatusBadge"
+
 export function CheckoutPaymentPanel() {
   return (
-    <section className="buyer-checkout-panel buyer-checkout-payment">
-      <header>
-        <span>4</span>
-        <div>
-          <h2>Payment method</h2>
-          <p>Payment collection is not completed in this batch.</p>
-        </div>
-        <button type="button">Manage</button>
-      </header>
-      <div className="buyer-checkout-payment-empty">
-        <div aria-hidden="true" />
-        <strong>Save cards for a faster checkout</strong>
-        <p>Secure payment · Convenient payment</p>
-        <button type="button">Add a credit or debit card</button>
-        <div className="buyer-checkout-card-logos">
-          <span>VISA</span>
-          <span>MC</span>
-          <span>AMEX</span>
-          <span>JCB</span>
-          <span>DISC</span>
-        </div>
+    <Card as="section" className="buyer-checkout-card buyer-checkout-payment-card">
+      <header><div><p>Step 4</p><h2>Payment authorization</h2></div><StatusBadge tone="warning">Authorize only</StatusBadge></header>
+      <div className="buyer-checkout-payment-message">
+        <strong>System payment provider</strong>
+        <p>The current local provider authorizes payment when the order is placed. It does not capture funds in this runtime.</p>
+        <dl><div><dt>Provider</dt><dd>pp_system_default</dd></div><div><dt>Capture</dt><dd>Not available</dd></div></dl>
       </div>
-    </section>
+    </Card>
   )
 }

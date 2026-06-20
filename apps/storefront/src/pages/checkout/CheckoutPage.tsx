@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react"
-import { CheckoutAddressPanel, type CheckoutAddress } from "../../components/checkout/CheckoutAddressPanel"
+import type { CheckoutAddress } from "../../components/checkout/CheckoutAddressPanel"
+import { CheckoutAddressCard } from "../../components/checkout/CheckoutAddressCard"
 import { CheckoutContactForm, type CheckoutContact } from "../../components/checkout/CheckoutContactForm"
+import { CheckoutCompleteError } from "../../components/checkout/CheckoutCompleteError"
+import { CheckoutPageStatus } from "../../components/checkout/CheckoutPageStatus"
 import { CheckoutPaymentPanel } from "../../components/checkout/CheckoutPaymentPanel"
-import { CheckoutSummary } from "../../components/checkout/CheckoutSummary"
+import { CheckoutShippingCard } from "../../components/checkout/CheckoutShippingCard"
+import { CheckoutSummaryCard } from "../../components/checkout/CheckoutSummaryCard"
+import { PageShell } from "../../components/layout/PageShell"
+import { StoreFooter } from "../../components/layout/StoreFooter"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
@@ -20,6 +26,8 @@ import {
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
 import type { StoreCart } from "../../lib/mock-data"
+import { completeCheckoutOrder } from "./checkout-action"
+import { resolveCheckoutState } from "./checkout-state"
 
 type CheckoutPageProps = {
   cartCount: number
@@ -70,34 +78,12 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [shippingMethodSaved, setShippingMethodSaved] = useState(false)
   const [placingOrder, setPlacingOrder] = useState(false)
   const [completeError, setCompleteError] = useState<string | undefined>()
+  const [loadVersion, setLoadVersion] = useState(0)
 
   const contactIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim()) && contact.phone.trim().length >= 4 && contact.name.trim().length > 1
   const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && address.country.trim())
-  const completeEndpointConfirmed = true
-  const shippingRequirementsMet = !requiresShippingMethod || (addressSaved && shippingMethodSaved)
-
-  const placeOrderDisabledReason = (() => {
-    if (!cart?.items.length) return "Cart is empty."
-    if (auth.isLoading) return "Checking account session."
-    if (!auth.customer) return "Sign in before placing an authenticated order."
-    if (!completeEndpointConfirmed) return "Complete cart API is not ready for buyer checkout."
-    if (!contactIsValid) return "Enter a valid email, phone, and receiver name."
-    if (placingOrder) return "Placing order..."
-    if (!requiresShippingMethod) return ""
-    if (!addressIsValid) return "Enter a complete delivery address."
-    if (!addressSaved) return "Save delivery address before placing the order."
-    if (!shippingMethodSaved) return "Select and save a shipping method."
-    return ""
-  })()
-  const canPlaceOrder = Boolean(
-    cart?.items.length &&
-    auth.customer &&
-    !auth.isLoading &&
-    !placingOrder &&
-    completeEndpointConfirmed &&
-    contactIsValid &&
-    shippingRequirementsMet
-  )
+  const checkoutState = resolveCheckoutState({ cart, authLoading: auth.isLoading, authenticated: Boolean(auth.customer), contactValid: contactIsValid, requiresShippingMethod, addressValid: addressIsValid, addressSaved, shippingMethodSaved, placingOrder })
+  const { canPlaceOrder, disabledReason: placeOrderDisabledReason } = checkoutState
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
 
   useEffect(() => {
@@ -162,7 +148,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     return () => {
       active = false
     }
-  }, [auth.customer, onCartUpdated])
+  }, [auth.customer, loadVersion, onCartUpdated])
 
   useEffect(() => {
     setContactStatus("idle")
@@ -273,18 +259,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       if (!auth.customer) {
         throw new Error("Sign in before placing an authenticated order.")
       }
-      const boundCart = await attachCustomerToCart(cart.id)
-      if (boundCart.customerId !== auth.customer.id) {
-        throw new Error("Cart customer binding did not return the current customer.")
-      }
-      setCart(boundCart)
-      onCartUpdated(boundCart)
-
-      const contactCart = await saveContactForCart(boundCart)
-      const result = await completeCart(contactCart.id)
-      if (!result.orderId) {
-        throw new Error("Complete cart succeeded without an order_id.")
-      }
+      const { result } = await completeCheckoutOrder({
+        cart,
+        customerId: auth.customer.id,
+        bindCustomer: attachCustomerToCart,
+        saveContact: saveContactForCart,
+        complete: completeCart,
+      })
       if (!result.email) {
         console.warn("[checkout] complete cart returned an order without email", result)
       }
@@ -297,7 +278,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         orderId: result.orderId,
         displayId: result.displayId,
         email: result.email ?? null,
-        total: result.total ?? cart.total,
+        total: result.total ?? (cart.hasTotal === false ? undefined : cart.total),
         currencyCode: result.currencyCode ?? cart.currencyCode,
       }
 
@@ -315,92 +296,36 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   }
 
   return (
-    <div className="buyer-checkout-page">
-      <StoreTopBar settings={settings} cartCount={cartCount} />
-      <main className="buyer-checkout-main">
-        {loading ? (
-          <section className="buyer-checkout-state" role="status">Loading checkout...</section>
-        ) : !cart || !cart.items.length ? (
-          <section className="buyer-checkout-state">
-            {error ? (
-              <>
-                <strong>Checkout cart unavailable</strong>
-                <p>{error}</p>
-              </>
-            ) : (
-              <>
-                <strong>Your cart is empty</strong>
-                <p>Add products before continuing to checkout.</p>
-              </>
-            )}
-            <div>
-              <a href="/cart">Back to cart</a>
-              <a href="/store">Shop products</a>
-            </div>
-          </section>
-        ) : (
+    <PageShell className="buyer-checkout-page" contentClassName="buyer-checkout-shell-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
+      <header className="buyer-checkout-page-header"><div><p>Secure checkout</p><h1>Checkout</h1><span>Review your contact, delivery, and order summary.</span></div><a href="/cart">Back to cart</a></header>
+      <CheckoutPageStatus loading={loading} error={error} empty={!cart || !cart.items.length} onRetry={() => setLoadVersion((version) => version + 1)} />
+      {!loading && !error && cart?.items.length ? (
           <section className="buyer-checkout-layout">
             <div className="buyer-checkout-left">
-              <div className="buyer-checkout-title">
-                <a href="/cart">Back to cart</a>
-                <h1>Checkout</h1>
-                <p>Review contact, delivery, payment, and order summary before placing the order.</p>
-              </div>
-              {completeError && <p className="buyer-checkout-inline-error">{completeError}</p>}
+              {completeError ? <CheckoutCompleteError message={completeError} /> : null}
               <CheckoutContactForm
                 value={contact}
                 onChange={(nextContact) => {
                   setContactTouched(true)
                   setContact(nextContact)
                 }}
+                onSave={() => { void handleSaveContact().catch(() => undefined) }}
                 status={contactStatus}
                 error={contactError}
               />
-              <CheckoutAddressPanel
+              <CheckoutAddressCard
                 value={address}
                 onChange={setAddress}
                 onSave={handleSaveAddress}
+                required={requiresShippingMethod}
                 saving={addressSaving}
                 saved={addressSaved}
                 error={addressError}
               />
-              <section className="buyer-checkout-panel buyer-checkout-shipping">
-                <header>
-                  <span>3</span>
-                  <div>
-                    <h2>Shipping method</h2>
-                    <p>{requiresShippingMethod ? (addressSaved ? "Choose an available delivery method." : "Save delivery address to load available shipping methods.") : "This cart does not require a shipping method."}</p>
-                  </div>
-                </header>
-                {shippingLoading ? (
-                  <div><strong>Loading shipping options</strong><span>Please wait...</span></div>
-                ) : shippingError ? (
-                  <p className="buyer-checkout-inline-error">{shippingError}</p>
-                ) : !requiresShippingMethod ? (
-                  <div><strong>No shipping option required</strong><span>The backend returned requires_shipping_method=false for this cart.</span></div>
-                ) : !addressSaved ? (
-                  <div><strong>Address required</strong><span>Shipping options are loaded from the backend after address save.</span></div>
-                ) : shippingOptions.length ? (
-                  <div className="buyer-checkout-shipping-options">
-                    {shippingOptions.map((option) => (
-                      <button
-                        className={selectedShippingOptionId === option.id && shippingMethodSaved ? "active" : ""}
-                        key={option.id}
-                        type="button"
-                        onClick={() => void handleSelectShippingMethod(option.id)}
-                      >
-                        <strong>{option.name}</strong>
-                        <span>{option.amount ? `$${option.amount.toFixed(2)} ${option.currencyCode.toUpperCase()}` : "Free"}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div><strong>No shipping options</strong><span>No selectable shipping methods are available for this address. Place Order remains disabled.</span></div>
-                )}
-              </section>
+              <CheckoutShippingCard required={requiresShippingMethod} addressSaved={addressSaved} loading={shippingLoading} error={shippingError} options={shippingOptions} selectedId={selectedShippingOptionId} methodSaved={shippingMethodSaved} onSelect={(id) => void handleSelectShippingMethod(id)} />
               <CheckoutPaymentPanel />
             </div>
-            <CheckoutSummary
+            <CheckoutSummaryCard
               cart={cart}
               canPlaceOrder={canPlaceOrder}
               disabledReason={placeOrderDisabledReason}
@@ -409,8 +334,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
               shippingAmount={shippingMethodSaved ? selectedShippingOption?.amount ?? 0 : undefined}
             />
           </section>
-        )}
-      </main>
-    </div>
+      ) : null}
+    </PageShell>
   )
 }
