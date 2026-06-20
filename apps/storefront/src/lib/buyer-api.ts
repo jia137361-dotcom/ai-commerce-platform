@@ -1,4 +1,5 @@
 import { mockProducts, reviews as mockReviews, type CartLineItem, type StoreCart, type StoreProduct } from "./mock-data"
+import { normalizeBuyerProduct, type BuyerProductApiInput } from "./buyer-product"
 
 export type DataSource = "backend" | "mock" | "static"
 
@@ -86,34 +87,7 @@ type ApiCategories = {
   categories?: ApiCategory[]
 }
 
-type ApiProduct = {
-  id?: string
-  product_id?: string
-  title?: string
-  description?: string | null
-  category?: string | null
-  category_name?: string | null
-  image_url?: string | null
-  mockup_image_url?: string | null
-  design_image_url?: string | null
-  print_file_url?: string | null
-  thumbnail?: string | null
-  images?: Array<{ url?: string | null }>
-  price?: number | string | null
-  variants?: Array<{ prices?: Array<{ amount?: number }> }>
-  tags?: string[] | null
-  metadata?: Record<string, unknown> | null
-  medusa_product_id?: string | null
-  medusa_variant_id?: string | null
-  requires_shipping?: boolean
-  supplier_id?: string | null
-  supplier_product_id?: string | null
-  supplier_variant_id?: string | null
-  is_cart_addable?: boolean
-  average_rating?: number | null
-  review_count?: number
-  category_ids?: string[] | null
-}
+type ApiProduct = BuyerProductApiInput
 
 type ApiProducts = {
   products?: ApiProduct[]
@@ -630,17 +604,6 @@ const headers = () => ({
   "X-Store-Id": config.storeId || "default_store",
 })
 
-const money = (value: number | string | null | undefined) => {
-  if (typeof value === "string" && value.trim().startsWith("$")) return value
-  const numeric = typeof value === "number" ? value : Number(value)
-  if (!Number.isFinite(numeric)) return "$0.00 USD"
-  const amount = numeric > 999 ? numeric / 100 : numeric
-  return `${new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount)} USD`
-}
-
 export const formatBuyerMoney = (value: number | undefined, currency = "USD") => {
   const amount = Number.isFinite(value) ? (value as number) : 0
   return new Intl.NumberFormat("en-US", {
@@ -653,9 +616,6 @@ const readNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
 }
-
-const firstVariantPrice = (product: ApiProduct) =>
-  product.variants?.flatMap((variant) => variant.prices ?? [])[0]?.amount
 
 const readString = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined)
 
@@ -762,42 +722,6 @@ const normalizeCategory = (category: ApiCategory, index: number): BuyerCategory 
   parentId: category.parent_id,
   sortOrder: category.sort_order,
 })
-
-const normalizeProduct = (product: ApiProduct, index: number): StoreProduct => {
-  const fallback = mockProducts[index % mockProducts.length]
-  const rawPrice = product.price ?? firstVariantPrice(product)
-  const imageUrl =
-    product.image_url ??
-    product.mockup_image_url ??
-    product.thumbnail ??
-    product.images?.find((image) => image.url)?.url ??
-    fallback.imageUrl
-
-  return {
-    id: product.product_id ?? product.id ?? `backend-product-${index}`,
-    title: product.title ?? "Untitled Product",
-    category: product.category_name ?? product.category ?? fallback.category,
-    categoryIds: product.category_ids ?? [],
-    price: money(rawPrice),
-    numericPrice: readNumber(rawPrice),
-    imageUrl,
-    mockupImageUrl: product.mockup_image_url ?? undefined,
-    designImageUrl: product.design_image_url ?? undefined,
-    printFileUrl: product.print_file_url ?? undefined,
-    badge: typeof product.metadata?.badge === "string" ? product.metadata.badge : undefined,
-    description: product.description ?? undefined,
-    medusaProductId: product.medusa_product_id ?? undefined,
-    medusaVariantId: product.medusa_variant_id ?? undefined,
-    requiresShipping: product.requires_shipping,
-    supplierId: product.supplier_id ?? undefined,
-    supplierProductId: product.supplier_product_id ?? undefined,
-    supplierVariantId: product.supplier_variant_id ?? undefined,
-    isCartAddable: Boolean(product.is_cart_addable && product.medusa_variant_id),
-    averageRating: product.average_rating ?? null,
-    reviewCount: product.review_count ?? 0,
-    tags: Array.isArray(product.tags) ? product.tags : [],
-  }
-}
 
 const normalizeReview = (review: ApiReview, index: number): BuyerReview => ({
   id: review.review_id ?? review.id ?? `review-${index}`,
@@ -933,7 +857,7 @@ export const fetchProductCategories = async (): Promise<LoadResult<BuyerCategory
 export const fetchProducts = async (): Promise<LoadResult<StoreProduct[]>> => {
   try {
     const payload = await apiFetch<ApiProducts>("/store/products")
-    const products = (payload.products ?? []).map(normalizeProduct)
+    const products = (payload.products ?? []).map(normalizeBuyerProduct)
     if (!products.length) {
       throw new Error("Backend returned no products")
     }
@@ -949,7 +873,7 @@ export const fetchProductDetail = async (productId: string): Promise<LoadResult<
     if (!payload.product) {
       throw new Error("Backend returned no product")
     }
-    return { data: normalizeProduct(payload.product, 0), source: "backend" }
+    return { data: normalizeBuyerProduct(payload.product, 0), source: "backend" }
   } catch (error) {
     const fallback = mockProducts.find((product) => product.id === productId) ?? mockProducts[0]
     return { data: fallback, source: "mock", error: warnFallback("product detail", error) }

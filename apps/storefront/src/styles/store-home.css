@@ -783,3 +783,406 @@
     margin-left: 0;
   }
 }
+
+/* FE-02 shop page. These selectors intentionally sit after the legacy store rules. */
+.buyer-ui-page-shell-content.buyer-shop-shell-content {
+  width: min(calc(100% - 48px), var(--buyer-content-width));
+  padding: 24px 0 56px;
+}
+
+.buyer-store-page {
+  background: var(--buyer-bg);
+  color: var(--buyer-text);
+}
+
+.buyer-store-page .buyer-store-hero {
+  height: auto;
+  min-height: 420px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--buyer-radius-card);
+  background-color: #2f2925;
+  background-image: none;
+  background-position: center;
+  background-size: cover;
+}
+
+.buyer-store-page .buyer-store-hero-copy {
+  width: min(620px, 72%);
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 56px 64px;
+}
+
+.buyer-store-page .buyer-store-hero-copy p {
+  margin: 0 0 16px;
+  color: var(--buyer-primary);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.buyer-store-page .buyer-store-hero-copy h2 {
+  max-width: 560px;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.buyer-store-page .buyer-store-hero-copy > span:not(.buyer-store-hero-fallback) {
+  max-width: 440px;
+  margin-top: 22px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.buyer-store-page .buyer-store-hero-copy .buyer-ui-button {
+  margin-top: 28px;
+}
+
+.buyer-store-hero-fallback {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  border-radius: 4px;
+  padding: 5px 8px;
+  background: rgba(17, 24, 39, 0.72);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.buyer-shop-identity {
+  min-height: 130px;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid var(--buyer-border);
+}
+
+.buyer-shop-identity-mark {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--buyer-border);
+  border-radius: 50%;
+  background: var(--buyer-surface);
+  box-shadow: var(--buyer-shadow-card);
+  color: var(--buyer-primary);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.buyer-shop-identity-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.buyer-shop-identity-copy h1,
+.buyer-shop-identity-copy p {
+  margin: 0;
+}
+
+.buyer-shop-identity-copy h1 {
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.buyer-shop-identity-copy p {
+  margin-top: 5px;
+  color: var(--buyer-text-muted);
+  font-size: 14px;
+}
+
+.buyer-shop-identity-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.buyer-shop-controls {
+  border-bottom: 1px solid var(--buyer-border);
+}
+
+.buyer-shop-category-tabs {
+  min-height: 66px;
+  display: flex;
+  align-items: stretch;
+  gap: 32px;
+  overflow-x: auto;
+}
+
+.buyer-store-page .buyer-shop-category-tabs button {
+  min-width: max-content;
+  border-bottom: 2px solid transparent;
+  color: var(--buyer-text-muted);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.buyer-store-page .buyer-shop-category-tabs button.active {
+  border-color: var(--buyer-primary);
+  color: var(--buyer-primary);
+}
+
+.buyer-shop-filterbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 0;
+  border-top: 1px solid var(--buyer-border);
+}
+
+.buyer-shop-filterbar .buyer-store-search {
+  width: min(100%, 420px);
+  height: 44px;
+  border-color: var(--buyer-border);
+  border-radius: var(--buyer-radius-button);
+  background: var(--buyer-surface);
+}
+
+.buyer-shop-sort {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--buyer-text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.buyer-shop-sort select {
+  min-height: 42px;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-button);
+  padding: 0 34px 0 12px;
+  background: var(--buyer-surface);
+  color: var(--buyer-text);
+  font: inherit;
+  font-weight: 700;
+}
+
+.buyer-store-page .buyer-store-fallback {
+  margin: 20px 0 0;
+  border-color: #efd69b;
+  border-radius: var(--buyer-radius-button);
+  background: #fffaf0;
+  color: var(--buyer-warning);
+}
+
+.buyer-shop-products {
+  padding-top: 38px;
+}
+
+.buyer-shop-products > .buyer-ui-section-header {
+  margin-bottom: 24px;
+}
+
+.buyer-shop-product-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 36px 22px;
+}
+
+.buyer-shop-product-card {
+  min-width: 0;
+  overflow: hidden;
+  border-color: transparent;
+  background: transparent;
+}
+
+.buyer-shop-product-media {
+  aspect-ratio: 1 / 1.06;
+  display: block;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--buyer-radius-card);
+  background: var(--buyer-surface-muted);
+}
+
+.buyer-shop-product-media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+.buyer-shop-product-card:hover .buyer-shop-product-media img {
+  transform: scale(1.025);
+}
+
+.buyer-shop-product-media .buyer-ui-status {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+
+.buyer-shop-product-media .buyer-ui-status + .buyer-ui-status {
+  top: auto;
+  right: 10px;
+  bottom: 10px;
+  left: auto;
+}
+
+.buyer-shop-product-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  color: var(--buyer-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.buyer-shop-product-body {
+  padding: 12px 2px 0;
+}
+
+.buyer-shop-product-body p,
+.buyer-shop-product-body h3 {
+  margin: 0;
+}
+
+.buyer-shop-product-body p {
+  color: var(--buyer-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.buyer-shop-product-body h3 {
+  min-height: 42px;
+  margin-top: 5px;
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+.buyer-shop-product-body h3 a {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.buyer-shop-product-meta {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--buyer-warning);
+  font-size: 12px;
+}
+
+.buyer-shop-product-meta small {
+  color: var(--buyer-text-muted);
+}
+
+.buyer-shop-product-body .buyer-ui-money {
+  margin-top: 5px;
+  display: block;
+  color: var(--buyer-primary);
+  font-size: 16px;
+}
+
+@media (max-width: 900px) {
+  .buyer-shop-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-ui-page-shell-content.buyer-shop-shell-content {
+    width: 100%;
+    padding-top: 0;
+  }
+
+  .buyer-store-page .buyer-store-hero {
+    min-height: 310px;
+    border-radius: 0;
+  }
+
+  .buyer-store-page .buyer-store-hero-copy {
+    width: 86%;
+    padding: 42px 20px;
+  }
+
+  .buyer-store-page .buyer-store-hero-copy h2 {
+    font-size: 38px;
+  }
+
+  .buyer-shop-identity,
+  .buyer-shop-controls,
+  .buyer-shop-products,
+  .buyer-store-page .buyer-store-fallback {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  .buyer-shop-identity {
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 12px;
+    padding: 20px 0;
+  }
+
+  .buyer-shop-identity-mark {
+    width: 56px;
+    height: 56px;
+  }
+
+  .buyer-shop-identity-copy h1 {
+    font-size: 18px;
+  }
+
+  .buyer-shop-identity-actions {
+    grid-column: 1 / -1;
+  }
+
+  .buyer-shop-identity-actions .buyer-ui-button {
+    flex: 1;
+  }
+
+  .buyer-shop-category-tabs {
+    gap: 22px;
+  }
+
+  .buyer-shop-filterbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .buyer-shop-filterbar .buyer-store-search,
+  .buyer-shop-sort select {
+    width: 100%;
+  }
+
+  .buyer-shop-sort {
+    justify-content: space-between;
+  }
+
+  .buyer-shop-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 12px;
+  }
+
+  .buyer-shop-product-body h3 {
+    min-height: 56px;
+  }
+
+  .buyer-store-footer {
+    grid-template-columns: 1fr;
+  }
+}
