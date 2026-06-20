@@ -40,6 +40,8 @@ export type CartLineItem = {
   quantity: number
   unitPrice: number
   total: number
+  hasUnitPrice?: boolean
+  hasTotal?: boolean
   variantId?: string
   variantTitle?: string
   productId?: string
@@ -64,6 +66,8 @@ export type StoreCart = {
   items: CartLineItem[]
   subtotal: number
   total: number
+  hasSubtotal?: boolean
+  hasTotal?: boolean
 }
 
 export type Review = {
