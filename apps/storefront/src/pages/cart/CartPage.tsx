@@ -19,6 +19,8 @@ import {
 } from "../../lib/buyer-api"
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
 import { removeCartItem, updateCartItemQuantity } from "./cart-actions"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 
 type CartPageProps = { onCartUpdated: (cart: StoreCart | null) => void }
 
@@ -26,6 +28,7 @@ const cartSettings: BuyerStoreSettings = { storeId: getBuyerStoreId(), brandName
 const cartDependencies = { updateLineItem: updateCartLineItem, deleteLineItem: deleteCartLineItem }
 
 export function CartPage({ onCartUpdated }: CartPageProps) {
+  const auth = useBuyerAuth()
   const [cart, setCart] = useState<StoreCart | null>(null)
   const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,7 +40,10 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
   const [deleting, setDeleting] = useState(false)
   const [loadVersion, setLoadVersion] = useState(0)
 
-  const storageKey = getBuyerCartStorageKey(getBuyerStoreId())
+  const storageKey = getBuyerCartStorageKey(
+    getBuyerStoreId(),
+    getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+  )
 
   const loadCart = useCallback(async (isActive: () => boolean) => {
     setLoading(true)

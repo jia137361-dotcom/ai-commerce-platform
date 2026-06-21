@@ -59,6 +59,7 @@ export type SelectedOption = {
 
 export type StoreCart = {
   id: string
+  regionId?: string
   storeId?: string
   email?: string
   customerId?: string | null

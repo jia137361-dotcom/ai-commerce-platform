@@ -13,7 +13,7 @@ export const ORDER_META_FULFILLMENT_STATUS = "mc_fulfillment_status"
 const LEGACY_ORDER_META_FULFILLMENT_STATUS = "fulfillment_status"
 
 export type OrderPaymentStatus = "pending" | "paid"
-export type OrderFulfillmentStatus = "none" | "waiting" | "pushed" | "shipped"
+export type OrderFulfillmentStatus = "none" | "waiting" | "pushed" | "shipped" | "delivered"
 
 export function normalizeOrderMetadata(
   meta: Record<string, unknown> | null | undefined

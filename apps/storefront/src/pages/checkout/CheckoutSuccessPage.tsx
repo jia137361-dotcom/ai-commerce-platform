@@ -19,7 +19,7 @@ const readSuccessInfo = (): CheckoutSuccessInfo | null => {
   try {
     const parsed = JSON.parse(raw) as Partial<CheckoutSuccessInfo> & { order_id?: string; display_id?: string; currency_code?: string }
     const storedOrderId = parsed.orderId ?? parsed.order_id
-    if (storedOrderId && (!orderId || storedOrderId === orderId)) return { orderId: storedOrderId, displayId: parsed.displayId ?? parsed.display_id, email: parsed.email, total: parsed.total, currencyCode: parsed.currencyCode ?? parsed.currency_code }
+    if (storedOrderId && (!orderId || storedOrderId === orderId)) return { orderId: storedOrderId, displayId: parsed.displayId ?? parsed.display_id, email: parsed.email, total: parsed.total, currencyCode: parsed.currencyCode ?? parsed.currency_code, paymentProviderId: parsed.paymentProviderId, paymentStatus: parsed.paymentStatus }
   } catch (error) {
     console.warn("[checkout-success] unable to parse checkout success data", error)
   }

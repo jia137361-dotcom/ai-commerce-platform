@@ -3,6 +3,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 
 const mockCompleteRun = jest.fn()
 const mockEnsureCartPaymentReady = jest.fn()
+const mockFindCartPaymentSession = jest.fn()
 const mockSetOrderPostCompletePendingMetadata = jest.fn()
 const mockSeedFulfillmentOrderIfMissing = jest.fn()
 const mockSyncFulfillmentPayloadFromOrder = jest.fn()
@@ -15,6 +16,7 @@ jest.mock("@medusajs/medusa/core-flows", () => ({
 
 jest.mock("../lib/ensure-cart-payment-ready", () => ({
   ensureCartPaymentReady: (...args: unknown[]) => mockEnsureCartPaymentReady(...args),
+  findCartPaymentSession: (...args: unknown[]) => mockFindCartPaymentSession(...args),
 }))
 
 jest.mock("../lib/sync-order-paid-fulfillment", () => ({
@@ -27,6 +29,10 @@ jest.mock("../lib/sync-order-paid-fulfillment", () => ({
 
 jest.mock("../lib/sync-fulfillment-line-items", () => ({
   syncFulfillmentPayloadFromOrder: (...args: unknown[]) => mockSyncFulfillmentPayloadFromOrder(...args),
+}))
+
+jest.mock("../lib/sync-cart-line-item-shipping", () => ({
+  syncCartLineItemShippingRequirements: jest.fn().mockResolvedValue(false),
 }))
 
 jest.mock("../lib/s2bdiy/push-s2b-order", () => ({
@@ -69,6 +75,7 @@ const createReq = ({
   items = [{ id: "line_1", quantity: 1, requires_shipping: false }],
   shippingAddress = null,
   shippingMethods = [],
+  paymentProviderId,
 }: {
   authCustomerId?: string | null
   cartCustomerId?: string | null
@@ -77,6 +84,7 @@ const createReq = ({
   items?: Array<Record<string, unknown>>
   shippingAddress?: Record<string, unknown> | null
   shippingMethods?: Array<Record<string, unknown>>
+  paymentProviderId?: string
 } = {}) => {
   let order = {
     id: "order_1",
@@ -121,7 +129,7 @@ const createReq = ({
   }
   const req = {
     params: { id: "cart_1" },
-    body: {},
+    body: paymentProviderId ? { payment_provider_id: paymentProviderId } : {},
     headers: {
       "x-publishable-api-key": "pk_test",
       "x-store-id": "default_store",
@@ -144,6 +152,7 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockCompleteRun.mockResolvedValue({ result: { id: "order_1" } })
+    mockFindCartPaymentSession.mockResolvedValue(null)
   })
 
   it("rejects authenticated complete when cart is not bound to current customer", async () => {
@@ -251,6 +260,33 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
       shippingAddress: { id: "addr_1", country_code: "cn" },
       shippingMethods: [{ id: "sm_1", shipping_option_id: "so_1" }],
     })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockCompleteRun).toHaveBeenCalledTimes(1)
+    expect(res.status).toHaveBeenCalledWith(200)
+  })
+
+  it("rejects Stripe completion without a frontend-initialized client secret", async () => {
+    const { req } = createReq({ paymentProviderId: "pp_stripe_stripe" })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.body).toMatchObject({ error: { code: "STRIPE_PAYMENT_SESSION_REQUIRED" } })
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+    expect(mockEnsureCartPaymentReady).not.toHaveBeenCalled()
+  })
+
+  it("allows Stripe completion with an initialized official payment session", async () => {
+    mockFindCartPaymentSession.mockResolvedValue({
+      provider_id: "pp_stripe_stripe",
+      status: "pending",
+      data: { client_secret: "pi_test_secret_123" },
+    })
+    const { req } = createReq({ paymentProviderId: "pp_stripe_stripe" })
     const res = createRes()
 
     await completeCart(req, res)

@@ -9,6 +9,12 @@
     "db:generate": "medusa db:generate store_core",
     "db:migrate": "medusa db:migrate",
     "seed": "medusa exec ./src/scripts/seed.ts",
+    "stripe:region:setup": "medusa exec ./src/scripts/enable-stripe-region.ts",
+    "pay-stripe:e2e:setup": "medusa exec ./src/scripts/pay-stripe-e2e-setup.ts",
+    "pay-stripe:reset-test-passwords": "medusa exec ./src/scripts/pay-stripe-reset-test-buyer-passwords.ts",
+    "pay-stripe:reset-test-seller-password": "medusa exec ./src/scripts/pay-stripe-reset-test-seller-password.ts",
+    "pay-stripe:http-smoke": "node ./src/scripts/pay-stripe-http-smoke.mjs",
+    "pay-stripe:live-e2e": "node ./src/scripts/pay-stripe-live-e2e.mjs",
     "test": "npx jest -c jest.config.cjs --passWithNoTests"
   },
   "dependencies": {

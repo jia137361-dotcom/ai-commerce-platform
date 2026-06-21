@@ -6,6 +6,7 @@ import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
 import { readOrderStoreId } from "../../../../../lib/order-store-context"
 import {
   ensureCartPaymentReady,
+  findCartPaymentSession,
   type CartWithPaymentCollection,
 } from "../../../../../lib/ensure-cart-payment-ready"
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
@@ -23,6 +24,7 @@ import { isS2bdiyEnabled } from "../../../../../modules/suppliers/s2bdiy/config"
 import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
+const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
 
 const readHeader = (req: MedusaRequest, name: string) => {
   const value = req.headers[name.toLowerCase()]
@@ -147,7 +149,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       })
     }
 
-    await ensureCartPaymentReady(req.scope, cartId, providerId)
+    if (isStripeProvider(providerId)) {
+      const stripeSession = await findCartPaymentSession(req.scope, cartId, providerId)
+      const clientSecret = stripeSession?.data?.client_secret
+      if (!stripeSession || typeof clientSecret !== "string" || !clientSecret.startsWith("pi_")) {
+        return res.status(400).json({
+          error: {
+            code: "STRIPE_PAYMENT_SESSION_REQUIRED",
+            message: "Initialize and confirm a Stripe payment session before completing this cart.",
+          },
+        })
+      }
+    } else {
+      await ensureCartPaymentReady(req.scope, cartId, providerId)
+    }
 
     const { result } = await completeCartWorkflow(req.scope).run({
       input: { id: cartId },

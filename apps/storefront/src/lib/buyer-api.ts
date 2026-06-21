@@ -1,5 +1,7 @@
 import { mockProducts, reviews as mockReviews, type CartLineItem, type StoreCart, type StoreProduct } from "./mock-data"
 import { normalizeBuyerProduct, type BuyerProductApiInput } from "./buyer-product"
+import { buildShipmentTrackingEvents } from "./buyer-tracking-events"
+import { readBuyerPreferencesFromMetadata, type BuyerPreferences } from "./buyer-preferences"
 
 export type DataSource = "backend" | "mock" | "static"
 
@@ -11,6 +13,10 @@ export type BuyerStoreSettings = {
   seoTitle?: string
   seoDescription?: string
   followerCount?: number
+  description?: string
+  announcement?: string
+  bannerUrl?: string
+  galleryUrls?: string[]
   metadata: Record<string, unknown>
 }
 
@@ -146,9 +152,32 @@ type ApiCart = {
   customer_id?: string | null
   email?: string
   currency_code?: string
+  region_id?: string
   items?: ApiCartLineItem[]
   subtotal?: number
   total?: number
+}
+
+type ApiPaymentProvider = { id?: string; is_enabled?: boolean }
+type ApiPaymentProvidersResponse = { payment_providers?: ApiPaymentProvider[] }
+type ApiPaymentSession = {
+  id?: string
+  provider_id?: string
+  status?: string
+  data?: Record<string, unknown> | null
+}
+type ApiPaymentCollection = {
+  id?: string
+  payment_sessions?: ApiPaymentSession[]
+}
+type ApiPaymentCollectionResponse = { payment_collection?: ApiPaymentCollection }
+
+export type BuyerPaymentProvider = { id: string; isStripe: boolean }
+export type BuyerPaymentSession = {
+  id: string
+  providerId: string
+  status?: string
+  clientSecret?: string
 }
 
 type ApiCartMutation = ApiCart & {
@@ -178,8 +207,10 @@ export type CartContactUpdateInput = {
 export type CartShippingOption = {
   id: string
   name: string
-  amount: number
+  amount?: number
   currencyCode: string
+  available: boolean
+  unavailableReason?: string
 }
 
 type ApiShippingOption = {
@@ -412,7 +443,45 @@ type ApiCustomer = {
   phone?: string | null
   created_at?: string | null
   updated_at?: string | null
+  metadata?: Record<string, unknown> | null
+  addresses?: ApiCustomerAddress[] | null
 }
+
+type ApiCustomerAddress = {
+  id?: string
+  address_name?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  company?: string | null
+  address_1?: string | null
+  address_2?: string | null
+  city?: string | null
+  province?: string | null
+  postal_code?: string | null
+  country_code?: string | null
+  phone?: string | null
+  is_default_shipping?: boolean
+  is_default_billing?: boolean
+}
+
+export type BuyerCustomerAddress = {
+  id: string
+  label?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  company?: string | null
+  address1: string
+  address2?: string | null
+  city: string
+  province?: string | null
+  postalCode: string
+  countryCode: string
+  phone?: string | null
+  isDefaultShipping: boolean
+  isDefaultBilling: boolean
+}
+
+export type BuyerCustomerAddressInput = Omit<BuyerCustomerAddress, "id"> & { id?: string }
 
 export type BuyerCustomer = {
   id: string
@@ -422,6 +491,8 @@ export type BuyerCustomer = {
   phone?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  metadata?: Record<string, unknown>
+  addresses?: BuyerCustomerAddress[]
 }
 
 export type BuyerRegisterInput = {
@@ -610,6 +681,7 @@ const fallbackSettings: BuyerStoreSettings = {
   storeId: "default_store",
   brandName: "Nespresso",
   metadata: {},
+  galleryUrls: [],
 }
 
 const fallbackCategories: BuyerCategory[] = [
@@ -631,9 +703,12 @@ const config = {
   storeId: readEnv("VITE_DEFAULT_STORE_ID", readEnv("NEXT_PUBLIC_STORE_ID", "default_store")),
 }
 
+export const getStripePublishableKey = () => readEnv("VITE_STRIPE_PK")
+
 export const getBuyerStoreId = () => config.storeId || "default_store"
 
-export const getBuyerCartStorageKey = (storeId = getBuyerStoreId()) => `citigoo:${storeId}:cart_id`
+export const getBuyerCartStorageKey = (storeId = getBuyerStoreId(), identity = "guest:anonymous") =>
+  `citigoo:${storeId}:cart:${encodeURIComponent(identity)}`
 
 const headers = () => ({
   "x-publishable-api-key": config.publishableKey,
@@ -649,6 +724,7 @@ export const formatBuyerMoney = (value: number | undefined, currency = "USD") =>
 }
 
 const readNumber = (value: number | string | null | undefined) => {
+  if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
 }
@@ -734,11 +810,52 @@ const normalizeCustomer = (customer?: ApiCustomer): BuyerCustomer | null => {
     phone: customer.phone ?? null,
     createdAt: customer.created_at ?? null,
     updatedAt: customer.updated_at ?? null,
+    metadata: customer.metadata ?? {},
+    addresses: (customer.addresses ?? []).map(normalizeCustomerAddress).filter((address): address is BuyerCustomerAddress => Boolean(address)),
   }
 }
 
+const normalizeCustomerAddress = (address?: ApiCustomerAddress): BuyerCustomerAddress | null => {
+  if (!address?.id || !address.address_1 || !address.city || !address.postal_code || !address.country_code) return null
+  return {
+    id: address.id,
+    label: address.address_name ?? null,
+    firstName: address.first_name ?? null,
+    lastName: address.last_name ?? null,
+    company: address.company ?? null,
+    address1: address.address_1,
+    address2: address.address_2 ?? null,
+    city: address.city,
+    province: address.province ?? null,
+    postalCode: address.postal_code,
+    countryCode: address.country_code.toLowerCase(),
+    phone: address.phone ?? null,
+    isDefaultShipping: Boolean(address.is_default_shipping),
+    isDefaultBilling: Boolean(address.is_default_billing),
+  }
+}
+
+const customerAddressPayload = (input: BuyerCustomerAddressInput) => ({
+  address_name: input.label?.trim() || undefined,
+  first_name: input.firstName?.trim() || undefined,
+  last_name: input.lastName?.trim() || undefined,
+  company: input.company?.trim() || undefined,
+  address_1: input.address1.trim(),
+  address_2: input.address2?.trim() || undefined,
+  city: input.city.trim(),
+  province: input.province?.trim() || undefined,
+  postal_code: input.postalCode.trim(),
+  country_code: input.countryCode.trim().toLowerCase(),
+  phone: input.phone?.trim() || undefined,
+  is_default_shipping: input.isDefaultShipping,
+  is_default_billing: input.isDefaultBilling,
+})
+
 const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
   const settings = payload.settings
+  const metadata = settings?.metadata ?? {}
+  const metadataString = (key: string) => typeof metadata[key] === "string" && metadata[key].trim() ? metadata[key].trim() : undefined
+  const gallery = metadata.gallery_urls
   return {
     storeId: settings?.store_id ?? config.storeId ?? "default_store",
     brandName: settings?.brand_name ?? "Nespresso",
@@ -747,7 +864,11 @@ const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
     seoTitle: settings?.seo_title ?? undefined,
     seoDescription: settings?.seo_description ?? undefined,
     followerCount: typeof settings?.follower_count === "number" ? settings.follower_count : undefined,
-    metadata: settings?.metadata ?? {},
+    description: metadataString("description") ?? settings?.seo_description ?? undefined,
+    announcement: metadataString("announcement"),
+    bannerUrl: metadataString("banner_url") ?? metadataString("hero_image_url"),
+    galleryUrls: Array.isArray(gallery) ? gallery.filter((value): value is string => typeof value === "string" && Boolean(value.trim())) : [],
+    metadata,
   }
 }
 
@@ -856,6 +977,7 @@ const normalizeCart = (cart: ApiCart): StoreCart => {
   const total = rawTotal ?? subtotal
   return {
     id: cart.cart_id ?? cart.id ?? "",
+    regionId: cart.region_id,
     storeId: cart.store_id,
     email: cart.email,
     customerId: cart.customer_id ?? null,
@@ -865,6 +987,17 @@ const normalizeCart = (cart: ApiCart): StoreCart => {
     total,
     hasSubtotal: rawSubtotal != null || derivedSubtotalAvailable,
     hasTotal: rawTotal != null || rawSubtotal != null || derivedSubtotalAvailable,
+  }
+}
+
+const normalizePaymentSession = (session?: ApiPaymentSession): BuyerPaymentSession | null => {
+  if (!session?.id || !session.provider_id) return null
+  const clientSecret = typeof session.data?.client_secret === "string" ? session.data.client_secret : undefined
+  return {
+    id: session.id,
+    providerId: session.provider_id,
+    status: session.status,
+    clientSecret,
   }
 }
 
@@ -1031,14 +1164,53 @@ export const getCartShippingOptions = async (cartId: string) => {
     .map<CartShippingOption>((option) => ({
       id: option.id,
       name: option.name,
-      amount: readNumber(option.amount) ?? 0,
+      amount: readNumber(option.amount),
       currencyCode: option.currency_code ?? "usd",
+      available: readNumber(option.amount) != null,
+      unavailableReason: readNumber(option.amount) == null ? "Price is unavailable for this cart/address." : undefined,
     }))
 
   return {
     options,
     requiresShippingMethod: payload.requires_shipping_method ?? options.length > 0,
   }
+}
+
+export const listCartPaymentProviders = async (regionId: string): Promise<BuyerPaymentProvider[]> => {
+  const params = new URLSearchParams({ region_id: regionId })
+  const payload = await apiFetch<ApiPaymentProvidersResponse>(`/store/payment-providers?${params.toString()}`)
+  return (payload.payment_providers ?? [])
+    .filter((provider): provider is Required<Pick<ApiPaymentProvider, "id">> & ApiPaymentProvider => Boolean(provider.id))
+    .filter((provider) => provider.is_enabled !== false)
+    .filter((provider) => provider.id === "pp_system_default" || provider.id.startsWith("pp_stripe_"))
+    .map((provider) => ({ id: provider.id, isStripe: provider.id.startsWith("pp_stripe_") }))
+}
+
+export const initializeCartPaymentSession = async (
+  cartId: string,
+  providerId: string
+): Promise<BuyerPaymentSession> => {
+  const collectionPayload = await apiFetch<ApiPaymentCollectionResponse>("/store/payment-collections", {
+    method: "POST",
+    body: JSON.stringify({ cart_id: cartId }),
+  })
+  const collectionId = collectionPayload.payment_collection?.id
+  if (!collectionId) throw new Error("Medusa did not return a payment collection for this cart.")
+
+  const sessionPayload = await apiFetch<ApiPaymentCollectionResponse>(
+    `/store/payment-collections/${encodeURIComponent(collectionId)}/payment-sessions`,
+    {
+      method: "POST",
+      body: JSON.stringify({ provider_id: providerId }),
+    }
+  )
+  const sessions = sessionPayload.payment_collection?.payment_sessions ?? []
+  const session = normalizePaymentSession(sessions.find((candidate) => candidate.provider_id === providerId))
+  if (!session) throw new Error("Medusa did not return the selected payment session.")
+  if (providerId.startsWith("pp_stripe_") && !session.clientSecret) {
+    throw new Error("Stripe payment session is missing client_secret.")
+  }
+  return session
 }
 
 export const selectCartShippingMethod = async (cartId: string, optionId: string) => {
@@ -1167,19 +1339,6 @@ const normalizeSupplierOrderTracking = (supplierOrder: ApiSupplierOrderTracking)
   lastSyncedAt: supplierOrder.last_synced_at ?? null,
 })
 
-const shipmentEvents = (shipments: BuyerOrderShipment[]) => {
-  const events: BuyerOrderTracking["events"] = []
-  for (const shipment of shipments) {
-    if (shipment.shippedAt) {
-      events.push({ label: "Shipped", date: shipment.shippedAt, status: shipment.status })
-    }
-    if (shipment.deliveredAt) {
-      events.push({ label: "Delivered", date: shipment.deliveredAt, status: "delivered" })
-    }
-  }
-  return events
-}
-
 export const getOrderTracking = async (orderId: string, email?: string): Promise<BuyerOrderTracking> => {
   const params = new URLSearchParams()
   if (email) params.set("email", email.trim().toLowerCase())
@@ -1195,7 +1354,7 @@ export const getOrderTracking = async (orderId: string, email?: string): Promise
     fulfillmentOrder: payload.fulfillment_order ?? null,
     shipments,
     supplierOrders,
-    events: shipmentEvents(shipments),
+    events: buildShipmentTrackingEvents(shipments),
   }
 }
 
@@ -1390,7 +1549,12 @@ export const registerCustomer = async (input: BuyerRegisterInput) => {
       phone: input.phone?.trim() || undefined,
     }),
   })
-  await createCustomerSession(auth.token)
+  const signedIn = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
+    method: "POST",
+    body: JSON.stringify({ email, password: input.password }),
+  })
+  if (!signedIn.token) throw new Error("Customer was created but session authentication did not return a token.")
+  await createCustomerSession(signedIn.token)
   return normalizeCustomer(payload.customer) ?? getCurrentCustomer()
 }
 
@@ -1406,6 +1570,60 @@ export const updateCustomerProfile = async (input: BuyerProfileUpdateInput) => {
   const customer = normalizeCustomer(payload.customer)
   if (!customer) throw new Error("Unable to load customer after profile update.")
   return customer
+}
+
+export const readBuyerPreferences = (customer: BuyerCustomer | null | undefined): BuyerPreferences => {
+  return readBuyerPreferencesFromMetadata(customer?.metadata)
+}
+
+export const updateBuyerPreferences = async (input: Partial<BuyerPreferences>) => {
+  const current = await getCurrentCustomer()
+  if (!current) throw new Error("Sign in to save account preferences.")
+  const previous = readBuyerPreferences(current)
+  const next = {
+    country_code: (input.countryCode ?? previous.countryCode).toLowerCase(),
+    currency_code: (input.currencyCode ?? previous.currencyCode).toLowerCase(),
+  }
+  const payload = await apiFetch<ApiCustomerResponse>("/store/customers/me", {
+    method: "POST",
+    body: JSON.stringify({
+      metadata: {
+        ...(current.metadata ?? {}),
+        buyer_preferences: next,
+      },
+    }),
+  })
+  const customer = normalizeCustomer(payload.customer)
+  if (!customer) throw new Error("Unable to reload saved account preferences.")
+  return customer
+}
+
+export const listCustomerAddresses = async (): Promise<BuyerCustomerAddress[]> => {
+  const payload = await apiFetch<{ addresses?: ApiCustomerAddress[] }>("/store/customers/me/addresses?limit=50")
+  return (payload.addresses ?? []).map(normalizeCustomerAddress).filter((address): address is BuyerCustomerAddress => Boolean(address))
+}
+
+export const createCustomerAddress = async (input: BuyerCustomerAddressInput) => {
+  await apiFetch<ApiCustomerResponse>("/store/customers/me/addresses", {
+    method: "POST",
+    body: JSON.stringify(customerAddressPayload(input)),
+  })
+  return listCustomerAddresses()
+}
+
+export const updateCustomerAddress = async (addressId: string, input: BuyerCustomerAddressInput) => {
+  await apiFetch<ApiCustomerResponse>(`/store/customers/me/addresses/${encodeURIComponent(addressId)}`, {
+    method: "POST",
+    body: JSON.stringify(customerAddressPayload(input)),
+  })
+  return listCustomerAddresses()
+}
+
+export const deleteCustomerAddress = async (addressId: string) => {
+  await apiFetch<{ deleted?: boolean }>(`/store/customers/me/addresses/${encodeURIComponent(addressId)}`, {
+    method: "DELETE",
+  })
+  return listCustomerAddresses()
 }
 
 export const signOutCustomer = async () => {

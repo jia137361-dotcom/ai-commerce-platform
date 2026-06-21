@@ -5,15 +5,14 @@ import { AccountSettingPlaceholderContent } from "./AccountSettingPlaceholderCon
 
 describe("account design placeholders", () => {
   it("maps every deferred account design route", () => {
-    for (const slug of ["security", "addresses", "country-region", "coupons", "currency", "following"]) {
-      expect(findAccountSettingPlaceholder(`/account/${slug}`)?.slug).toBe(slug)
-    }
+    expect(findAccountSettingPlaceholder("/account/security")?.slug).toBe("security")
+    for (const slug of ["addresses", "country-region", "coupons", "currency", "following"]) expect(findAccountSettingPlaceholder(`/account/${slug}`)).toBeUndefined()
   })
 
   it("renders an honest unavailable state without a fake control", () => {
-    const setting = accountSettingPlaceholders.find((item) => item.slug === "coupons")!
+    const setting = accountSettingPlaceholders.find((item) => item.slug === "security")!
     const html = renderToStaticMarkup(createElement(AccountSettingPlaceholderContent, { setting }))
-    expect(html).toContain("Coupons")
+    expect(html).toContain("Account &amp; Security")
     expect(html).toContain("Coming later")
     expect(html).toContain("Unavailable in demo")
     expect(html).toContain("does not save preferences or call a new backend API")

@@ -7,6 +7,7 @@ import {
   createShippingProfilesWorkflow,
   createStockLocationsWorkflow,
   linkSalesChannelsToStockLocationWorkflow,
+  updateShippingOptionsWorkflow,
 } from "@medusajs/core-flows"
 import { resolveDefaultSalesChannelId } from "../lib/resolve-default-sales-channel"
 
@@ -501,6 +502,31 @@ export default async function batch11ShippingSmokeSetup({ container }: ExecArgs)
     shippingOption = result[0] as unknown as Record<string, unknown>
   }
 
+  if (!shippingOption?.id) {
+    throw new Error("Unable to resolve Batch 11 smoke shipping option")
+  }
+
+  // Repair legacy fixture options that were created before a USD price was
+  // attached. This is intentionally scoped to the isolated Batch 11 option.
+  await updateShippingOptionsWorkflow(container).run({
+    input: [
+      {
+        id: String(shippingOption.id),
+        price_type: "flat",
+        prices: [
+          {
+            amount: 500,
+            currency_code: "usd",
+          },
+          {
+            amount: 500,
+            currency_code: "eur",
+          },
+        ],
+      },
+    ],
+  })
+
   console.log(
     JSON.stringify(
       {
@@ -519,6 +545,8 @@ export default async function batch11ShippingSmokeSetup({ container }: ExecArgs)
         service_zone_id: serviceZone.id,
         shipping_option_id: shippingOption?.id,
         shipping_option_name: shippingOption?.name ?? SHIPPING_OPTION_NAME,
+        shipping_option_price_amount: 500,
+        shipping_option_price_currencies: ["usd", "eur"],
       },
       null,
       2

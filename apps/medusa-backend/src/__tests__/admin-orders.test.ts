@@ -1,4 +1,26 @@
-import { buildFulfillmentTimeline, parseAdminOrdersListQuery, summarizeAdminOrderRow } from "../lib/admin-orders"
+import {
+  buildFulfillmentTimeline,
+  mergeAdminOrderMetadata,
+  parseAdminOrdersListQuery,
+  summarizeAdminOrderRow,
+} from "../lib/admin-orders"
+
+describe("mergeAdminOrderMetadata", () => {
+  it("hydrates store metadata omitted by the order list projection", () => {
+    expect(
+      mergeAdminOrderMetadata(
+        [{ id: "order_1", email: "buyer@example.com" }],
+        [{ id: "order_1", metadata: { store_id: "store_a", payment_status: "paid" } }]
+      )
+    ).toEqual([
+      {
+        id: "order_1",
+        email: "buyer@example.com",
+        metadata: { store_id: "store_a", payment_status: "paid" },
+      },
+    ])
+  })
+})
 
 describe("parseAdminOrdersListQuery", () => {
   it("parses limit offset email display_id", () => {
@@ -48,5 +70,27 @@ describe("buildFulfillmentTimeline", () => {
     })
     expect(steps[3].key).toBe("shipped")
     expect(steps[3].status).toBe("completed")
+    expect(steps[4].status).toBe("active")
+  })
+
+  it("marks delivered only when shipment status and delivered timestamp are both present", () => {
+    const withoutEvidence = buildFulfillmentTimeline({
+      mcFulfillmentStatus: "delivered",
+      fulfillmentOrder: { status: "fulfilled" },
+      latestShipment: { shipped_at: "2026-05-25T10:00:00.000Z", status: "shipped" },
+    })
+    expect(withoutEvidence[4].status).not.toBe("completed")
+
+    const withEvidence = buildFulfillmentTimeline({
+      mcFulfillmentStatus: "delivered",
+      fulfillmentOrder: { status: "fulfilled" },
+      latestShipment: {
+        shipped_at: "2026-05-25T10:00:00.000Z",
+        delivered_at: "2026-05-27T10:00:00.000Z",
+        status: "delivered",
+      },
+    })
+    expect(withEvidence[4].status).toBe("completed")
+    expect(withEvidence[4].timestamp).toBe("2026-05-27T10:00:00.000Z")
   })
 })

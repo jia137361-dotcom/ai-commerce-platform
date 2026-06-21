@@ -35,7 +35,7 @@ export function AccountHomePage({ cartCount }: { cartCount: number }) {
             <Card as="section" className="buyer-account-overview">
               <p className="buyer-account-kicker">Buyer account</p>
               <h1>Welcome back</h1>
-              <p>You are signed in as <strong>{auth.customer.email || "a buyer account"}</strong>. Your cart stays available if you sign out or switch accounts.</p>
+              <p>You are signed in as <strong>{auth.customer.email || "a buyer account"}</strong>. This cart is isolated to this buyer and store.</p>
               <div className="buyer-account-actions">
                 <Button href="/account/orders">View orders</Button>
                 <Button href="/account/profile" variant="secondary">View profile</Button>
@@ -43,7 +43,7 @@ export function AccountHomePage({ cartCount }: { cartCount: number }) {
             </Card>
             <Card as="section" variant="muted" className="buyer-account-session-card">
               <h2>Account session</h2>
-              <p>Switching accounts signs out this buyer session only. Seller dashboard access and your shopping cart are not affected.</p>
+              <p>Switching accounts signs out this buyer session only. Seller dashboard access is not affected; each buyer sees only their own cart.</p>
               <div className="buyer-account-actions">
                 <Button variant="secondary" onClick={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))}>Switch account</Button>
                 <Button variant="ghost" onClick={() => void auth.signOut().then(() => window.location.assign("/store"))}>Sign out</Button>

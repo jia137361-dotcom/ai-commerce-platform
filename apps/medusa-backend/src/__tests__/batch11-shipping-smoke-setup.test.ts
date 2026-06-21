@@ -5,6 +5,7 @@ const mockLinkSalesChannelsRun = jest.fn()
 const mockCreateLocationFulfillmentSetRun = jest.fn()
 const mockCreateServiceZonesRun = jest.fn()
 const mockCreateShippingOptionsRun = jest.fn()
+const mockUpdateShippingOptionsRun = jest.fn()
 const mockCreateShippingProfilesRun = jest.fn()
 
 jest.mock("@medusajs/core-flows", () => ({
@@ -22,6 +23,9 @@ jest.mock("@medusajs/core-flows", () => ({
   })),
   createShippingOptionsWorkflow: jest.fn(() => ({
     run: mockCreateShippingOptionsRun,
+  })),
+  updateShippingOptionsWorkflow: jest.fn(() => ({
+    run: mockUpdateShippingOptionsRun,
   })),
   createShippingProfilesWorkflow: jest.fn(() => ({
     run: mockCreateShippingProfilesRun,
@@ -154,6 +158,9 @@ describe("Batch 11 shipping smoke setup", () => {
     })
     mockCreateShippingOptionsRun.mockResolvedValue({
       result: [{ id: "so_created", name: "Batch 11 Smoke Standard CN" }],
+    })
+    mockUpdateShippingOptionsRun.mockResolvedValue({
+      result: [{ id: "so_existing" }],
     })
     mockCreateShippingProfilesRun.mockResolvedValue({
       result: [{ id: "sp_created", name: "Batch 11 Smoke Shipping Profile" }],
@@ -426,6 +433,18 @@ describe("Batch 11 shipping smoke setup", () => {
       shipping_profile_id: "sp_real",
     })
     expect(mockCreateShippingOptionsRun).not.toHaveBeenCalled()
+    expect(mockUpdateShippingOptionsRun).toHaveBeenCalledWith({
+      input: [
+        {
+          id: "so_existing",
+          price_type: "flat",
+          prices: [
+            { amount: 500, currency_code: "usd" },
+            { amount: 500, currency_code: "eur" },
+          ],
+        },
+      ],
+    })
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('"resolved_shipping_profile_id": "sp_real"')
     )
@@ -450,6 +469,18 @@ describe("Batch 11 shipping smoke setup", () => {
         ],
       })
     )
+    expect(mockUpdateShippingOptionsRun).toHaveBeenCalledWith({
+      input: [
+        {
+          id: "so_created",
+          price_type: "flat",
+          prices: [
+            { amount: 500, currency_code: "usd" },
+            { amount: 500, currency_code: "eur" },
+          ],
+        },
+      ],
+    })
 
     consoleSpy.mockRestore()
   })
@@ -517,6 +548,7 @@ describe("Batch 11 shipping smoke setup", () => {
     expect(mockCreateLocationFulfillmentSetRun).not.toHaveBeenCalled()
     expect(mockCreateServiceZonesRun).not.toHaveBeenCalled()
     expect(mockCreateShippingOptionsRun).not.toHaveBeenCalled()
+    expect(mockUpdateShippingOptionsRun).toHaveBeenCalledTimes(2)
 
     consoleSpy.mockRestore()
   })

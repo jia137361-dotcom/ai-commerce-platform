@@ -280,6 +280,225 @@
   font-size: 13px;
 }
 
+.buyer-account-settings-panel {
+  min-width: 0;
+  overflow: hidden;
+  align-self: start;
+  padding: 0;
+}
+
+.buyer-account-settings-panel > header {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--buyer-border);
+  padding: 0 24px;
+}
+
+.buyer-account-settings-panel > header a {
+  color: var(--buyer-text);
+  font-size: 24px;
+  text-decoration: none;
+}
+
+.buyer-account-settings-panel > header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.buyer-account-settings-panel > footer {
+  padding: 24px;
+}
+
+.buyer-account-settings-panel > footer .buyer-ui-button {
+  width: 100%;
+}
+
+.buyer-address-list article,
+.buyer-following-list article {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid var(--buyer-border);
+  padding: 24px;
+}
+
+.buyer-address-list article.default {
+  border-left: 3px solid var(--buyer-primary);
+  background: #fff9f6;
+}
+
+.buyer-address-list article > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.buyer-address-list p,
+.buyer-address-list h2,
+.buyer-address-list span,
+.buyer-following-list h2,
+.buyer-following-list p {
+  margin: 0;
+}
+
+.buyer-address-list p,
+.buyer-address-list span,
+.buyer-following-list p {
+  color: var(--buyer-text-muted);
+  font-size: 13px;
+}
+
+.buyer-address-list h2 {
+  margin: 7px 0;
+  font-size: 18px;
+}
+
+.buyer-address-list small {
+  display: inline-block;
+  margin-top: 10px;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: #fff0e8;
+  color: var(--buyer-primary);
+  font-weight: 800;
+}
+
+.buyer-address-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.buyer-address-form {
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+}
+
+.buyer-address-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.buyer-address-form-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--buyer-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.buyer-address-form-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.buyer-address-form-grid input,
+.buyer-address-form-grid select {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--buyer-border);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--buyer-text);
+  font: inherit;
+}
+
+.buyer-address-default {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.buyer-account-empty-state {
+  min-height: 390px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 44px 24px;
+  text-align: center;
+}
+
+.buyer-account-empty-state > span {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--buyer-border);
+  border-radius: 50%;
+  color: var(--buyer-text-muted);
+  font-size: 28px;
+}
+
+.buyer-account-empty-state h2 {
+  margin: 18px 0 8px;
+}
+
+.buyer-account-empty-state p {
+  max-width: 430px;
+  margin: 0 0 20px;
+  color: var(--buyer-text-muted);
+  line-height: 1.6;
+}
+
+.buyer-preference-list button {
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 28px;
+  align-items: center;
+  border-bottom: 1px solid var(--buyer-border);
+  padding: 0 24px;
+  color: var(--buyer-text);
+  font: inherit;
+  text-align: left;
+}
+
+.buyer-preference-list button:hover,
+.buyer-preference-list button.selected {
+  background: #fff9f6;
+}
+
+.buyer-preference-list button small {
+  color: var(--buyer-text-muted);
+  font-size: 13px;
+}
+
+.buyer-preference-list button strong {
+  color: var(--buyer-primary);
+  font-size: 20px;
+}
+
+.buyer-account-settings-panel > .buyer-account-setting-note,
+.buyer-account-settings-panel > .buyer-account-success,
+.buyer-account-settings-panel > .buyer-account-error {
+  margin: 18px 24px;
+}
+
+.buyer-following-list article img,
+.buyer-following-list article > span {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--buyer-surface-muted);
+  object-fit: contain;
+  color: var(--buyer-primary);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.buyer-following-list article > div {
+  min-width: 0;
+  flex: 1;
+}
+
 .buyer-account-session-card h2,
 .buyer-account-session-card p {
   margin: 0;
@@ -405,5 +624,23 @@
 
   .buyer-account-setting-heading {
     flex-direction: column;
+  }
+
+  .buyer-address-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-address-form-grid label.wide {
+    grid-column: auto;
+  }
+
+  .buyer-address-list article,
+  .buyer-following-list article {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .buyer-address-actions {
+    width: 100%;
   }
 }

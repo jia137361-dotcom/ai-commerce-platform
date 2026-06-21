@@ -110,7 +110,7 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     supplierId: product.supplier_id ?? undefined,
     supplierProductId: product.supplier_product_id ?? undefined,
     supplierVariantId: product.supplier_variant_id ?? undefined,
-    isCartAddable: Boolean(product.is_cart_addable && product.medusa_variant_id),
+    isCartAddable: Boolean(product.is_cart_addable && variants.some((variant) => variant.isPurchasable)),
     averageRating: product.average_rating ?? null,
     reviewCount: product.review_count ?? 0,
     tags: Array.isArray(product.tags) ? product.tags : [],

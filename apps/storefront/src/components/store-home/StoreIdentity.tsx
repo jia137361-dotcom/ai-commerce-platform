@@ -32,7 +32,7 @@ export function StoreIdentity({ settings }: { settings: BuyerStoreSettings }) {
         >
           {following ? t("following") : t("follow")}
         </Button>
-        <Button href="/help">{t("message")}</Button>
+        <Button variant="secondary" disabled title="Direct seller messaging is not available yet">{t("message")} · unavailable</Button>
       </div>
     </section>
   )

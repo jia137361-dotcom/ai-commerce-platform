@@ -19,15 +19,32 @@ import {
   getCartShippingOptions,
   getBuyerCartStorageKey,
   getBuyerStoreId,
+  getStripePublishableKey,
+  initializeCartPaymentSession,
+  listCartPaymentProviders,
+  listCustomerAddresses,
+  readBuyerPreferences,
   selectCartShippingMethod,
   updateCartAddress,
   updateCartContact,
   type CartShippingOption,
+  type BuyerPaymentProvider,
+  type BuyerPaymentSession,
   type BuyerStoreSettings,
+  type BuyerCustomerAddress,
 } from "../../lib/buyer-api"
 import type { StoreCart } from "../../lib/mock-data"
 import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
 import { resolveCheckoutState } from "./checkout-state"
+import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import { isCheckoutCountryCode, shippingUnavailableMessage } from "./checkout-countries"
+import {
+  chooseDefaultPaymentProvider,
+  hasValidStripeClientSecret,
+  isStripeProviderId,
+  STRIPE_ORDER_CREATION_FAILED_MESSAGE,
+} from "./checkout-payment"
+import { savedAddressToCheckout } from "./checkout-saved-address"
 
 type CheckoutPageProps = {
   cartCount: number
@@ -47,7 +64,7 @@ const initialContact: CheckoutContact = {
 }
 
 const initialAddress: CheckoutAddress = {
-  country: "United States",
+  country: "us",
   state: "",
   city: "",
   address1: "",
@@ -63,6 +80,8 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [contact, setContact] = useState(initialContact)
   const [contactTouched, setContactTouched] = useState(false)
   const [address, setAddress] = useState(initialAddress)
+  const [savedAddresses, setSavedAddresses] = useState<BuyerCustomerAddress[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
   const [addressSaving, setAddressSaving] = useState(false)
@@ -77,12 +96,20 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [shippingError, setShippingError] = useState<string | undefined>()
   const [shippingMethodSaved, setShippingMethodSaved] = useState(false)
   const [placingOrder, setPlacingOrder] = useState(false)
+  const [paymentProviders, setPaymentProviders] = useState<BuyerPaymentProvider[]>([{ id: "pp_system_default", isStripe: false }])
+  const [selectedPaymentProviderId, setSelectedPaymentProviderId] = useState("pp_system_default")
+  const [paymentSession, setPaymentSession] = useState<BuyerPaymentSession | null>(null)
+  const [paymentPreparing, setPaymentPreparing] = useState(false)
+  const [paymentError, setPaymentError] = useState<string | undefined>()
   const [completeError, setCompleteError] = useState<string | undefined>()
   const [loadVersion, setLoadVersion] = useState(0)
 
   const contactIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim()) && contact.phone.trim().length >= 4 && contact.name.trim().length > 1
-  const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && address.country.trim())
-  const checkoutState = resolveCheckoutState({ cart, authLoading: auth.isLoading, authenticated: Boolean(auth.customer), contactValid: contactIsValid, requiresShippingMethod, addressValid: addressIsValid, addressSaved, shippingMethodSaved, placingOrder })
+  const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && isCheckoutCountryCode(address.country))
+  const stripePublishableKey = getStripePublishableKey()
+  const stripeSelected = isStripeProviderId(selectedPaymentProviderId)
+  const paymentSessionReady = !stripeSelected || hasValidStripeClientSecret(paymentSession)
+  const checkoutState = resolveCheckoutState({ cart, authLoading: auth.isLoading, authenticated: Boolean(auth.customer), contactValid: contactIsValid, requiresShippingMethod, addressValid: addressIsValid, addressSaved, shippingMethodSaved, paymentSessionReady, placingOrder })
   const { canPlaceOrder, disabledReason: placeOrderDisabledReason } = checkoutState
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
 
@@ -97,7 +124,8 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         setSettings(settingsResult.data)
       }
 
-      const cartId = window.localStorage.getItem(getBuyerCartStorageKey(getBuyerStoreId()))
+      const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+      const cartId = window.localStorage.getItem(getBuyerCartStorageKey(getBuyerStoreId(), cartIdentity))
       if (!cartId) {
         if (active) {
           setCart(null)
@@ -122,17 +150,32 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         setCart(activeCart)
         onCartUpdated(activeCart)
         try {
+          if (!activeCart.regionId) throw new Error("Cart region is unavailable; payment providers cannot be resolved.")
+          const availableProviders = await listCartPaymentProviders(activeCart.regionId)
+          if (!active) return
+          const providers = availableProviders.length ? availableProviders : [{ id: "pp_system_default", isStripe: false }]
+          setPaymentProviders(providers)
+          setSelectedPaymentProviderId(chooseDefaultPaymentProvider(providers, stripePublishableKey))
+          setPaymentError(undefined)
+        } catch (providerError) {
+          if (!active) return
+          setPaymentProviders([{ id: "pp_system_default", isStripe: false }])
+          setSelectedPaymentProviderId("pp_system_default")
+          setPaymentError(providerError instanceof Error ? providerError.message : "Unable to load payment providers.")
+        }
+        try {
           const shipping = await getCartShippingOptions(activeCart.id)
           if (!active) return
           setShippingOptions(shipping.options)
           setRequiresShippingMethod(shipping.requiresShippingMethod)
-          setSelectedShippingOptionId(shipping.options[0]?.id ?? "")
+          setSelectedShippingOptionId(shipping.options.find((option) => option.available)?.id ?? "")
           setShippingMethodSaved(!shipping.requiresShippingMethod)
         } catch (shippingProbeError) {
           console.warn("[checkout] shipping requirement probe failed", shippingProbeError)
           if (!active) return
           setRequiresShippingMethod(true)
           setShippingMethodSaved(false)
+          setShippingError(shippingUnavailableMessage(shippingProbeError))
         }
       } catch (loadError) {
         if (!active) return
@@ -158,7 +201,29 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setSelectedShippingOptionId("")
     setShippingMethodSaved(false)
     setShippingError(undefined)
+    setPaymentSession(null)
+    setPaymentError(undefined)
   }, [contact, address])
+
+  useEffect(() => {
+    if (!stripeSelected || !cart || (requiresShippingMethod && !shippingMethodSaved)) {
+      setPaymentSession(null)
+      return
+    }
+    if (!stripePublishableKey.startsWith("pk_test_")) {
+      setPaymentSession(null)
+      setPaymentError("VITE_STRIPE_PK must be configured with a Stripe test publishable key.")
+      return
+    }
+    let active = true
+    setPaymentPreparing(true)
+    setPaymentError(undefined)
+    void initializeCartPaymentSession(cart.id, selectedPaymentProviderId)
+      .then((session) => { if (active) setPaymentSession(session) })
+      .catch((value) => { if (active) { setPaymentSession(null); setPaymentError(value instanceof Error ? value.message : "Unable to initialize Stripe payment.") } })
+      .finally(() => { if (active) setPaymentPreparing(false) })
+    return () => { active = false }
+  }, [cart?.id, cart?.total, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
 
   useEffect(() => {
     if (!auth.customer || contactTouched || contact.email || contact.name || contact.phone) return
@@ -168,6 +233,30 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       name: [auth.customer.firstName, auth.customer.lastName].filter(Boolean).join(" "),
     })
   }, [auth.customer, contact.email, contact.name, contact.phone, contactTouched])
+
+  useEffect(() => {
+    if (!auth.customer) {
+      setSavedAddresses([])
+      setSelectedAddressId("")
+      return
+    }
+    let active = true
+    const preferences = readBuyerPreferences(auth.customer)
+    setAddress((current) => current.address1 ? current : { ...current, country: preferences.countryCode })
+    void listCustomerAddresses().then((addresses) => {
+      if (!active) return
+      setSavedAddresses(addresses)
+    }).catch((reason) => console.warn("[checkout] unable to load saved addresses", reason))
+    return () => { active = false }
+  }, [auth.customer?.id])
+
+  const selectSavedAddress = (saved: BuyerCustomerAddress) => {
+    const selection = savedAddressToCheckout(saved)
+    setSelectedAddressId(saved.id)
+    setAddress(selection.address)
+    setContact((current) => ({ ...current, name: selection.name || current.name, phone: selection.phone || current.phone }))
+    setContactTouched(true)
+  }
 
   const saveContactForCart = async (targetCart: StoreCart) => {
     setContactStatus("saving")
@@ -212,18 +301,25 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
           city: address.city.trim(),
           province: address.state.trim() || undefined,
           postalCode: address.postalCode.trim(),
-          countryCode: address.country.trim().toLowerCase() === "united states" ? "us" : address.country.trim().toLowerCase(),
+          countryCode: address.country,
         },
       })
       setCart(updated)
       onCartUpdated(updated)
       setAddressSaved(true)
       setShippingLoading(true)
-      const shipping = await getCartShippingOptions(updated.id)
-      setShippingOptions(shipping.options)
-      setRequiresShippingMethod(shipping.requiresShippingMethod)
-      setSelectedShippingOptionId(shipping.options[0]?.id ?? "")
-      setShippingMethodSaved(!shipping.requiresShippingMethod)
+      try {
+        const shipping = await getCartShippingOptions(updated.id)
+        setShippingOptions(shipping.options)
+        setRequiresShippingMethod(shipping.requiresShippingMethod)
+        setSelectedShippingOptionId(shipping.options.find((option) => option.available)?.id ?? "")
+        setShippingMethodSaved(!shipping.requiresShippingMethod)
+      } catch (shippingLoadError) {
+        setShippingOptions([])
+        setRequiresShippingMethod(true)
+        setShippingMethodSaved(false)
+        setShippingError(shippingUnavailableMessage(shippingLoadError))
+      }
     } catch (saveError) {
       setAddressError(saveError instanceof Error ? saveError.message : "Unable to save delivery address.")
       setAddressSaved(false)
@@ -245,13 +341,16 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       onCartUpdated(updated)
       setShippingMethodSaved(true)
     } catch (selectError) {
-      setShippingError(selectError instanceof Error ? selectError.message : "Unable to select shipping method.")
+      setShippingError(shippingUnavailableMessage(selectError))
     } finally {
       setShippingLoading(false)
     }
   }
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = async (
+    providerId = selectedPaymentProviderId,
+    propagateCompleteError = false
+  ) => {
     if (!cart || !canPlaceOrder) return
     setPlacingOrder(true)
     setCompleteError(undefined)
@@ -263,13 +362,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
               customerId: auth.customer.id,
               bindCustomer: attachCustomerToCart,
               saveContact: saveContactForCart,
-              complete: completeCart,
+              complete: (cartId) => completeCart(cartId, providerId),
             })
           ).result
         : (await completeGuestCheckoutOrder({
             cart,
             saveContact: saveContactForCart,
-            complete: completeCart,
+            complete: (cartId) => completeCart(cartId, providerId),
           })).result
       if (!result.email) {
         console.warn("[checkout] complete cart returned an order without email", result)
@@ -285,16 +384,24 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         email: result.email ?? null,
         total: result.total ?? (cart.hasTotal === false ? undefined : cart.total),
         currencyCode: result.currencyCode ?? cart.currencyCode,
+        paymentProviderId: result.paymentProviderId ?? providerId,
+        paymentStatus: result.paymentStatus,
       }
 
-      window.localStorage.removeItem(getBuyerCartStorageKey(storeId))
+      const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+      window.localStorage.removeItem(getBuyerCartStorageKey(storeId, cartIdentity))
       window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
       onCartUpdated(null)
       window.location.assign(`/checkout/success?order_id=${encodeURIComponent(result.orderId)}`)
     } catch (completeErrorValue) {
-      const message = completeErrorValue instanceof Error ? completeErrorValue.message : "Unable to place order."
+      const message = propagateCompleteError
+        ? STRIPE_ORDER_CREATION_FAILED_MESSAGE
+        : completeErrorValue instanceof Error
+          ? completeErrorValue.message
+          : "Unable to place order."
       console.error("[checkout] complete cart failed", completeErrorValue)
       setCompleteError(message)
+      if (propagateCompleteError) throw completeErrorValue
     } finally {
       setPlacingOrder(false)
     }
@@ -320,20 +427,34 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
               />
               <CheckoutAddressCard
                 value={address}
-                onChange={setAddress}
+                onChange={(next) => { setSelectedAddressId(""); setAddress(next) }}
                 onSave={handleSaveAddress}
                 required={requiresShippingMethod}
                 saving={addressSaving}
                 saved={addressSaved}
                 error={addressError}
+                savedAddresses={savedAddresses}
+                selectedAddressId={selectedAddressId}
+                onSelectSavedAddress={selectSavedAddress}
               />
               <CheckoutShippingCard required={requiresShippingMethod} addressSaved={addressSaved} loading={shippingLoading} error={shippingError} options={shippingOptions} selectedId={selectedShippingOptionId} methodSaved={shippingMethodSaved} onSelect={(id) => void handleSelectShippingMethod(id)} />
-              <CheckoutPaymentPanel />
+              <CheckoutPaymentPanel
+                providers={paymentProviders}
+                selectedProviderId={selectedPaymentProviderId}
+                onProviderChange={(providerId) => { setSelectedPaymentProviderId(providerId); setPaymentSession(null); setPaymentError(undefined) }}
+                session={paymentSession}
+                stripePublishableKey={stripePublishableKey}
+                preparing={paymentPreparing}
+                error={paymentError}
+                canSubmit={canPlaceOrder}
+                placing={placingOrder}
+                onStripeComplete={() => handlePlaceOrder(selectedPaymentProviderId, true)}
+              />
             </div>
             <CheckoutSummaryCard
               cart={cart}
-              canPlaceOrder={canPlaceOrder}
-              disabledReason={placeOrderDisabledReason}
+              canPlaceOrder={canPlaceOrder && !stripeSelected}
+              disabledReason={stripeSelected && canPlaceOrder ? "Confirm payment in the Stripe Payment Element." : placeOrderDisabledReason}
               onPlaceOrder={() => void handlePlaceOrder()}
               placing={placingOrder}
               shippingAmount={shippingMethodSaved ? selectedShippingOption?.amount ?? 0 : undefined}

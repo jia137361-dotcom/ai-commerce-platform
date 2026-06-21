@@ -1,5 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../lib/store-context"
 import { readOrderStoreId } from "../../../lib/order-store-context"
 import {
@@ -8,7 +8,11 @@ import {
   toMedusaAdminOrderFulfillmentStatus,
   toMedusaAdminOrderPaymentStatus,
 } from "../../../lib/order-custom-metadata"
-import { parseAdminOrdersListQuery, summarizeAdminOrderRow } from "../../../lib/admin-orders"
+import {
+  mergeAdminOrderMetadata,
+  parseAdminOrdersListQuery,
+  summarizeAdminOrderRow,
+} from "../../../lib/admin-orders"
 import { FULFILLMENT_ORDERS_MODULE } from "../../../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../../../modules/fulfillment-orders/service"
 import { SHIPMENTS_MODULE } from "../../../modules/shipments"
@@ -81,7 +85,18 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       relations: ["items"],
     } as never)
 
-    const scoped = orders.filter((o) => readOrderStoreId(o) === storeId)
+    const queryGraph = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: metadataRows } = (await queryGraph.graph({
+      entity: "order",
+      fields: ["id", "metadata"],
+      filters: { id: orders.map((order) => order.id) },
+    })) as { data: Array<{ id: string; metadata?: Record<string, unknown> | null }> }
+    const ordersWithMetadata = mergeAdminOrderMetadata(
+      orders as unknown as Array<Record<string, unknown>>,
+      metadataRows
+    )
+
+    const scoped = ordersWithMetadata.filter((o) => readOrderStoreId(o) === storeId)
     const page = scoped.slice(query.offset, query.offset + query.limit)
 
     const enriched = await Promise.all(

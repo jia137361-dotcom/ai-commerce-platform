@@ -88,7 +88,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const shipping_options = (result as ShippingOptionResult[]).map((option) => ({
       id: option.id,
       name: option.name,
-      amount: option.amount ?? option.calculated_price?.calculated_amount ?? 0,
+      amount: option.amount ?? option.calculated_price?.calculated_amount ?? null,
       currency_code,
       provider_id: option.provider_id ?? null,
       service_zone_id: option.service_zone_id ?? null,

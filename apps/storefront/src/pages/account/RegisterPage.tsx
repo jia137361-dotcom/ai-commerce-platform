@@ -37,7 +37,7 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
         <section className="buyer-account-auth-intro">
           <p>Buyer account</p>
           <h1>Create your account</h1>
-          <span>Register to keep your profile and authenticated order history together. Your current cart will remain available.</span>
+          <span>Register to keep your profile, orders, and buyer-specific cart separate from other accounts.</span>
         </section>
         <Card as="section" className="buyer-account-auth-card">
         <div className="buyer-account-auth-tabs">

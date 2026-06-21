@@ -92,8 +92,21 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
     },
   })
 
+  const deliveredMutation = useMutation({
+    mutationFn: () => apiFetch(`/admin/orders/${orderId}/mock-delivered`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] })
+      queryClient.invalidateQueries({ queryKey: ["order-fulfillment", orderId] })
+      toast.push("Mock delivery recorded", "success")
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Mock delivery update failed", "error")
+    },
+  })
+
   const order = detailQuery.data
   const fulfillmentStatus = String(order?.fulfillment_status ?? "waiting")
+  const showMockDelivered = import.meta.env.DEV && fulfillmentStatus === "shipped"
 
   return (
     <div className="grid gap-6 bg-surface-muted p-6 lg:grid-cols-2">
@@ -144,6 +157,16 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
             <Button variant="outline" size="sm" onClick={() => shipMutation.mutate()}>
               Mock Shipment
             </Button>
+            {showMockDelivered ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={deliveredMutation.isPending}
+                onClick={() => deliveredMutation.mutate()}
+              >
+                Mock Delivered
+              </Button>
+            ) : null}
             <Button size="sm" onClick={() => pushMutation.mutate()}>
               ✨ Push to Fulfillment
             </Button>

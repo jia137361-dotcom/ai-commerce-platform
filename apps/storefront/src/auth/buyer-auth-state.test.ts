@@ -13,7 +13,7 @@ describe("buyer sign out state cleanup", () => {
       buyer_auth_token: "stale-buyer-token",
       buyer_customer: "stale-customer",
       "citigoo:buyer_auth_token": "namespaced-token",
-      "citigoo:default_store:cart_id": "cart_1",
+      "citigoo:default_store:cart:buyer%3Acus_1": "cart_1",
       seller_admin_token: "seller-token",
     })
     const session = storage({ "citigoo:buyer_customer": "stale-session-customer" })
@@ -34,7 +34,7 @@ describe("buyer sign out state cleanup", () => {
   it("keeps the buyer cart", () => {
     const { local, session } = setup()
     clearBuyerAuthClientState(local, session)
-    expect(local.values["citigoo:default_store:cart_id"]).toBe("cart_1")
+    expect(local.values["citigoo:default_store:cart:buyer%3Acus_1"]).toBe("cart_1")
   })
 
   it("keeps seller dashboard login state", () => {

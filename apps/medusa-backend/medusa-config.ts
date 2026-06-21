@@ -6,11 +6,13 @@ const stripePaymentProviders =
   process.env.STRIPE_API_KEY && process.env.STRIPE_API_KEY.length > 0
     ? [
         {
-          resolve: "@medusajs/medusa/payment-stripe",
+          resolve: "@medusajs/payment-stripe",
           id: "stripe",
           options: {
             apiKey: process.env.STRIPE_API_KEY,
             webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+            capture: true,
+            automaticPaymentMethods: true,
           },
         },
       ]

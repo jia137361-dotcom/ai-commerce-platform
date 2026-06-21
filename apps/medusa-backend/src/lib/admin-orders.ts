@@ -38,7 +38,7 @@ export const buildFulfillmentTimeline = (input: {
   const pushedDone = ["pushed", "shipped"].includes(mc) || Boolean(pushedAt)
   const inProdDone = pushedDone && (fo?.status === "pushed" || fo?.status === "fulfilled")
   const shippedDone = mc === "shipped" || Boolean(shippedAt)
-  const deliveredDone = ship?.status === "delivered" || Boolean(deliveredAt)
+  const deliveredDone = Boolean(deliveredAt) && ship?.status === "delivered"
 
   const steps: FulfillmentStepKey[] = [
     "waiting",
@@ -100,6 +100,25 @@ export const parseAdminOrdersListQuery = (query: Record<string, unknown>) => {
       : undefined
 
   return { limit, offset, email, display_id }
+}
+
+export const mergeAdminOrderMetadata = (
+  orders: Array<Record<string, unknown>>,
+  metadataRows: Array<{ id: string; metadata?: Record<string, unknown> | null }>
+): Array<Record<string, unknown> & { metadata?: Record<string, unknown> | null }> => {
+  const metadataByOrderId = new Map(metadataRows.map((row) => [row.id, row.metadata]))
+  return orders.map((order) => {
+    const currentMetadata =
+      order.metadata && typeof order.metadata === "object"
+        ? (order.metadata as Record<string, unknown>)
+        : null
+    return {
+      ...order,
+      metadata:
+        (typeof order.id === "string" ? metadataByOrderId.get(order.id) : undefined) ??
+        currentMetadata,
+    }
+  })
 }
 
 const readOrderNumeric = (value: unknown): number | null => {

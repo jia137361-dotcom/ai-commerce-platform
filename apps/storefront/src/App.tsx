@@ -10,6 +10,7 @@ import { RegisterPage } from "./pages/account/RegisterPage"
 import { SignInPage } from "./pages/account/SignInPage"
 import { AccountSettingPlaceholderPage } from "./pages/account/AccountSettingPlaceholderPage"
 import { findAccountSettingPlaceholder } from "./pages/account/account-setting-placeholders"
+import { AccountSettingsPage, type AccountSettingsSlug } from "./pages/account/AccountSettingsPage"
 import { OrderDetailPage } from "./pages/orders/OrderDetailPage"
 import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
@@ -17,8 +18,11 @@ import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
+import { useBuyerAuth } from "./auth/useBuyerAuth"
+import { getBuyerCartIdentity, removeLegacySharedCartKey } from "./lib/buyer-cart-storage"
 
 function App() {
+  const auth = useBuyerAuth()
   const [path, setPath] = useState(window.location.pathname)
   const [cartCount, setCartCount] = useState(0)
 
@@ -29,7 +33,10 @@ function App() {
   }, [])
 
   const refreshCartCount = async () => {
-    const cartId = window.localStorage.getItem(getBuyerCartStorageKey(getBuyerStoreId()))
+    const storeId = getBuyerStoreId()
+    removeLegacySharedCartKey(storeId, window.localStorage)
+    const identity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+    const cartId = window.localStorage.getItem(getBuyerCartStorageKey(storeId, identity))
     if (!cartId) {
       setCartCount(0)
       return
@@ -44,7 +51,7 @@ function App() {
 
   useEffect(() => {
     void refreshCartCount()
-  }, [])
+  }, [auth.customer?.id])
 
   const onCartUpdated = (cart: StoreCart | null) => {
     setCartCount(cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
@@ -82,6 +89,12 @@ function App() {
 
   if (path.startsWith("/account/register")) {
     return <RegisterPage cartCount={cartCount} />
+  }
+
+  const realAccountSetting = (["addresses", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[])
+    .find((slug) => path === `/account/${slug}`)
+  if (realAccountSetting) {
+    return <AccountSettingsPage cartCount={cartCount} slug={realAccountSetting} />
   }
 
   const accountSettingPlaceholder = findAccountSettingPlaceholder(path)

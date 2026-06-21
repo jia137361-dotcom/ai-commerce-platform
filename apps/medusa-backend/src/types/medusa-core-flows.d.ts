@@ -9,4 +9,5 @@ declare module "@medusajs/medusa/core-flows" {
   export const createPaymentSessionsWorkflow: any
   export const createProductsWorkflow: any
   export const updateProductVariantsWorkflow: any
+  export const updateRegionsWorkflow: any
 }

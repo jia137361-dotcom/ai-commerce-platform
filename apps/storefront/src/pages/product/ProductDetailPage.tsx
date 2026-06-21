@@ -29,6 +29,7 @@ import { addProductSelectionToCart } from "./product-cart-action"
 import { resolveProductPurchaseState, resolveSelectedProductVariant } from "./product-detail-state"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { buildProductSignInHref } from "./product-auth"
+import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 
 type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
 type Notice = { label: string; message: string }
@@ -132,7 +133,10 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       const updated = await addProductSelectionToCart({
         variantId: selectedVariant.id,
         quantity,
-        storageKey: getBuyerCartStorageKey(settings.storeId),
+        storageKey: getBuyerCartStorageKey(
+          settings.storeId,
+          getBuyerCartIdentity(auth.customer.id, window.localStorage)
+        ),
         storage: window.localStorage,
         createCart,
         addLineItem: addCartLineItem,

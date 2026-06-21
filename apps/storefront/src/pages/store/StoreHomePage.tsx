@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { PageShell } from "../../components/layout/PageShell"
 import { SectionHeader } from "../../components/layout/SectionHeader"
 import { ShopBrowseControls } from "../../components/store-home/ShopBrowseControls"
+import { StoreAboutPanel } from "../../components/store-home/StoreAboutPanel"
 import { ShopHero } from "../../components/store-home/ShopHero"
 import { StoreIdentity } from "../../components/store-home/StoreIdentity"
 import { StoreProductResults } from "../../components/store-home/StoreProductResults"
@@ -22,15 +23,8 @@ type Notice = { key: string; message: string }
 const fallbackSettings: BuyerStoreSettings = {
   storeId: "default_store",
   brandName: "Citigoo Official Store",
+  galleryUrls: [],
   metadata: {},
-}
-
-const readMetadataString = (metadata: Record<string, unknown>, ...keys: string[]) => {
-  for (const key of keys) {
-    const value = metadata[key]
-    if (typeof value === "string" && value.trim()) return value.trim()
-  }
-  return undefined
 }
 
 function StoreFooter() {
@@ -56,6 +50,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
   const [sort, setSort] = useState("recommended")
   const [productSource, setProductSource] = useState<DataSource>("backend")
   const [loadVersion, setLoadVersion] = useState(0)
+  const [activeSection, setActiveSection] = useState<"items" | "about">("items")
 
   const loadStore = useCallback(async (isActive: () => boolean) => {
     setLoading(true)
@@ -91,6 +86,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab")
     if (!tab) return
+    if (tab === "about") setActiveSection("about")
     const targetId = tab === "category" ? "products" : tab
     window.requestAnimationFrame(() => {
       document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -125,7 +121,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
     })
   }, [activeCategoryId, categories, products, query, sort])
 
-  const heroImage = readMetadataString(settings.metadata, "banner_url", "hero_image_url") || products.find((product) => product.imageUrl)?.imageUrl
+  const heroImage = settings.bannerUrl
   const hasFilters = activeCategoryId !== "all" || Boolean(query.trim())
   const productError = productSource === "mock" ? notices.find((notice) => notice.message.startsWith("Mock data"))?.message : undefined
 
@@ -136,7 +132,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StoreFooter />}
     >
-      <ShopHero brandName={settings.brandName} imageUrl={heroImage} isFallback={!readMetadataString(settings.metadata, "banner_url", "hero_image_url")} />
+      <ShopHero brandName={settings.brandName} imageUrl={heroImage} isFallback={!settings.bannerUrl} announcement={settings.announcement} description={settings.description} />
       <StoreIdentity settings={settings} />
       <ShopBrowseControls
         categories={visibleCategories}
@@ -146,6 +142,8 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
         onQueryChange={setQuery}
         sort={sort}
         onSortChange={setSort}
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
       />
 
       {notices.length ? (
@@ -154,7 +152,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
         </aside>
       ) : null}
 
-      <section className="buyer-shop-products" id="products">
+      {activeSection === "items" ? <section className="buyer-shop-products" id="products">
         <SectionHeader
           eyebrow={activeCategoryId === "all" ? "Store collection" : "Selected category"}
           title={activeCategoryId === "all" ? "Latest drops" : visibleCategories.find((category) => category.id === activeCategoryId)?.name ?? "Products"}
@@ -167,22 +165,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
           hasFilters={hasFilters}
           onRetry={() => setLoadVersion((version) => version + 1)}
         />
-      </section>
-
-      <section className="buyer-shop-about" id="about">
-        <SectionHeader eyebrow="About" title={settings.brandName} description="Curated products with protected checkout and order support." />
-        <p className="buyer-shop-about-copy">
-          Browse published items from our seller studio, add to cart, and check out with your buyer account.
-          Questions? Visit the <a href="/help">Help Center</a>.
-        </p>
-      </section>
-
-      <section className="buyer-shop-reviews" id="reviews">
-        <SectionHeader eyebrow="Reviews" title="Customer feedback" description="Ratings appear on each product detail page." />
-        <p className="buyer-shop-about-copy">
-          Open any product to read reviews and share your experience after delivery.
-        </p>
-      </section>
+      </section> : <StoreAboutPanel settings={settings} />}
     </PageShell>
   )
 }

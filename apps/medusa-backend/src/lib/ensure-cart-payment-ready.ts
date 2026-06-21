@@ -13,9 +13,14 @@ const PROCESSABLE_STATUSES = new Set([
   "captured",
 ])
 
-type PaymentSessionRow = { status?: string; provider_id?: string }
+export type PaymentSessionRow = {
+  id?: string
+  status?: string
+  provider_id?: string
+  data?: Record<string, unknown> | null
+}
 
-async function readCartPaymentCollectionId(
+export async function readCartPaymentCollectionId(
   container: MedusaContainer,
   cartId: string
 ): Promise<string | null> {
@@ -29,18 +34,29 @@ async function readCartPaymentCollectionId(
   return data[0]?.payment_collection?.id ?? null
 }
 
-async function listPaymentSessions(
+export async function listPaymentSessions(
   container: MedusaContainer,
   paymentCollectionId: string
 ): Promise<PaymentSessionRow[]> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = (await query.graph({
     entity: "payment_session",
-    fields: ["id", "status", "provider_id"],
+    fields: ["id", "status", "provider_id", "data"],
     filters: { payment_collection_id: paymentCollectionId },
   })) as { data: PaymentSessionRow[] }
 
   return data
+}
+
+export async function findCartPaymentSession(
+  container: MedusaContainer,
+  cartId: string,
+  providerId: string
+): Promise<PaymentSessionRow | null> {
+  const paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
+  if (!paymentCollectionId) return null
+  const sessions = await listPaymentSessions(container, paymentCollectionId)
+  return sessions.find((session) => session.provider_id === providerId) ?? null
 }
 
 function hasProcessableSessionForProvider(

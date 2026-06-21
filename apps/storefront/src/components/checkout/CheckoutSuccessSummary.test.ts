@@ -11,4 +11,12 @@ describe("CheckoutSuccessSummary", () => {
     expect(html).not.toContain("Payment captured")
     expect(html).not.toContain("Refund available")
   })
+
+  it("shows backend Stripe status without exposing payment secrets", () => {
+    const html = renderToStaticMarkup(createElement(CheckoutSuccessSummary, { info: { orderId: "order_123", paymentProviderId: "pp_stripe_stripe", paymentStatus: "captured" } }))
+    expect(html).toContain("Stripe · captured")
+    expect(html).not.toContain("client_secret")
+    expect(html).not.toContain("sk_test_")
+    expect(html).not.toContain("whsec_")
+  })
 })

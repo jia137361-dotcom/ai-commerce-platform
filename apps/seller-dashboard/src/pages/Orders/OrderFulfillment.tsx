@@ -59,8 +59,28 @@ export function OrderFulfillmentPage() {
     },
   })
 
+  const deliveredMutation = useMutation({
+    mutationFn: () => apiFetch(`/admin/orders/${orderId}/mock-delivered`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] })
+      queryClient.invalidateQueries({ queryKey: ["order-fulfillment", orderId] })
+      toast.push("Mock delivery recorded", "success")
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Mock delivery update failed", "error")
+    },
+  })
+
   const order = detailQuery.data
   const supplier = order?.supplier_order as Record<string, unknown> | null | undefined
+  const timelineSteps = timelineQuery.data?.steps ?? []
+  const shippedComplete = timelineSteps.some(
+    (step) => step.key === "shipped" && step.status === "completed"
+  )
+  const deliveredComplete = timelineSteps.some(
+    (step) => step.key === "delivered" && step.status === "completed"
+  )
+  const showMockDelivered = import.meta.env.DEV && shippedComplete && !deliveredComplete
 
   return (
     <div>
@@ -113,9 +133,19 @@ export function OrderFulfillmentPage() {
             <Button variant="outline" className="w-full" onClick={() => shipMutation.mutate()}>
               Mock Shipment
             </Button>
+            {showMockDelivered ? (
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={deliveredMutation.isPending}
+                onClick={() => deliveredMutation.mutate()}
+              >
+                Mock Delivered
+              </Button>
+            ) : null}
           </div>
           <p className="mt-6 text-xs text-slate-400">
-            Automated sync with supplier warehouse will occur shortly after any status update.
+            Mock actions are local development aids only. Real carrier delivery remains unavailable (TRACKING-01).
           </p>
           {detailQuery.isLoading ? null : (
             <div className="mt-6 space-y-2 border-t pt-4 text-sm">

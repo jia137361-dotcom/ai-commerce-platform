@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import { OrderTrackingEmptyState } from "../../components/orders/OrderTrackingEmptyState"
 import { OrderTrackingHeader } from "../../components/orders/OrderTrackingHeader"
 import { OrderTrackingShipment } from "../../components/orders/OrderTrackingShipment"
 import { OrderTrackingTimeline } from "../../components/orders/OrderTrackingTimeline"
@@ -14,7 +13,11 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   fetchStoreSettings,
   getBuyerStoreId,
+  getAuthenticatedOrderDetail,
+  getOrderDetail,
   getOrderTracking,
+  formatBuyerMoney,
+  type BuyerOrderDetail,
   type BuyerOrderTracking,
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
@@ -50,6 +53,7 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
   const auth = useBuyerAuth()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [tracking, setTracking] = useState<BuyerOrderTracking | null>(null)
+  const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
 
@@ -81,9 +85,13 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
         return
       }
       try {
-        const result = await getOrderTracking(orderId, email)
+        const [result, detail] = await Promise.all([
+          getOrderTracking(orderId, email),
+          auth.customer ? getAuthenticatedOrderDetail(orderId) : getOrderDetail(orderId, email),
+        ])
         if (!active) return
         setTracking(result)
+        setOrder(detail)
       } catch (trackingError) {
         if (!active) return
         setTracking(null)
@@ -117,29 +125,34 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
           <LoadingState label="Loading tracking..." />
         ) : error || !tracking ? (
           <ErrorState title="Tracking unavailable" message={error ?? "No tracking data was returned."} />
-        ) : !hasTracking ? (
-          <OrderTrackingEmptyState
-            title="Tracking not available yet"
-            message="No carrier, tracking number, shipment, or delivery events have been reported for this order."
-            actionHref={detailHref}
-            actionLabel="View order details"
-          />
         ) : (
           <>
             <OrderTrackingHeader orderId={tracking.orderId} displayId={displayId} tracking={tracking} />
             <section className="buyer-order-tracking-grid">
               <div className="buyer-order-tracking-left">
+                {!hasTracking ? <Card className="buyer-order-card buyer-order-shipment-waiting"><p className="buyer-order-kicker">Waiting for dispatch</p><h2>Tracking not available yet</h2><p>Waiting for the seller or supplier to dispatch this order. No carrier event has been reported yet.</p></Card> : null}
                 {tracking.supplierOrders.length ? <OrderTrackingSupplierStatus supplierOrders={tracking.supplierOrders} /> : null}
                 <OrderTrackingShipment shipment={firstShipment} />
                 <OrderTrackingTimeline events={tracking.events} />
+                <Card as="section" className="buyer-order-card buyer-order-package">
+                  <p className="buyer-order-kicker">Package contents</p>
+                  <h2>{order?.items.length ?? 0} item{order?.items.length === 1 ? "" : "s"}</h2>
+                  {order?.items.length ? order.items.map((item) => <article className="buyer-order-package-item" key={item.id}>{item.thumbnail ? <img src={item.thumbnail} alt="" /> : null}<div><strong>{item.title}</strong><span>{item.variantTitle || "Default option"} · Qty {item.quantity}</span></div><strong>{item.subtotal == null ? "Not available" : formatBuyerMoney(item.subtotal, order.currencyCode ?? "usd")}</strong></article>) : <p className="buyer-order-muted">Package contents are not available.</p>}
+                </Card>
               </div>
-              <Card as="aside" className="buyer-order-card buyer-order-actions">
-                <p className="buyer-order-kicker">Actions</p>
-                <h2>Next steps</h2>
-                <Button href="/store">Back to store</Button>
-                <Button variant="secondary" href={detailHref}>View order details</Button>
-                {!auth.customer ? <Button variant="ghost" href="/orders/lookup">Search another order</Button> : null}
-              </Card>
+              <aside className="buyer-order-tracking-aside">
+                <Card className="buyer-order-card buyer-order-payment-details"><p className="buyer-order-kicker">Payment details</p><h2>Order total</h2><dl className="buyer-order-data-grid"><div><dt>Subtotal</dt><dd>{order?.subtotal == null ? "Not available" : formatBuyerMoney(order.subtotal, order.currencyCode ?? "usd")}</dd></div><div><dt>Shipping</dt><dd>{order?.shippingTotal == null ? "Not available" : formatBuyerMoney(order.shippingTotal, order.currencyCode ?? "usd")}</dd></div><div><dt>Total</dt><dd>{order?.total == null ? "Not available" : formatBuyerMoney(order.total, order.currencyCode ?? "usd")}</dd></div><div><dt>Payment state</dt><dd>{order?.paymentStatus || "Not available"}</dd></div></dl><p className="buyer-order-muted">Authorization status is shown as returned; capture is not implied.</p></Card>
+                <Card className="buyer-order-card buyer-order-actions">
+                  <p className="buyer-order-kicker">Quick actions</p>
+                  <h2>Order support</h2>
+                  <Button href="/help">Support</Button>
+                  <Button variant="secondary" href={detailHref}>View order details</Button>
+                  <Button variant="ghost" disabled>Invoice · unavailable</Button>
+                  <Button variant="ghost" disabled>Return / after-sales · unavailable</Button>
+                  <Button variant="ghost" disabled>Share · unavailable</Button>
+                  {!auth.customer ? <Button variant="ghost" href="/orders/lookup">Search another order</Button> : null}
+                </Card>
+              </aside>
             </section>
           </>
         )}

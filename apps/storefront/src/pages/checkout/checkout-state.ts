@@ -10,6 +10,7 @@ export type CheckoutStateInput = {
   addressValid: boolean
   addressSaved: boolean
   shippingMethodSaved: boolean
+  paymentSessionReady: boolean
   placingOrder: boolean
 }
 
@@ -23,6 +24,7 @@ export const resolveCheckoutState = (input: CheckoutStateInput) => {
   else if (input.requiresShippingMethod && !input.addressValid) disabledReason = "Enter a complete delivery address."
   else if (input.requiresShippingMethod && !input.addressSaved) disabledReason = "Save delivery address before placing the order."
   else if (input.requiresShippingMethod && !input.shippingMethodSaved) disabledReason = "Select and save a shipping method."
+  else if (!input.paymentSessionReady) disabledReason = "Initialize a valid payment session before placing the order."
 
   return { canPlaceOrder: !disabledReason, disabledReason }
 }
