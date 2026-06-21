@@ -24,6 +24,13 @@ export function AccountNavigation({
         <a href="/account">Overview</a>
         <a href="/account/profile">Profile</a>
         <a href="/account/orders">Orders</a>
+        <span className="buyer-account-nav-label">Settings</span>
+        <a href="/account/security">Account &amp; Security</a>
+        <a href="/account/addresses">Delivery addresses</a>
+        <a href="/account/country-region">Country &amp; region</a>
+        <a href="/account/currency">Currency</a>
+        <a href="/account/coupons">Coupons</a>
+        <a href="/account/following">Following</a>
         <Button variant="ghost" onClick={onSwitchAccount}>Switch account</Button>
         <Button variant="ghost" onClick={onSignOut}>Sign out</Button>
       </nav>

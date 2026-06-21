@@ -8,6 +8,8 @@ import { AccountHomePage } from "./pages/account/AccountHomePage"
 import { AccountProfilePage } from "./pages/account/AccountProfilePage"
 import { RegisterPage } from "./pages/account/RegisterPage"
 import { SignInPage } from "./pages/account/SignInPage"
+import { AccountSettingPlaceholderPage } from "./pages/account/AccountSettingPlaceholderPage"
+import { findAccountSettingPlaceholder } from "./pages/account/account-setting-placeholders"
 import { OrderDetailPage } from "./pages/orders/OrderDetailPage"
 import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
@@ -80,6 +82,11 @@ function App() {
 
   if (path.startsWith("/account/register")) {
     return <RegisterPage cartCount={cartCount} />
+  }
+
+  const accountSettingPlaceholder = findAccountSettingPlaceholder(path)
+  if (accountSettingPlaceholder) {
+    return <AccountSettingPlaceholderPage cartCount={cartCount} setting={accountSettingPlaceholder} />
   }
 
   if (path.startsWith("/account/profile")) {

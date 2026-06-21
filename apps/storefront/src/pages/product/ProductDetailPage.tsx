@@ -27,6 +27,8 @@ import {
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
 import { addProductSelectionToCart } from "./product-cart-action"
 import { resolveProductPurchaseState, resolveSelectedProductVariant } from "./product-detail-state"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { buildProductSignInHref } from "./product-auth"
 
 type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
 type Notice = { label: string; message: string }
@@ -34,6 +36,7 @@ type Notice = { label: string; message: string }
 const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo Official Store", metadata: {} }
 
 export function ProductDetailPage({ productId, cartCount, onCartUpdated }: ProductDetailPageProps) {
+  const auth = useBuyerAuth()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [product, setProduct] = useState<StoreProduct | null>(null)
   const [reviews, setReviews] = useState<BuyerReviewsSummary | null>(null)
@@ -118,6 +121,11 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
 
   const addToCart = async () => {
     if (!product || !selectedVariant?.id || !purchaseState.canAdd || adding) return
+    if (!auth.customer) {
+      const returnTo = `${window.location.pathname}${window.location.search}`
+      window.location.assign(buildProductSignInHref(returnTo))
+      return
+    }
     setAdding(true)
     setAddNotice(undefined)
     try {
@@ -157,6 +165,8 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
             quantity={quantity}
             setQuantity={setQuantity}
             adding={adding}
+            authLoading={auth.isLoading}
+            requiresSignIn={!auth.isLoading && !auth.customer}
             addNotice={addNotice}
             onAddToCart={() => void addToCart()}
           />

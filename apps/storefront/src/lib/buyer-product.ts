@@ -89,6 +89,7 @@ const formatPrice = (amount?: number) => {
 
 export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0): StoreProduct => {
   const numericPrice = normalizeBuyerProductPrice(product)
+  const variants = normalizeBuyerProductVariants(product)
 
   return {
     id: product.product_id ?? product.id ?? `backend-product-${index}`,
@@ -113,6 +114,6 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     averageRating: product.average_rating ?? null,
     reviewCount: product.review_count ?? 0,
     tags: Array.isArray(product.tags) ? product.tags : [],
-    variants: normalizeBuyerProductVariants(product),
+    variants,
   }
 }

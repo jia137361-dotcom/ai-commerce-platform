@@ -218,6 +218,15 @@
   padding-top: 16px;
 }
 
+.buyer-account-nav-label {
+  margin: 12px 10px 4px;
+  color: var(--buyer-text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .buyer-account-overview,
 .buyer-account-profile,
 .buyer-account-required {
@@ -226,6 +235,49 @@
 
 .buyer-account-session-card {
   padding: 24px 28px;
+}
+
+.buyer-account-setting-placeholder {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+}
+
+.buyer-account-setting-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.buyer-account-setting-heading h1,
+.buyer-account-setting-placeholder > p,
+.buyer-account-setting-state h2,
+.buyer-account-setting-state p {
+  margin: 0;
+}
+
+.buyer-account-setting-heading h1 {
+  font-size: 30px;
+}
+
+.buyer-account-setting-placeholder > p,
+.buyer-account-setting-state p {
+  color: var(--buyer-text-muted);
+  line-height: 1.65;
+}
+
+.buyer-account-setting-state {
+  padding: 18px 20px;
+}
+
+.buyer-account-setting-state h2 {
+  margin-bottom: 7px;
+  font-size: 17px;
+}
+
+.buyer-account-setting-note {
+  font-size: 13px;
 }
 
 .buyer-account-session-card h2,
@@ -349,5 +401,9 @@
 
   .buyer-account-profile-summary {
     grid-template-columns: 1fr;
+  }
+
+  .buyer-account-setting-heading {
+    flex-direction: column;
   }
 }

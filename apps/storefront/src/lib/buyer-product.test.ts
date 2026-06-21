@@ -28,4 +28,19 @@ describe("buyer product normalization", () => {
       .toEqual(expect.objectContaining({ id: "variant_a", title: "Large", inventoryQuantity: 2 }))
     expect(normalizeBuyerProductVariants({ is_cart_addable: true, medusa_variant_id: "variant_bridge" })[0]?.id).toBe("variant_bridge")
   })
+
+  it("does not treat unlinked variant descriptors as native cart variants", () => {
+    const product = normalizeBuyerProduct({
+      product_id: "prod_multi",
+      title: "Multi option product",
+      is_cart_addable: true,
+      variants: [
+        { id: "variant_small", title: "Small" },
+        { id: "variant_large", title: "Large" },
+      ],
+    })
+
+    expect(product.isCartAddable).toBe(false)
+    expect(product.variants?.map((variant) => variant.id)).toEqual(["variant_small", "variant_large"])
+  })
 })

@@ -261,6 +261,23 @@ type ApiOrderTrackingResponse = {
   fulfillment_status?: unknown
   fulfillment_order?: ApiFulfillmentOrder | null
   shipments?: ApiShipment[]
+  supplier_orders?: ApiSupplierOrderTracking[]
+}
+
+type ApiSupplierOrderTracking = {
+  id?: string | null
+  supplier?: string | null
+  supplier_order_id?: string | null
+  status?: string | null
+  status_text?: string | null
+  payment_status?: string | null
+  payment_status_text?: string | null
+  logistics_name?: string | null
+  logistics_status?: string | null
+  logistics_status_text?: string | null
+  tracking_number?: string | null
+  tracking_url?: string | null
+  last_synced_at?: string | null
 }
 
 type ApiOrderDetailItem = {
@@ -453,11 +470,28 @@ export type BuyerOrderTracking = {
   fulfillmentStatus?: unknown
   fulfillmentOrder?: ApiFulfillmentOrder | null
   shipments: BuyerOrderShipment[]
+  supplierOrders: BuyerSupplierOrderTracking[]
   events: Array<{
     label: string
     date?: string | null
     status?: string | null
   }>
+}
+
+export type BuyerSupplierOrderTracking = {
+  id?: string | null
+  supplier?: string | null
+  supplierOrderId?: string | null
+  status?: string | null
+  statusText?: string | null
+  paymentStatus?: string | null
+  paymentStatusText?: string | null
+  logisticsName?: string | null
+  logisticsStatus?: string | null
+  logisticsStatusText?: string | null
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  lastSyncedAt?: string | null
 }
 
 export type BuyerOrderDetailItem = {
@@ -1117,6 +1151,22 @@ const normalizeShipment = (shipment: ApiShipment): BuyerOrderShipment => ({
   status: shipment.status ?? null,
 })
 
+const normalizeSupplierOrderTracking = (supplierOrder: ApiSupplierOrderTracking): BuyerSupplierOrderTracking => ({
+  id: supplierOrder.id ?? null,
+  supplier: supplierOrder.supplier ?? null,
+  supplierOrderId: supplierOrder.supplier_order_id ?? null,
+  status: supplierOrder.status ?? null,
+  statusText: supplierOrder.status_text ?? null,
+  paymentStatus: supplierOrder.payment_status ?? null,
+  paymentStatusText: supplierOrder.payment_status_text ?? null,
+  logisticsName: supplierOrder.logistics_name ?? null,
+  logisticsStatus: supplierOrder.logistics_status ?? null,
+  logisticsStatusText: supplierOrder.logistics_status_text ?? null,
+  trackingNumber: supplierOrder.tracking_number ?? null,
+  trackingUrl: supplierOrder.tracking_url ?? null,
+  lastSyncedAt: supplierOrder.last_synced_at ?? null,
+})
+
 const shipmentEvents = (shipments: BuyerOrderShipment[]) => {
   const events: BuyerOrderTracking["events"] = []
   for (const shipment of shipments) {
@@ -1136,6 +1186,7 @@ export const getOrderTracking = async (orderId: string, email?: string): Promise
   const query = params.toString()
   const payload = await apiFetch<ApiOrderTrackingResponse>(`/store/orders/${encodeURIComponent(orderId)}/tracking${query ? `?${query}` : ""}`)
   const shipments = (payload.shipments ?? []).map(normalizeShipment)
+  const supplierOrders = (payload.supplier_orders ?? []).map(normalizeSupplierOrderTracking)
   return {
     orderId: payload.order_id ?? orderId,
     storeId: payload.store_id,
@@ -1143,6 +1194,7 @@ export const getOrderTracking = async (orderId: string, email?: string): Promise
     fulfillmentStatus: payload.fulfillment_status,
     fulfillmentOrder: payload.fulfillment_order ?? null,
     shipments,
+    supplierOrders,
     events: shipmentEvents(shipments),
   }
 }

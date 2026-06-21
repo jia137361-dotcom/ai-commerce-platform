@@ -6,6 +6,7 @@ describe("order tracking state", () => {
       orderId: "order_1",
       fulfillmentOrder: null,
       shipments: [],
+      supplierOrders: [],
       events: [],
     })).toBe(false)
   })
@@ -15,6 +16,17 @@ describe("order tracking state", () => {
       orderId: "order_1",
       fulfillmentOrder: null,
       shipments: [{ carrier: "DHL", trackingNumber: "TRACK-1" }],
+      supplierOrders: [],
+      events: [],
+    })).toBe(true)
+  })
+
+  it("recognizes real supplier review status before carrier tracking exists", () => {
+    expect(hasOrderTrackingData({
+      orderId: "order_1",
+      fulfillmentOrder: null,
+      shipments: [],
+      supplierOrders: [{ status: "reviewing", statusText: "审核中" }],
       events: [],
     })).toBe(true)
   })

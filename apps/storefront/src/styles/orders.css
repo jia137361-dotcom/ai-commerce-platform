@@ -310,10 +310,46 @@
 }
 
 .buyer-order-shipment,
+.buyer-order-supplier-progress,
 .buyer-order-timeline,
 .buyer-order-empty,
 .buyer-order-actions {
   padding: 28px;
+}
+
+.buyer-order-supplier-progress > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.buyer-order-supplier-progress h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.buyer-order-supplier-explainer,
+.buyer-order-supplier-note {
+  color: #667083;
+  line-height: 1.6;
+}
+
+.buyer-order-supplier-list {
+  display: grid;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.buyer-order-supplier-list > dl + dl {
+  border-top: 1px solid #edf0f3;
+  padding-top: 18px;
+}
+
+.buyer-order-supplier-note {
+  margin: 18px 0 0;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .buyer-order-shipment h2,
@@ -924,6 +960,7 @@
 
   .buyer-order-lookup-card,
   .buyer-order-shipment,
+  .buyer-order-supplier-progress,
   .buyer-order-timeline,
   .buyer-order-empty,
   .buyer-order-actions,
@@ -938,6 +975,10 @@
   .buyer-order-detail-item,
   .buyer-order-data-grid {
     grid-template-columns: 1fr;
+  }
+
+  .buyer-order-supplier-progress > header {
+    flex-direction: column;
   }
 
   .buyer-order-detail-price {

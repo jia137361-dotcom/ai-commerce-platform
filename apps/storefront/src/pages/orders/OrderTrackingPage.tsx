@@ -3,6 +3,7 @@ import { OrderTrackingEmptyState } from "../../components/orders/OrderTrackingEm
 import { OrderTrackingHeader } from "../../components/orders/OrderTrackingHeader"
 import { OrderTrackingShipment } from "../../components/orders/OrderTrackingShipment"
 import { OrderTrackingTimeline } from "../../components/orders/OrderTrackingTimeline"
+import { OrderTrackingSupplierStatus } from "../../components/orders/OrderTrackingSupplierStatus"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
@@ -128,6 +129,7 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
             <OrderTrackingHeader orderId={tracking.orderId} displayId={displayId} tracking={tracking} />
             <section className="buyer-order-tracking-grid">
               <div className="buyer-order-tracking-left">
+                {tracking.supplierOrders.length ? <OrderTrackingSupplierStatus supplierOrders={tracking.supplierOrders} /> : null}
                 <OrderTrackingShipment shipment={firstShipment} />
                 <OrderTrackingTimeline events={tracking.events} />
               </div>

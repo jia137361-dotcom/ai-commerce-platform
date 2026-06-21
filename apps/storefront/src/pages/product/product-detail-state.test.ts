@@ -18,6 +18,17 @@ describe("product detail purchase state", () => {
     expect(resolveSelectedProductVariant(product, "variant_default")?.id).toBe("variant_default")
   })
 
+  it("updates selection to a requested variant in a multi-variant product", () => {
+    const multiple = {
+      ...product,
+      variants: [
+        { id: "variant_small", title: "Small", isPurchasable: true },
+        { id: "variant_large", title: "Large", isPurchasable: true },
+      ],
+    }
+    expect(resolveSelectedProductVariant(multiple, "variant_large")?.title).toBe("Large")
+  })
+
   it("disables add to cart when no purchasable variant exists", () => {
     const state = resolveProductPurchaseState({ ...product, medusaVariantId: undefined, variants: [] }, undefined)
     expect(state.canAdd).toBe(false)
