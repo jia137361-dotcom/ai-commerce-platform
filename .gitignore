@@ -16,11 +16,10 @@ github仓库
 github仓库.txt
 单店先行、多店预留版三人分工.txt
 .DS_Store
-<<<<<<< HEAD
 scripts/*.local.env
-=======
 scripts/dev3-full-backend-pipeline.local.env
-scripts/dev3-full-backend-pipeline.local.env
->>>>>>> feature/supplier-s2bdiy-dry-run
+
+# Database dumps for partner handoff — never commit
+exports/
 
 .tmp/
