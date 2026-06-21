@@ -1,4 +1,6 @@
 import type { BuyerCustomer } from "../../lib/buyer-api"
+import { Button } from "../ui/Button"
+import { Card } from "../ui/Card"
 
 export function AccountNavigation({
   customer,
@@ -11,17 +13,20 @@ export function AccountNavigation({
 }) {
   const display = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "Account"
   return (
-    <aside className="buyer-account-nav">
-      <div className="buyer-account-avatar">{display.slice(0, 1).toUpperCase()}</div>
-      <strong>{display}</strong>
-      <span>{customer.email}</span>
-      <nav>
+    <Card as="aside" className="buyer-account-nav">
+      <div className="buyer-account-nav-user">
+        <div className="buyer-account-avatar" aria-hidden="true">{display.slice(0, 1).toUpperCase()}</div>
+        <strong>{display}</strong>
+        <span>{customer.email || "Email not provided"}</span>
+        <small>Buyer account</small>
+      </div>
+      <nav className="buyer-account-nav-links" aria-label="Buyer account">
         <a href="/account">Overview</a>
         <a href="/account/profile">Profile</a>
         <a href="/account/orders">Orders</a>
-        <button type="button" onClick={onSignOut}>Sign out</button>
-        <button type="button" onClick={onSwitchAccount}>Switch account</button>
+        <Button variant="ghost" onClick={onSwitchAccount}>Switch account</Button>
+        <Button variant="ghost" onClick={onSignOut}>Sign out</Button>
       </nav>
-    </aside>
+    </Card>
   )
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { StoreTopBar } from "../store-home/StoreTopBar"
 import type { BuyerStoreSettings } from "../../lib/buyer-api"
+import { PageShell } from "../layout/PageShell"
 
 export function AccountAuthLayout({
   settings,
@@ -12,9 +13,12 @@ export function AccountAuthLayout({
   children: ReactNode
 }) {
   return (
-    <div className="buyer-account-page">
-      <StoreTopBar settings={settings} cartCount={cartCount} />
-      <main className="buyer-account-main">{children}</main>
-    </div>
+    <PageShell
+      className="buyer-account-page"
+      contentClassName="buyer-account-main"
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+    >
+      {children}
+    </PageShell>
   )
 }

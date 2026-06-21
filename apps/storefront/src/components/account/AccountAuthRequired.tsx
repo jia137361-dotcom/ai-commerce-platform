@@ -1,12 +1,16 @@
+import { Button } from "../ui/Button"
+import { Card } from "../ui/Card"
+
 export function AccountAuthRequired() {
   return (
-    <section className="buyer-account-card buyer-account-required">
+    <Card as="section" className="buyer-account-required">
+      <p className="buyer-account-kicker">Buyer account</p>
       <h1>Sign in required</h1>
-      <p>Your account area uses a secure customer session. Sign in to continue.</p>
-      <div>
-        <a href="/account/sign-in">Sign in</a>
-        <a href="/account/register">Create account</a>
+      <p>Sign in to see your orders and profile, or create a buyer account to get started.</p>
+      <div className="buyer-account-required-actions">
+        <Button href="/account/sign-in">Sign in</Button>
+        <Button href="/account/register" variant="secondary">Create account</Button>
       </div>
-    </section>
+    </Card>
   )
 }

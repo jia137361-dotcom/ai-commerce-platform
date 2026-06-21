@@ -5,6 +5,7 @@ import { AccountNavigation } from "../../components/account/AccountNavigation"
 import { AccountProfileForm } from "../../components/account/AccountProfileForm"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { fetchStoreSettings, type BuyerStoreSettings } from "../../lib/buyer-api"
+import { LoadingState } from "../../components/ui/States"
 
 const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo", metadata: {} }
 
@@ -36,7 +37,7 @@ export function AccountProfilePage({ cartCount }: { cartCount: number }) {
   return (
     <AccountAuthLayout settings={settings} cartCount={cartCount}>
       {auth.isLoading ? (
-        <section className="buyer-account-card buyer-account-required">Loading account...</section>
+        <LoadingState label="Loading buyer profile..." />
       ) : !auth.customer ? (
         <AccountAuthRequired />
       ) : (

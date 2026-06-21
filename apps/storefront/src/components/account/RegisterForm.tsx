@@ -1,4 +1,7 @@
 import { useState } from "react"
+import { Button } from "../ui/Button"
+import { FormField } from "../ui/FormField"
+import { ErrorState } from "../ui/States"
 
 type RegisterFormProps = {
   loading: boolean
@@ -21,30 +24,15 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
         void onSubmit({ email, password, firstName, lastName, phone })
       }}
     >
-      {error && <p className="buyer-account-error">{error}</p>}
+      {error && <ErrorState className="buyer-account-inline-error" title="Registration failed" message={error} />}
       <div className="buyer-account-two">
-        <label>
-          First name
-          <input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="First name" autoComplete="given-name" />
-        </label>
-        <label>
-          Last name
-          <input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Last name" autoComplete="family-name" />
-        </label>
+        <FormField label="First name" value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="First name" autoComplete="given-name" />
+        <FormField label="Last name" value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Last name" autoComplete="family-name" />
       </div>
-      <label>
-        Email
-        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email" autoComplete="email" />
-      </label>
-      <label>
-        Phone
-        <input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+1 555 0100" autoComplete="tel" />
-      </label>
-      <label>
-        Password
-        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a password" autoComplete="new-password" />
-      </label>
-      <button type="submit" disabled={loading}>{loading ? "Creating account..." : "Create account"}</button>
+      <FormField label="Email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email" autoComplete="email" />
+      <FormField label="Phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+1 555 0100" autoComplete="tel" hint="Optional" />
+      <FormField label="Password" required type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a password" autoComplete="new-password" />
+      <Button type="submit" loading={loading}>{loading ? "Creating account..." : "Create account"}</Button>
     </form>
   )
 }

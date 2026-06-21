@@ -4,6 +4,7 @@ import { SignInForm } from "../../components/account/SignInForm"
 import { fetchStoreSettings, type BuyerStoreSettings } from "../../lib/buyer-api"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { safeReturnTo } from "./account-utils"
+import { Card } from "../../components/ui/Card"
 
 const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo", metadata: {} }
 
@@ -32,13 +33,20 @@ export function SignInPage({ cartCount }: { cartCount: number }) {
 
   return (
     <AccountAuthLayout settings={settings} cartCount={cartCount}>
-      <section className="buyer-account-auth-card">
+      <div className="buyer-account-auth-shell">
+        <section className="buyer-account-auth-intro">
+          <p>Buyer account</p>
+          <h1>Welcome back</h1>
+          <span>Sign in to view your orders and profile. This session is separate from seller dashboard access.</span>
+        </section>
+        <Card as="section" className="buyer-account-auth-card">
         <div className="buyer-account-auth-tabs">
           <a className="active" href="/account/sign-in">Sign in</a>
           <a href="/account/register">Sign up</a>
         </div>
         <SignInForm loading={loading} error={error} onSubmit={submit} />
-      </section>
+        </Card>
+      </div>
     </AccountAuthLayout>
   )
 }

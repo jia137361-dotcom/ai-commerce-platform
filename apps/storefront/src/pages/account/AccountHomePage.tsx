@@ -4,6 +4,9 @@ import { AccountNavigation } from "../../components/account/AccountNavigation"
 import { AccountAuthRequired } from "../../components/account/AccountAuthRequired"
 import { fetchStoreSettings, type BuyerStoreSettings } from "../../lib/buyer-api"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { Button } from "../../components/ui/Button"
+import { Card } from "../../components/ui/Card"
+import { LoadingState } from "../../components/ui/States"
 
 const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo", metadata: {} }
 
@@ -18,7 +21,7 @@ export function AccountHomePage({ cartCount }: { cartCount: number }) {
   return (
     <AccountAuthLayout settings={settings} cartCount={cartCount}>
       {auth.isLoading ? (
-        <section className="buyer-account-card buyer-account-required">Loading account...</section>
+        <LoadingState label="Loading buyer account..." />
       ) : !auth.customer ? (
         <AccountAuthRequired />
       ) : (
@@ -28,14 +31,24 @@ export function AccountHomePage({ cartCount }: { cartCount: number }) {
             onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))}
             onSwitchAccount={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))}
           />
-          <div className="buyer-account-card buyer-account-overview">
-            <p className="buyer-account-kicker">Overview</p>
-            <h1>Welcome back</h1>
-            <p>Your secure buyer session is active. View your authenticated order history or switch accounts from the account navigation.</p>
-            <div>
-              <a href="/account/profile">Edit profile</a>
-              <a href="/account/orders">Orders</a>
-            </div>
+          <div className="buyer-account-content">
+            <Card as="section" className="buyer-account-overview">
+              <p className="buyer-account-kicker">Buyer account</p>
+              <h1>Welcome back</h1>
+              <p>You are signed in as <strong>{auth.customer.email || "a buyer account"}</strong>. Your cart stays available if you sign out or switch accounts.</p>
+              <div className="buyer-account-actions">
+                <Button href="/account/orders">View orders</Button>
+                <Button href="/account/profile" variant="secondary">View profile</Button>
+              </div>
+            </Card>
+            <Card as="section" variant="muted" className="buyer-account-session-card">
+              <h2>Account session</h2>
+              <p>Switching accounts signs out this buyer session only. Seller dashboard access and your shopping cart are not affected.</p>
+              <div className="buyer-account-actions">
+                <Button variant="secondary" onClick={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))}>Switch account</Button>
+                <Button variant="ghost" onClick={() => void auth.signOut().then(() => window.location.assign("/store"))}>Sign out</Button>
+              </div>
+            </Card>
           </div>
         </section>
       )}
