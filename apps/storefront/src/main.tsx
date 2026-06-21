@@ -10,6 +10,7 @@ import "./styles/cart.css"
 import "./styles/checkout.css"
 import "./styles/orders.css"
 import "./styles/account.css"
+import "./styles/static-info.css"
 import "./styles/design-system.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
