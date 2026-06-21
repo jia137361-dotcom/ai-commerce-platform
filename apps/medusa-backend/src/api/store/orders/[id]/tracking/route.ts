@@ -10,6 +10,9 @@ import { FULFILLMENT_ORDERS_MODULE } from "../../../../../modules/fulfillment-or
 import type FulfillmentOrdersModuleService from "../../../../../modules/fulfillment-orders/service"
 import { SHIPMENTS_MODULE } from "../../../../../modules/shipments"
 import type ShipmentsModuleService from "../../../../../modules/shipments/service"
+import { STORE_CORE_MODULE } from "../../../../../modules/store-core"
+import type StoreCoreModuleService from "../../../../../modules/store-core/service"
+import { normalizeSupplierOrderTracking } from "../../../../../lib/supplier-order-tracking"
 
 type TrackingOrder = {
   customer_id?: string | null
@@ -62,6 +65,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const foService = req.scope.resolve(FULFILLMENT_ORDERS_MODULE) as FulfillmentOrdersModuleService
     const shipmentService = req.scope.resolve(SHIPMENTS_MODULE) as ShipmentsModuleService
+    const storeCoreService = req.scope.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
 
     const fos = await foService.listFulfillmentOrders({ order_id: [orderId] })
     const fo = fos[0] ?? null
@@ -69,6 +73,10 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const shipments = fo
       ? await shipmentService.listShipments({ fulfillment_order_id: [fo.id] })
       : []
+    const supplierOrders = await storeCoreService.listSupplierOrders({
+      order_id: [orderId],
+      store_id: readOrderStoreId(order),
+    })
 
     res.status(200).json({
       order_id: order.id,
@@ -77,6 +85,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       fulfillment_status: readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null),
       fulfillment_order: fo,
       shipments,
+      supplier_orders: supplierOrders.map((supplierOrder) =>
+        normalizeSupplierOrderTracking(supplierOrder as unknown as Record<string, unknown>)
+      ),
     })
   } catch (error: unknown) {
     if (error instanceof OrderStoreAccessError) {

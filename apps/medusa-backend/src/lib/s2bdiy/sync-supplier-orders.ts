@@ -43,6 +43,7 @@ export async function syncSupplierOrderById(
   const logistics = detail.order_logistics as Record<string, unknown> | undefined
   const tracking =
     (logistics?.logisticss_track_number as string) ??
+    (logistics?.logistics_track_number as string) ??
     (logistics?.tracking_number as string) ??
     null
   const waybillUrl =
@@ -58,6 +59,13 @@ export async function syncSupplierOrderById(
       product_amount: Number(detail.product_amount ?? 0),
       shipping_amount: Number(detail.shipping_amount ?? 0),
       total_amount: Number(detail.total_amount ?? 0),
+      logistics_name: String(
+        logistics?.logistics_name ??
+        logistics?.logisticss_name ??
+        detail.logistics_platform_text ??
+        row.logistics_name ??
+        ""
+      ) || null,
       tracking_number: tracking,
       waybill_url: waybillUrl,
       last_synced_at: new Date(),
