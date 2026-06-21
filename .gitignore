@@ -24,3 +24,4 @@ scripts/dev3-full-backend-pipeline.local.env
 >>>>>>> feature/supplier-s2bdiy-dry-run
 
 .tmp/
+apps/medusa-backend/static/logos/
