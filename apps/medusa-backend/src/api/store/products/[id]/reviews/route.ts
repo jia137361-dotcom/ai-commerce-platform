@@ -10,6 +10,8 @@ import {
   readMcProductIdsFromOrder,
   summarizeProductReviews,
 } from "../../../../../lib/product-reviews"
+import { readOrderFulfillmentStatusMeta } from "../../../../../lib/order-custom-metadata"
+import { isReceiptConfirmed } from "../../../../../lib/order-receipt-confirmation"
 import {
   getStoreCoreService,
   sendError,
@@ -184,6 +186,13 @@ export const POST = async (
       "REVIEW_NOT_ALLOWED",
       "Only verified buyers can review this product"
     )
+  }
+
+  if (readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null) !== "delivered") {
+    return sendError(res, 403, "REVIEW_NOT_ALLOWED", "Reviews are available only after delivery")
+  }
+  if (!isReceiptConfirmed(order)) {
+    return sendError(res, 403, "REVIEW_NOT_ALLOWED", "Confirm receipt before reviewing this product")
   }
 
   const existing = await (storeCoreService as any).listProductReviews({

@@ -10,7 +10,7 @@ import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
-import { fetchStoreSettings, getMyOrders, type BuyerOrdersPage, type BuyerStoreSettings } from "../../lib/buyer-api"
+import { confirmOrderReceived, fetchStoreSettings, getMyOrders, type BuyerOrdersPage, type BuyerStoreSettings } from "../../lib/buyer-api"
 
 type OrderHistoryPageProps = {
   cartCount: number
@@ -57,6 +57,7 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
           status: activeFilter.status,
           paymentStatus: activeFilter.paymentStatus,
           fulfillmentStatus: activeFilter.fulfillmentStatus,
+          bucket: activeFilter.bucket,
         })
         if (!active) return
         if (import.meta.env.DEV) {
@@ -112,7 +113,7 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
               <section className="buyer-order-history-list" aria-label="Authenticated order history">
                 {ordersPage.orders.map((order) => (
                   <div key={order.orderId}>
-                    <OrderHistoryCard order={order} />
+                    <OrderHistoryCard order={order} onConfirmReceipt={async (orderId) => { await confirmOrderReceived(orderId) }} />
                   </div>
                 ))}
               </section>

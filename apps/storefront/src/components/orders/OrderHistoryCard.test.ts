@@ -29,4 +29,22 @@ describe("OrderHistoryCard design-system integration", () => {
     expect(html).toContain("Payment authorized, not captured")
     expect(html).not.toContain(">Payment captured<")
   })
+
+  it("shows receipt confirmation and review actions only from real order eligibility", () => {
+    const html = renderToStaticMarkup(createElement(OrderHistoryCard, {
+      order: {
+        orderId: "order_delivered",
+        displayId: "88",
+        fulfillmentStatus: "delivered",
+        itemCount: 1,
+        previewItems: [{ title: "T-shirt", quantity: 1, productId: "prod_shirt" }],
+        receiptConfirmationRequired: true,
+        reviewEligible: true,
+      },
+      onConfirmReceipt: async () => undefined,
+    }))
+    expect(html).toContain("Confirm delivery")
+    expect(html).toContain("Write a review")
+    expect(html).toContain("/products/prod_shirt?reviewOrder=88#reviews")
+  })
 })

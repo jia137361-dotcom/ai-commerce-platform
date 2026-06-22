@@ -2,15 +2,20 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
 import { readOrderStoreId } from "../../../../../lib/order-store-context"
+import { STORE_CORE_MODULE } from "../../../../../modules/store-core"
+import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../../modules/buyer-refund-requests"
+import { matchesBuyerOrderBucket } from "../../../../../lib/customer-order-buckets"
 import {
   ORDER_META_PAYMENT_STATUS,
   readOrderFulfillmentStatusMeta,
 } from "../../../../../lib/order-custom-metadata"
+import { isReceiptConfirmed } from "../../../../../lib/order-receipt-confirmation"
 
 type OrderLineItem = {
   title?: string | null
   thumbnail?: string | null
   quantity?: number | string | null
+  metadata?: Record<string, unknown> | null
 }
 
 type CustomerOrder = {
@@ -118,7 +123,7 @@ const safeOrderShape = (order: CustomerOrder) => ({
   keys: Object.keys(order),
 })
 
-const normalizeOrderSummary = (order: CustomerOrder) => {
+const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<string>(), returnOrderIds = new Set<string>()) => {
   const metadata = order.metadata ?? null
   const items = order.items ?? []
   return {
@@ -129,6 +134,10 @@ const normalizeOrderSummary = (order: CustomerOrder) => {
     status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
     payment_status: metadata?.[ORDER_META_PAYMENT_STATUS] ?? null,
     fulfillment_status: readOrderFulfillmentStatusMeta(metadata),
+    receipt_confirmation_required: readOrderFulfillmentStatusMeta(metadata) === "delivered" && !isReceiptConfirmed(order),
+    receipt_confirmed_at: typeof metadata?.buyer_confirmed_received_at === "string" ? metadata.buyer_confirmed_received_at : null,
+    review_eligible: readOrderFulfillmentStatusMeta(metadata) === "delivered" && isReceiptConfirmed(order) && Boolean(order.id) && !reviewedOrderIds.has(order.id!),
+    return_intent: Boolean(order.id) && returnOrderIds.has(order.id!),
     currency_code: order.currency_code ?? null,
     total: readNumber(order.total),
     item_count: items.reduce((sum, item) => sum + (readNumber(item.quantity) ?? 0), 0),
@@ -136,6 +145,7 @@ const normalizeOrderSummary = (order: CustomerOrder) => {
       title: item.title ?? "Untitled item",
       thumbnail: item.thumbnail ?? null,
       quantity: readNumber(item.quantity) ?? 0,
+      product_id: typeof item.metadata?.mc_product_id === "string" ? item.metadata.mc_product_id : null,
     })),
   }
 }
@@ -183,6 +193,7 @@ const loadOrdersWithQueryGraph = async (
       "items.title",
       "items.thumbnail",
       "items.quantity",
+      "items.metadata",
     ],
     filters: selector,
     pagination: {
@@ -269,6 +280,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const status = readStringFilter(req.query?.status)
     const paymentStatus = readStringFilter(req.query?.payment_status)
     const fulfillmentStatus = readStringFilter(req.query?.fulfillment_status)
+    const bucket = readStringFilter(req.query?.bucket)
     const storeId = resolveCurrentStore(req).store_id
 
     const selector: Record<string, unknown> = { customer_id: customerId }
@@ -283,7 +295,20 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       .filter((order) => !paymentStatus || order.metadata?.[ORDER_META_PAYMENT_STATUS] === paymentStatus)
       .filter((order) => !fulfillmentStatus || readOrderFulfillmentStatusMeta(order.metadata ?? null) === fulfillmentStatus)
 
-    const page = filtered.slice(offset, offset + limit)
+    let reviewedOrderIds = new Set<string>()
+    let returnOrderIds = new Set<string>()
+    try {
+      const storeCore = req.scope.resolve(STORE_CORE_MODULE) as any
+      const reviews = await storeCore.listProductReviews({ store_id: storeId, status: "published" })
+      reviewedOrderIds = new Set(reviews.map((review: any) => review.order_id).filter(Boolean))
+      const refunds = req.scope.resolve(BUYER_REFUND_REQUESTS_MODULE) as any
+      const requests = await refunds.listBuyerRefundRequests({ customer_id: customerId, store_id: storeId })
+      returnOrderIds = new Set(requests.map((request: any) => request.order_id).filter(Boolean))
+    } catch {
+      // Optional aggregates remain empty if a module is unavailable.
+    }
+    const bucketed = bucket ? filtered.filter((order) => matchesBuyerOrderBucket({ bucket, paymentStatus: String(order.metadata?.[ORDER_META_PAYMENT_STATUS] ?? ""), fulfillmentStatus: String(readOrderFulfillmentStatusMeta(order.metadata ?? null) ?? "none"), orderId: order.id, reviewedOrderIds, returnOrderIds })) : filtered
+    const page = bucketed.slice(offset, offset + limit)
     if (process.env.NODE_ENV !== "production") {
       const customerEmail = await readCustomerEmailForDiagnostics(req, customerId)
       let sameEmailUnownedCount: number | undefined
@@ -319,8 +344,8 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     return res.status(200).json({
-      orders: page.map(normalizeOrderSummary),
-      count: filtered.length,
+      orders: page.map((order) => normalizeOrderSummary(order, reviewedOrderIds, returnOrderIds)),
+      count: bucketed.length,
       limit,
       offset,
     })

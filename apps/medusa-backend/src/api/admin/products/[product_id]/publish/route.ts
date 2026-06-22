@@ -106,6 +106,19 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     medusa_product_id: bridge.medusaProductId,
     medusa_variant_id: bridge.medusaVariantId,
   }
+  if (bridge.variantMappings?.length && Array.isArray(product.variants)) {
+    const mappings = new Map(
+      bridge.variantMappings.map((entry) => [entry.supplier_variant_id, entry.medusa_variant_id])
+    )
+    updateData.variants = product.variants.map((value: unknown) => {
+      if (!value || typeof value !== "object") return value
+      const row = value as Record<string, unknown>
+      const supplierVariantId = readString(row.supplier_variant_id)
+      return supplierVariantId && mappings.has(supplierVariantId)
+        ? { ...row, medusa_variant_id: mappings.get(supplierVariantId) }
+        : row
+    })
+  }
   if (productNeedsCartBridgeBackfill(product) || product.status !== "published") {
     updateData.status = "published"
   }

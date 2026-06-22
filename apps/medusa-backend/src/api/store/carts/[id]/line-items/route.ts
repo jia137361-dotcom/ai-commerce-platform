@@ -33,10 +33,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const linkedProducts = await storeCoreService.listProducts({
       medusa_variant_id: variant_id,
     })
-    const linkedProduct = resolveLinkedProductForVariant(
+    let linkedProduct = resolveLinkedProductForVariant(
       linkedProducts as Record<string, unknown>[],
       { storeId: cartStoreId }
     )
+    if (!linkedProduct) {
+      const productModule = req.scope.resolve(Modules.PRODUCT)
+      const nativeVariant = await productModule.retrieveProductVariant(variant_id)
+      const metadata = nativeVariant.metadata as Record<string, unknown> | null | undefined
+      const mcProductId = typeof metadata?.mc_product_id === "string" ? metadata.mc_product_id : null
+      if (mcProductId) {
+        const rows = await storeCoreService.listProducts({ id: mcProductId })
+        linkedProduct = rows[0] as Record<string, unknown> | undefined
+      }
+    }
 
     if (!linkedProduct) {
       return res.status(400).json({

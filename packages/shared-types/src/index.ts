@@ -19,6 +19,9 @@ export type FulfillmentStatus = (typeof FulfillmentStatuses)[number]
 
 export type ProductVariantRow = {
   supplier_variant_id: string
+  medusa_variant_id?: string
+  supplier_size_id?: string
+  supplier_color_id?: string
   color: string
   size: string
   price: number
@@ -95,4 +98,3 @@ export type StoreSettings = {
   seo_description: string | null
   metadata: Record<string, unknown>
 }
-

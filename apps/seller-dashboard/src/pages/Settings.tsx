@@ -29,6 +29,12 @@ export function SettingsPage() {
   const [announcement, setAnnouncement] = useState("")
   const [bannerUrl, setBannerUrl] = useState("")
   const [galleryUrls, setGalleryUrls] = useState("")
+  const [shippingPolicy, setShippingPolicy] = useState("")
+  const [paymentPolicy, setPaymentPolicy] = useState("")
+  const [returnsPolicy, setReturnsPolicy] = useState("")
+  const [cancellationPolicy, setCancellationPolicy] = useState("")
+  const [privacyPolicy, setPrivacyPolicy] = useState("")
+  const [faqs, setFaqs] = useState("")
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
@@ -44,6 +50,12 @@ export function SettingsPage() {
     setAnnouncement(String(s.metadata?.announcement ?? ""))
     setBannerUrl(String(s.metadata?.banner_url ?? ""))
     setGalleryUrls(Array.isArray(s.metadata?.gallery_urls) ? s.metadata.gallery_urls.join("\n") : "")
+    setShippingPolicy(String(s.metadata?.shipping_policy ?? ""))
+    setPaymentPolicy(String(s.metadata?.payment_policy ?? ""))
+    setReturnsPolicy(String(s.metadata?.returns_policy ?? ""))
+    setCancellationPolicy(String(s.metadata?.cancellation_policy ?? ""))
+    setPrivacyPolicy(String(s.metadata?.privacy_policy ?? ""))
+    setFaqs(Array.isArray(s.metadata?.faqs) ? s.metadata.faqs.map((entry: any) => `${entry.question ?? ""} | ${entry.answer ?? ""}`).join("\n") : "")
   }, [data])
 
   const saveMutation = useMutation({
@@ -63,6 +75,15 @@ export function SettingsPage() {
             announcement,
             banner_url: bannerUrl,
             gallery_urls: galleryUrls.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean),
+            shipping_policy: shippingPolicy.trim() || null,
+            payment_policy: paymentPolicy.trim() || null,
+            returns_policy: returnsPolicy.trim() || null,
+            cancellation_policy: cancellationPolicy.trim() || null,
+            privacy_policy: privacyPolicy.trim() || null,
+            faqs: faqs.split(/\r?\n/).flatMap((line) => {
+              const [question, ...answer] = line.split("|")
+              return question?.trim() && answer.join("|").trim() ? [{ question: question.trim(), answer: answer.join("|").trim() }] : []
+            }),
           },
         }),
       }),
@@ -189,6 +210,24 @@ export function SettingsPage() {
 
             <Label>Gallery image URLs</Label>
             <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={galleryUrls} onChange={(e) => setGalleryUrls(e.target.value)} placeholder="One image URL per line" />
+
+            <Label>Shipping Policy</Label>
+            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={shippingPolicy} onChange={(e) => setShippingPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
+
+            <Label>Payment Policy</Label>
+            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={paymentPolicy} onChange={(e) => setPaymentPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
+
+            <Label>Returns & Exchanges</Label>
+            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={returnsPolicy} onChange={(e) => setReturnsPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
+
+            <Label>Cancellation Policy</Label>
+            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={cancellationPolicy} onChange={(e) => setCancellationPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
+
+            <Label>Privacy Policy</Label>
+            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={privacyPolicy} onChange={(e) => setPrivacyPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
+
+            <Label>FAQs</Label>
+            <textarea className="min-h-28 rounded-lg border border-slate-300 px-3 py-2" value={faqs} onChange={(e) => setFaqs(e.target.value)} placeholder="One per line: Question | Answer" />
 
             <Label>Currency</Label>
             <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>

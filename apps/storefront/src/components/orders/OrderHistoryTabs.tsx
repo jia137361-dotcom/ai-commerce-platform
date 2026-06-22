@@ -4,15 +4,17 @@ export type OrderHistoryFilter = {
   status?: string
   paymentStatus?: string
   fulfillmentStatus?: string
+  bucket?: string
 }
 
 export const orderHistoryFilters: OrderHistoryFilter[] = [
   { key: "all", label: "All" },
-  { key: "pending", label: "Pending", status: "pending" },
-  { key: "paid", label: "Paid", paymentStatus: "paid" },
-  { key: "waiting", label: "Processing", fulfillmentStatus: "waiting" },
-  { key: "shipped", label: "Shipped", fulfillmentStatus: "shipped" },
-  { key: "completed", label: "Completed", status: "completed" },
+  { key: "unpaid", label: "Unpaid", bucket: "unpaid" },
+  { key: "processing", label: "Processing", bucket: "processing" },
+  { key: "shipped", label: "Shipped", bucket: "shipped" },
+  { key: "delivered", label: "Delivered", bucket: "delivered" },
+  { key: "reviews", label: "Reviews", bucket: "reviews" },
+  { key: "returns", label: "Returns", bucket: "returns" },
 ]
 
 export function OrderHistoryTabs({

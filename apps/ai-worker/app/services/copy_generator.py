@@ -20,15 +20,16 @@ def _strip_json_fences(raw: str) -> str:
     return text
 
 
-def _mock_copy(prompt: str, base_cost: float) -> dict[str, Any]:
+def _mock_copy(prompt: str, product_name: str, base_cost: float) -> dict[str, Any]:
     settings = get_settings()
     price = round(max(base_cost * settings.price_markup_multiplier, base_cost + 5), 2)
     title = f"Custom Design — {prompt[:60]}".strip()
     description = (
-        f"Premium print-on-demand product featuring your design: {prompt}. "
-        "Soft fabric, vibrant print, made to order."
+        f"Custom {product_name} featuring your design: {prompt}. "
+        "Made to order using the selected fulfillment product."
     )
-    tags = ["custom", "pod", "ai-generated", "t-shirt"]
+    product_tag = product_name.strip().lower() or "product"
+    tags = ["custom", "pod", "ai-generated", product_tag]
     return {
         "title": title,
         "description": description,
@@ -55,7 +56,7 @@ async def generate_product_copy(
         has_key = bool(settings.deepseek_api_key.strip())
 
     if settings.mock_generation or not has_key:
-        return _mock_copy(prompt, base_cost)
+        return _mock_copy(prompt, product_name, base_cost)
 
     variant_bits = []
     if color:
@@ -101,14 +102,14 @@ Rules:
             max_tokens=900,
         )
     except DeepSeekError:
-        return _mock_copy(prompt, base_cost)
+        return _mock_copy(prompt, product_name, base_cost)
 
     try:
         data = json.loads(_strip_json_fences(raw))
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
-            return _mock_copy(prompt, base_cost)
+            return _mock_copy(prompt, product_name, base_cost)
         data = json.loads(match.group(0))
 
     title = str(data.get("title") or "").strip()
@@ -122,7 +123,7 @@ Rules:
         price_suggestion = round(base_cost * settings.price_markup_multiplier, 2)
 
     if not title or not description:
-        return _mock_copy(prompt, base_cost)
+        return _mock_copy(prompt, product_name, base_cost)
 
     return {
         "title": title,

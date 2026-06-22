@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { BuyerOrderSummary } from "../../lib/buyer-api"
 import { authenticatedOrderDetailHref } from "../../pages/orders/order-detail-state"
 import { humanizeOrderStatus, paymentStatusPresentation } from "../../pages/orders/order-status"
@@ -6,8 +7,22 @@ import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { StatusBadge, statusToneFor } from "../ui/StatusBadge"
 
-export function OrderHistoryCard({ order }: { order: BuyerOrderSummary }) {
+export function OrderHistoryCard({ order, onConfirmReceipt }: { order: BuyerOrderSummary; onConfirmReceipt?: (orderId: string) => Promise<void> }) {
   const payment = paymentStatusPresentation(order.paymentStatus)
+  const [confirming, setConfirming] = useState(false)
+  const [confirmationError, setConfirmationError] = useState<string>()
+  const confirmReceipt = async () => {
+    setConfirming(true)
+    setConfirmationError(undefined)
+    try {
+      if (!onConfirmReceipt) return
+      await onConfirmReceipt(order.orderId)
+      window.location.reload()
+    } catch (error) {
+      setConfirmationError(error instanceof Error ? error.message : "Unable to confirm receipt")
+      setConfirming(false)
+    }
+  }
   return (
     <Card as="article" className="buyer-order-card buyer-order-history-card">
       <header>
@@ -50,10 +65,13 @@ export function OrderHistoryCard({ order }: { order: BuyerOrderSummary }) {
       <footer>
         <span>{order.itemCount} item{order.itemCount === 1 ? "" : "s"}</span>
         <nav aria-label={`Order ${order.displayId ?? order.orderId} actions`}>
+          {order.receiptConfirmationRequired && onConfirmReceipt ? <Button onClick={() => void confirmReceipt()} disabled={confirming}>{confirming ? "Confirming…" : "Confirm delivery"}</Button> : null}
+          {order.reviewEligible && order.previewItems[0]?.productId ? <Button variant="secondary" href={`/products/${encodeURIComponent(order.previewItems[0].productId!)}?reviewOrder=${encodeURIComponent(order.displayId ?? order.orderId)}#reviews`}>Write a review</Button> : null}
           <Button href={authenticatedOrderDetailHref(order.orderId)}>View order</Button>
           <Button variant="secondary" href={`/account/orders/${encodeURIComponent(order.orderId)}/tracking`}>Track order</Button>
         </nav>
       </footer>
+      {confirmationError ? <p role="alert" className="buyer-order-muted">{confirmationError}</p> : null}
     </Card>
   )
 }

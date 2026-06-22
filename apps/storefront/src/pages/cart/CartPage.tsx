@@ -10,6 +10,8 @@ import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { normalizeBuyerCartItem } from "../../lib/buyer-cart"
 import {
   deleteCartLineItem,
+  addCartLineItem,
+  createCart,
   fetchCart,
   fetchProducts,
   getBuyerCartStorageKey,
@@ -39,6 +41,8 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
   const [deleteError, setDeleteError] = useState<string | undefined>()
   const [deleting, setDeleting] = useState(false)
   const [loadVersion, setLoadVersion] = useState(0)
+  const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
+  const [preparingCheckout, setPreparingCheckout] = useState(false)
 
   const storageKey = getBuyerCartStorageKey(
     getBuyerStoreId(),
@@ -54,8 +58,16 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
       return
     }
     try {
-      const loaded = await fetchCart(cartId)
-      if (isActive()) { setCart(loaded); onCartUpdated(loaded) }
+      const splitKey = `citigoo:${getBuyerStoreId()}:split_checkout`
+      const splitRaw = window.sessionStorage.getItem(splitKey)
+      const split = splitRaw ? JSON.parse(splitRaw) as { sourceCartId?: string; checkoutCartId?: string } : null
+      const resolvedCartId = split?.checkoutCartId === cartId && split.sourceCartId ? split.sourceCartId : cartId
+      if (resolvedCartId !== cartId) {
+        window.localStorage.setItem(storageKey, resolvedCartId)
+        window.sessionStorage.removeItem(splitKey)
+      }
+      const loaded = await fetchCart(resolvedCartId)
+      if (isActive()) { setCart(loaded); setSelectedLineIds(new Set(loaded.items.map((item) => item.id))); onCartUpdated(loaded) }
     } catch (error) {
       if (isActive()) {
         setLoadError(error instanceof Error ? error.message : "Unable to load cart.")
@@ -79,6 +91,42 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
   const items = useMemo(() => cart?.items.map(normalizeBuyerCartItem) ?? [], [cart])
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
   const deleteTarget = items.find((item) => item.id === deleteTargetId) ?? null
+  const selectedItems = cart?.items.filter((item) => selectedLineIds.has(item.id)) ?? []
+  const selectedCart = cart ? {
+    ...cart,
+    items: selectedItems,
+    subtotal: selectedItems.reduce((sum, item) => sum + item.total, 0),
+    total: selectedItems.reduce((sum, item) => sum + item.total, 0),
+  } : null
+
+  const prepareSelectedCheckout = async () => {
+    if (!cart || !selectedItems.length || preparingCheckout) return
+    if (selectedItems.length === cart.items.length) {
+      window.location.assign("/checkout")
+      return
+    }
+    if (selectedItems.some((item) => !item.variantId)) {
+      setLoadError("A selected item has no purchasable variant.")
+      return
+    }
+    setPreparingCheckout(true)
+    try {
+      let checkoutCart = await createCart()
+      for (const item of selectedItems) {
+        checkoutCart = await addCartLineItem(checkoutCart.id, item.variantId!, item.quantity)
+      }
+      window.sessionStorage.setItem(`citigoo:${getBuyerStoreId()}:split_checkout`, JSON.stringify({
+        sourceCartId: cart.id,
+        checkoutCartId: checkoutCart.id,
+        selectedLineIds: selectedItems.map((item) => item.id),
+      }))
+      window.localStorage.setItem(storageKey, checkoutCart.id)
+      window.location.assign("/checkout")
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Unable to prepare selected checkout.")
+      setPreparingCheckout(false)
+    }
+  }
 
   const updateQuantity = async (lineId: string, quantity: number) => {
     if (!cart?.id || updatingLineId) return
@@ -132,9 +180,11 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
               error={lineErrors[item.id] || undefined}
               onQuantityChange={(lineId, quantity) => void updateQuantity(lineId, quantity)}
               onDeleteRequest={(lineId) => { setDeleteTargetId(lineId); setDeleteError(undefined) }}
+              selected={selectedLineIds.has(item.id)}
+              onSelectedChange={(selected) => setSelectedLineIds((current) => { const next = new Set(current); if (selected) next.add(item.id); else next.delete(item.id); return next })}
             /></div>)}
           </div>
-          <CartSummaryCard cart={cart} />
+          {selectedCart ? <CartSummaryCard cart={selectedCart} onCheckout={() => void prepareSelectedCheckout()} preparing={preparingCheckout} /> : null}
         </section>
       ) : null}
 

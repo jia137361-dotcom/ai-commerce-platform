@@ -1,4 +1,5 @@
 import type StoreCoreModuleService from "../modules/store-core/service"
+import { findStoreCoreVariantRow } from "./native-product-variants"
 
 export type LineItemProductionMetadata = {
   mc_product_id: string | null
@@ -24,12 +25,16 @@ export type LineItemProductionMetadata = {
 
 export async function buildLineItemProductionMetadata(
   storeCoreService: StoreCoreModuleService,
-  linkedProduct: Record<string, unknown>
+  linkedProduct: Record<string, unknown>,
+  selectedMedusaVariantId?: string
 ): Promise<LineItemProductionMetadata> {
+  const selectedRow = selectedMedusaVariantId
+    ? findStoreCoreVariantRow(linkedProduct, selectedMedusaVariantId)
+    : undefined
   const supplierVariantId =
-    typeof linkedProduct.supplier_variant_id === "string"
+    selectedRow?.supplier_variant_id ?? (typeof linkedProduct.supplier_variant_id === "string"
       ? linkedProduct.supplier_variant_id
-      : null
+      : null)
 
   let color: string | null = null
   let size: string | null = null
@@ -72,8 +77,8 @@ export async function buildLineItemProductionMetadata(
   }
 
   const basicProductId = linkedProduct.basic_product_id
-  const supplierSizeId = linkedProduct.supplier_size_id
-  const supplierColorId = linkedProduct.supplier_color_id
+  const supplierSizeId = selectedRow?.supplier_size_id ?? linkedProduct.supplier_size_id
+  const supplierColorId = selectedRow?.supplier_color_id ?? linkedProduct.supplier_color_id
 
   return {
     mc_product_id: typeof linkedProduct.id === "string" ? linkedProduct.id : null,
@@ -100,7 +105,7 @@ export async function buildLineItemProductionMetadata(
         ? linkedProduct.mockup_image_url
         : null,
     print_position: printPosition ?? "front",
-    color,
-    size,
+    color: selectedRow?.color ?? color,
+    size: selectedRow?.size ?? size,
   }
 }

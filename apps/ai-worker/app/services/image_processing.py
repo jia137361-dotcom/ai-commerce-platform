@@ -97,6 +97,15 @@ async def _resolve_mockup_base(
     elif view == "back" and mockup_sources.get("preview_background_url"):
         remote_candidates.append(("preview", mockup_sources["preview_background_url"]))
 
+    # Non-apparel products must never silently fall back to the bundled T-shirt.
+    # A supplier-provided blank is a more honest preview even when only one view exists.
+    if (
+        mockup_sources.get("platform_product_id") not in {"pp_tshirt", "pp_hoodie"}
+        and mockup_sources.get("supplier_blank_url")
+        and not any(source == "supplier" for source, _ in remote_candidates)
+    ):
+        remote_candidates.insert(0, ("supplier", mockup_sources["supplier_blank_url"]))
+
     for source_kind, url in remote_candidates:
         loaded = await load_image_from_url(url)
         if loaded is None:

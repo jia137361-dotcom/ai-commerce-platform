@@ -78,4 +78,21 @@ describe("buildLineItemProductionMetadata", () => {
     })
     expect(meta.print_position).toBe("back")
   })
+
+  it("uses the selected native variant instead of the product default supplier variant", async () => {
+    const storeCoreService = {
+      listSupplierProductVariants: jest.fn().mockResolvedValue([]),
+      listSupplierPrintSpecs: jest.fn().mockResolvedValue([]),
+    }
+    const meta = await buildLineItemProductionMetadata(storeCoreService as any, {
+      id: "prod_shirt",
+      supplier_variant_id: "mug_default",
+      variants: [{ supplier_variant_id: "shirt_black_l", medusa_variant_id: "variant_black_l", supplier_color_id: "5", supplier_size_id: "22", color: "Black", size: "L", price: 79, stock: 10 }],
+    }, "variant_black_l")
+    expect(meta.supplier_variant_id).toBe("shirt_black_l")
+    expect(meta.supplier_color_id).toBe("5")
+    expect(meta.supplier_size_id).toBe("22")
+    expect(meta.color).toBe("Black")
+    expect(meta.size).toBe("L")
+  })
 })

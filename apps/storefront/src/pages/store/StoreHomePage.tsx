@@ -6,11 +6,14 @@ import { StoreAboutPanel } from "../../components/store-home/StoreAboutPanel"
 import { ShopHero } from "../../components/store-home/ShopHero"
 import { StoreIdentity } from "../../components/store-home/StoreIdentity"
 import { StoreProductResults } from "../../components/store-home/StoreProductResults"
+import { StoreReviewsPanel } from "../../components/store-home/StoreReviewsPanel"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import {
   fetchProductCategories,
   fetchProducts,
   fetchStoreSettings,
+  fetchStoreReviews,
+  type BuyerReviewsSummary,
   type BuyerCategory,
   type BuyerStoreSettings,
   type DataSource,
@@ -50,14 +53,17 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
   const [sort, setSort] = useState("recommended")
   const [productSource, setProductSource] = useState<DataSource>("backend")
   const [loadVersion, setLoadVersion] = useState(0)
-  const [activeSection, setActiveSection] = useState<"items" | "about">("items")
+  const [activeSection, setActiveSection] = useState<"items" | "category" | "reviews" | "about">("items")
+  const [storeReviews, setStoreReviews] = useState<BuyerReviewsSummary | null>(null)
+  const [storeReviewsError, setStoreReviewsError] = useState<string>()
 
   const loadStore = useCallback(async (isActive: () => boolean) => {
     setLoading(true)
-    const [settingsResult, categoriesResult, productsResult] = await Promise.all([
+    const [settingsResult, categoriesResult, productsResult, reviewsResult] = await Promise.all([
       fetchStoreSettings(),
       fetchProductCategories(),
       fetchProducts(),
+      fetchStoreReviews(),
     ])
 
     if (!isActive()) return
@@ -66,8 +72,10 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
     setCategories(categoriesResult.data)
     setProducts(productsResult.data)
     setProductSource(productsResult.source)
+    setStoreReviews(reviewsResult.data)
+    setStoreReviewsError(reviewsResult.error)
     setNotices(
-      [settingsResult, categoriesResult, productsResult]
+      [settingsResult, categoriesResult, productsResult, reviewsResult]
         .filter((result) => result.error)
         .map((result, index) => ({
           key: `${result.source}-${index}-${result.error}`,
@@ -87,6 +95,8 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
     const tab = new URLSearchParams(window.location.search).get("tab")
     if (!tab) return
     if (tab === "about") setActiveSection("about")
+    if (tab === "reviews") setActiveSection("reviews")
+    if (tab === "category") setActiveSection("category")
     const targetId = tab === "category" ? "products" : tab
     window.requestAnimationFrame(() => {
       document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -152,7 +162,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
         </aside>
       ) : null}
 
-      {activeSection === "items" ? <section className="buyer-shop-products" id="products">
+      {activeSection === "items" || activeSection === "category" ? <section className="buyer-shop-products" id="products">
         <SectionHeader
           eyebrow={activeCategoryId === "all" ? "Store collection" : "Selected category"}
           title={activeCategoryId === "all" ? "Latest drops" : visibleCategories.find((category) => category.id === activeCategoryId)?.name ?? "Products"}
@@ -165,7 +175,7 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
           hasFilters={hasFilters}
           onRetry={() => setLoadVersion((version) => version + 1)}
         />
-      </section> : <StoreAboutPanel settings={settings} />}
+      </section> : activeSection === "reviews" ? <StoreReviewsPanel summary={storeReviews} error={storeReviewsError} /> : <StoreAboutPanel settings={settings} />}
     </PageShell>
   )
 }

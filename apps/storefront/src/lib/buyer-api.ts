@@ -1,4 +1,4 @@
-import { mockProducts, reviews as mockReviews, type CartLineItem, type StoreCart, type StoreProduct } from "./mock-data"
+import { type CartLineItem, type StoreCart, type StoreProduct } from "./mock-data"
 import { normalizeBuyerProduct, type BuyerProductApiInput } from "./buyer-product"
 import { buildShipmentTrackingEvents } from "./buyer-tracking-events"
 import { readBuyerPreferencesFromMetadata, type BuyerPreferences } from "./buyer-preferences"
@@ -17,6 +17,12 @@ export type BuyerStoreSettings = {
   announcement?: string
   bannerUrl?: string
   galleryUrls?: string[]
+  shippingPolicy?: string
+  paymentPolicy?: string
+  returnsPolicy?: string
+  cancellationPolicy?: string
+  privacyPolicy?: string
+  faqs?: Array<{ question: string; answer: string }>
   metadata: Record<string, unknown>
 }
 
@@ -36,6 +42,8 @@ export type BuyerReview = {
   title?: string
   content: string
   createdAt?: string
+  productId?: string
+  productTitle?: string
 }
 
 export type BuyerReviewsSummary = {
@@ -113,6 +121,8 @@ type ApiReview = {
   title?: string | null
   content?: string | null
   created_at?: string
+  product_id?: string
+  product_title?: string
 }
 
 type ApiReviews = {
@@ -404,6 +414,7 @@ type ApiMyOrderPreviewItem = {
   title?: string
   thumbnail?: string | null
   quantity?: number
+  product_id?: string | null
 }
 
 type ApiMyOrder = {
@@ -418,6 +429,10 @@ type ApiMyOrder = {
   total?: number | null
   item_count?: number
   preview_items?: ApiMyOrderPreviewItem[]
+  review_eligible?: boolean
+  receipt_confirmation_required?: boolean
+  receipt_confirmed_at?: string | null
+  return_intent?: boolean
 }
 
 type ApiMyOrdersResponse = {
@@ -659,7 +674,12 @@ export type BuyerOrderSummary = {
     title: string
     thumbnail?: string | null
     quantity: number
+    productId?: string | null
   }>
+  reviewEligible?: boolean
+  receiptConfirmationRequired?: boolean
+  receiptConfirmedAt?: string | null
+  returnIntent?: boolean
 }
 
 export type BuyerOrdersPage = {
@@ -675,6 +695,7 @@ export type BuyerOrdersQuery = {
   status?: string
   paymentStatus?: string
   fulfillmentStatus?: string
+  bucket?: string
 }
 
 const fallbackSettings: BuyerStoreSettings = {
@@ -683,13 +704,6 @@ const fallbackSettings: BuyerStoreSettings = {
   metadata: {},
   galleryUrls: [],
 }
-
-const fallbackCategories: BuyerCategory[] = [
-  { id: "all", name: "All", slug: "all", sortOrder: 0 },
-  { id: "coffee", name: "Coffee", slug: "coffee", sortOrder: 1 },
-  { id: "machines", name: "Machines", slug: "machines", sortOrder: 2 },
-  { id: "deals", name: "Deals", slug: "deals", sortOrder: 3 },
-]
 
 const readEnv = (key: string, fallback = "") =>
   (import.meta.env[key] as string | undefined)?.trim() || fallback
@@ -868,6 +882,17 @@ const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
     announcement: metadataString("announcement"),
     bannerUrl: metadataString("banner_url") ?? metadataString("hero_image_url"),
     galleryUrls: Array.isArray(gallery) ? gallery.filter((value): value is string => typeof value === "string" && Boolean(value.trim())) : [],
+    shippingPolicy: metadataString("shipping_policy"),
+    paymentPolicy: metadataString("payment_policy"),
+    returnsPolicy: metadataString("returns_policy"),
+    cancellationPolicy: metadataString("cancellation_policy"),
+    privacyPolicy: metadataString("privacy_policy"),
+    faqs: Array.isArray(metadata.faqs) ? metadata.faqs.flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return []
+      const question = (entry as Record<string, unknown>).question
+      const answer = (entry as Record<string, unknown>).answer
+      return typeof question === "string" && question.trim() && typeof answer === "string" && answer.trim() ? [{ question: question.trim(), answer: answer.trim() }] : []
+    }) : [],
     metadata,
   }
 }
@@ -888,6 +913,8 @@ const normalizeReview = (review: ApiReview, index: number): BuyerReview => ({
   title: review.title ?? undefined,
   content: review.content ?? "",
   createdAt: review.created_at,
+  productId: review.product_id,
+  productTitle: review.product_title,
 })
 
 const normalizeReviews = (payload: ApiReviews, productId: string): BuyerReviewsSummary => ({
@@ -898,20 +925,7 @@ const normalizeReviews = (payload: ApiReviews, productId: string): BuyerReviewsS
   reviews: (payload.reviews ?? []).map(normalizeReview),
 })
 
-const fallbackReviews = (productId: string): BuyerReviewsSummary => ({
-  productId,
-  averageRating: 4.8,
-  reviewCount: mockReviews.length,
-  ratingBreakdown: { "5": 2, "4": 1, "3": 0, "2": 0, "1": 0 },
-  reviews: mockReviews.map((review) => ({
-    id: review.id,
-    customerName: review.user,
-    rating: review.rating,
-    title: review.location,
-    content: review.text,
-    createdAt: review.date,
-  })),
-})
+const emptyReviews = (productId: string): BuyerReviewsSummary => ({ productId, averageRating: null, reviewCount: 0, ratingBreakdown: {}, reviews: [] })
 
 const fallbackShare = (product: StoreProduct): BuyerShareInfo => {
   const productUrl = `${window.location.origin}/products/${encodeURIComponent(product.id)}`
@@ -1001,11 +1015,6 @@ const normalizePaymentSession = (session?: ApiPaymentSession): BuyerPaymentSessi
   }
 }
 
-const mockProductsWithCategories = mockProducts.map((product, index) => ({
-  ...product,
-  categoryIds: product.categoryIds ?? [fallbackCategories[(index % (fallbackCategories.length - 1)) + 1]?.id ?? "all"],
-}))
-
 export const fetchStoreSettings = async (): Promise<LoadResult<BuyerStoreSettings>> => {
   try {
     return {
@@ -1021,15 +1030,12 @@ export const fetchProductCategories = async (): Promise<LoadResult<BuyerCategory
   try {
     const payload = await apiFetch<ApiCategories>("/store/product-categories")
     const categories = (payload.categories ?? []).map(normalizeCategory)
-    if (!categories.length) {
-      throw new Error("Backend returned no categories")
-    }
     return {
       data: [{ id: "all", name: "All", slug: "all", sortOrder: -1 }, ...categories],
       source: "backend",
     }
   } catch (error) {
-    return { data: fallbackCategories, source: "static", error: warnFallback("categories", error) }
+    return { data: [{ id: "all", name: "All", slug: "all", sortOrder: -1 }], source: "static", error: warnFallback("categories", error) }
   }
 }
 
@@ -1037,12 +1043,9 @@ export const fetchProducts = async (): Promise<LoadResult<StoreProduct[]>> => {
   try {
     const payload = await apiFetch<ApiProducts>("/store/products")
     const products = (payload.products ?? []).map(normalizeBuyerProduct)
-    if (!products.length) {
-      throw new Error("Backend returned no products")
-    }
     return { data: products, source: "backend" }
   } catch (error) {
-    return { data: mockProductsWithCategories, source: "mock", error: warnFallback("products", error) }
+    return { data: [], source: "static", error: warnFallback("products", error) }
   }
 }
 
@@ -1054,8 +1057,7 @@ export const fetchProductDetail = async (productId: string): Promise<LoadResult<
     }
     return { data: normalizeBuyerProduct(payload.product, 0), source: "backend" }
   } catch (error) {
-    const fallback = mockProducts.find((product) => product.id === productId) ?? mockProducts[0]
-    return { data: fallback, source: "mock", error: warnFallback("product detail", error) }
+    return { data: { id: productId, title: "Product unavailable", category: "", price: "Price unavailable", imageUrl: "", isCartAddable: false, variants: [] }, source: "static", error: warnFallback("product detail", error) }
   }
 }
 
@@ -1064,7 +1066,36 @@ export const fetchProductReviews = async (productId: string): Promise<LoadResult
     const payload = await apiFetch<ApiReviews>(`/store/products/${encodeURIComponent(productId)}/reviews`)
     return { data: normalizeReviews(payload, productId), source: "backend" }
   } catch (error) {
-    return { data: fallbackReviews(productId), source: "mock", error: warnFallback("product reviews", error) }
+    return { data: emptyReviews(productId), source: "static", error: warnFallback("product reviews", error) }
+  }
+}
+
+export const submitProductReview = async (input: {
+  productId: string
+  email: string
+  orderNumber: string
+  rating: number
+  title?: string
+  content?: string
+  customerName?: string
+}) => apiFetch<ApiReviews>(`/store/products/${encodeURIComponent(input.productId)}/reviews`, {
+  method: "POST",
+  body: JSON.stringify({
+    email: input.email,
+    order_number: input.orderNumber,
+    rating: input.rating,
+    title: input.title,
+    content: input.content,
+    customer_name: input.customerName,
+  }),
+})
+
+export const fetchStoreReviews = async (): Promise<LoadResult<BuyerReviewsSummary>> => {
+  try {
+    const payload = await apiFetch<ApiReviews>("/store/reviews")
+    return { data: normalizeReviews(payload, "store"), source: "backend" }
+  } catch (error) {
+    return { data: emptyReviews("store"), source: "static", error: warnFallback("store reviews", error) }
   }
 }
 
@@ -1264,6 +1295,7 @@ export const getMyOrders = async ({
   status,
   paymentStatus,
   fulfillmentStatus,
+  bucket,
 }: BuyerOrdersQuery = {}): Promise<BuyerOrdersPage> => {
   const params = new URLSearchParams({
     limit: String(limit),
@@ -1272,6 +1304,7 @@ export const getMyOrders = async ({
   if (status) params.set("status", status)
   if (paymentStatus) params.set("payment_status", paymentStatus)
   if (fulfillmentStatus) params.set("fulfillment_status", fulfillmentStatus)
+  if (bucket) params.set("bucket", bucket)
 
   const { status: httpStatus, payload } = await apiFetchWithStatus<ApiMyOrdersResponse>(`/store/customers/me/orders?${params.toString()}`)
   const rawOrders = Array.isArray(payload.orders) ? payload.orders : []
@@ -1290,7 +1323,12 @@ export const getMyOrders = async ({
         title: item.title ?? "Untitled item",
         thumbnail: item.thumbnail ?? null,
         quantity: item.quantity ?? 0,
+        productId: item.product_id ?? null,
       })),
+      reviewEligible: Boolean(order.review_eligible),
+      receiptConfirmationRequired: Boolean(order.receipt_confirmation_required),
+      receiptConfirmedAt: order.receipt_confirmed_at ?? null,
+      returnIntent: Boolean(order.return_intent),
     }))
   if (import.meta.env.DEV) {
     console.info("[account-orders-api] response", {
@@ -1311,6 +1349,20 @@ export const getMyOrders = async ({
     limit: payload.limit ?? limit,
     offset: payload.offset ?? offset,
   }
+}
+
+export const confirmOrderReceived = async (orderId: string) => {
+  return apiFetch<{ order_id: string; status: string; confirmed_at: string }>(
+    `/store/customers/me/orders/${encodeURIComponent(orderId)}/confirm-received`,
+    { method: "POST" }
+  )
+}
+
+export const changeBuyerPassword = async (currentPassword: string, newPassword: string) => {
+  return apiFetch<{ updated: boolean }>("/store/customers/me/password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  })
 }
 
 const normalizeShipment = (shipment: ApiShipment): BuyerOrderShipment => ({

@@ -13,6 +13,8 @@ const settings: BuyerStoreSettings = {
   logoUrl: "https://example.com/logo.png",
   galleryUrls: ["https://example.com/gallery-1.png", "https://picsum.photos/id/1025/800/600"],
   metadata: {},
+  returnsPolicy: "Returns accepted within the seller policy window.",
+  faqs: [{ question: "How is this made?", answer: "Made to order." }],
 }
 
 describe("StoreAboutPanel", () => {
@@ -36,9 +38,10 @@ describe("StoreAboutPanel", () => {
     const returnsHtml = renderToStaticMarkup(createElement(StoreInformationContent, { section: "returns", settings }))
     const faqHtml = renderToStaticMarkup(createElement(StoreInformationContent, { section: "faqs", settings }))
 
+    expect(returnsHtml).toContain("Returns accepted within the seller policy window.")
     expect(returnsHtml).toContain("not available in the buyer portal yet")
-    expect(faqHtml).toContain("Direct buyer–seller messaging is not available yet")
-    expect(faqHtml).toContain("only after shipping evidence is available")
+    expect(faqHtml).toContain("How is this made?")
+    expect(faqHtml).toContain("Made to order.")
   })
 
   it("hides empty or unsafe gallery values and preserves direct image URLs", () => {

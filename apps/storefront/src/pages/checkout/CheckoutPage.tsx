@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import type { CheckoutAddress } from "../../components/checkout/CheckoutAddressPanel"
 import { CheckoutAddressCard } from "../../components/checkout/CheckoutAddressCard"
-import { CheckoutContactForm, type CheckoutContact } from "../../components/checkout/CheckoutContactForm"
+import type { CheckoutContact } from "../../components/checkout/CheckoutContactForm"
 import { CheckoutCompleteError } from "../../components/checkout/CheckoutCompleteError"
 import { CheckoutPageStatus } from "../../components/checkout/CheckoutPageStatus"
 import { CheckoutPaymentPanel } from "../../components/checkout/CheckoutPaymentPanel"
@@ -14,6 +14,7 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   attachCustomerToCart,
   completeCart,
+  deleteCartLineItem,
   fetchCart,
   fetchStoreSettings,
   getCartShippingOptions,
@@ -389,7 +390,19 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       }
 
       const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
-      window.localStorage.removeItem(getBuyerCartStorageKey(storeId, cartIdentity))
+      const cartStorageKey = getBuyerCartStorageKey(storeId, cartIdentity)
+      const splitKey = `citigoo:${storeId}:split_checkout`
+      const splitRaw = window.sessionStorage.getItem(splitKey)
+      const split = splitRaw ? JSON.parse(splitRaw) as { sourceCartId?: string; checkoutCartId?: string; selectedLineIds?: string[] } : null
+      if (split?.checkoutCartId === cart.id && split.sourceCartId) {
+        for (const lineId of split.selectedLineIds ?? []) {
+          try { await deleteCartLineItem(split.sourceCartId, lineId) } catch (cleanupError) { console.warn("[checkout] unable to remove purchased source line", { line_id: lineId, cleanupError }) }
+        }
+        window.localStorage.setItem(cartStorageKey, split.sourceCartId)
+        window.sessionStorage.removeItem(splitKey)
+      } else {
+        window.localStorage.removeItem(cartStorageKey)
+      }
       window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
       onCartUpdated(null)
       window.location.assign(`/checkout/success?order_id=${encodeURIComponent(result.orderId)}`)
@@ -415,16 +428,6 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
           <section className="buyer-checkout-layout">
             <div className="buyer-checkout-left">
               {completeError ? <CheckoutCompleteError message={completeError} /> : null}
-              <CheckoutContactForm
-                value={contact}
-                onChange={(nextContact) => {
-                  setContactTouched(true)
-                  setContact(nextContact)
-                }}
-                onSave={() => { void handleSaveContact().catch(() => undefined) }}
-                status={contactStatus}
-                error={contactError}
-              />
               <CheckoutAddressCard
                 value={address}
                 onChange={(next) => { setSelectedAddressId(""); setAddress(next) }}
@@ -436,6 +439,11 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
                 savedAddresses={savedAddresses}
                 selectedAddressId={selectedAddressId}
                 onSelectSavedAddress={selectSavedAddress}
+                contact={contact}
+                onContactChange={(nextContact) => { setContactTouched(true); setContact(nextContact) }}
+                onSaveContact={() => { void handleSaveContact().catch(() => undefined) }}
+                contactStatus={contactStatus}
+                contactError={contactError}
               />
               <CheckoutShippingCard required={requiresShippingMethod} addressSaved={addressSaved} loading={shippingLoading} error={shippingError} options={shippingOptions} selectedId={selectedShippingOptionId} methodSaved={shippingMethodSaved} onSelect={(id) => void handleSelectShippingMethod(id)} />
               <CheckoutPaymentPanel

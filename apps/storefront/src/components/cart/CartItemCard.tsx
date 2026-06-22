@@ -12,11 +12,14 @@ type CartItemCardProps = {
   error?: string
   onQuantityChange: (lineId: string, quantity: number) => void
   onDeleteRequest: (lineId: string) => void
+  selected?: boolean
+  onSelectedChange?: (selected: boolean) => void
 }
 
-export function CartItemCard({ item, currencyCode, updating, error, onQuantityChange, onDeleteRequest }: CartItemCardProps) {
+export function CartItemCard({ item, currencyCode, updating, error, onQuantityChange, onDeleteRequest, selected = true, onSelectedChange }: CartItemCardProps) {
   return (
     <Card as="article" className="buyer-cart-item-card">
+      <label className="buyer-cart-item-select"><input type="checkbox" checked={selected} onChange={(event) => onSelectedChange?.(event.target.checked)} /><span className="sr-only">Select {item.title} for checkout</span></label>
       <a className="buyer-cart-item-media" href={item.productHref} aria-label={`View ${item.title}`}>
         {item.imageUrl ? <img src={item.imageUrl} alt={item.title} /> : <span role="img" aria-label="Product image unavailable">No image</span>}
       </a>

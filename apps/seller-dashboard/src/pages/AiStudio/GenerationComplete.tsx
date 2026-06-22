@@ -10,7 +10,7 @@ import { Button } from "../../components/ui/Button"
 import { Card, CardTitle } from "../../components/ui/Card"
 import { Input, Label, Textarea } from "../../components/ui/Input"
 import { Skeleton } from "../../components/ui/EmptyState"
-import type { NormalizedProduct } from "@ai-commerce/shared-types"
+import type { NormalizedProduct, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type LocationState = {
   generation?: Record<string, unknown>
@@ -55,6 +55,7 @@ export function GenerationCompletePage() {
   const [tags, setTags] = useState<string[]>([])
   const [colors, setColors] = useState<string[]>([])
   const [mockupKey, setMockupKey] = useState("mockup_front")
+  const [variants, setVariants] = useState<ProductVariantRow[]>([])
 
   const product = data?.product ?? (jobData?.result?.product as NormalizedProduct | undefined)
   const cacheKey =
@@ -76,6 +77,7 @@ export function GenerationCompletePage() {
       setPrice(String(product.price ?? ""))
       const metaTags = product.metadata?.tags
       setTags(Array.isArray(metaTags) ? (metaTags as string[]) : product.tags ?? [])
+      setVariants(Array.isArray(product.variants) ? product.variants : [])
     } else if (generation) {
       if (typeof generation.title === "string") setTitle(generation.title)
       if (typeof generation.description === "string") setDescription(generation.description)
@@ -107,6 +109,7 @@ export function GenerationCompletePage() {
           description,
           price: Number(price),
           tags,
+          variants,
           metadata: product?.metadata ?? {},
         }),
       }),
@@ -162,7 +165,7 @@ export function GenerationCompletePage() {
             <h1 className="text-3xl font-bold text-slate-900">AI Generation Complete</h1>
           </div>
           <p className="mt-2 text-slate-500">
-            Your design is composited onto the fulfillment blank. Mockup views show the T-shirt;
+            Your design is composited onto the selected fulfillment blank. Mockup views show the product;
             Print Artwork is the flat graphic only.
           </p>
         </div>
@@ -178,7 +181,7 @@ export function GenerationCompletePage() {
         <div className="space-y-4">
           <Card className="overflow-hidden p-0">
             <p className="border-b px-4 py-2 text-xs font-semibold uppercase text-slate-500">
-              T-shirt Mockup Preview
+              Product Mockup Preview
             </p>
             {activeMockup ? (
               <img src={activeMockup} alt="Mockup preview" className="aspect-square w-full object-cover" />
@@ -270,6 +273,35 @@ export function GenerationCompletePage() {
           <div>
             <Label>AI Suggested Price</Label>
             <p className="mt-1 text-3xl font-bold">${price || "29.99"}</p>
+          </div>
+          <div>
+            <Label>Product specifications</Label>
+            {variants.length ? (
+              <div className="mt-2 overflow-hidden rounded-lg border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-xs text-slate-500">
+                      <th className="px-3 py-2">Color</th>
+                      <th className="px-3 py-2">Size</th>
+                      <th className="px-3 py-2">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {variants.map((variant, index) => (
+                      <tr key={variant.supplier_variant_id} className="border-t">
+                        <td className="p-2"><Input value={variant.color} onChange={(event) => setVariants((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, color: event.target.value } : row))} /></td>
+                        <td className="p-2"><Input value={variant.size} onChange={(event) => setVariants((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, size: event.target.value } : row))} /></td>
+                        <td className="p-2"><Input type="number" min={0} step="0.01" value={variant.price} onChange={(event) => setVariants((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, price: Number(event.target.value) } : row))} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                No supplier specifications are attached. Select a fulfillment product before publishing.
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
             <Button type="submit" variant="outline">

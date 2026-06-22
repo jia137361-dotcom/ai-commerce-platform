@@ -43,4 +43,18 @@ describe("buyer product normalization", () => {
     expect(product.isCartAddable).toBe(true)
     expect(product.variants?.map((variant) => variant.id)).toEqual(["variant_small", "variant_large"])
   })
+
+  it("uses native ids embedded in supplier variant rows", () => {
+    const variants = normalizeBuyerProductVariants({
+      is_cart_addable: true,
+      variants: [
+        { supplier_variant_id: "s2b-black-m", medusa_variant_id: "variant_black_m", color: "Black", size: "M" },
+        { supplier_variant_id: "s2b-black-l", medusa_variant_id: "variant_black_l", color: "Black", size: "L" },
+      ],
+    })
+    expect(variants.map(({ id, title }) => ({ id, title }))).toEqual([
+      { id: "variant_black_m", title: "Black / M" },
+      { id: "variant_black_l", title: "Black / L" },
+    ])
+  })
 })

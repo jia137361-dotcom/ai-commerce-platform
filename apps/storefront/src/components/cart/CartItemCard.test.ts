@@ -13,5 +13,7 @@ describe("CartItemCard", () => {
     expect(html).toContain("https://example.com/mug.jpg")
     expect(html).toContain("$24.00")
     expect(html).toContain(">2<")
+    expect(html).toContain('type="checkbox"')
+    expect(html).toContain('checked=""')
   })
 })

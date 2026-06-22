@@ -54,6 +54,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const [adding, setAdding] = useState(false)
   const [addNotice, setAddNotice] = useState<{ tone: "success" | "error"; message: string } | undefined>()
   const [loadVersion, setLoadVersion] = useState(0)
+  const reviewOrderNumber = new URLSearchParams(window.location.search).get("reviewOrder")
 
   const loadProduct = useCallback(async (isActive: () => boolean) => {
     setLoading(true)
@@ -179,7 +180,13 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
         <ProductDetailsSection product={product} />
 
         {recommendations.length ? <section className="buyer-product-recommendations"><header><p>More from this store</p><h2>You may also like</h2></header><div className="buyer-product-recommendation-grid">{recommendations.map((item) => <div key={item.id}><ProductCard product={item} /></div>)}</div></section> : null}
-        <ProductReviewSection summary={reviews} source={reviewSource} error={notices.find((notice) => notice.label === "reviews")?.message} />
+        <ProductReviewSection
+          summary={reviews}
+          source={reviewSource}
+          error={notices.find((notice) => notice.label === "reviews")?.message}
+          review={reviewOrderNumber && auth.customer?.email ? { productId: product.id, orderNumber: reviewOrderNumber, email: auth.customer.email, customerName: [auth.customer.firstName, auth.customer.lastName].filter(Boolean).join(" ") || undefined } : undefined}
+          onSubmitted={() => setLoadVersion((version) => version + 1)}
+        />
         {share ? <ProductSharePanel share={share} source={shareSource} error={shareError} /> : null}
       </> : null}
     </PageShell>

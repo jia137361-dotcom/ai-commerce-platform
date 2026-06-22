@@ -24,7 +24,7 @@ const purchasedOrder = {
   id: "order_1",
   display_id: 1001,
   email: "buyer@example.com",
-  metadata: { store_id: "default_store" },
+  metadata: { store_id: "default_store", mc_fulfillment_status: "delivered", buyer_confirmed_received_at: "2026-06-22T00:00:00.000Z" },
   items: [{ metadata: { mc_product_id: product.id } }],
 }
 
@@ -299,6 +299,17 @@ describe("store product review routes", () => {
     expect(res.body).toMatchObject({
       error: { code: "REVIEW_NOT_ALLOWED" },
     })
+    expect(storeCore.createProductReviews).not.toHaveBeenCalled()
+  })
+
+  it("rejects reviews before delivery", async () => {
+    const waitingOrder = { ...purchasedOrder, metadata: { store_id: "default_store", mc_fulfillment_status: "waiting" } }
+    const { storeCore, orderModule } = setup({ orders: [waitingOrder], retrievedOrder: waitingOrder })
+    const req = createReq({ body: validBody(5), storeCore, orderModule })
+    const res = createRes()
+    await createProductReview(req as any, res)
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(res.body).toMatchObject({ error: { message: "Reviews are available only after delivery" } })
     expect(storeCore.createProductReviews).not.toHaveBeenCalled()
   })
 

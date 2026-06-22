@@ -11,6 +11,7 @@ import { CartStoreMismatchError } from "../lib/cart-store-error"
 import { ensureDefaultSalesChannelStockLocation } from "../lib/ensure-native-bridge-cartable"
 import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
 import { buildLineItemProductionMetadata } from "../lib/line-item-production-metadata"
+import { findStoreCoreVariantRow } from "../lib/native-product-variants"
 import { resolveProductRequiresShipping } from "../lib/product-shipping"
 import { resolveLinkedProductForVariant } from "../lib/resolve-linked-product"
 import { STORE_CORE_MODULE } from "../modules/store-core"
@@ -151,10 +152,18 @@ const addLineItemStep = createStep(
     const linkedProducts = await storeCoreService.listProducts({
       medusa_variant_id: input.variant_id,
     })
-    const linkedProduct = resolveLinkedProductForVariant(
+    let linkedProduct = resolveLinkedProductForVariant(
       linkedProducts as Record<string, unknown>[],
       { storeId: cartStoreId }
     )
+    if (!linkedProduct) {
+      const metadata = variant?.metadata as Record<string, unknown> | null | undefined
+      const linkedId = typeof metadata?.mc_product_id === "string" ? metadata.mc_product_id : null
+      if (linkedId) {
+        const rows = await storeCoreService.listProducts({ id: linkedId })
+        linkedProduct = rows[0] as unknown as Record<string, unknown> | undefined
+      }
+    }
 
     if (!linkedProduct) {
       throw new Error("variant_id must be linked to a store-core product")
@@ -168,8 +177,10 @@ const addLineItemStep = createStep(
       throw new Error("Product must be published")
     }
 
-    const linkedPrice =
-      typeof linkedProduct.price === "number" && linkedProduct.price > 0
+    const selectedVariantRow = findStoreCoreVariantRow(linkedProduct, input.variant_id)
+    const linkedPrice = selectedVariantRow?.price && selectedVariantRow.price > 0
+      ? selectedVariantRow.price
+      : typeof linkedProduct.price === "number" && linkedProduct.price > 0
         ? linkedProduct.price
         : 19.99
     const priceSetId = await ensureVariantHasPriceSet(container, {
@@ -190,7 +201,8 @@ const addLineItemStep = createStep(
 
     const productionMetadata = await buildLineItemProductionMetadata(
       storeCoreService,
-      linkedProduct
+      linkedProduct,
+      input.variant_id
     )
     const requiresShipping = resolveProductRequiresShipping(
       linkedProduct as Record<string, unknown>

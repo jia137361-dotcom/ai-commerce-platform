@@ -75,8 +75,8 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
     <article className="buyer-shop-information-card">
       <p className="buyer-shop-information-eyebrow">Information & policies</p>
       <h2>Shipping</h2>
-      <p>Available shipping methods and prices are calculated from your delivery address during checkout.</p>
-      <p className="buyer-shop-policy-note">Carrier updates are shown only when the seller or supplier provides tracking evidence.</p>
+      <p>{settings.shippingPolicy ?? "Not provided by this seller."}</p>
+      <p className="buyer-shop-policy-note">Available shipping methods and prices are calculated from your delivery address during checkout.</p>
     </article>
   )
 
@@ -84,8 +84,8 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
     <article className="buyer-shop-information-card">
       <p className="buyer-shop-information-eyebrow">Information & policies</p>
       <h2>Payment</h2>
-      <p>Payment methods supported for your cart are displayed during checkout.</p>
-      <p className="buyer-shop-policy-note">This store has not provided a separate seller payment policy.</p>
+      <p>{settings.paymentPolicy ?? "Not provided by this seller."}</p>
+      <p className="buyer-shop-policy-note">Payment methods supported for your cart are displayed during checkout.</p>
     </article>
   )
 
@@ -93,8 +93,8 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
     <article className="buyer-shop-information-card">
       <p className="buyer-shop-information-eyebrow">Information & policies</p>
       <h2>Returns &amp; exchanges</h2>
-      <p>Online return and exchange requests are not available in the buyer portal yet.</p>
-      <p className="buyer-shop-policy-note">For help with an existing order, contact support with your order number.</p>
+      <p>{settings.returnsPolicy ?? "Not provided by this seller."}</p>
+      <p className="buyer-shop-policy-note">Online return and exchange workflows are not available in the buyer portal yet.</p>
     </article>
   )
 
@@ -102,8 +102,8 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
     <article className="buyer-shop-information-card">
       <p className="buyer-shop-information-eyebrow">Information & policies</p>
       <h2>Cancellations</h2>
-      <p>Cancellation availability depends on the current payment and fulfillment state of the order.</p>
-      <p className="buyer-shop-policy-note">Check order details for available actions. A seller-specific cancellation policy has not been provided.</p>
+      <p>{settings.cancellationPolicy ?? "Not provided by this seller."}</p>
+      <p className="buyer-shop-policy-note">Cancellation availability still depends on the current payment and fulfillment state shown in order details.</p>
     </article>
   )
 
@@ -111,11 +111,7 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
     <article className="buyer-shop-information-card">
       <p className="buyer-shop-information-eyebrow">Store information</p>
       <h2>Frequently asked questions</h2>
-      <div className="buyer-shop-faqs">
-        <details><summary>Where will I see shipping options?</summary><p>Eligible methods and prices appear at checkout after a supported delivery address is entered.</p></details>
-        <details><summary>Can I message the seller?</summary><p>Direct buyer–seller messaging is not available yet. Please use the Help Center for support.</p></details>
-        <details><summary>Where can I track an order?</summary><p>Open your order details. Tracking is shown only after shipping evidence is available.</p></details>
-      </div>
+      {settings.faqs?.length ? <div className="buyer-shop-faqs">{settings.faqs.map((faq) => <details key={faq.question}><summary>{faq.question}</summary><p>{faq.answer}</p></details>)}</div> : <p>Not provided by this seller.</p>}
     </article>
   )
 
@@ -123,8 +119,8 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
     <article className="buyer-shop-information-card">
       <p className="buyer-shop-information-eyebrow">Information & policies</p>
       <h2>Privacy Policy</h2>
-      <p>This seller has not provided a store-specific privacy policy.</p>
-      <p className="buyer-shop-policy-note">Read the platform <a href="/privacy">Privacy Policy</a> for information about how buyer data is handled.</p>
+      <p>{settings.privacyPolicy ?? "Not provided by this seller."}</p>
+      <p className="buyer-shop-policy-note">Read the platform <a href="/privacy">Privacy Policy</a> for platform-level information.</p>
     </article>
   )
 }

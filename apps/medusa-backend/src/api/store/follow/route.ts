@@ -1,7 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../lib/store-context"
-import { applyFollowDelta, pickStoreSettingsRow, readFollowerCount } from "../../../lib/store-engagement"
+import { countUniqueStoreFollowers, pickStoreSettingsRow } from "../../../lib/store-engagement"
 import { getStoreCoreService, sendError } from "../../_helpers/store-core"
 
 type AuthenticatedRequest = MedusaRequest & {
@@ -19,12 +19,13 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const storeCore = getStoreCoreService(req)
   const rows = await storeCore.listStoreSettings({ store_id: storeId })
   const row = pickStoreSettingsRow(rows, storeId)
-  const followerCount = readFollowerCount(row?.metadata as Record<string, unknown> | null)
+  const customerModule = req.scope.resolve(Modules.CUSTOMER) as any
+  const customers = await customerModule.listCustomers({}, { select: ["id", "metadata"], take: 10000 })
+  const followerCount = countUniqueStoreFollowers(customers, storeId)
 
   const customerId = (req as AuthenticatedRequest).auth_context?.actor_id
   let following = false
   if (customerId) {
-    const customerModule = req.scope.resolve(Modules.CUSTOMER)
     const customer = await customerModule.retrieveCustomer(customerId)
     const followed = readFollowedStores(customer.metadata as Record<string, unknown> | null)
     following = followed.includes(storeId)
@@ -43,11 +44,11 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const rows = await storeCore.listStoreSettings({ store_id: storeId })
     const row = pickStoreSettingsRow(rows, storeId)
     const metadata = (row?.metadata ?? {}) as Record<string, unknown>
+    const customerModule = req.scope.resolve(Modules.CUSTOMER) as any
 
     const customerId = (req as AuthenticatedRequest).auth_context?.actor_id
     let wasFollowing = false
     if (customerId) {
-      const customerModule = req.scope.resolve(Modules.CUSTOMER)
       const customer = await customerModule.retrieveCustomer(customerId)
       const followed = readFollowedStores(customer.metadata as Record<string, unknown> | null)
       wasFollowing = followed.includes(storeId)
@@ -62,14 +63,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       } as never)
     }
 
-    let nextMetadata = metadata
-    if (customerId) {
-      if (following && !wasFollowing) {
-        nextMetadata = applyFollowDelta(metadata, 1)
-      } else if (!following && wasFollowing) {
-        nextMetadata = applyFollowDelta(metadata, -1)
-      }
-    }
+    const customers = await customerModule.listCustomers({}, { select: ["id", "metadata"], take: 10000 })
+    const followerCount = countUniqueStoreFollowers(customers, storeId)
+    const nextMetadata = { ...metadata, follower_count: followerCount }
 
     if (customerId && following !== wasFollowing) {
       if (row?.id) {
@@ -88,7 +84,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     return res.json({
       store_id: storeId,
       following,
-      follower_count: readFollowerCount(customerId ? nextMetadata : metadata),
+      follower_count: followerCount,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to update follow state"

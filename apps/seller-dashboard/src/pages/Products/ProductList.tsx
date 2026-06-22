@@ -81,6 +81,12 @@ export function ProductListPage() {
     },
   })
 
+  const unpublishMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/admin/products/${id}/unpublish`, { method: "POST" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["products"] }); toast.push("Product unpublished", "success") },
+    onError: (err: unknown) => toast.push(err instanceof Error ? err.message : "Unpublish failed", "error"),
+  })
+
   const restoreMutation = useMutation({
     mutationFn: (id: string) =>
       apiFetch(storeProductPath(id), {
@@ -286,6 +292,8 @@ export function ProductListPage() {
                                 },
                               ]
                             : []),
+                          ...(product.status === "published" ? [{ label: "Unpublish", variant: "danger" as const, onClick: () => unpublishMutation.mutate(productId) }] : []),
+                          ...(product.status === "unpublished" ? [{ label: "Re-publish", variant: "primary" as const, onClick: () => publishMutation.mutate(productId) }] : []),
                         ]}
                       />
                     </td>

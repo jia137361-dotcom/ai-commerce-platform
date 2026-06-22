@@ -28,6 +28,8 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     storeId,
     products.map((product: any) => product.id)
   )
+  const categories = await storeCoreService.listProductCategories({ store_id: storeId })
+  const categoryNames = new Map(categories.map((category: any) => [category.id, category.name]))
   const productsWithShipping = products.map((product: any) => ({
     ...product,
     requires_shipping: resolveProductRequiresShipping(product as Record<string, unknown>),
@@ -36,8 +38,6 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   return res.json({
     store_id: storeId,
     count: products.length,
-    products: productsWithShipping.map((product: any) =>
-      normalizeProductWithReviewSummary(product, summaries.get(product.id))
-    )
+    products: productsWithShipping.map((product: any) => ({ ...normalizeProductWithReviewSummary(product, summaries.get(product.id)), category_name: product.category_ids?.[0] ? categoryNames.get(product.category_ids[0]) ?? null : null }))
   })
 }

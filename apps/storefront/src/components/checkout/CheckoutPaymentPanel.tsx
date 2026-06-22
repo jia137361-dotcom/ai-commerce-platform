@@ -41,7 +41,7 @@ export function CheckoutPaymentPanel({
 
   return (
     <Card as="section" className="buyer-checkout-card buyer-checkout-payment-card">
-      <header><div><p>Step 4</p><h2>Payment method</h2></div><StatusBadge tone={stripeSelected && validClientSecret ? "success" : "warning"}>{stripeSelected ? validClientSecret ? "Stripe ready" : "Setup required" : "Dev fallback"}</StatusBadge></header>
+      <header><div><p>Step 3</p><h2>Payment method</h2></div><StatusBadge tone={stripeSelected && validClientSecret ? "success" : "warning"}>{stripeSelected ? validClientSecret ? "Stripe ready" : "Setup required" : "Dev fallback"}</StatusBadge></header>
 
       <div className="buyer-checkout-payment-providers" role="radiogroup" aria-label="Payment provider">
         {providers.map((provider) => <button key={provider.id} type="button" role="radio" aria-checked={selectedProviderId === provider.id} className={selectedProviderId === provider.id ? "active" : ""} onClick={() => onProviderChange?.(provider.id)}><strong>{provider.isStripe ? "Stripe test payment" : "System-default authorization"}</strong><span>{provider.id}</span></button>)}

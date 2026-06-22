@@ -140,6 +140,8 @@ export async function generateAndCreateDraft(
   })
   const variantRows = (catalogVariants as Array<Record<string, unknown>>).map((row) => ({
     supplier_variant_id: String(row.id),
+    supplier_size_id: row.supplier_size_id != null ? String(row.supplier_size_id) : undefined,
+    supplier_color_id: row.supplier_color_id != null ? String(row.supplier_color_id) : undefined,
     color: String(row.color_name ?? row.color ?? "Default"),
     size: String(row.size_name ?? row.size ?? "Default"),
     price: price ?? 0,

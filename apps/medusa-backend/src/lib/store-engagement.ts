@@ -50,5 +50,13 @@ export const applyFollowDelta = (
   }
 }
 
+export const countUniqueStoreFollowers = (
+  customers: Array<{ id?: string; metadata?: Record<string, unknown> | null }>,
+  storeId: string
+) => new Set(customers.filter((customer) => {
+  const followed = customer.metadata?.followed_store_ids
+  return Array.isArray(followed) && followed.includes(storeId)
+}).map((customer) => customer.id).filter((id): id is string => Boolean(id))).size
+
 export const pickStoreSettingsRow = (rows: StoreSettingsRow[], storeId: string) =>
   rows.find((row) => row.store_id === storeId) ?? rows[0]

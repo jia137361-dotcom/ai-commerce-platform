@@ -33,8 +33,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const summaries = await getProductReviewSummaries(storeCoreService, storeId, [
     product.id
   ])
+  const categories = product.category_ids?.length ? await storeCoreService.listProductCategories({ id: product.category_ids, store_id: storeId }) : []
 
   return res.json({
-    product: normalizeProductWithReviewSummary(productWithShipping, summaries.get(product.id))
+    product: { ...normalizeProductWithReviewSummary(productWithShipping, summaries.get(product.id)), category_name: categories[0]?.name ?? null }
   })
 }

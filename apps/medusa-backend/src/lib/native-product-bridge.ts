@@ -13,6 +13,7 @@ import {
 } from "./product-cart-bridge"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
+import { readStoreCoreVariantRows, type StoreCoreVariantRow } from "./native-product-variants"
 
 const BRIDGE_PRICE_CURRENCY = "usd"
 const FALLBACK_PRICE = 19.99
@@ -20,10 +21,14 @@ const FALLBACK_PRICE = 19.99
 export type NativeProductBridge = {
   medusaProductId: string
   medusaVariantId: string
+  variantMappings?: Array<{
+    supplier_variant_id: string
+    medusa_variant_id: string
+  }>
 }
 
-const bridgeHandle = (productId: string) =>
-  `store-core-${productId}`
+const bridgeHandle = (productId: string, multiVariant = false) =>
+  `store-core-${productId}${multiVariant ? "-multi" : ""}`
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -31,18 +36,18 @@ const bridgeHandle = (productId: string) =>
 async function findNativeProductAndVariantByHandle(
   container: MedusaContainer,
   handle: string
-): Promise<{ productId: string; variantId: string } | null> {
+): Promise<{ productId: string; variantId: string; variants: Array<{ id?: string; metadata?: Record<string, unknown> | null }> } | null> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = (await query.graph({
     entity: "product",
-    fields: ["id", "variants.id"],
+    fields: ["id", "variants.id", "variants.metadata"],
     filters: { handle },
-  })) as { data: Array<{ id: string; variants?: Array<{ id?: string }> }> }
+  })) as { data: Array<{ id: string; variants?: Array<{ id?: string; metadata?: Record<string, unknown> | null }> }> }
 
   const row = data[0]
   const variantId = row?.variants?.[0]?.id
   if (row?.id && variantId) {
-    return { productId: row.id, variantId }
+    return { productId: row.id, variantId, variants: row.variants ?? [] }
   }
   return null
 }
@@ -83,22 +88,55 @@ async function createNativeBridgeProduct(
   const metadata = buildNativeBridgeMetadata(productId, storeId)
   const price =
     typeof product.price === "number" && product.price > 0 ? product.price : FALLBACK_PRICE
-  const amount = Math.max(1, Math.round(price * 100))
-  const handle = bridgeHandle(productId)
+  const variantRows = readStoreCoreVariantRows(product, price)
+  const hasMultipleVariants = variantRows.length > 1
+  const handle = bridgeHandle(productId, hasMultipleVariants)
 
   const existing = await findNativeProductAndVariantByHandle(container, handle)
   if (existing) {
-    await syncBridgeVariant(container, existing.variantId, product, existing.productId)
-    await ensureVariantHasPriceSet(container, {
-      variantId: existing.variantId,
-      amount,
-      currencyCode: BRIDGE_PRICE_CURRENCY,
-    })
+    const existingVariants = existing.variants
+    const rowsBySupplierId = new Map(variantRows.map((row) => [row.supplier_variant_id, row]))
+    for (const nativeVariant of existingVariants) {
+      if (!nativeVariant.id) continue
+      const supplierVariantId = readString(nativeVariant.metadata?.supplier_variant_id)
+      const row = supplierVariantId ? rowsBySupplierId.get(supplierVariantId) : undefined
+      await syncBridgeVariant(container, nativeVariant.id, product, existing.productId)
+      await ensureVariantHasPriceSet(container, {
+        variantId: nativeVariant.id,
+        amount: Math.max(1, Math.round((row?.price ?? price) * 100)),
+        currencyCode: BRIDGE_PRICE_CURRENCY,
+      })
+    }
     return {
       medusaProductId: existing.productId,
       medusaVariantId: existing.variantId,
+      variantMappings: existingVariants.flatMap((nativeVariant) => {
+        const supplierVariantId = readString(nativeVariant.metadata?.supplier_variant_id)
+        return nativeVariant.id && supplierVariantId
+          ? [{ supplier_variant_id: supplierVariantId, medusa_variant_id: nativeVariant.id }]
+          : []
+      }),
     }
   }
+
+  const rows: StoreCoreVariantRow[] = variantRows.length
+    ? variantRows
+    : [{
+        supplier_variant_id: readString(product.supplier_variant_id) ?? `default-${productId}`,
+        color: "Default",
+        size: "Default",
+        price,
+        stock: 0,
+      }]
+  const optionPairs = new Set(rows.map((row) => `${row.color}\u0000${row.size}`))
+  const needsSupplierOption = optionPairs.size !== rows.length
+  const options = [
+    { title: "Color", values: [...new Set(rows.map((row) => row.color))] },
+    { title: "Size", values: [...new Set(rows.map((row) => row.size))] },
+    ...(needsSupplierOption
+      ? [{ title: "Supplier option", values: rows.map((row) => row.supplier_variant_id) }]
+      : []),
+  ]
 
   const { result } = await createProductsWorkflow(container).run({
     input: {
@@ -108,22 +146,30 @@ async function createNativeBridgeProduct(
           handle,
           status: "published",
           metadata,
-          options: [{ title: "Default", values: ["Default"] }],
-          variants: [
-            {
-              title: "Default",
+          options,
+          variants: rows.map((row) => {
+            const variantMetadata = {
+              ...metadata,
+              supplier_variant_id: row.supplier_variant_id,
+            }
+            return {
+              title: [row.color, row.size].filter((value) => value !== "Default").join(" / ") || "Default",
               manage_inventory: false,
               allow_backorder: true,
-              metadata,
-              options: { Default: "Default" },
+              metadata: variantMetadata,
+              options: {
+                Color: row.color,
+                Size: row.size,
+                ...(needsSupplierOption ? { "Supplier option": row.supplier_variant_id } : {}),
+              },
               prices: [
                 {
-                  amount,
+                  amount: Math.max(1, Math.round(row.price * 100)),
                   currency_code: BRIDGE_PRICE_CURRENCY,
                 },
               ],
-            },
-          ],
+            }
+          }),
         },
       ],
     },
@@ -135,16 +181,25 @@ async function createNativeBridgeProduct(
     throw new Error(`Failed to create native bridge for ${productId}`)
   }
 
-  await syncBridgeVariant(container, nativeVariantId, product, nativeProduct.id)
-  await ensureVariantHasPriceSet(container, {
-    variantId: nativeVariantId,
-    amount,
-    currencyCode: BRIDGE_PRICE_CURRENCY,
-  })
+  const createdVariants = nativeProduct.variants ?? []
+  for (let index = 0; index < createdVariants.length; index += 1) {
+    const createdVariantId = createdVariants[index]?.id
+    if (!createdVariantId) continue
+    await syncBridgeVariant(container, createdVariantId, product, nativeProduct.id)
+    await ensureVariantHasPriceSet(container, {
+      variantId: createdVariantId,
+      amount: Math.max(1, Math.round((rows[index]?.price ?? price) * 100)),
+      currencyCode: BRIDGE_PRICE_CURRENCY,
+    })
+  }
 
   return {
     medusaProductId: nativeProduct.id,
     medusaVariantId: nativeVariantId,
+    variantMappings: rows.flatMap((row, index) => {
+      const id = createdVariants[index]?.id
+      return id ? [{ supplier_variant_id: row.supplier_variant_id, medusa_variant_id: id }] : []
+    }),
   }
 }
 

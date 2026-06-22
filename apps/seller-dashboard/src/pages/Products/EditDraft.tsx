@@ -15,6 +15,8 @@ import type { NormalizedProduct, ProductVariantRow } from "@ai-commerce/shared-t
 
 type SupplierVariant = {
   supplier_variant_id: string
+  supplier_size_id?: string | null
+  supplier_color_id?: string | null
   color?: string | null
   size?: string | null
   color_name?: string | null
@@ -32,20 +34,22 @@ const toVariantRows = (
 ): ProductVariantRow[] => {
   if (!Array.isArray(rows)) return []
   return rows
-    .map((row) => {
-      if (!row || typeof row !== "object") return null
+    .flatMap((row): ProductVariantRow[] => {
+      if (!row || typeof row !== "object") return []
       const v = row as Record<string, unknown>
       const supplierVariantId = String(v.supplier_variant_id ?? "")
-      if (!supplierVariantId) return null
-      return {
+      if (!supplierVariantId) return []
+      return [{
         supplier_variant_id: supplierVariantId,
+        medusa_variant_id: typeof v.medusa_variant_id === "string" ? v.medusa_variant_id : undefined,
+        supplier_size_id: typeof v.supplier_size_id === "string" ? v.supplier_size_id : undefined,
+        supplier_color_id: typeof v.supplier_color_id === "string" ? v.supplier_color_id : undefined,
         color: String(v.color ?? "Default"),
         size: String(v.size ?? "Default"),
         price: Number(v.price ?? fallbackPrice) || fallbackPrice,
         stock: Number(v.stock ?? 50) || 0,
-      }
+      }]
     })
-    .filter((row): row is ProductVariantRow => row !== null)
 }
 
 const buildVariantsFromSupplier = (
@@ -54,6 +58,8 @@ const buildVariantsFromSupplier = (
 ): ProductVariantRow[] =>
   supplierVariants.map((variant) => ({
     supplier_variant_id: variant.supplier_variant_id,
+    supplier_size_id: variant.supplier_size_id ?? undefined,
+    supplier_color_id: variant.supplier_color_id ?? undefined,
     color: variant.color_name ?? variant.color ?? "Default",
     size: variant.size_name ?? variant.size ?? "Default",
     price: fallbackPrice,
@@ -82,6 +88,11 @@ export function EditDraftPage() {
 
   const product = data?.product ?? stateProduct
 
+  const { data: categoryData } = useQuery({
+    queryKey: ["product-categories"],
+    queryFn: () => apiFetch<{ categories: Array<{ category_id: string; name: string }> }>("/admin/product-categories"),
+  })
+
   const { data: supplierData } = useQuery({
     queryKey: ["supplier-products", product?.platform_product_id],
     enabled: Boolean(product?.platform_product_id),
@@ -99,6 +110,8 @@ export function EditDraftPage() {
   const [description, setDescription] = useState("")
   const [price, setPrice] = useState("")
   const [tags, setTags] = useState<string[]>([])
+  const [categoryIds, setCategoryIds] = useState<string[]>([])
+  const [newCategoryName, setNewCategoryName] = useState("")
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
   const [requiresShipping, setRequiresShipping] = useState(true)
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
@@ -111,6 +124,7 @@ export function EditDraftPage() {
     setDescription(p.description ?? "")
     setPrice(String(p.price ?? ""))
     setTags(Array.isArray(p.tags) ? p.tags : [])
+    setCategoryIds(Array.isArray(p.category_ids) ? p.category_ids : [])
     setRequiresShipping(
       typeof p.requires_shipping === "boolean"
         ? p.requires_shipping
@@ -167,6 +181,7 @@ export function EditDraftPage() {
     description,
     price: parsePrice(),
     tags,
+    category_ids: categoryIds,
     variants,
     requires_shipping: requiresShipping,
     metadata: {
@@ -258,6 +273,20 @@ export function EditDraftPage() {
     onError: (err: unknown) => {
       toast.push(formatError(err), "error")
     },
+  })
+
+  const createCategoryMutation = useMutation({
+    mutationFn: () => apiFetch<{ category_id: string }>("/admin/product-categories", {
+      method: "POST",
+      body: JSON.stringify({ name: newCategoryName.trim() }),
+    }),
+    onSuccess: (created) => {
+      setCategoryIds([created.category_id])
+      setNewCategoryName("")
+      queryClient.invalidateQueries({ queryKey: ["product-categories"] })
+      toast.push("Category created for this store", "success")
+    },
+    onError: (err: unknown) => toast.push(formatError(err), "error"),
   })
 
   const updateVariant = (
@@ -529,6 +558,37 @@ export function EditDraftPage() {
               </button>
               ) : null}
             </div>
+          </div>
+
+          <div>
+            <Label>Category</Label>
+            <select
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              value={categoryIds[0] ?? ""}
+              disabled={isArchived}
+              onChange={(event) => setCategoryIds(event.target.value ? [event.target.value] : [])}
+            >
+              <option value="">No category</option>
+              {(categoryData?.categories ?? []).map((category) => <option key={category.category_id} value={category.category_id}>{category.name}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">Only real categories created for this store are shown.</p>
+            {!isArchived ? (
+              <div className="mt-3 flex gap-2">
+                <Input
+                  value={newCategoryName}
+                  placeholder="New category name"
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
+                  onClick={() => createCategoryMutation.mutate()}
+                >
+                  Add category
+                </Button>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-lg border border-slate-200 p-4">

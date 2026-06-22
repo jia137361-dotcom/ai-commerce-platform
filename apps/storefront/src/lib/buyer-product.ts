@@ -3,8 +3,13 @@ import type { BuyerProductVariant, StoreProduct } from "./mock-data"
 export type BuyerProductApiVariant = {
   id?: string
   variant_id?: string
+  medusa_variant_id?: string
+  supplier_variant_id?: string
+  color?: string | null
+  size?: string | null
   title?: string | null
   inventory_quantity?: number | null
+  stock?: number | null
   manage_inventory?: boolean | null
   allow_backorder?: boolean | null
   prices?: Array<{ amount?: number }>
@@ -55,15 +60,15 @@ export const normalizeBuyerProductPrice = (product: BuyerProductApiInput) => {
 
 export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): BuyerProductVariant[] => {
   const variants = (product.variants ?? []).flatMap((variant, index) => {
-    const id = variant.variant_id ?? variant.id
+    const id = variant.medusa_variant_id ?? variant.variant_id ?? variant.id
     if (!id) return []
-    const inventoryQuantity = typeof variant.inventory_quantity === "number" ? variant.inventory_quantity : undefined
+    const inventoryQuantity = typeof variant.inventory_quantity === "number" ? variant.inventory_quantity : typeof variant.stock === "number" ? variant.stock : undefined
     const manageInventory = variant.manage_inventory ?? undefined
     const allowBackorder = variant.allow_backorder ?? undefined
     const hasInventory = manageInventory === false || inventoryQuantity == null || inventoryQuantity > 0 || allowBackorder === true
     return [{
       id,
-      title: variant.title?.trim() || `Option ${index + 1}`,
+      title: variant.title?.trim() || [variant.color, variant.size].filter(Boolean).join(" / ") || `Option ${index + 1}`,
       inventoryQuantity,
       manageInventory,
       allowBackorder,
