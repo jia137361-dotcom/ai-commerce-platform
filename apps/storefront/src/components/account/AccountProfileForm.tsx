@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import type { BuyerCustomer } from "../../lib/buyer-api"
+import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
 import { FormField } from "../ui/FormField"
@@ -32,13 +33,15 @@ export function AccountProfileForm({ customer, loading, error, saved, onSubmit }
         <p>Keep the buyer details currently supported by your account API up to date.</p>
       </header>
       <dl className="buyer-account-profile-summary">
-        <div><dt>Email</dt><dd>{customer.email || "Not provided"}</dd></div>
+        <div><dt>Email</dt><dd>{customer.email || "Not provided"} {isBuyerEmailVerified(customer.metadata) ? "· Verified" : "· Not verified"}</dd></div>
         <div><dt>First name</dt><dd>{customer.firstName || "Not provided"}</dd></div>
         <div><dt>Last name</dt><dd>{customer.lastName || "Not provided"}</dd></div>
         <div><dt>Phone</dt><dd>{customer.phone || "Not provided"}</dd></div>
-        <div><dt>Address</dt><dd>Not provided</dd></div>
+        <div><dt>Delivery addresses</dt><dd><a href="/account/addresses">Manage saved addresses</a></dd></div>
       </dl>
-      <p className="buyer-account-readonly-note">Email and address editing are unavailable in the current buyer API.</p>
+      <p className="buyer-account-readonly-note">
+        Email is managed through account security. Verify your email in <a href="/account/security">Account &amp; Security</a>. Phone can be updated here; SMS verification will be added later.
+      </p>
       <form
         className="buyer-account-form buyer-account-profile-form"
         onSubmit={(event) => {

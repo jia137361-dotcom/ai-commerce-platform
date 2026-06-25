@@ -1,5 +1,6 @@
 import { useState } from "react"
 import type { BuyerStoreSettings } from "../../lib/buyer-api"
+import { StoreGalleryCarousel } from "./StoreGalleryCarousel"
 
 export type StoreInformationSection =
   | "shop-info"
@@ -7,7 +8,6 @@ export type StoreInformationSection =
   | "payment"
   | "returns"
   | "cancellations"
-  | "faqs"
   | "privacy"
 
 const navigation: Array<{ id: StoreInformationSection; label: string; icon: string }> = [
@@ -16,7 +16,6 @@ const navigation: Array<{ id: StoreInformationSection; label: string; icon: stri
   { id: "payment", label: "Payment", icon: "▣" },
   { id: "returns", label: "Returns & exchanges", icon: "↩" },
   { id: "cancellations", label: "Cancellations", icon: "×" },
-  { id: "faqs", label: "FAQs", icon: "?" },
   { id: "privacy", label: "Privacy Policy", icon: "◇" },
 ]
 
@@ -24,12 +23,6 @@ export function normalizeStoreGalleryUrls(urls: string[] | undefined) {
   return (urls ?? [])
     .map((url) => url.trim())
     .filter((url, index, all) => /^https?:\/\//i.test(url) && all.indexOf(url) === index)
-}
-
-function StoreGalleryImage({ url, alt }: { url: string; alt: string }) {
-  const [failed, setFailed] = useState(false)
-  if (failed) return null
-  return <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)} />
 }
 
 function ShopInfo({ settings }: { settings: BuyerStoreSettings }) {
@@ -54,15 +47,7 @@ function ShopInfo({ settings }: { settings: BuyerStoreSettings }) {
       <article className="buyer-shop-information-card">
         <p className="buyer-shop-information-eyebrow">Gallery</p>
         <h2>Inside the shop</h2>
-        {galleryUrls.length ? (
-          <div className="buyer-shop-gallery" aria-label="Store gallery">
-            {galleryUrls.map((url, index) => (
-              <StoreGalleryImage key={url} url={url} alt={`${settings.brandName} gallery ${index + 1}`} />
-            ))}
-          </div>
-        ) : (
-          <p className="buyer-shop-field-unavailable">Store gallery has not been provided by the seller.</p>
-        )}
+        <StoreGalleryCarousel images={galleryUrls} title={settings.brandName} />
       </article>
     </div>
   )
@@ -107,14 +92,6 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
     </article>
   )
 
-  if (section === "faqs") return (
-    <article className="buyer-shop-information-card">
-      <p className="buyer-shop-information-eyebrow">Store information</p>
-      <h2>Frequently asked questions</h2>
-      {settings.faqs?.length ? <div className="buyer-shop-faqs">{settings.faqs.map((faq) => <details key={faq.question}><summary>{faq.question}</summary><p>{faq.answer}</p></details>)}</div> : <p>Not provided by this seller.</p>}
-    </article>
-  )
-
   return (
     <article className="buyer-shop-information-card">
       <p className="buyer-shop-information-eyebrow">Information & policies</p>
@@ -144,7 +121,7 @@ export function StoreAboutPanel({ settings }: { settings: BuyerStoreSettings }) 
               onClick={() => setActiveSection(item.id)}
             >
               <span aria-hidden="true">{item.icon}</span>{item.label}
-              {index > 2 && item.id !== "faqs" && item.id !== "privacy" ? <small>Limited</small> : null}
+              {index > 2 && item.id !== "privacy" ? <small>Limited</small> : null}
             </button>
           ))}
         </nav>
@@ -153,8 +130,8 @@ export function StoreAboutPanel({ settings }: { settings: BuyerStoreSettings }) 
           <span aria-hidden="true">?</span>
           <h3>Customer support</h3>
           {settings.supportEmail ? <a href={`mailto:${settings.supportEmail}`}>{settings.supportEmail}</a> : <p>Seller support email unavailable.</p>}
-          <a className="buyer-shop-support-action" href="/help">Message us via Help Center</a>
-          <small>Direct seller messaging is unavailable.</small>
+          <a className="buyer-shop-support-action" href="/account/messages">Message the seller</a>
+          <small>Signed-in buyers can chat with the store team about orders and products.</small>
         </div>
       </aside>
 

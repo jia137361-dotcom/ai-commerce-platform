@@ -1,20 +1,29 @@
-import { FormEvent, useEffect, useRef, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiFetch, ApiError } from "../lib/api-client"
-import { fileToBase64 } from "../lib/file-to-base64"
+import {
+  buildStorePolicyTexts,
+  mergeStorePolicyPresets,
+  type StorePolicyPresetFields,
+} from "@ai-commerce/shared-types"
+import { apiFetch } from "../lib/api-client"
 import { PageHeader } from "../components/PageHeader"
+import { StorePolicyPresetsSection } from "../components/StorePolicyPresetsSection"
+import { StoreSettingsMediaFields } from "../components/StoreSettingsMediaFields"
+import { SellerStripeConnectSection } from "../components/SellerStripeConnectSection"
 import { useToast } from "../components/ToastProvider"
 import { Button } from "../components/ui/Button"
 import { Card } from "../components/ui/Card"
-import { FieldError, Input, Label, Select } from "../components/ui/Input"
+import { Input, Label, Select } from "../components/ui/Input"
 import type { StoreSettings } from "@ai-commerce/shared-types"
 
-const LOGO_MAX = 2 * 1024 * 1024
+const readGalleryUrls = (metadata: Record<string, unknown> | null | undefined) =>
+  Array.isArray(metadata?.gallery_urls)
+    ? metadata.gallery_urls.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    : []
 
 export function SettingsPage() {
   const queryClient = useQueryClient()
   const toast = useToast()
-  const fileRef = useRef<HTMLInputElement>(null)
   const { data } = useQuery({
     queryKey: ["settings"],
     queryFn: () => apiFetch<{ settings: StoreSettings }>("/admin/store-settings"),
@@ -28,15 +37,8 @@ export function SettingsPage() {
   const [description, setDescription] = useState("")
   const [announcement, setAnnouncement] = useState("")
   const [bannerUrl, setBannerUrl] = useState("")
-  const [galleryUrls, setGalleryUrls] = useState("")
-  const [shippingPolicy, setShippingPolicy] = useState("")
-  const [paymentPolicy, setPaymentPolicy] = useState("")
-  const [returnsPolicy, setReturnsPolicy] = useState("")
-  const [cancellationPolicy, setCancellationPolicy] = useState("")
-  const [privacyPolicy, setPrivacyPolicy] = useState("")
-  const [faqs, setFaqs] = useState("")
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([])
+  const [policyPresets, setPolicyPresets] = useState<StorePolicyPresetFields>({})
 
   useEffect(() => {
     const s = data?.settings
@@ -49,18 +51,16 @@ export function SettingsPage() {
     setDescription(String(s.metadata?.description ?? s.seo_description ?? ""))
     setAnnouncement(String(s.metadata?.announcement ?? ""))
     setBannerUrl(String(s.metadata?.banner_url ?? ""))
-    setGalleryUrls(Array.isArray(s.metadata?.gallery_urls) ? s.metadata.gallery_urls.join("\n") : "")
-    setShippingPolicy(String(s.metadata?.shipping_policy ?? ""))
-    setPaymentPolicy(String(s.metadata?.payment_policy ?? ""))
-    setReturnsPolicy(String(s.metadata?.returns_policy ?? ""))
-    setCancellationPolicy(String(s.metadata?.cancellation_policy ?? ""))
-    setPrivacyPolicy(String(s.metadata?.privacy_policy ?? ""))
-    setFaqs(Array.isArray(s.metadata?.faqs) ? s.metadata.faqs.map((entry: any) => `${entry.question ?? ""} | ${entry.answer ?? ""}`).join("\n") : "")
+    setGalleryUrls(readGalleryUrls(s.metadata))
+    setPolicyPresets(mergeStorePolicyPresets(s.metadata))
   }, [data])
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      apiFetch("/admin/store-settings", {
+    mutationFn: () => {
+      const mergedPresets = mergeStorePolicyPresets({ ...data?.settings.metadata, policy_presets: policyPresets })
+      const generatedPolicies = buildStorePolicyTexts(mergedPresets, brandName)
+
+      return apiFetch("/admin/store-settings", {
         method: "PUT",
         body: JSON.stringify({
           brand_name: brandName,
@@ -73,20 +73,15 @@ export function SettingsPage() {
             language,
             description,
             announcement,
-            banner_url: bannerUrl,
-            gallery_urls: galleryUrls.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean),
-            shipping_policy: shippingPolicy.trim() || null,
-            payment_policy: paymentPolicy.trim() || null,
-            returns_policy: returnsPolicy.trim() || null,
-            cancellation_policy: cancellationPolicy.trim() || null,
-            privacy_policy: privacyPolicy.trim() || null,
-            faqs: faqs.split(/\r?\n/).flatMap((line) => {
-              const [question, ...answer] = line.split("|")
-              return question?.trim() && answer.join("|").trim() ? [{ question: question.trim(), answer: answer.join("|").trim() }] : []
-            }),
+            banner_url: bannerUrl || null,
+            gallery_urls: galleryUrls,
+            policy_presets: mergedPresets,
+            ...generatedPolicies,
+            faqs: null,
           },
         }),
-      }),
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] })
       toast.push("Settings saved successfully", "success")
@@ -95,48 +90,6 @@ export function SettingsPage() {
       toast.push(err instanceof Error ? err.message : "Failed to save settings", "error")
     },
   })
-
-  const uploadLogo = async (file: File) => {
-    setUploadError(null)
-    if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
-      setUploadError("Only PNG and JPG files are supported")
-      return
-    }
-    if (file.size > LOGO_MAX) {
-      setUploadError("Logo must be 2MB or smaller")
-      return
-    }
-    if (file.size > 500 * 1024) {
-      toast.push("Large logo detected — upload may take a moment", "info")
-    }
-
-    setUploading(true)
-    try {
-      const fileBase64 = await fileToBase64(file)
-      const res = await apiFetch<{ logo_url: string }>("/admin/store-settings/logo", {
-        method: "POST",
-        body: JSON.stringify({
-          file_base64: fileBase64,
-          content_type: file.type || "image/png",
-        }),
-      })
-      setLogoUrl(res.logo_url)
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-      toast.push("Logo uploaded successfully", "success")
-    } catch (err: unknown) {
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Logo upload failed"
-      setUploadError(message)
-      toast.push(message, "error")
-    } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ""
-    }
-  }
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -152,49 +105,17 @@ export function SettingsPage() {
       <Card className="mx-auto max-w-2xl">
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-[140px_1fr] sm:items-center">
-            <Label>Logo</Label>
-            <div>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50">
-                  {logoUrl ? (
-                    <img src={logoUrl} alt="Store logo" className="h-full w-full rounded-lg object-cover" />
-                  ) : (
-                    <span className="text-xs text-slate-400">1024×1024</span>
-                  )}
-                </div>
-                <div>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    disabled={uploading}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) void uploadLogo(file)
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={uploading}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    {uploading ? "Uploading…" : "Upload New Logo"}
-                  </Button>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Supports PNG, JPG. Max size 2MB. Recommended 1:1 aspect ratio.
-                  </p>
-                  <FieldError message={uploadError} />
-                </div>
-              </div>
-            </div>
+            <StoreSettingsMediaFields
+              logoUrl={logoUrl}
+              bannerUrl={bannerUrl}
+              galleryUrls={galleryUrls}
+              onLogoChange={setLogoUrl}
+              onBannerChange={setBannerUrl}
+              onGalleryChange={setGalleryUrls}
+            />
 
             <Label>Store Name</Label>
             <Input value={brandName} onChange={(e) => setBrandName(e.target.value)} />
-
-            <Label>Logo URL</Label>
-            <Input type="url" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
 
             <Label>Support Email</Label>
             <Input type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
@@ -205,29 +126,11 @@ export function SettingsPage() {
             <Label>Announcement</Label>
             <Input value={announcement} onChange={(e) => setAnnouncement(e.target.value)} placeholder="New collection now available" />
 
-            <Label>Banner URL</Label>
-            <Input type="url" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} placeholder="https://…" />
-
-            <Label>Gallery image URLs</Label>
-            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={galleryUrls} onChange={(e) => setGalleryUrls(e.target.value)} placeholder="One image URL per line" />
-
-            <Label>Shipping Policy</Label>
-            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={shippingPolicy} onChange={(e) => setShippingPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
-
-            <Label>Payment Policy</Label>
-            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={paymentPolicy} onChange={(e) => setPaymentPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
-
-            <Label>Returns & Exchanges</Label>
-            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={returnsPolicy} onChange={(e) => setReturnsPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
-
-            <Label>Cancellation Policy</Label>
-            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={cancellationPolicy} onChange={(e) => setCancellationPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
-
-            <Label>Privacy Policy</Label>
-            <textarea className="min-h-24 rounded-lg border border-slate-300 px-3 py-2" value={privacyPolicy} onChange={(e) => setPrivacyPolicy(e.target.value)} placeholder="Leave empty to show Not provided" />
-
-            <Label>FAQs</Label>
-            <textarea className="min-h-28 rounded-lg border border-slate-300 px-3 py-2" value={faqs} onChange={(e) => setFaqs(e.target.value)} placeholder="One per line: Question | Answer" />
+            <StorePolicyPresetsSection
+              presets={policyPresets}
+              brandName={brandName}
+              onChange={setPolicyPresets}
+            />
 
             <Label>Currency</Label>
             <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
@@ -250,6 +153,7 @@ export function SettingsPage() {
           </div>
         </form>
       </Card>
+      <SellerStripeConnectSection />
     </div>
   )
 }

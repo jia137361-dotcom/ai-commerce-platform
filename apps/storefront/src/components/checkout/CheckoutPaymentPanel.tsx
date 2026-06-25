@@ -2,7 +2,7 @@ import { Elements } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
 import { useMemo } from "react"
 import type { BuyerPaymentProvider, BuyerPaymentSession } from "../../lib/buyer-api"
-import { hasValidStripeClientSecret, isStripeProviderId } from "../../pages/checkout/checkout-payment"
+import { hasValidStripeClientSecret, isStripeProviderId, isValidStripePublishableKey } from "../../pages/checkout/checkout-payment"
 import { StripePaymentForm } from "./StripePaymentForm"
 import { Card } from "../ui/Card"
 import { StatusBadge } from "../ui/StatusBadge"
@@ -17,7 +17,7 @@ type CheckoutPaymentPanelProps = {
   error?: string
   canSubmit?: boolean
   placing?: boolean
-  onStripeComplete?: () => Promise<void>
+  onStripeComplete?: (paymentMethodLabel?: string) => Promise<void>
 }
 
 export function CheckoutPaymentPanel({
@@ -34,36 +34,61 @@ export function CheckoutPaymentPanel({
 }: CheckoutPaymentPanelProps) {
   const stripeSelected = isStripeProviderId(selectedProviderId)
   const validClientSecret = hasValidStripeClientSecret(session)
+  const stripeReady = isValidStripePublishableKey(stripePublishableKey)
+  const stripeAvailable = providers.some((provider) => provider.isStripe)
   const stripePromise = useMemo(
-    () => stripeSelected && validClientSecret && stripePublishableKey.startsWith("pk_test_") ? loadStripe(stripePublishableKey) : null,
-    [stripePublishableKey, stripeSelected, validClientSecret]
+    () => stripeSelected && validClientSecret && stripeReady ? loadStripe(stripePublishableKey) : null,
+    [stripePublishableKey, stripeSelected, validClientSecret, stripeReady]
   )
 
   return (
     <Card as="section" className="buyer-checkout-card buyer-checkout-payment-card">
-      <header><div><p>Step 3</p><h2>Payment method</h2></div><StatusBadge tone={stripeSelected && validClientSecret ? "success" : "warning"}>{stripeSelected ? validClientSecret ? "Stripe ready" : "Setup required" : "Dev fallback"}</StatusBadge></header>
+      <header><div><p>Step 3</p><h2>Payment method</h2></div><StatusBadge tone={stripeSelected && validClientSecret ? "success" : stripeAvailable ? "warning" : "neutral"}>{stripeSelected ? validClientSecret ? "Stripe ready" : "Setup required" : stripeAvailable ? "Stripe available" : "Dev fallback"}</StatusBadge></header>
 
-      <div className="buyer-checkout-payment-providers" role="radiogroup" aria-label="Payment provider">
-        {providers.map((provider) => <button key={provider.id} type="button" role="radio" aria-checked={selectedProviderId === provider.id} className={selectedProviderId === provider.id ? "active" : ""} onClick={() => onProviderChange?.(provider.id)}><strong>{provider.isStripe ? "Stripe test payment" : "System-default authorization"}</strong><span>{provider.id}</span></button>)}
+      <div className="buyer-checkout-payment-providers" role="radiogroup" aria-label="Payment method">
+        {providers.map((provider) => (
+          <button
+            key={provider.id}
+            type="button"
+            role="radio"
+            aria-checked={selectedProviderId === provider.id}
+            className={selectedProviderId === provider.id ? "active" : ""}
+            onClick={() => onProviderChange?.(provider.id)}
+          >
+            <strong>{provider.isStripe ? "Card, Apple Pay, Google Pay" : "System-default authorization"}</strong>
+          </button>
+        ))}
       </div>
 
       {error ? <p className="buyer-checkout-inline-error" role="alert">{error}</p> : null}
 
       {stripeSelected ? (
-        !stripePublishableKey.startsWith("pk_test_") ? (
-          <p className="buyer-checkout-card-copy">Stripe is enabled for this region, but `VITE_STRIPE_PK` is not configured with a test publishable key.</p>
+        !stripeReady ? (
+          <div className="buyer-checkout-payment-message">
+            <strong>Stripe publishable key required</strong>
+            <p>Add `VITE_STRIPE_PK=pk_test_...` to `apps/storefront/.env.local`, restart the storefront, then reload checkout.</p>
+            <p>You can also save cards in <a href="/account/payment-methods">Account → Payment methods</a> once Stripe is configured.</p>
+          </div>
         ) : preparing ? (
-          <p className="buyer-checkout-card-copy">Creating the official Medusa Stripe payment session...</p>
+          <p className="buyer-checkout-card-copy">Creating the Stripe payment session...</p>
         ) : !validClientSecret || !stripePromise ? (
-          <p className="buyer-checkout-card-copy">Stripe Payment Element will render only after Medusa returns a valid `client_secret`.</p>
+          <p className="buyer-checkout-card-copy">Stripe Payment Element will render after Medusa returns a valid payment `client_secret`.</p>
         ) : (
           <Elements stripe={stripePromise} options={{ clientSecret: session!.clientSecret, appearance: { theme: "stripe" } }}>
             <StripePaymentForm canSubmit={canSubmit} placing={placing} onComplete={onStripeComplete} />
           </Elements>
         )
+      ) : stripeAvailable ? (
+        <div className="buyer-checkout-payment-message">
+          <strong>Real card payments are available</strong>
+          <p>Select <em>Card, Apple Pay, Google Pay</em> above. If it stays on the dev fallback, configure `VITE_STRIPE_PK` in the storefront and restart Medusa after setting `STRIPE_API_KEY`.</p>
+          <p><a href="/account/payment-methods">Manage saved payment methods</a> in your buyer account.</p>
+        </div>
       ) : (
         <div className="buyer-checkout-payment-message">
-          <strong>System-default authorization · development fallback</strong>
+          <strong>Development fallback only</strong>
+          <p>Stripe is not enabled for this region yet. Set `STRIPE_API_KEY` on Medusa, restart the backend, then run:</p>
+          <p><code>npm --workspace apps/medusa-backend run stripe:region:setup</code></p>
           <p>The local provider authorizes when the order is placed. It does not collect card details or prove captured funds.</p>
           <dl><div><dt>Provider</dt><dd>pp_system_default</dd></div><div><dt>Capture</dt><dd>Not available</dd></div></dl>
         </div>

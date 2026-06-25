@@ -1,3 +1,13 @@
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
+import type { MedusaContainer } from "@medusajs/framework/types"
+import { resolveOrderLineItemThumbnail } from "./order-line-item-display"
+import {
+  ORDER_META_PAYMENT_STATUS,
+  readOrderFulfillmentStatusMeta,
+  toMedusaAdminOrderFulfillmentStatus,
+  toMedusaAdminOrderPaymentStatus,
+} from "./order-custom-metadata"
+
 export type FulfillmentStepKey =
   | "waiting"
   | "pushed"
@@ -121,6 +131,181 @@ export const mergeAdminOrderMetadata = (
   })
 }
 
+const ADMIN_ORDER_GRAPH_FIELDS = [
+  "id",
+  "email",
+  "display_id",
+  "metadata",
+  "items.id",
+  "items.title",
+  "items.product_title",
+  "items.subtitle",
+  "items.thumbnail",
+  "items.quantity",
+  "items.unit_price",
+  "items.total",
+  "items.variant_id",
+  "items.product_id",
+  "items.metadata",
+] as const
+
+const ADMIN_ORDER_GRAPH_FIELDS_MINIMAL = ["id", "email", "display_id", "metadata"] as const
+
+export type AdminSupplierSummary = {
+  supplier_id: string | null
+  supplier_order_id: string | null
+  supplier_status: string | null
+}
+
+const readNonEmptyString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value.trim() : null
+
+export const resolveAdminSupplierSummary = (
+  fulfillmentOrder: Record<string, unknown> | null | undefined,
+  supplierOrder: Record<string, unknown> | null | undefined
+): AdminSupplierSummary => ({
+  supplier_id:
+    readNonEmptyString(supplierOrder?.supplier_id) ??
+    readNonEmptyString(fulfillmentOrder?.supplier) ??
+    null,
+  supplier_order_id:
+    readNonEmptyString(supplierOrder?.supplier_order_id) ??
+    readNonEmptyString(fulfillmentOrder?.supplier_order_id) ??
+    null,
+  supplier_status:
+    readNonEmptyString(supplierOrder?.supplier_status) ??
+    readNonEmptyString(fulfillmentOrder?.status) ??
+    null,
+})
+
+const loadAdminOrderGraphRow = async (
+  scope: MedusaContainer,
+  orderId: string
+): Promise<Record<string, unknown> | null> => {
+  const queryGraph = scope.resolve(ContainerRegistrationKeys.QUERY) as {
+    graph: (input: never) => Promise<{ data?: Array<Record<string, unknown>> }>
+  }
+  const filters = { id: [orderId] }
+
+  try {
+    const { data } = await queryGraph.graph({
+      entity: "order",
+      fields: [...ADMIN_ORDER_GRAPH_FIELDS],
+      filters,
+      options: { throwIfKeyNotFound: false },
+    } as never)
+    if (data?.[0]) return data[0]
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[admin-orders] graph enrichment failed", {
+        order_id: orderId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  try {
+    const { data } = await queryGraph.graph({
+      entity: "order",
+      fields: [...ADMIN_ORDER_GRAPH_FIELDS_MINIMAL],
+      filters,
+      options: { throwIfKeyNotFound: false },
+    } as never)
+    return data?.[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+export type AdminOrderRecord = {
+  id: string
+  email?: string | null
+  display_id?: number | null
+  created_at?: string | Date | null
+  currency_code?: string | null
+  metadata?: Record<string, unknown> | null
+  items?: unknown[]
+  shipping_address?: Record<string, unknown> | null
+}
+
+export const hydrateAdminOrderFromGraph = (
+  order: Record<string, unknown>,
+  graphRow: Record<string, unknown> | null | undefined
+): Record<string, unknown> => {
+  if (!graphRow) return order
+
+  const retrieveItems = Array.isArray(order.items) ? order.items : []
+  const graphItems = Array.isArray(graphRow.items) ? graphRow.items : []
+
+  return {
+    ...order,
+    email: order.email ?? graphRow.email,
+    display_id: order.display_id ?? graphRow.display_id,
+    metadata:
+      (graphRow.metadata && typeof graphRow.metadata === "object"
+        ? graphRow.metadata
+        : undefined) ??
+      order.metadata,
+    items: retrieveItems.length > 0 ? retrieveItems : graphItems,
+    shipping_address: order.shipping_address ?? null,
+  }
+}
+
+export const loadAdminOrderRecord = async (
+  scope: MedusaContainer,
+  orderId: string
+): Promise<AdminOrderRecord> => {
+  const orderModule = scope.resolve(Modules.ORDER)
+
+  const order = await orderModule.retrieveOrder(orderId, {
+    relations: ["items", "shipping_address"],
+  })
+
+  const graphRow = await loadAdminOrderGraphRow(scope, orderId)
+  const [withMetadata] = mergeAdminOrderMetadata(
+    [order as unknown as Record<string, unknown>],
+    graphRow
+      ? ([graphRow] as Array<{ id: string; metadata?: Record<string, unknown> | null }>)
+      : []
+  )
+
+  const hydrated = hydrateAdminOrderFromGraph(withMetadata, graphRow)
+
+  return {
+    ...hydrated,
+    id: order.id,
+    created_at: order.created_at,
+    currency_code: order.currency_code,
+  } as AdminOrderRecord
+}
+
+export const serializeAdminOrderSummary = (input: {
+  order: AdminOrderRecord
+  fulfillmentOrder?: Record<string, unknown> | null
+  supplierOrder?: Record<string, unknown> | null
+}) => {
+  const meta = input.order.metadata as Record<string, unknown> | null
+  const mcPayment = meta?.[ORDER_META_PAYMENT_STATUS] ?? null
+  const paymentMethodLabel =
+    typeof meta?.payment_method_label === "string" && meta.payment_method_label.trim()
+      ? meta.payment_method_label.trim()
+      : null
+  const mcFulfillment = readOrderFulfillmentStatusMeta(meta)
+
+  return {
+    order_id: input.order.id,
+    display_id: input.order.display_id ?? null,
+    email: input.order.email ?? null,
+    shipping_address: input.order.shipping_address ?? null,
+    payment_status: toMedusaAdminOrderPaymentStatus(mcPayment),
+    payment_method_label: paymentMethodLabel,
+    mc_payment_status: mcPayment ?? null,
+    fulfillment_status: toMedusaAdminOrderFulfillmentStatus(mcFulfillment),
+    mc_fulfillment_status: mcFulfillment ?? null,
+    supplier: resolveAdminSupplierSummary(input.fulfillmentOrder, input.supplierOrder),
+  }
+}
+
 const readOrderNumeric = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value
   if (typeof value === "string" && value.trim()) {
@@ -167,7 +352,7 @@ export const normalizeOrderLineItem = (item: Record<string, unknown>) => {
     id: item.id,
     title: item.title ?? item.product_title ?? null,
     subtitle: item.subtitle ?? null,
-    thumbnail: item.thumbnail ?? null,
+    thumbnail: resolveOrderLineItemThumbnail(item),
     quantity: item.quantity ?? 1,
     unit_price: item.unit_price ?? null,
     total: item.total ?? null,

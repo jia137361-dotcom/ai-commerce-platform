@@ -6,10 +6,17 @@ import { STORE_CORE_MODULE } from "../../../../../modules/store-core"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../../modules/buyer-refund-requests"
 import { matchesBuyerOrderBucket } from "../../../../../lib/customer-order-buckets"
 import {
+  buyerOrderDisplayStatusLabel,
+  canConfirmReceipt,
+  readReceiptConfirmed,
+  resolveBuyerOrderDisplayStatus,
+} from "../../../../../lib/buyer-order-display"
+import {
   ORDER_META_PAYMENT_STATUS,
   readOrderFulfillmentStatusMeta,
+  readOrderFulfillmentStatusString,
 } from "../../../../../lib/order-custom-metadata"
-import { isReceiptConfirmed } from "../../../../../lib/order-receipt-confirmation"
+import { enrichOrderLineItemsWithImages, resolveOrderLineItemThumbnail } from "../../../../../lib/order-line-item-display"
 
 type OrderLineItem = {
   title?: string | null
@@ -126,24 +133,50 @@ const safeOrderShape = (order: CustomerOrder) => ({
 const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<string>(), returnOrderIds = new Set<string>()) => {
   const metadata = order.metadata ?? null
   const items = order.items ?? []
+  const paymentStatus = metadata?.[ORDER_META_PAYMENT_STATUS] ?? null
+  const fulfillmentStatus = readOrderFulfillmentStatusString(metadata)
+  const receiptConfirmed = readReceiptConfirmed(order)
+  const receiptConfirmationRequired = canConfirmReceipt({
+    fulfillmentStatus,
+    receiptConfirmed,
+  })
+  const reviewEligible =
+    ["shipped", "delivered"].includes(fulfillmentStatus ?? "") &&
+    receiptConfirmed &&
+    Boolean(order.id) &&
+    !reviewedOrderIds.has(order.id!)
+  const reviewCompleted = Boolean(order.id) && reviewedOrderIds.has(order.id!)
+  const displayStatus = resolveBuyerOrderDisplayStatus({
+    status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
+    paymentStatus: typeof paymentStatus === "string" ? paymentStatus : null,
+    fulfillmentStatus,
+    receiptConfirmed,
+    reviewEligible,
+    reviewCompleted,
+    returnIntent: Boolean(order.id) && returnOrderIds.has(order.id!),
+  })
+
   return {
     order_id: order.id ?? "",
     display_id: readDisplayId(order),
     created_at: dateValue(order.created_at),
     email: order.email ?? null,
     status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
-    payment_status: metadata?.[ORDER_META_PAYMENT_STATUS] ?? null,
-    fulfillment_status: readOrderFulfillmentStatusMeta(metadata),
-    receipt_confirmation_required: readOrderFulfillmentStatusMeta(metadata) === "delivered" && !isReceiptConfirmed(order),
+    payment_status: paymentStatus,
+    fulfillment_status: fulfillmentStatus,
+    buyer_display_status: displayStatus,
+    buyer_display_status_label: buyerOrderDisplayStatusLabel(displayStatus),
+    receipt_confirmation_required: receiptConfirmationRequired,
     receipt_confirmed_at: typeof metadata?.buyer_confirmed_received_at === "string" ? metadata.buyer_confirmed_received_at : null,
-    review_eligible: readOrderFulfillmentStatusMeta(metadata) === "delivered" && isReceiptConfirmed(order) && Boolean(order.id) && !reviewedOrderIds.has(order.id!),
+    review_eligible: reviewEligible,
+    review_completed: reviewCompleted,
     return_intent: Boolean(order.id) && returnOrderIds.has(order.id!),
     currency_code: order.currency_code ?? null,
     total: readNumber(order.total),
     item_count: items.reduce((sum, item) => sum + (readNumber(item.quantity) ?? 0), 0),
     preview_items: items.slice(0, 3).map((item) => ({
       title: item.title ?? "Untitled item",
-      thumbnail: item.thumbnail ?? null,
+      thumbnail: resolveOrderLineItemThumbnail(item),
       quantity: readNumber(item.quantity) ?? 0,
       product_id: typeof item.metadata?.mc_product_id === "string" ? item.metadata.mc_product_id : null,
     })),
@@ -208,11 +241,6 @@ const loadCustomerOrders = async (
   req: MedusaRequest,
   selector: Record<string, unknown>
 ): Promise<{ orders: CustomerOrder[]; source: "order_module" | "query_graph" }> => {
-  const moduleOrders = await loadOrdersWithOrderModule(req, selector)
-  if (moduleOrders.length > 0) {
-    return { orders: moduleOrders, source: "order_module" }
-  }
-
   try {
     const graphOrders = await loadOrdersWithQueryGraph(req, selector)
     if (graphOrders.length > 0) {
@@ -220,12 +248,13 @@ const loadCustomerOrders = async (
     }
   } catch (error) {
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[customer-orders] query graph fallback failed", {
+      console.warn("[customer-orders] query graph load failed", {
         message: error instanceof Error ? error.message : String(error),
       })
     }
   }
 
+  const moduleOrders = await loadOrdersWithOrderModule(req, selector)
   return { orders: moduleOrders, source: "order_module" }
 }
 
@@ -275,7 +304,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       return res.status(401).json({ error: "Customer session is required" })
     }
 
-    const limit = readPositiveInt(req.query?.limit, 20, 50)
+    const limit = readPositiveInt(req.query?.limit, 20, 100)
     const offset = readPositiveInt(req.query?.offset, 0)
     const status = readStringFilter(req.query?.status)
     const paymentStatus = readStringFilter(req.query?.payment_status)
@@ -307,8 +336,52 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     } catch {
       // Optional aggregates remain empty if a module is unavailable.
     }
-    const bucketed = bucket ? filtered.filter((order) => matchesBuyerOrderBucket({ bucket, paymentStatus: String(order.metadata?.[ORDER_META_PAYMENT_STATUS] ?? ""), fulfillmentStatus: String(readOrderFulfillmentStatusMeta(order.metadata ?? null) ?? "none"), orderId: order.id, reviewedOrderIds, returnOrderIds })) : filtered
+    const bucketed = bucket
+      ? filtered.filter((order) =>
+          matchesBuyerOrderBucket({
+            bucket,
+            status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
+            paymentStatus: String(order.metadata?.[ORDER_META_PAYMENT_STATUS] ?? ""),
+            fulfillmentStatus: readOrderFulfillmentStatusString(order.metadata ?? null) ?? "none",
+            orderId: order.id,
+            receiptConfirmed: readReceiptConfirmed(order),
+            reviewEligible:
+              ["shipped", "delivered"].includes(readOrderFulfillmentStatusString(order.metadata ?? null) ?? "") &&
+              readReceiptConfirmed(order) &&
+              Boolean(order.id) &&
+              !reviewedOrderIds.has(order.id!),
+            reviewedOrderIds,
+            returnOrderIds,
+          })
+        )
+      : filtered
     const page = bucketed.slice(offset, offset + limit)
+    const applyPreviewImages = async (ordersPage: CustomerOrder[]) => {
+      const withSyncThumbnails = ordersPage.map((order) => ({
+        ...order,
+        items: order.items?.map((item) => ({
+          ...item,
+          thumbnail: resolveOrderLineItemThumbnail(item),
+        })),
+      }))
+
+      try {
+        const storeCore = req.scope.resolve(STORE_CORE_MODULE) as {
+          listProducts: (filters: Record<string, unknown>) => Promise<Array<Record<string, unknown>>>
+        }
+        return Promise.all(
+          withSyncThumbnails.map(async (order) => ({
+            ...order,
+            items: order.items?.length
+              ? await enrichOrderLineItemsWithImages(storeCore, order.items)
+              : order.items,
+          }))
+        )
+      } catch {
+        return withSyncThumbnails
+      }
+    }
+    const pageWithImages = await applyPreviewImages(page)
     if (process.env.NODE_ENV !== "production") {
       const customerEmail = await readCustomerEmailForDiagnostics(req, customerId)
       let sameEmailUnownedCount: number | undefined
@@ -344,7 +417,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     return res.status(200).json({
-      orders: page.map((order) => normalizeOrderSummary(order, reviewedOrderIds, returnOrderIds)),
+      orders: pageWithImages.map((order) => normalizeOrderSummary(order, reviewedOrderIds, returnOrderIds)),
       count: bucketed.length,
       limit,
       offset,

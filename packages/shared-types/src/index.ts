@@ -28,6 +28,13 @@ export type ProductVariantRow = {
   stock: number
 }
 
+export type ProductRegionSummary = {
+  region_id: string
+  name: string
+  currency_code: string
+  country_codes: string[]
+}
+
 export type ProductGalleryItem = {
   id: string
   label: string
@@ -54,6 +61,8 @@ export type NormalizedProduct = {
   medusa_variant_id?: string | null
   is_cart_addable?: boolean
   requires_shipping?: boolean
+  supported_region_ids?: string[]
+  supported_regions?: ProductRegionSummary[]
   variants?: ProductVariantRow[]
   design_image_url?: string | null
   mockup_image_url?: string | null
@@ -98,3 +107,5 @@ export type StoreSettings = {
   seo_description: string | null
   metadata: Record<string, unknown>
 }
+
+export * from "./store-policy-presets"

@@ -2,6 +2,11 @@
 
 export const ORDER_META_STORE_ID = "store_id"
 export const ORDER_META_PAYMENT_STATUS = "payment_status"
+export const ORDER_META_SELLER_PAYOUT_STATUS = "seller_payout_status"
+export const ORDER_META_SELLER_PAYOUT_TRANSFER_ID = "seller_payout_transfer_id"
+export const ORDER_META_SELLER_PAYOUT_AT = "seller_payout_at"
+export const ORDER_META_SELLER_PAYOUT_AMOUNT = "seller_payout_amount"
+export const ORDER_META_SELLER_PAYOUT_ERROR = "seller_payout_error"
 
 /**
  * 平台履约阶段（等待推单 / 已推供应商 / 已发货），勿使用键名 `fulfillment_status`：
@@ -34,6 +39,13 @@ export function readOrderFulfillmentStatusMeta(
 ): unknown {
   if (!meta) return undefined
   return meta[ORDER_META_FULFILLMENT_STATUS] ?? meta[LEGACY_ORDER_META_FULFILLMENT_STATUS]
+}
+
+export function readOrderFulfillmentStatusString(
+  meta: Record<string, unknown> | null | undefined
+): string | null {
+  const value = readOrderFulfillmentStatusMeta(meta)
+  return typeof value === "string" ? value : null
 }
 
 /** Medusa Admin 订单表的 FulfillmentStatusCell 只接受原生履约枚举字符串 */

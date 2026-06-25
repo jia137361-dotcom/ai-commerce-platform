@@ -48,6 +48,11 @@ export function OrderDetailActions({
         </div>
       ) : null}
       <Button href={trackingHref}>Track order</Button>
+      {isAuthenticated ? (
+        <Button variant="secondary" href={`/account/messages?orderId=${encodeURIComponent(order.orderId)}`}>
+          Message seller
+        </Button>
+      ) : null}
       {actionState.showCancel ? (
         <Button variant="danger" onClick={onCancel}>Cancel order</Button>
       ) : order.cancellation?.message && isAuthenticated ? (

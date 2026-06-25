@@ -1,7 +1,11 @@
 import type { BuyerPaymentProvider, BuyerPaymentSession } from "../../lib/buyer-api"
 import type { Stripe, StripeElements } from "@stripe/stripe-js"
+import { resolveStripePaymentMethodLabel } from "../../lib/stripe-payment-method"
 
 export const isStripeProviderId = (providerId?: string) => Boolean(providerId?.startsWith("pp_stripe_"))
+
+export const isValidStripePublishableKey = (publishableKey: string) =>
+  publishableKey.startsWith("pk_test_") || publishableKey.startsWith("pk_live_")
 
 export const chooseDefaultPaymentProvider = (
   providers: BuyerPaymentProvider[],
@@ -10,7 +14,7 @@ export const chooseDefaultPaymentProvider = (
   const stripe =
     providers.find((provider) => provider.id === "pp_stripe_stripe") ??
     providers.find((provider) => provider.isStripe)
-  if (stripe && stripePublishableKey.startsWith("pk_test_")) return stripe.id
+  if (stripe && isValidStripePublishableKey(stripePublishableKey)) return stripe.id
   return providers.find((provider) => provider.id === "pp_system_default")?.id ?? providers[0]?.id ?? "pp_system_default"
 }
 
@@ -26,20 +30,25 @@ export async function confirmStripePaymentAndComplete<T>(input: {
   stripe: Pick<Stripe, "confirmPayment">
   elements: StripeElements
   returnUrl: string
-  complete: () => Promise<T>
-}) {
+  complete: (paymentMethodLabel?: string) => Promise<T>
+}): Promise<{ result: T; paymentMethodLabel?: string }> {
   const result = await input.stripe.confirmPayment({
     elements: input.elements,
     redirect: "if_required",
     confirmParams: { return_url: input.returnUrl },
   })
   if (result.error) throw new Error(result.error.message || "Stripe payment confirmation failed.")
-  const status = result.paymentIntent?.status
+  const paymentIntent = result.paymentIntent
+  const status = paymentIntent?.status
   if (!status || !COMPLETABLE_STRIPE_STATUSES.has(status)) {
     throw new Error(`Stripe payment is not ready to complete${status ? ` (${status})` : ""}.`)
   }
+  const paymentMethodLabel = paymentIntent
+    ? await resolveStripePaymentMethodLabel(paymentIntent)
+    : undefined
   try {
-    return await input.complete()
+    const orderResult = await input.complete(paymentMethodLabel)
+    return { result: orderResult, paymentMethodLabel }
   } catch {
     throw new Error(STRIPE_ORDER_CREATION_FAILED_MESSAGE)
   }

@@ -1,15 +1,12 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import { assertOrderBelongsToCurrentStore } from "../../../../lib/order-store-context"
 import { OrderStoreAccessError } from "../../../../lib/order-store-error"
 import {
-  ORDER_META_PAYMENT_STATUS,
-  readOrderFulfillmentStatusMeta,
-  toMedusaAdminOrderFulfillmentStatus,
-  toMedusaAdminOrderPaymentStatus,
-} from "../../../../lib/order-custom-metadata"
-import { normalizeOrderLineItem } from "../../../../lib/admin-orders"
+  loadAdminOrderRecord,
+  normalizeOrderLineItem,
+  serializeAdminOrderSummary,
+} from "../../../../lib/admin-orders"
 import { getStoreCoreService, sendError } from "../../../_helpers/store-core"
 import { FULFILLMENT_ORDERS_MODULE } from "../../../../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../../../../modules/fulfillment-orders/service"
@@ -21,14 +18,11 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const orderId = req.params.order_id as string
     const storeId = resolveCurrentStore(req).store_id
 
-    const orderModule = req.scope.resolve(Modules.ORDER)
     const foService = req.scope.resolve(FULFILLMENT_ORDERS_MODULE) as FulfillmentOrdersModuleService
     const shipmentService = req.scope.resolve(SHIPMENTS_MODULE) as ShipmentsModuleService
     const storeCore = getStoreCoreService(req)
 
-    const order = await orderModule.retrieveOrder(orderId, {
-      relations: ["items", "shipping_address"],
-    })
+    const order = await loadAdminOrderRecord(req.scope, orderId)
     assertOrderBelongsToCurrentStore(req, order)
 
     const fos = await foService.listFulfillmentOrders({ order_id: [orderId] })
@@ -45,29 +39,34 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
           })[0]
         : null
 
-    const supplierRows = await storeCore.listSupplierOrders({ order_id: [orderId] })
-    const supplierOrder = supplierRows[0] ?? null
+    let supplierOrder: Record<string, unknown> | null = null
+    try {
+      const supplierRows = await storeCore.listSupplierOrders({ order_id: [orderId] })
+      supplierOrder = (supplierRows[0] as Record<string, unknown> | undefined) ?? null
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[admin-order-detail] supplier order lookup failed", {
+          order_id: orderId,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
 
-    const meta = order.metadata as Record<string, unknown> | null
-    const mcPayment = meta?.[ORDER_META_PAYMENT_STATUS] ?? null
-    const mcFulfillment = readOrderFulfillmentStatusMeta(meta)
+    const summary = serializeAdminOrderSummary({
+      order,
+      fulfillmentOrder: fo as Record<string, unknown> | null,
+      supplierOrder,
+    })
 
-    const items = (order.items ?? []).map((item) =>
+    const items = (Array.isArray(order.items) ? order.items : []).map((item) =>
       normalizeOrderLineItem(item as unknown as Record<string, unknown>)
     )
 
     return res.json({
-      order_id: order.id,
+      ...summary,
       store_id: storeId,
-      display_id: order.display_id,
-      email: order.email,
       created_at: order.created_at,
       currency_code: order.currency_code,
-      payment_status: toMedusaAdminOrderPaymentStatus(mcPayment),
-      mc_payment_status: mcPayment ?? null,
-      fulfillment_status: toMedusaAdminOrderFulfillmentStatus(mcFulfillment),
-      mc_fulfillment_status: mcFulfillment ?? null,
-      shipping_address: order.shipping_address ?? null,
       items,
       fulfillment_order: fo,
       latest_shipment: latestShipment,

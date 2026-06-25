@@ -11,7 +11,7 @@ const validCart: StoreCart = {
   items: [{ id: "line_1", title: "Product", quantity: 1, unitPrice: 21.25, total: 21.25, hasUnitPrice: true, hasTotal: true, variantId: "variant_1" }],
 }
 
-const base = { cart: validCart, authLoading: false, authenticated: true, contactValid: true, requiresShippingMethod: false, addressValid: false, addressSaved: false, shippingMethodSaved: false, paymentSessionReady: true, placingOrder: false }
+const base = { cart: validCart, authLoading: false, authenticated: true, emailVerified: true, contactValid: true, requiresShippingMethod: false, addressValid: false, addressSaved: false, shippingMethodSaved: false, paymentSessionReady: true, placingOrder: false }
 
 describe("checkout state", () => {
   it("handles an empty cart", () => expect(resolveCheckoutState({ ...base, cart: null })).toEqual(expect.objectContaining({ canPlaceOrder: false, disabledReason: "Cart is empty." })))
@@ -25,6 +25,9 @@ describe("checkout state", () => {
   })
   it("allows guest checkout when contact is valid", () =>
     expect(resolveCheckoutState({ ...base, authenticated: false }).canPlaceOrder).toBe(true)
+  )
+  it("blocks logged-in checkout when email is not verified", () =>
+    expect(resolveCheckoutState({ ...base, emailVerified: false }).disabledReason).toContain("Verify your account email")
   )
   it("allows a valid non-shipping order without address or shipping method", () =>
     expect(resolveCheckoutState(base).canPlaceOrder).toBe(true)

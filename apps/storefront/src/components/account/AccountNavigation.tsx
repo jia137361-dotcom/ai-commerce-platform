@@ -27,6 +27,7 @@ export function AccountNavigation({
         <span className="buyer-account-nav-label">Settings</span>
         <a href="/account/security">Account &amp; Security</a>
         <a href="/account/addresses">Delivery addresses</a>
+        <a href="/account/payment-methods">Payment methods</a>
         <a href="/account/country-region">Country &amp; region</a>
         <a href="/account/currency">Currency</a>
         <a href="/account/coupons">Coupons</a>

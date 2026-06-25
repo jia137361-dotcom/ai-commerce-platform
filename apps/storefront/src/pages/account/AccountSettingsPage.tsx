@@ -4,6 +4,7 @@ import { AccountAuthLayout } from "../../components/account/AccountAuthLayout"
 import { AccountAuthRequired } from "../../components/account/AccountAuthRequired"
 import { AccountNavigation } from "../../components/account/AccountNavigation"
 import { AccountCouponsEmpty } from "../../components/account/AccountCouponsEmpty"
+import { AccountPaymentMethods } from "./AccountPaymentMethods"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
 import { LoadingState } from "../../components/ui/States"
@@ -24,7 +25,7 @@ import {
 import { CHECKOUT_COUNTRIES } from "../checkout/checkout-countries"
 import { customerAddressToInput } from "./account-settings-state"
 
-export type AccountSettingsSlug = "addresses" | "country-region" | "currency" | "coupons" | "following"
+export type AccountSettingsSlug = "addresses" | "payment-methods" | "country-region" | "currency" | "coupons" | "following"
 
 const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo", metadata: {} }
 const currencies = [
@@ -144,6 +145,10 @@ function PreferenceList({ kind }: { kind: "country" | "currency" }) {
   </SettingsFrame>
 }
 
+function PaymentMethodsPanel() {
+  return <SettingsFrame title="Payment methods"><AccountPaymentMethods /></SettingsFrame>
+}
+
 function FollowingList({ settings }: { settings: BuyerStoreSettings }) {
   const [following, setFollowing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -158,6 +163,7 @@ export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; sl
   useEffect(() => { void fetchStoreSettings().then((result) => setSettings(result.data)) }, [])
   const content = useMemo(() => {
     if (slug === "addresses") return <AddressBook />
+    if (slug === "payment-methods") return <PaymentMethodsPanel />
     if (slug === "country-region") return <PreferenceList kind="country" />
     if (slug === "currency") return <PreferenceList kind="currency" />
     if (slug === "following") return <FollowingList settings={settings} />

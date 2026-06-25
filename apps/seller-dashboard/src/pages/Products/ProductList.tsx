@@ -1,8 +1,13 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "../../lib/api-client"
-import { storeProductPath, storeProductsListPath } from "../../lib/store-product-api"
+import {
+  storeProductPath,
+  storeProductPermanentDeletePath,
+  storeProductsBulkPath,
+  storeProductsListPath,
+} from "../../lib/store-product-api"
 import { PageHeader } from "../../components/PageHeader"
 import { useToast } from "../../components/ToastProvider"
 import { Badge } from "../../components/ui/Badge"
@@ -20,6 +25,8 @@ const STATUSES = [
   { id: "archived" as const, label: "Archived" },
 ]
 
+type BulkAction = "archive" | "delete"
+
 const isFailedProduct = (product: NormalizedProduct) => {
   const meta = product.metadata ?? {}
   return (
@@ -28,6 +35,9 @@ const isFailedProduct = (product: NormalizedProduct) => {
       (typeof meta.s2b_provision_error === "string" && meta.s2b_provision_error.length > 0))
   )
 }
+
+const canPermanentlyDelete = (product: NormalizedProduct) =>
+  product.status === "draft" || product.status === "archived"
 
 export function ProductListPage() {
   const navigate = useNavigate()
@@ -38,6 +48,9 @@ export function ProductListPage() {
   const [q, setQ] = useState("")
   const [search, setSearch] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkAction, setBulkAction] = useState<BulkAction | null>(null)
   const limit = 20
 
   const apiStatus = status
@@ -58,15 +71,75 @@ export function ProductListPage() {
       ),
   })
 
+  const products = data?.products ?? []
+  const count = data?.count ?? 0
+  const visibleIds = useMemo(() => products.map((product) => product.product_id), [products])
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
+  const selectedCount = selectedIds.length
+
+  const clearSelection = () => setSelectedIds([])
+
+  const toggleProduct = (productId: string) => {
+    setSelectedIds((current) =>
+      current.includes(productId) ? current.filter((id) => id !== productId) : [...current, productId]
+    )
+  }
+
+  const toggleAllVisible = () => {
+    setSelectedIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((id) => !visibleIds.includes(id))
+      }
+      return Array.from(new Set([...current, ...visibleIds]))
+    })
+  }
+
+  const invalidateProducts = () => {
+    queryClient.invalidateQueries({ queryKey: ["products"] })
+    clearSelection()
+  }
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiFetch(storeProductPath(id), { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["products"] })
+      invalidateProducts()
       toast.push("Product archived", "success")
       setDeleteId(null)
     },
     onError: (err: unknown) => {
       toast.push(err instanceof Error ? err.message : "Archive failed", "error")
+    },
+  })
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(storeProductPermanentDeletePath(id), { method: "DELETE" }),
+    onSuccess: () => {
+      invalidateProducts()
+      toast.push("Product permanently deleted", "success")
+      setPermanentDeleteId(null)
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Delete failed", "error")
+    },
+  })
+
+  const bulkMutation = useMutation({
+    mutationFn: (input: { action: BulkAction; product_ids: string[] }) =>
+      apiFetch<{ succeeded: number; failed: number; skipped: number }>(storeProductsBulkPath(), {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: (result, variables) => {
+      invalidateProducts()
+      const label = variables.action === "archive" ? "archived" : "deleted"
+      toast.push(
+        `${result.succeeded} product${result.succeeded === 1 ? "" : "s"} ${label}${result.failed ? `, ${result.failed} failed` : ""}${result.skipped ? `, ${result.skipped} skipped` : ""}`,
+        result.failed ? "error" : "success"
+      )
+      setBulkAction(null)
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Bulk action failed", "error")
     },
   })
 
@@ -123,9 +196,6 @@ export function ProductListPage() {
     },
   })
 
-  const products = data?.products ?? []
-  const count = data?.count ?? 0
-
   return (
     <div>
       <PageHeader
@@ -143,13 +213,14 @@ export function ProductListPage() {
       />
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <Tabs items={STATUSES} value={status} onChange={(id) => { setStatus(id); setOffset(0) }} />
+        <Tabs items={STATUSES} value={status} onChange={(id) => { setStatus(id); setOffset(0); clearSelection() }} />
         <form
           className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault()
             setOffset(0)
             setSearch(q.trim())
+            clearSelection()
           }}
         >
           <input
@@ -163,6 +234,25 @@ export function ProductListPage() {
           </Button>
         </form>
       </div>
+
+      {selectedCount ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-sm text-slate-700">
+            <strong>{selectedCount}</strong> selected
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={clearSelection}>
+              Clear
+            </Button>
+            <Button variant="danger" size="sm" onClick={() => setBulkAction("archive")}>
+              Archive selected
+            </Button>
+            <Button variant="danger" size="sm" onClick={() => setBulkAction("delete")}>
+              Delete selected
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <TableSkeleton />
@@ -195,6 +285,14 @@ export function ProductListPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-surface-muted text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all products on this page"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                  />
+                </th>
                 <th className="px-4 py-3">Image</th>
                 <th className="px-4 py-3">Title</th>
                 <th className="px-4 py-3">Status</th>
@@ -216,8 +314,17 @@ export function ProductListPage() {
                   (product.metadata?.design_image_url as string | undefined) ||
                   product.image_url
                 const productId = product.product_id
+                const checked = selectedIds.includes(productId)
                 return (
-                  <tr key={productId} className="border-t border-slate-100">
+                  <tr key={productId} className={`border-t border-slate-100 ${checked ? "bg-slate-50" : ""}`}>
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${product.title}`}
+                        checked={checked}
+                        onChange={() => toggleProduct(productId)}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="h-12 w-12 overflow-hidden rounded-lg bg-slate-100">
                         {thumb ? (
@@ -255,6 +362,11 @@ export function ProductListPage() {
                                   variant: "primary" as const,
                                   onClick: () => restoreMutation.mutate(productId),
                                 },
+                                {
+                                  label: "Delete permanently",
+                                  variant: "danger" as const,
+                                  onClick: () => setPermanentDeleteId(productId),
+                                },
                               ]
                             : [
                                 {
@@ -262,6 +374,15 @@ export function ProductListPage() {
                                   variant: "danger" as const,
                                   onClick: () => setDeleteId(productId),
                                 },
+                                ...(canPermanentlyDelete(product)
+                                  ? [
+                                      {
+                                        label: "Delete permanently",
+                                        variant: "danger" as const,
+                                        onClick: () => setPermanentDeleteId(productId),
+                                      },
+                                    ]
+                                  : []),
                               ]),
                           ...(isFailedProduct(product) && failedJobId
                             ? [
@@ -310,7 +431,10 @@ export function ProductListPage() {
           offset={offset}
           limit={limit}
           count={count}
-          onPageChange={setOffset}
+          onPageChange={(nextOffset) => {
+            setOffset(nextOffset)
+            clearSelection()
+          }}
           label={`Showing ${products.length} of ${count} products`}
         />
       ) : null}
@@ -333,7 +457,55 @@ export function ProductListPage() {
           </>
         }
       >
-        This will archive the product. You can duplicate it later if needed.
+        This will archive the product and hide it from your storefront. You can restore it later from the Archived tab.
+      </Modal>
+
+      <Modal
+        open={Boolean(permanentDeleteId)}
+        title="Delete product permanently?"
+        onClose={() => setPermanentDeleteId(null)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPermanentDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => permanentDeleteId && permanentDeleteMutation.mutate(permanentDeleteId)}
+            >
+              Delete permanently
+            </Button>
+          </>
+        }
+      >
+        This draft or archived product will be permanently removed and cannot be restored.
+      </Modal>
+
+      <Modal
+        open={Boolean(bulkAction)}
+        title={bulkAction === "delete" ? "Delete selected products?" : "Archive selected products?"}
+        onClose={() => setBulkAction(null)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setBulkAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={bulkMutation.isPending}
+              onClick={() => {
+                if (!bulkAction || !selectedIds.length) return
+                bulkMutation.mutate({ action: bulkAction, product_ids: selectedIds })
+              }}
+            >
+              {bulkAction === "delete" ? "Delete permanently" : "Archive"}
+            </Button>
+          </>
+        }
+      >
+        {bulkAction === "delete"
+          ? "Only draft or archived products can be permanently deleted. Published items in the selection will be reported as failed."
+          : "Selected products will be archived and hidden from your storefront. You can restore them later from the Archived tab."}
       </Modal>
     </div>
   )

@@ -117,6 +117,45 @@ const createReq = ({
 }
 
 describe("GET /store/orders/:order_id/detail", () => {
+  it("returns totals from order summary when root totals are missing", async () => {
+    const { req, queryGraph } = createReq({
+      authCustomerId: undefined,
+      retrievedOrder: {
+        ...order,
+        subtotal: null,
+        shipping_total: null,
+        total: null,
+        items: [{
+          ...order.items[0],
+          subtotal: null,
+          unit_price: 2499,
+        }],
+      },
+    })
+    queryGraph.graph.mockResolvedValueOnce({
+      data: [{
+        summary: {
+          totals: {
+            subtotal: 2499,
+            shipping_total: 500,
+            total: 2999,
+            current_order_total: 2999,
+          },
+        },
+      }],
+    })
+    const res = createRes()
+
+    await getOrderDetail(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      subtotal: 24.99,
+      shipping_total: 5,
+      total: 29.99,
+    })
+  })
+
   it("returns order detail for matching email and store", async () => {
     const { req } = createReq({ authCustomerId: undefined })
     const res = createRes()
@@ -136,11 +175,15 @@ describe("GET /store/orders/:order_id/detail", () => {
           id: "ordli_1",
           title: "Printed item",
           quantity: 1,
-          unit_price: 2125,
-          subtotal: 2125,
+          unit_price: 21.25,
+          subtotal: 21.25,
         },
       ],
-      total: 2125,
+      subtotal: 21.25,
+      shipping_total: 0,
+      discount_total: 0,
+      tax_total: 0,
+      total: 21.25,
       cancellation: {
         allowed: false,
         code: "ORDER_ACCESS_DENIED",

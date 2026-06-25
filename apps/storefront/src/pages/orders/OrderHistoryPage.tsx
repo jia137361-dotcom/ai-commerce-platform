@@ -3,7 +3,6 @@ import { OrderHistoryAuthRequired } from "../../components/orders/OrderHistoryAu
 import { OrderHistoryCard } from "../../components/orders/OrderHistoryCard"
 import { OrderHistoryEmptyState } from "../../components/orders/OrderHistoryEmptyState"
 import { OrderHistoryHeader } from "../../components/orders/OrderHistoryHeader"
-import { OrderHistoryPagination } from "../../components/orders/OrderHistoryPagination"
 import { OrderHistoryTabs, orderHistoryFilters, type OrderHistoryFilter } from "../../components/orders/OrderHistoryTabs"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { PageShell } from "../../components/layout/PageShell"
@@ -28,7 +27,6 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState<string | undefined>()
   const [activeFilter, setActiveFilter] = useState<OrderHistoryFilter>(orderHistoryFilters[0])
-  const [offset, setOffset] = useState(0)
   const auth = useBuyerAuth()
 
   useEffect(() => {
@@ -52,22 +50,11 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
       setOrdersError(undefined)
       try {
         const page = await getMyOrders({
-          limit: 10,
-          offset,
-          status: activeFilter.status,
-          paymentStatus: activeFilter.paymentStatus,
-          fulfillmentStatus: activeFilter.fulfillmentStatus,
+          limit: 100,
+          offset: 0,
           bucket: activeFilter.bucket,
         })
         if (!active) return
-        if (import.meta.env.DEV) {
-          console.info("[account-orders] parsed counts", {
-            selected_tab: activeFilter.key,
-            parsed_order_count: page.orders.length,
-            filtered_order_count: page.orders.length,
-            response_count: page.count,
-          })
-        }
         setOrdersPage(page)
       } catch (error) {
         if (!active) return
@@ -81,11 +68,10 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
     return () => {
       active = false
     }
-  }, [activeFilter, auth.customer, offset])
+  }, [activeFilter, auth.customer])
 
   const changeFilter = (filter: OrderHistoryFilter) => {
     setActiveFilter(filter)
-    setOffset(0)
   }
 
   return (
@@ -95,36 +81,40 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StoreFooter />}
     >
-        <OrderHistoryHeader signedInEmail={auth.customer?.email} />
-        <OrderHistoryTabs activeKey={activeFilter.key} onChange={changeFilter} />
-        {auth.isLoading ? (
-          <LoadingState label="Checking account session..." />
-        ) : auth.customer ? (
-          ordersLoading ? (
-            <LoadingState label="Loading your orders..." />
-          ) : ordersError ? (
-            <ErrorState
-              title="Orders unavailable"
-              message={ordersError}
-              action={{ label: "Retry", onClick: () => window.location.reload() }}
-            />
-          ) : ordersPage?.orders.length ? (
-            <>
-              <section className="buyer-order-history-list" aria-label="Authenticated order history">
-                {ordersPage.orders.map((order) => (
-                  <div key={order.orderId}>
-                    <OrderHistoryCard order={order} onConfirmReceipt={async (orderId) => { await confirmOrderReceived(orderId) }} />
-                  </div>
-                ))}
-              </section>
-              <OrderHistoryPagination count={ordersPage.count} limit={ordersPage.limit} offset={ordersPage.offset} onPage={setOffset} />
-            </>
-          ) : (
-            <OrderHistoryEmptyState />
-          )
+      <OrderHistoryHeader signedInEmail={auth.customer?.email} />
+      <OrderHistoryTabs activeKey={activeFilter.key} onChange={changeFilter} />
+      {auth.isLoading ? (
+        <LoadingState label="Checking account session..." />
+      ) : auth.customer ? (
+        ordersLoading ? (
+          <LoadingState label="Loading your orders..." />
+        ) : ordersError ? (
+          <ErrorState
+            title="Orders unavailable"
+            message={ordersError}
+            action={{ label: "Retry", onClick: () => window.location.reload() }}
+          />
+        ) : ordersPage?.orders.length ? (
+          <section className="buyer-order-history-list" aria-label="Authenticated order history">
+            {ordersPage.orders.map((order) => (
+              <div key={order.orderId}>
+                <OrderHistoryCard
+                  order={order}
+                  customerEmail={auth.customer?.email}
+                  customerName={[auth.customer?.firstName, auth.customer?.lastName].filter(Boolean).join(" ") || undefined}
+                  onConfirmReceipt={async (orderId) => { await confirmOrderReceived(orderId) }}
+                  onReviewSubmitted={() => window.location.reload()}
+                  onRefundSubmitted={() => window.location.reload()}
+                />
+              </div>
+            ))}
+          </section>
         ) : (
-          <OrderHistoryAuthRequired />
-        )}
+          <OrderHistoryEmptyState />
+        )
+      ) : (
+        <OrderHistoryAuthRequired />
+      )}
     </PageShell>
   )
 }

@@ -112,6 +112,8 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
     : guestEmail
       ? `/account/orders/${encodeURIComponent(orderId)}?${new URLSearchParams({ email: guestEmail }).toString()}`
       : "/orders/lookup"
+  const backHref = auth.customer ? "/account/orders" : detailHref
+  const backLabel = auth.customer ? "Back to orders" : "Back to order details"
   const hasTracking = hasOrderTrackingData(tracking)
 
   return (
@@ -124,10 +126,21 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
         {loading ? (
           <LoadingState label="Loading tracking..." />
         ) : error || !tracking ? (
-          <ErrorState title="Tracking unavailable" message={error ?? "No tracking data was returned."} />
+          <>
+            <a className="back-link" href={backHref}>
+              ← {backLabel}
+            </a>
+            <ErrorState title="Tracking unavailable" message={error ?? "No tracking data was returned."} />
+          </>
         ) : (
           <>
-            <OrderTrackingHeader orderId={tracking.orderId} displayId={displayId} tracking={tracking} />
+            <OrderTrackingHeader
+              orderId={tracking.orderId}
+              displayId={displayId}
+              tracking={tracking}
+              backHref={backHref}
+              backLabel={backLabel}
+            />
             <section className="buyer-order-tracking-grid">
               <div className="buyer-order-tracking-left">
                 {!hasTracking ? <Card className="buyer-order-card buyer-order-shipment-waiting"><p className="buyer-order-kicker">Waiting for dispatch</p><h2>Tracking not available yet</h2><p>Waiting for the seller or supplier to dispatch this order. No carrier event has been reported yet.</p></Card> : null}
@@ -150,7 +163,6 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
                   <Button variant="ghost" disabled>Invoice · unavailable</Button>
                   <Button variant="ghost" disabled>Return / after-sales · unavailable</Button>
                   <Button variant="ghost" disabled>Share · unavailable</Button>
-                  {!auth.customer ? <Button variant="ghost" href="/orders/lookup">Search another order</Button> : null}
                 </Card>
               </aside>
             </section>

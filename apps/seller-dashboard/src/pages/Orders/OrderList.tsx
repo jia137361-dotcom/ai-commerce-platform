@@ -10,6 +10,7 @@ import { EmptyState, TableSkeleton } from "../../components/ui/EmptyState"
 import { Pagination } from "../../components/ui/Pagination"
 import { HorizontalStepper } from "../../components/ui/Stepper"
 import type { FulfillmentTimelineStep } from "@ai-commerce/shared-types"
+import { formatCustomerLabel, formatPaymentLabel } from "../../lib/order-display"
 
 type OrderRow = {
   id: string
@@ -53,7 +54,7 @@ const formatOrderMoney = (amount: number | undefined, currency = "USD") => {
   }).format(amount)
 }
 
-function OrderExpandedPanel({ orderId }: { orderId: string }) {
+function OrderExpandedPanel({ orderId, listRow }: { orderId: string; listRow: OrderRow }) {
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -105,15 +106,30 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
   })
 
   const order = detailQuery.data
-  const fulfillmentStatus = String(order?.fulfillment_status ?? "waiting")
+  const fulfillmentStatus = String(order?.fulfillment_status ?? listRow.fulfillment_status ?? "waiting")
   const showMockDelivered = import.meta.env.DEV && fulfillmentStatus === "shipped"
+  const shippingAddress = order?.shipping_address as Record<string, unknown> | null | undefined
+  const items = (order?.items as Array<Record<string, unknown>> | undefined) ?? []
+  const customerLabel = formatCustomerLabel(
+    (order?.email as string | undefined) ?? listRow.email,
+    shippingAddress
+  )
+  const paymentLabel = formatPaymentLabel(
+    (order?.payment_status as string | undefined) ?? listRow.payment_status,
+    order?.payment_method_label as string | undefined
+  )
 
   return (
     <div className="grid gap-6 bg-surface-muted p-6 lg:grid-cols-2">
       <div>
         <h4 className="mb-3 text-sm font-semibold uppercase text-slate-500">Order Items</h4>
-        <ul className="space-y-3">
-          {(order?.items as Array<Record<string, unknown>> | undefined)?.map((item) => (
+        {detailQuery.isLoading ? (
+          <p className="text-sm text-slate-400">Loading items…</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-slate-400">No items found for this order.</p>
+        ) : (
+          <ul className="space-y-3">
+            {items.map((item) => (
             <li key={String(item.id)} className="flex items-center gap-3 rounded-lg border bg-white p-3">
               {item.thumbnail ? (
                 <img
@@ -133,7 +149,8 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
               <p className="text-brand">{String(item.quantity)}×</p>
             </li>
           ))}
-        </ul>
+          </ul>
+        )}
       </div>
       <div className="space-y-4">
         <div>
@@ -148,10 +165,10 @@ function OrderExpandedPanel({ orderId }: { orderId: string }) {
         </div>
         <div className="rounded-lg border bg-white p-4 text-sm">
           <p>
-            <span className="text-slate-500">Customer:</span> {String(order?.email ?? "—")}
+            <span className="text-slate-500">Customer:</span> {customerLabel}
           </p>
           <p className="mt-1">
-            <span className="text-slate-500">Payment:</span> {String(order?.payment_status ?? "—")}
+            <span className="text-slate-500">Payment:</span> {paymentLabel}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => shipMutation.mutate()}>
@@ -255,7 +272,9 @@ export function OrderListPage() {
                   <tr
                     className={`border-t ${expandedId === o.id ? "border-l-4 border-l-brand" : ""}`}
                   >
-                    <td className="px-4 py-3 font-medium">#{o.display_id}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {o.display_id != null ? `#${o.display_id}` : "—"}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge label={o.payment_status} />
                     </td>
@@ -277,7 +296,7 @@ export function OrderListPage() {
                   {expandedId === o.id ? (
                     <tr>
                       <td colSpan={6} className="p-0">
-                        <OrderExpandedPanel orderId={o.id} />
+                        <OrderExpandedPanel orderId={o.id} listRow={o} />
                       </td>
                     </tr>
                   ) : null}

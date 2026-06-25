@@ -13,6 +13,7 @@ describe("Stripe checkout payment state", () => {
 
   it("selects Stripe only when the region exposes it and a test publishable key exists", () => {
     expect(chooseDefaultPaymentProvider(providers, "pk_test_123")).toBe("pp_stripe_stripe")
+    expect(chooseDefaultPaymentProvider(providers, "pk_live_123")).toBe("pp_stripe_stripe")
     expect(chooseDefaultPaymentProvider(providers, "")).toBe("pp_system_default")
     expect(chooseDefaultPaymentProvider([providers[0]], "pk_test_123")).toBe("pp_system_default")
   })
@@ -48,12 +49,32 @@ describe("Stripe checkout payment state", () => {
   it("completes the cart only after Stripe success", async () => {
     const complete = jest.fn().mockResolvedValue({ orderId: "order_1" })
     await expect(confirmStripePaymentAndComplete({
-      stripe: { confirmPayment: jest.fn().mockResolvedValue({ paymentIntent: { status: "succeeded" } }) } as never,
+      stripe: {
+        confirmPayment: jest.fn().mockResolvedValue({ paymentIntent: { status: "succeeded", payment_method_types: ["card"] } }),
+        retrievePaymentMethod: jest.fn(),
+      } as never,
       elements: {} as never,
       returnUrl: "http://localhost/checkout",
       complete,
-    })).resolves.toEqual({ orderId: "order_1" })
-    expect(complete).toHaveBeenCalledTimes(1)
+    })).resolves.toEqual({ result: { orderId: "order_1" }, paymentMethodLabel: "Card" })
+    expect(complete).toHaveBeenCalledWith("Card")
+  })
+
+  it("resolves card labels from Stripe payment methods", async () => {
+    const complete = jest.fn().mockResolvedValue({ orderId: "order_1" })
+    await expect(confirmStripePaymentAndComplete({
+      stripe: {
+        confirmPayment: jest.fn().mockResolvedValue({
+          paymentIntent: { status: "succeeded", payment_method: "pm_123" },
+        }),
+        retrievePaymentMethod: jest.fn().mockResolvedValue({
+          paymentMethod: { type: "card", card: { brand: "visa", last4: "4242" } },
+        }),
+      } as never,
+      elements: {} as never,
+      returnUrl: "http://localhost/checkout",
+      complete,
+    })).resolves.toEqual({ result: { orderId: "order_1" }, paymentMethodLabel: "VISA ···· 4242" })
   })
 
   it("shows a safe error when Stripe succeeds but Medusa order creation fails", async () => {

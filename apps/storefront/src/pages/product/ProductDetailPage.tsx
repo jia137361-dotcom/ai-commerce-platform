@@ -6,7 +6,6 @@ import { ProductDetailsSection } from "../../components/product-detail/ProductDe
 import { ProductMediaGallery } from "../../components/product-detail/ProductMediaGallery"
 import { ProductPurchasePanel } from "../../components/product-detail/ProductPurchasePanel"
 import { ProductReviewSection } from "../../components/product-detail/ProductReviewSection"
-import { ProductSharePanel } from "../../components/product-detail/ProductSharePanel"
 import { ProductStoreCard } from "../../components/product-detail/ProductStoreCard"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { StoreFooter } from "../../components/layout/StoreFooter"
@@ -19,6 +18,7 @@ import {
   fetchProductShare,
   fetchStoreSettings,
   getBuyerCartStorageKey,
+  readBuyerPreferences,
   type BuyerReviewsSummary,
   type BuyerShareInfo,
   type BuyerStoreSettings,
@@ -47,7 +47,6 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const [fatalError, setFatalError] = useState<string | undefined>()
   const [notices, setNotices] = useState<Notice[]>([])
   const [reviewSource, setReviewSource] = useState<DataSource>("backend")
-  const [shareSource, setShareSource] = useState<DataSource>("backend")
   const [shareError, setShareError] = useState<string | undefined>()
   const [selectedVariantId, setSelectedVariantId] = useState<string | undefined>()
   const [quantity, setQuantity] = useState(1)
@@ -55,6 +54,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const [addNotice, setAddNotice] = useState<{ tone: "success" | "error"; message: string } | undefined>()
   const [loadVersion, setLoadVersion] = useState(0)
   const reviewOrderNumber = new URLSearchParams(window.location.search).get("reviewOrder")
+  const viewReviewOrderNumber = new URLSearchParams(window.location.search).get("viewReviewOrder")
 
   const loadProduct = useCallback(async (isActive: () => boolean) => {
     setLoading(true)
@@ -94,7 +94,6 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       productsResult.data.filter((item) => item.id !== realProduct.id).slice(0, 4)
     )
     setShare(shareResult.data)
-    setShareSource(shareResult.source)
     setShareError(shareResult.error)
     setNotices([
       ...(productResult.source !== "backend"
@@ -139,7 +138,8 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
           getBuyerCartIdentity(auth.customer.id, window.localStorage)
         ),
         storage: window.localStorage,
-        createCart,
+        createCart: () =>
+          createCart({ countryCode: readBuyerPreferences(auth.customer).countryCode }),
         addLineItem: addCartLineItem,
       })
       onCartUpdated(updated)
@@ -174,6 +174,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
             requiresSignIn={!auth.isLoading && !auth.customer}
             addNotice={addNotice}
             onAddToCart={() => void addToCart()}
+            share={share}
           />
         </section>
         <ProductStoreCard settings={settings} />
@@ -185,9 +186,9 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
           source={reviewSource}
           error={notices.find((notice) => notice.label === "reviews")?.message}
           review={reviewOrderNumber && auth.customer?.email ? { productId: product.id, orderNumber: reviewOrderNumber, email: auth.customer.email, customerName: [auth.customer.firstName, auth.customer.lastName].filter(Boolean).join(" ") || undefined } : undefined}
+          viewReviewOrderNumber={viewReviewOrderNumber}
           onSubmitted={() => setLoadVersion((version) => version + 1)}
         />
-        {share ? <ProductSharePanel share={share} source={shareSource} error={shareError} /> : null}
       </> : null}
     </PageShell>
   )

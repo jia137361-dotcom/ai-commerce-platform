@@ -17,6 +17,7 @@ import SupplierOrder from "./models/supplier-order"
 import SupplierOrderItem from "./models/supplier-order-item"
 import AiGenerationJob from "./models/ai-generation-job"
 import StoreNotification from "./models/store-notification"
+import StoreMessage from "./models/store-message"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -37,6 +38,7 @@ class StoreCoreModuleService extends MedusaService({
   SupplierOrderItem,
   AiGenerationJob,
   StoreNotification,
+  StoreMessage,
 }) {}
 
 export default StoreCoreModuleService

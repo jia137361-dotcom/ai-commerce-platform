@@ -35,6 +35,13 @@ export type BuyerProductApiInput = {
   medusa_product_id?: string | null
   medusa_variant_id?: string | null
   requires_shipping?: boolean
+  supported_region_ids?: string[]
+  supported_regions?: Array<{
+    region_id: string
+    name: string
+    currency_code: string
+    country_codes: string[]
+  }>
   supplier_id?: string | null
   supplier_product_id?: string | null
   supplier_variant_id?: string | null
@@ -92,6 +99,13 @@ const formatPrice = (amount?: number) => {
   }).format(amount)} USD`
 }
 
+const formatSupportedRegions = (
+  regions?: BuyerProductApiInput["supported_regions"]
+) => {
+  if (!regions?.length) return "All configured regions"
+  return regions.map((region) => region.name).join(", ")
+}
+
 export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0): StoreProduct => {
   const numericPrice = normalizeBuyerProductPrice(product)
   const variants = normalizeBuyerProductVariants(product)
@@ -112,6 +126,9 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     medusaProductId: product.medusa_product_id ?? undefined,
     medusaVariantId: product.medusa_variant_id ?? undefined,
     requiresShipping: product.requires_shipping,
+    supportedRegionIds: product.supported_region_ids,
+    supportedRegions: product.supported_regions,
+    supportedRegionsLabel: formatSupportedRegions(product.supported_regions),
     supplierId: product.supplier_id ?? undefined,
     supplierProductId: product.supplier_product_id ?? undefined,
     supplierVariantId: product.supplier_variant_id ?? undefined,

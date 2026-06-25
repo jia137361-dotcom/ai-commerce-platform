@@ -1004,3 +1004,153 @@
 .buyer-order-package-item img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; }
 .buyer-order-package-item div { display: grid; gap: 5px; }
 .buyer-order-package-item span { color: #687084; font-size: 13px; }
+
+.buyer-order-review-form {
+  display: grid;
+  gap: 18px;
+}
+
+.buyer-star-rating {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.buyer-star-rating legend {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.buyer-star-rating [role="radiogroup"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.buyer-star-rating button {
+  border: 0;
+  background: transparent;
+  color: #f5a623;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.buyer-star-rating-value {
+  margin-left: 8px;
+  color: #667083;
+  font-size: 14px;
+}
+
+.buyer-order-review-text {
+  display: grid;
+  gap: 8px;
+}
+
+.buyer-order-review-text textarea {
+  width: 100%;
+  border: 1px solid #cfd6e2;
+  border-radius: 8px;
+  padding: 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.buyer-order-review-images {
+  display: grid;
+  gap: 10px;
+}
+
+.buyer-order-review-images p {
+  margin: 4px 0 0;
+  color: #667083;
+  font-size: 14px;
+}
+
+.buyer-order-review-image-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.buyer-order-review-image-list li {
+  position: relative;
+}
+
+.buyer-order-review-image-list img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e7eaf0;
+}
+
+.buyer-order-review-image-list button {
+  display: block;
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: #667083;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.buyer-messages-page .buyer-messages-header {
+  margin-bottom: 20px;
+}
+
+.buyer-messages-header h1 {
+  margin: 8px 0 0;
+}
+
+.buyer-messages-thread {
+  display: grid;
+  gap: 16px;
+}
+
+.buyer-messages-list {
+  display: grid;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid #e7eaf0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.buyer-message {
+  max-width: 80%;
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+.buyer-message-outgoing {
+  margin-left: auto;
+  background: #fff4ea;
+}
+
+.buyer-message-incoming {
+  background: #f5f7fa;
+}
+
+.buyer-message p {
+  margin: 6px 0 0;
+}
+
+.buyer-messages-compose {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-messages-compose textarea {
+  width: 100%;
+  border: 1px solid #cfd6e2;
+  border-radius: 8px;
+  padding: 12px;
+  font: inherit;
+}

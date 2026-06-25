@@ -2,6 +2,7 @@ import type { MedusaContainer } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { readOrderFulfillmentStatusMeta } from "../lib/order-custom-metadata"
 import { shouldAutoConfirmReceipt } from "../lib/order-receipt-confirmation"
+import { releaseSellerPayout } from "../lib/seller-order-payout"
 
 export default async function autoConfirmDeliveredOrdersJob(container: MedusaContainer) {
   const orderModule = container.resolve(Modules.ORDER)
@@ -20,6 +21,11 @@ export default async function autoConfirmDeliveredOrdersJob(container: MedusaCon
         receipt_confirmation_source: "automatic_7_days",
       },
     } as never)
+    try {
+      await releaseSellerPayout(container, order.id, "auto_confirm")
+    } catch (error) {
+      console.error("[auto-confirm-delivered-orders] seller payout failed:", error)
+    }
     updated += 1
   }
 

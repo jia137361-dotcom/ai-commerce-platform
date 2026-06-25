@@ -6,7 +6,6 @@ export function OrderHistoryHeader({ signedInEmail }: { signedInEmail?: string |
         <h1>Orders</h1>
         <p>{signedInEmail ? `Showing orders for ${signedInEmail}.` : "Sign in to view your full order history."}</p>
       </div>
-      <a href="/orders/lookup">Find an order</a>
     </section>
   )
 }

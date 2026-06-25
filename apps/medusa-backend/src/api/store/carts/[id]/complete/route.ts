@@ -22,6 +22,7 @@ import { syncFulfillmentPayloadFromOrder } from "../../../../../lib/sync-fulfill
 import { pushOrderToS2bdiy } from "../../../../../lib/s2bdiy/push-s2b-order"
 import { isS2bdiyEnabled } from "../../../../../modules/suppliers/s2bdiy/config"
 import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
+import { resolvePaymentMethodLabelFromClientSecret } from "../../../../../lib/stripe-payment-method-label"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
@@ -149,6 +150,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       })
     }
 
+    let paymentMethodLabel: string | null = null
     if (isStripeProvider(providerId)) {
       const stripeSession = await findCartPaymentSession(req.scope, cartId, providerId)
       const clientSecret = stripeSession?.data?.client_secret
@@ -159,6 +161,11 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             message: "Initialize and confirm a Stripe payment session before completing this cart.",
           },
         })
+      }
+      try {
+        paymentMethodLabel = await resolvePaymentMethodLabelFromClientSecret(clientSecret)
+      } catch (error) {
+        console.warn("[checkout-complete] unable to resolve Stripe payment method label", error)
       }
     } else {
       await ensureCartPaymentReady(req.scope, cartId, providerId)
@@ -205,6 +212,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
     await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
+    if (paymentMethodLabel) {
+      const existingMeta = (completedOrder.metadata ?? {}) as Record<string, unknown>
+      await orderModule.updateOrders(orderId, {
+        metadata: { ...existingMeta, payment_method_label: paymentMethodLabel },
+      } as never)
+    }
     await seedFulfillmentOrderIfMissing(req.scope, {
       orderId,
       storeId,
@@ -251,6 +264,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       cart_customer_id: cart.customer_id ?? null,
       order_customer_id: (order as CompleteOrder).customer_id ?? null,
       payment_provider_id: providerId,
+      payment_method_label: paymentMethodLabel,
       payment_status: (order.metadata as Record<string, unknown> | null)?.payment_status ?? null,
       fulfillment_status: readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null),
       order,

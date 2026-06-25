@@ -4,6 +4,7 @@ import StoreCoreModuleService from "../../modules/store-core/service"
 import { ErrorCodes } from "../../lib/errors"
 import { summarizeProductReviews } from "../../lib/product-reviews"
 import { resolveProductRequiresShipping } from "../../lib/product-shipping"
+import { resolveProductSupportedRegionIds } from "../../lib/product-regions"
 
 export type ProductStatus = "draft" | "published" | "unpublished" | "archived"
 export type ProductSource = "manual" | "ai"
@@ -48,6 +49,7 @@ export const normalizeProduct = (product: any) => ({
   medusa_product_id: product.medusa_product_id,
   medusa_variant_id: product.medusa_variant_id,
   requires_shipping: resolveProductRequiresShipping(product),
+  supported_region_ids: resolveProductSupportedRegionIds(product),
   is_cart_addable: product.status === "published" && Boolean(product.medusa_variant_id),
   design_image_url: product.design_image_url,
   mockup_image_url: product.mockup_image_url,

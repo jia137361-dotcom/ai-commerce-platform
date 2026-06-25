@@ -13,8 +13,9 @@ export const statusToneFor = (status?: string | null): StatusTone => {
   const value = status?.trim().toLowerCase() ?? ""
   if (["failed", "canceled", "cancelled", "rejected"].includes(value)) return "danger"
   if (["completed", "delivered", "refunded", "processed"].includes(value)) return "success"
-  if (["shipped", "fulfilled", "partially_fulfilled"].includes(value)) return "info"
-  if (["pending", "authorized", "processing", "waiting", "not_fulfilled"].includes(value)) return "warning"
+  if (["shipped", "fulfilled", "partially_fulfilled", "awaiting_receipt"].includes(value)) return "info"
+  if (["pending", "authorized", "processing", "waiting", "not_fulfilled", "unpaid", "packing", "awaiting_review", "refunding"].includes(value)) return "warning"
+  if (["reviewed"].includes(value)) return "success"
   return "neutral"
 }
 

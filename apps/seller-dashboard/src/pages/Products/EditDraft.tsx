@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch, ApiError, STOREFRONT_URL } from "../../lib/api-client"
-import { storeProductPath } from "../../lib/store-product-api"
+import { storeProductPath, storeProductPermanentDeletePath } from "../../lib/store-product-api"
 import { buildProductGallery } from "../../lib/product-gallery"
 import { useToast } from "../../components/ToastProvider"
 import { Badge } from "../../components/ui/Badge"
@@ -11,7 +11,7 @@ import { Card } from "../../components/ui/Card"
 import { Input, Label, Textarea } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { Skeleton } from "../../components/ui/EmptyState"
-import type { NormalizedProduct, ProductVariantRow } from "@ai-commerce/shared-types"
+import type { NormalizedProduct, ProductRegionSummary, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type SupplierVariant = {
   supplier_variant_id: string
@@ -73,6 +73,7 @@ export function EditDraftPage() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [confirmPermanentDelete, setConfirmPermanentDelete] = useState(false)
   const [variantsInitialized, setVariantsInitialized] = useState(false)
 
   const stateProduct = (location.state as EditLocationState | null)?.product
@@ -91,6 +92,17 @@ export function EditDraftPage() {
   const { data: categoryData } = useQuery({
     queryKey: ["product-categories"],
     queryFn: () => apiFetch<{ categories: Array<{ category_id: string; name: string }> }>("/admin/product-categories"),
+  })
+
+  const {
+    data: regionData,
+    isLoading: regionsLoading,
+    isError: regionsError,
+    error: regionsFetchError,
+  } = useQuery({
+    queryKey: ["market-regions"],
+    queryFn: () =>
+      apiFetch<{ regions: ProductRegionSummary[] }>("/admin/market-regions?ensure=true"),
   })
 
   const { data: supplierData } = useQuery({
@@ -114,6 +126,7 @@ export function EditDraftPage() {
   const [newCategoryName, setNewCategoryName] = useState("")
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
   const [requiresShipping, setRequiresShipping] = useState(true)
+  const [supportedRegionIds, setSupportedRegionIds] = useState<string[]>([])
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
 
   useEffect(() => {
@@ -132,6 +145,12 @@ export function EditDraftPage() {
           ? p.metadata.requires_shipping
           : Boolean(p.supplier_product_id || p.platform_product_id)
     )
+    const savedRegionIds = Array.isArray(p.supported_region_ids)
+      ? p.supported_region_ids
+      : Array.isArray(p.metadata?.supported_region_ids)
+        ? p.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
+        : []
+    setSupportedRegionIds(savedRegionIds)
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
@@ -171,6 +190,19 @@ export function EditDraftPage() {
     }
   }, [product?.product_id, product?.metadata?.gallery, previewKey, previewOptions.length])
 
+  useEffect(() => {
+    if (!regionData?.regions.length || supportedRegionIds.length) return
+    if (!product) return
+    const savedRegionIds = Array.isArray(product.supported_region_ids)
+      ? product.supported_region_ids
+      : Array.isArray(product.metadata?.supported_region_ids)
+        ? product.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
+        : []
+    if (!savedRegionIds.length) {
+      setSupportedRegionIds(regionData.regions.map((region) => region.region_id))
+    }
+  }, [product, regionData, supportedRegionIds.length])
+
   const parsePrice = () => {
     const parsed = Number(price)
     return Number.isFinite(parsed) ? parsed : NaN
@@ -184,9 +216,11 @@ export function EditDraftPage() {
     category_ids: categoryIds,
     variants,
     requires_shipping: requiresShipping,
+    supported_region_ids: supportedRegionIds,
     metadata: {
       ...(product?.metadata ?? {}),
       requires_shipping: requiresShipping,
+      supported_region_ids: supportedRegionIds,
     },
   })
 
@@ -220,6 +254,10 @@ export function EditDraftPage() {
       toast.push("Enter a valid base price", "error")
       return false
     }
+    if (!supportedRegionIds.length) {
+      toast.push("Select at least one sales region", "error")
+      return false
+    }
     return true
   }
 
@@ -247,6 +285,18 @@ export function EditDraftPage() {
     onSuccess: () => navigate("/products"),
     onError: (err: unknown) => {
       toast.push(err instanceof Error ? err.message : "Archive failed", "error")
+    },
+  })
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: () => apiFetch(storeProductPermanentDeletePath(id!), { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] })
+      toast.push("Product permanently deleted", "success")
+      navigate("/products")
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Delete failed", "error")
     },
   })
 
@@ -386,6 +436,9 @@ export function EditDraftPage() {
               </Button>
               <Button disabled={isBusy} onClick={() => restoreMutation.mutate()}>
                 {restoreMutation.isPending ? "Restoring…" : "Restore to draft"}
+              </Button>
+              <Button variant="danger" disabled={isBusy} onClick={() => setConfirmPermanentDelete(true)}>
+                Delete permanently
               </Button>
             </>
           )}
@@ -613,6 +666,59 @@ export function EditDraftPage() {
             </label>
           </div>
 
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-900">Sales regions</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Choose where buyers can purchase this product. Checkout addresses must match a supported region.
+            </p>
+            {regionsError ? (
+              <p className="mt-3 text-sm text-red-600">
+                Failed to load regions
+                {regionsFetchError instanceof Error ? `: ${regionsFetchError.message}` : "."}
+              </p>
+            ) : regionData?.regions.length ? (
+              <div className="mt-4 grid gap-2">
+                {regionData.regions.map((region) => {
+                  const checked = supportedRegionIds.includes(region.region_id)
+                  return (
+                    <label
+                      key={region.region_id}
+                      className="flex items-start gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
+                        checked={checked}
+                        disabled={isArchived}
+                        onChange={(event) => {
+                          setSupportedRegionIds((current) => {
+                            if (event.target.checked) {
+                              return Array.from(new Set([...current, region.region_id]))
+                            }
+                            return current.filter((id) => id !== region.region_id)
+                          })
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium text-slate-900">{region.name}</span>
+                        <span className="mt-1 block text-slate-500">
+                          {region.country_codes.map((code) => code.toUpperCase()).join(", ")} · {region.currency_code.toUpperCase()}
+                        </span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            ) : regionsLoading ? (
+              <p className="mt-3 text-sm text-slate-500">Loading available regions...</p>
+            ) : (
+              <p className="mt-3 text-sm text-amber-700">No regions configured. Run regions bootstrap on the backend.</p>
+            )}
+            {!supportedRegionIds.length ? (
+              <p className="mt-3 text-sm text-amber-700">Select at least one region before saving.</p>
+            ) : null}
+          </div>
+
           <div className="rounded-lg border border-slate-200">
             <div className="border-b px-4 py-2 text-xs font-semibold uppercase text-slate-500">
               Product Variants
@@ -701,6 +807,11 @@ export function EditDraftPage() {
             <Button type="button" variant="danger" onClick={() => setConfirmArchive(true)}>
               Archive
             </Button>
+            {product.status === "draft" ? (
+              <Button type="button" variant="danger" onClick={() => setConfirmPermanentDelete(true)}>
+                Delete permanently
+              </Button>
+            ) : null}
           </div>
           ) : null}
         </Card>
@@ -722,6 +833,24 @@ export function EditDraftPage() {
         }
       >
         The product will be archived and hidden from your catalog.
+      </Modal>
+
+      <Modal
+        open={confirmPermanentDelete}
+        title="Delete product permanently?"
+        onClose={() => setConfirmPermanentDelete(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmPermanentDelete(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => permanentDeleteMutation.mutate()}>
+              Delete permanently
+            </Button>
+          </>
+        }
+      >
+        This product will be permanently removed and cannot be restored.
       </Modal>
     </div>
   )

@@ -1,3 +1,10 @@
+export type ProductRegionSummary = {
+  region_id: string
+  name: string
+  currency_code: string
+  country_codes: string[]
+}
+
 export type StoreProduct = {
   id: string
   title: string
@@ -14,6 +21,9 @@ export type StoreProduct = {
   medusaProductId?: string
   medusaVariantId?: string
   requiresShipping?: boolean
+  supportedRegionIds?: string[]
+  supportedRegions?: ProductRegionSummary[]
+  supportedRegionsLabel?: string
   supplierId?: string
   supplierProductId?: string
   supplierVariantId?: string
@@ -57,6 +67,17 @@ export type SelectedOption = {
   value: string
 }
 
+export type StoreCartShippingAddress = {
+  firstName?: string
+  lastName?: string
+  address1?: string
+  address2?: string
+  city?: string
+  province?: string
+  postalCode?: string
+  countryCode?: string
+}
+
 export type StoreCart = {
   id: string
   regionId?: string
@@ -69,6 +90,7 @@ export type StoreCart = {
   total: number
   hasSubtotal?: boolean
   hasTotal?: boolean
+  shippingAddress?: StoreCartShippingAddress | null
 }
 
 export type Review = {

@@ -6,9 +6,11 @@ import { resolveCurrentStore } from "../../../../lib/store-context"
 import {
   buildLogoPublicUrl,
   resolveLogoUploadDir,
+  resolveStoreMediaBaseUrl,
   validateLogoUpload,
-} from "../../../../lib/store-settings-logo"
-import { getStoreCoreService, sendError } from "../../../_helpers/store-core"
+} from "../../../../lib/store-settings-media"
+import { upsertStoreSettings } from "../../../../lib/store-settings-update"
+import { sendError } from "../../../_helpers/store-core"
 
 type LogoBody = {
   file_base64?: string
@@ -26,33 +28,14 @@ export const POST = async (req: MedusaRequest<LogoBody>, res: MedusaResponse) =>
   }
 
   const { store_id: storeId } = resolveCurrentStore(req)
-  const storeCoreService = getStoreCoreService(req)
   const ext = contentType.includes("png") ? "png" : "jpg"
   const fileName = `${storeId}-${randomBytes(6).toString("hex")}.${ext}`
   const uploadDir = resolveLogoUploadDir()
   await mkdir(uploadDir, { recursive: true })
   await writeFile(path.join(uploadDir, fileName), validation.buffer)
 
-  const logoUrl = buildLogoPublicUrl(fileName)
+  const logoUrl = buildLogoPublicUrl(fileName, resolveStoreMediaBaseUrl(req))
 
-  const existing = await storeCoreService.listStoreSettings({ store_id: storeId })
-  if (existing.length) {
-    const [updated] = await storeCoreService.updateStoreSettings({
-      selector: { id: existing[0].id, store_id: storeId },
-      data: { logo_url: logoUrl },
-    })
-    return res.json({ logo_url: updated.logo_url })
-  }
-
-  const created = await storeCoreService.createStoreSettings({
-    store_id: storeId,
-    brand_name: null,
-    logo_url: logoUrl,
-    support_email: null,
-    seo_title: null,
-    seo_description: null,
-    metadata: {},
-  })
-
-  return res.status(201).json({ logo_url: created.logo_url })
+  const updated = await upsertStoreSettings(req, { logo_url: logoUrl })
+  return res.json({ logo_url: updated.logo_url })
 }

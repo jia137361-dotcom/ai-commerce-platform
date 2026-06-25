@@ -1092,6 +1092,45 @@
 
 .buyer-checkout-payment-providers span { color: var(--buyer-text-muted); font-size: 12px; }
 .buyer-checkout-stripe-form { display: grid; gap: 18px; padding: 22px; }
+
+.buyer-stripe-test-hint {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  font-size: 13px;
+  color: var(--buyer-text-muted);
+}
+
+.buyer-stripe-test-hint summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--buyer-text);
+}
+
+.buyer-stripe-test-hint p {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
+.buyer-stripe-test-hint table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.buyer-stripe-test-hint th,
+.buyer-stripe-test-hint td {
+  border-top: 1px solid #e2e8f0;
+  padding: 8px 6px;
+  text-align: left;
+}
+
+.buyer-stripe-test-hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
 .buyer-checkout-saved-addresses {
   display: grid;
   gap: 8px;

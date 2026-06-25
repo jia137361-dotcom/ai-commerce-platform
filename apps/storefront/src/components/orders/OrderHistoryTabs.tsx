@@ -1,20 +1,15 @@
 export type OrderHistoryFilter = {
   key: string
   label: string
-  status?: string
-  paymentStatus?: string
-  fulfillmentStatus?: string
   bucket?: string
 }
 
 export const orderHistoryFilters: OrderHistoryFilter[] = [
   { key: "all", label: "All" },
   { key: "unpaid", label: "Unpaid", bucket: "unpaid" },
-  { key: "processing", label: "Processing", bucket: "processing" },
-  { key: "shipped", label: "Shipped", bucket: "shipped" },
-  { key: "delivered", label: "Delivered", bucket: "delivered" },
+  { key: "packing", label: "Processing", bucket: "packing" },
+  { key: "awaiting_receipt", label: "To receive", bucket: "awaiting_receipt" },
   { key: "reviews", label: "Reviews", bucket: "reviews" },
-  { key: "returns", label: "Returns", bucket: "returns" },
 ]
 
 export function OrderHistoryTabs({

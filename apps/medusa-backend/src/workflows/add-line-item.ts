@@ -13,6 +13,7 @@ import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
 import { buildLineItemProductionMetadata } from "../lib/line-item-production-metadata"
 import { findStoreCoreVariantRow } from "../lib/native-product-variants"
 import { resolveProductRequiresShipping } from "../lib/product-shipping"
+import { isProductAvailableInRegion } from "../lib/product-regions"
 import { resolveLinkedProductForVariant } from "../lib/resolve-linked-product"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
@@ -175,6 +176,12 @@ const addLineItemStep = createStep(
 
     if (readProductStatus(linkedProduct) !== "published") {
       throw new Error("Product must be published")
+    }
+
+    const cartRegionId =
+      typeof cart.region_id === "string" && cart.region_id.length > 0 ? cart.region_id : null
+    if (!isProductAvailableInRegion(linkedProduct as Record<string, unknown>, cartRegionId)) {
+      throw new Error("Product is not available in the cart region")
     }
 
     const selectedVariantRow = findStoreCoreVariantRow(linkedProduct, input.variant_id)

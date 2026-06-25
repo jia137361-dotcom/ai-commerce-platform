@@ -2,7 +2,9 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../../../../../lib/store-context"
 import { readOrderStoreId } from "../../../../../../../lib/order-store-context"
-import { readOrderFulfillmentStatusMeta } from "../../../../../../../lib/order-custom-metadata"
+import { canConfirmReceipt } from "../../../../../../../lib/buyer-order-display"
+import { readOrderFulfillmentStatusString } from "../../../../../../../lib/order-custom-metadata"
+import { releaseSellerPayout } from "../../../../../../../lib/seller-order-payout"
 
 type AuthenticatedRequest = MedusaRequest & { auth_context?: { actor_id?: string } }
 
@@ -17,8 +19,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   }
 
   const metadata = (order.metadata ?? {}) as Record<string, unknown>
-  if (readOrderFulfillmentStatusMeta(metadata) !== "delivered") {
-    return res.status(409).json({ error: "Receipt can be confirmed only after delivery evidence exists" })
+  const fulfillmentStatus = readOrderFulfillmentStatusString(metadata)
+  if (!canConfirmReceipt({ fulfillmentStatus, receiptConfirmed: false })) {
+    return res.status(409).json({ error: "Receipt can be confirmed only after the order has shipped" })
   }
 
   const confirmedAt = typeof metadata.buyer_confirmed_received_at === "string"
@@ -33,5 +36,17 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     },
   } as never)
 
-  return res.json({ order_id: order.id, status: "completed", confirmed_at: confirmedAt })
+  let sellerPayout = null
+  try {
+    sellerPayout = await releaseSellerPayout(req.scope, order.id, "buyer_confirm")
+  } catch (error) {
+    console.error("[confirm-received] seller payout failed:", error)
+  }
+
+  return res.json({
+    order_id: order.id,
+    status: "completed",
+    confirmed_at: confirmedAt,
+    seller_payout: sellerPayout,
+  })
 }

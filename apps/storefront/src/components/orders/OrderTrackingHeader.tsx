@@ -4,16 +4,26 @@ type OrderTrackingHeaderProps = {
   orderId: string
   displayId?: string
   tracking?: BuyerOrderTracking
+  backHref: string
+  backLabel?: string
 }
 
 const valueOrUnavailable = (value: unknown) =>
   typeof value === "string" && value.trim() ? value : "Not available"
 
-export function OrderTrackingHeader({ orderId, displayId, tracking }: OrderTrackingHeaderProps) {
+export function OrderTrackingHeader({
+  orderId,
+  displayId,
+  tracking,
+  backHref,
+  backLabel = "Back to order details",
+}: OrderTrackingHeaderProps) {
   return (
     <section className="buyer-order-card buyer-order-tracking-header">
       <div>
-        <a href="/orders/lookup">Search another order</a>
+        <a className="back-link" href={backHref}>
+          ← {backLabel}
+        </a>
         <h1>Order tracking</h1>
         <p>Order {displayId ? `#${displayId}` : orderId}</p>
       </div>

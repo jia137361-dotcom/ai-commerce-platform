@@ -7,6 +7,12 @@ import {
   ensureNativeProductShippingProfile,
 } from "../../../lib/product-shipping"
 import {
+  attachSupportedRegionsToProduct,
+  mergeSupportedRegionIdsIntoMetadata,
+  validateSupportedRegionIds,
+} from "../../../lib/product-regions"
+import { permanentlyDeleteStoreProduct } from "../../../lib/store-product-bulk"
+import {
   getMcProductById,
   getStoreCoreService,
   normalizeProduct,
@@ -42,10 +48,15 @@ export const getStoreProductByIdHandler = async (req: MedusaRequest, res: Medusa
     return sendError(res, 403, "PRODUCT_STORE_MISMATCH", "Product does not belong to current store")
   }
 
+  const productWithRegions = await attachSupportedRegionsToProduct(req.scope, product)
+
   return res.json({
     product_id: product.id,
     store_id: product.store_id,
-    product: normalizeProduct(product),
+    product: {
+      ...normalizeProduct(productWithRegions),
+      supported_regions: productWithRegions.supported_regions,
+    },
   })
 }
 
@@ -113,19 +124,39 @@ export const putStoreProductByIdHandler = async (req: MedusaRequest, res: Medusa
     }
   }
 
-  if (typeof body.requires_shipping === "boolean") {
-    const existingMeta =
-      typeof product.metadata === "object" && product.metadata
-        ? (product.metadata as Record<string, unknown>)
-        : {}
-    const incomingMeta =
-      typeof data.metadata === "object" && data.metadata
-        ? (data.metadata as Record<string, unknown>)
-        : {}
-    data.metadata = mergeRequiresShippingIntoMetadata(
-      { ...existingMeta, ...incomingMeta },
-      body.requires_shipping
+  const existingMeta =
+    typeof product.metadata === "object" && product.metadata
+      ? (product.metadata as Record<string, unknown>)
+      : {}
+  const incomingMeta =
+    typeof data.metadata === "object" && data.metadata
+      ? (data.metadata as Record<string, unknown>)
+      : {}
+  let mergedMeta = { ...existingMeta, ...incomingMeta }
+
+  const requestedRegionIds = Array.isArray(body.supported_region_ids)
+    ? body.supported_region_ids
+    : Array.isArray(incomingMeta.supported_region_ids)
+      ? incomingMeta.supported_region_ids
+      : null
+
+  if (Array.isArray(requestedRegionIds)) {
+    const regionIds = requestedRegionIds.filter(
+      (id): id is string => typeof id === "string" && id.trim().length > 0
     )
+    const regionError = await validateSupportedRegionIds(req.scope, regionIds)
+    if (regionError) {
+      return sendError(res, 400, "VALIDATION_ERROR", regionError)
+    }
+    mergedMeta = mergeSupportedRegionIdsIntoMetadata(mergedMeta, regionIds)
+  }
+
+  if (typeof body.requires_shipping === "boolean") {
+    mergedMeta = mergeRequiresShippingIntoMetadata(mergedMeta, body.requires_shipping)
+  }
+
+  if ("metadata" in data || Array.isArray(requestedRegionIds) || typeof body.requires_shipping === "boolean") {
+    data.metadata = mergedMeta
   }
 
   if (Object.keys(data).length === 0) {
@@ -171,6 +202,29 @@ export const deleteStoreProductByIdHandler = async (req: MedusaRequest, res: Med
   }
   if (product === "mismatch") {
     return sendError(res, 403, "PRODUCT_STORE_MISMATCH", "Product does not belong to current store")
+  }
+
+  const permanent = req.query.permanent === "true"
+
+  if (permanent) {
+    const deleted = await permanentlyDeleteStoreProduct(storeCoreService, storeId, productId)
+    if (!deleted.ok) {
+      if (deleted.code === "PRODUCT_NOT_FOUND") {
+        return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
+      }
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "Only draft or archived products can be permanently deleted"
+      )
+    }
+    return res.json({
+      product_id: deleted.product_id,
+      store_id: storeId,
+      status: "deleted",
+      deleted: true,
+    })
   }
 
   if (product.status === "archived") {

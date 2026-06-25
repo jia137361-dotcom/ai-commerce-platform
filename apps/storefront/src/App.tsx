@@ -12,6 +12,7 @@ import { AccountSettingPlaceholderPage } from "./pages/account/AccountSettingPla
 import { findAccountSettingPlaceholder } from "./pages/account/account-setting-placeholders"
 import { AccountSettingsPage, type AccountSettingsSlug } from "./pages/account/AccountSettingsPage"
 import { OrderDetailPage } from "./pages/orders/OrderDetailPage"
+import { StoreMessagesPage } from "./pages/account/StoreMessagesPage"
 import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
@@ -91,7 +92,7 @@ function App() {
     return <RegisterPage cartCount={cartCount} />
   }
 
-  const realAccountSetting = (["addresses", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[])
+  const realAccountSetting = (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[])
     .find((slug) => path === `/account/${slug}`)
   if (realAccountSetting) {
     return <AccountSettingsPage cartCount={cartCount} slug={realAccountSetting} />
@@ -104,6 +105,11 @@ function App() {
 
   if (path.startsWith("/account/profile")) {
     return <AccountProfilePage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/account/messages")) {
+    const orderId = new URLSearchParams(window.location.search).get("orderId") ?? undefined
+    return <StoreMessagesPage cartCount={cartCount} orderId={orderId} />
   }
 
   if (path.startsWith("/account/orders/") && path.endsWith("/tracking")) {

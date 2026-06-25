@@ -9,6 +9,7 @@ import {
   toMedusaAdminOrderPaymentStatus,
 } from "../../../lib/order-custom-metadata"
 import {
+  hydrateAdminOrderFromGraph,
   mergeAdminOrderMetadata,
   parseAdminOrdersListQuery,
   summarizeAdminOrderRow,
@@ -88,12 +89,15 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const queryGraph = req.scope.resolve(ContainerRegistrationKeys.QUERY)
     const { data: metadataRows } = (await queryGraph.graph({
       entity: "order",
-      fields: ["id", "metadata"],
+      fields: ["id", "metadata", "email", "display_id", "items.id", "items.quantity"],
       filters: { id: orders.map((order) => order.id) },
-    })) as { data: Array<{ id: string; metadata?: Record<string, unknown> | null }> }
+    })) as { data: Array<Record<string, unknown>> }
+    const graphById = new Map(metadataRows.map((row) => [String(row.id), row]))
     const ordersWithMetadata = mergeAdminOrderMetadata(
       orders as unknown as Array<Record<string, unknown>>,
-      metadataRows
+      metadataRows as Array<{ id: string; metadata?: Record<string, unknown> | null }>
+    ).map((order) =>
+      hydrateAdminOrderFromGraph(order, graphById.get(String(order.id)))
     )
 
     const scoped = ordersWithMetadata.filter((o) => readOrderStoreId(o) === storeId)

@@ -1,27 +1,33 @@
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import type { BuyerStoreSettings } from "../../lib/buyer-api"
 import { useStoreFollow } from "../../hooks/useStoreFollow"
 import { useBuyerLocale } from "../../lib/locale"
+import { buildShareChannels, buildShareText } from "../../lib/share-channels"
+import { ShareChannelsPanel } from "../share/ShareChannelsPanel"
 import { Button } from "../ui/Button"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 export function StoreIdentity({ settings }: { settings: BuyerStoreSettings }) {
   const { t } = useBuyerLocale()
+  const auth = useBuyerAuth()
   const name = settings.brandName || "Citigoo Official Store"
   const { following, followerCount, pending, toggleFollow } = useStoreFollow(
     settings.storeId,
     settings.followerCount ?? 0
   )
-  const [shareStatus, setShareStatus] = useState("")
-  const shareStore = async () => {
-    const url = window.location.href
-    try {
-      if (navigator.share) await navigator.share({ title: name, url })
-      else if (navigator.clipboard) { await navigator.clipboard.writeText(url); setShareStatus("Link copied") }
-      else setShareStatus("Sharing unavailable")
-    } catch (error) {
-      if ((error as Error)?.name !== "AbortError") setShareStatus("Sharing unavailable")
+  const [shareOpen, setShareOpen] = useState(false)
+  const sharePayload = useMemo(() => {
+    const pageUrl = window.location.href
+    return {
+      pageUrl,
+      shareText: buildShareText(name, pageUrl),
+      channels: buildShareChannels({
+        pageUrl,
+        title: name,
+        imageUrl: settings.logoUrl,
+      }),
     }
-  }
+  }, [name, settings.logoUrl])
 
   return (
     <section className="buyer-shop-identity" aria-label="Store information">
@@ -36,7 +42,28 @@ export function StoreIdentity({ settings }: { settings: BuyerStoreSettings }) {
         </p>
       </div>
       <div className="buyer-shop-identity-actions">
-        <Button variant="ghost" onClick={() => void shareStore()} ariaLabel="Share store">↗ Share</Button>
+        <div className="buyer-shop-share-wrap">
+          <Button
+            variant="ghost"
+            onClick={() => setShareOpen((open) => !open)}
+            ariaLabel="Share store"
+            aria-expanded={shareOpen}
+          >
+            ↗ Share
+          </Button>
+          {shareOpen ? (
+            <div className="buyer-shop-share-popover">
+              <ShareChannelsPanel
+                compact
+                heading="Share this store"
+                title={name}
+                pageUrl={sharePayload.pageUrl}
+                shareText={sharePayload.shareText}
+                channels={sharePayload.channels}
+              />
+            </div>
+          ) : null}
+        </div>
         <Button
           variant={following ? "primary" : "secondary"}
           type="button"
@@ -45,9 +72,13 @@ export function StoreIdentity({ settings }: { settings: BuyerStoreSettings }) {
         >
           {following ? t("following") : t("follow")}
         </Button>
-        <Button variant="secondary" disabled title="Direct seller messaging is not available yet">{t("message")} · unavailable</Button>
+        <Button
+          variant="secondary"
+          href={auth.customer ? "/account/messages" : `/account/sign-in?returnTo=${encodeURIComponent("/account/messages")}`}
+        >
+          {t("message")}
+        </Button>
       </div>
-      {shareStatus ? <span className="buyer-shop-share-status" role="status">{shareStatus}</span> : null}
     </section>
   )
 }

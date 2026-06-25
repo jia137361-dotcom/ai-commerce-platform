@@ -8,3 +8,6 @@ export const readBuyerPreferencesFromMetadata = (metadata?: Record<string, unkno
     currencyCode: typeof preferences.currency_code === "string" ? preferences.currency_code.toLowerCase() : "usd",
   }
 }
+
+export const isBuyerEmailVerified = (metadata?: Record<string, unknown> | null) =>
+  typeof metadata?.email_verified_at === "string" && metadata.email_verified_at.length > 0

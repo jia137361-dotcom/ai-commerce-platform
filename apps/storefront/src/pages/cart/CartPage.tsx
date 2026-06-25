@@ -16,6 +16,7 @@ import {
   fetchProducts,
   getBuyerCartStorageKey,
   getBuyerStoreId,
+  readBuyerPreferences,
   updateCartLineItem,
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
@@ -111,7 +112,9 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     }
     setPreparingCheckout(true)
     try {
-      let checkoutCart = await createCart()
+      let checkoutCart = await createCart({
+        countryCode: readBuyerPreferences(auth.customer).countryCode,
+      })
       for (const item of selectedItems) {
         checkoutCart = await addCartLineItem(checkoutCart.id, item.variantId!, item.quantity)
       }

@@ -9,6 +9,8 @@
     "db:generate": "medusa db:generate store_core",
     "db:migrate": "medusa db:migrate",
     "seed": "medusa exec ./src/scripts/seed.ts",
+    "regions:bootstrap": "medusa exec ./src/scripts/bootstrap-market-regions.ts",
+    "shipping:bootstrap": "medusa exec ./src/scripts/bootstrap-market-shipping.ts",
     "stripe:region:setup": "medusa exec ./src/scripts/enable-stripe-region.ts",
     "pay-stripe:e2e:setup": "medusa exec ./src/scripts/pay-stripe-e2e-setup.ts",
     "pay-stripe:reset-test-passwords": "medusa exec ./src/scripts/pay-stripe-reset-test-buyer-passwords.ts",

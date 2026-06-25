@@ -1,6 +1,7 @@
 import { PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
 import { useState } from "react"
 import { confirmStripePaymentAndComplete } from "../../pages/checkout/checkout-payment"
+import { StripeTestModeHint } from "./StripeTestModeHint"
 import { Button } from "../ui/Button"
 
 export function StripePaymentForm({
@@ -10,7 +11,7 @@ export function StripePaymentForm({
 }: {
   canSubmit: boolean
   placing: boolean
-  onComplete: () => Promise<void>
+  onComplete: (paymentMethodLabel?: string) => Promise<void>
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -26,7 +27,7 @@ export function StripePaymentForm({
         stripe,
         elements,
         returnUrl: `${window.location.origin}/checkout`,
-        complete: onComplete,
+        complete: (paymentMethodLabel) => onComplete(paymentMethodLabel),
       })
     } catch (value) {
       setError(value instanceof Error ? value.message : "Stripe payment confirmation failed.")
@@ -37,7 +38,8 @@ export function StripePaymentForm({
 
   return (
     <div className="buyer-checkout-stripe-form">
-      <PaymentElement />
+      <PaymentElement options={{ layout: "tabs" }} />
+      <StripeTestModeHint />
       {error ? <p className="buyer-checkout-inline-error" role="alert">{error}</p> : null}
       <Button loading={confirming || placing} disabled={!stripe || !elements || !canSubmit || confirming || placing} onClick={() => void submit()}>
         {placing ? "Creating order..." : confirming ? "Confirming payment..." : "Pay with Stripe and place order"}

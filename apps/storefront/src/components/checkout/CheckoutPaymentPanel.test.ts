@@ -17,7 +17,7 @@ describe("CheckoutPaymentPanel", () => {
       selectedProviderId: "pp_stripe_stripe",
       stripePublishableKey: "pk_test_example",
     }))
-    expect(html).toContain("only after Medusa returns a valid")
+    expect(html).toContain("after Medusa returns a valid payment")
     expect(html).not.toContain("Pay with Stripe")
   })
 })

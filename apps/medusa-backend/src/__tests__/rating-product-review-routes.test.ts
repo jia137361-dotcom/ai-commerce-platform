@@ -76,6 +76,8 @@ const validBody = (rating = 5) => ({
   email: "buyer@example.com",
   order_number: 1001,
   rating,
+  logistics_rating: rating,
+  overall_rating: rating,
   title: "Great print",
   content: "The print quality is good.",
   customer_name: "Jane",
@@ -225,6 +227,49 @@ describe("store product review routes", () => {
       },
     })
     expect(storeCore.createProductReviews).not.toHaveBeenCalled()
+  })
+
+  it("rejects missing logistics and overall ratings", async () => {
+    const { storeCore, orderModule } = setup()
+    const req = createReq({
+      body: { ...validBody(5), logistics_rating: undefined, overall_rating: undefined },
+      storeCore,
+      orderModule,
+    })
+    const res = createRes()
+
+    await createProductReview(req as any, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(storeCore.createProductReviews).not.toHaveBeenCalled()
+  })
+
+  it("accepts optional text and image urls", async () => {
+    const { storeCore, orderModule } = setup()
+    const req = createReq({
+      body: {
+        ...validBody(4),
+        title: undefined,
+        content: undefined,
+        image_urls: ["https://example.com/static/reviews/review-1.jpg"],
+      },
+      storeCore,
+      orderModule,
+    })
+    const res = createRes()
+
+    await createProductReview(req as any, res)
+
+    expect(res.status).toHaveBeenCalledWith(201)
+    expect(storeCore.createProductReviews).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          logistics_rating: 4,
+          overall_rating: 4,
+          image_urls: ["https://example.com/static/reviews/review-1.jpg"],
+        }),
+      })
+    )
   })
 
   it("rejects missing order number", async () => {

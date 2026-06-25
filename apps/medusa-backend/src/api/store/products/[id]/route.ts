@@ -1,6 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import { resolveProductRequiresShipping } from "../../../../lib/product-shipping"
+import { attachSupportedRegionsToProduct } from "../../../../lib/product-regions"
 import {
   getProductReviewSummaries,
   getStoreCoreService,
@@ -29,13 +30,17 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     ...product,
     requires_shipping: resolveProductRequiresShipping(product as Record<string, unknown>),
   }
-
-  const summaries = await getProductReviewSummaries(storeCoreService, storeId, [
-    product.id
-  ])
-  const categories = product.category_ids?.length ? await storeCoreService.listProductCategories({ id: product.category_ids, store_id: storeId }) : []
+  const productWithRegions = await attachSupportedRegionsToProduct(req.scope, productWithShipping)
+  const summaries = await getProductReviewSummaries(storeCoreService, storeId, [product.id])
+  const categories = product.category_ids?.length
+    ? await storeCoreService.listProductCategories({ id: product.category_ids, store_id: storeId })
+    : []
 
   return res.json({
-    product: { ...normalizeProductWithReviewSummary(productWithShipping, summaries.get(product.id)), category_name: categories[0]?.name ?? null }
+    product: {
+      ...normalizeProductWithReviewSummary(productWithRegions, summaries.get(product.id)),
+      supported_regions: productWithRegions.supported_regions,
+      category_name: categories[0]?.name ?? null,
+    },
   })
 }

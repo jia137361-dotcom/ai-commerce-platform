@@ -1,5 +1,8 @@
 import type { BuyerProductVariant, StoreProduct } from "../../lib/mock-data"
 import type { ProductPurchaseState } from "../../pages/product/product-detail-state"
+import { formatProductRegionNames } from "../../pages/product/product-regions"
+import type { BuyerShareInfo } from "../../lib/buyer-api"
+import { ProductSharePanel } from "./ProductSharePanel"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
@@ -19,9 +22,10 @@ type ProductPurchasePanelProps = {
   requiresSignIn?: boolean
   addNotice?: { tone: "success" | "error"; message: string }
   onAddToCart: () => void
+  share?: BuyerShareInfo | null
 }
 
-export function ProductPurchasePanel({ product, variants, selectedVariantId, onVariantChange, purchaseState, quantity, setQuantity, adding, authLoading = false, requiresSignIn = false, addNotice, onAddToCart }: ProductPurchasePanelProps) {
+export function ProductPurchasePanel({ product, variants, selectedVariantId, onVariantChange, purchaseState, quantity, setQuantity, adding, authLoading = false, requiresSignIn = false, addNotice, onAddToCart, share }: ProductPurchasePanelProps) {
   const reviewCount = product.reviewCount ?? 0
   return (
     <Card as="aside" className="buyer-product-purchase">
@@ -62,6 +66,10 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
         {authLoading ? "Checking account..." : adding ? "Adding..." : requiresSignIn ? "Sign in to add to cart" : "Add to cart"}
       </Button>
       {requiresSignIn ? <p className="buyer-product-checkout-note">Browsing is open to everyone. Sign in before adding this option to your cart.</p> : null}
+      <p className="buyer-product-checkout-note">
+        Available for purchase in: <strong>{formatProductRegionNames(product.supportedRegions)}</strong>.
+      </p>
+      {share ? <ProductSharePanel share={share} source="backend" compact /> : null}
       <p className="buyer-product-checkout-note">Taxes and delivery options are confirmed during checkout.</p>
     </Card>
   )

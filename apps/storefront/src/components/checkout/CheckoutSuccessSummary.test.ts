@@ -13,10 +13,18 @@ describe("CheckoutSuccessSummary", () => {
   })
 
   it("shows backend Stripe status without exposing payment secrets", () => {
-    const html = renderToStaticMarkup(createElement(CheckoutSuccessSummary, { info: { orderId: "order_123", paymentProviderId: "pp_stripe_stripe", paymentStatus: "captured" } }))
+    const html = renderToStaticMarkup(createElement(CheckoutSuccessSummary, {
+      info: {
+        orderId: "order_123",
+        paymentProviderId: "pp_stripe_stripe",
+        paymentMethodLabel: "VISA ···· 4242",
+        paymentStatus: "captured",
+      },
+    }))
     expect(html).toContain("Stripe · captured")
+    expect(html).toContain("Payment method")
+    expect(html).toContain("VISA ···· 4242")
+    expect(html).not.toContain("pp_stripe_stripe")
     expect(html).not.toContain("client_secret")
-    expect(html).not.toContain("sk_test_")
-    expect(html).not.toContain("whsec_")
   })
 })

@@ -15,6 +15,7 @@ export interface ShareChannel {
 
 /** 所有分享渠道的集合 */
 export interface ShareChannels {
+  wechat: ShareChannel
   facebook: ShareChannel
   x: ShareChannel
   pinterest: ShareChannel
@@ -43,8 +44,17 @@ export const buildShareLinks = (input: ShareLinkInput): ShareChannels => {
   const encodedUrl = encodeURIComponent(input.productUrl)
   const encodedTitle = encodeURIComponent(input.title)
   const encodedImage = input.imageUrl ? encodeURIComponent(input.imageUrl) : null
+  const shareText = buildShareText(input.title, input.productUrl)
 
   return {
+    // WeChat — 浏览器无法直接唤起分享，复制标题+链接后粘贴到微信
+    wechat: {
+      enabled: true,
+      type: "copy_then_open",
+      value: shareText,
+      message: "Link copied. Paste it into WeChat to share.",
+    },
+
     // Facebook — 使用 sharer.php，无需 appId
     facebook: {
       enabled: true,

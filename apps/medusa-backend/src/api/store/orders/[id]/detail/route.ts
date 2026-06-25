@@ -2,6 +2,8 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { assertOrderBelongsToCurrentStore, readOrderStoreId } from "../../../../../lib/order-store-context"
 import { OrderStoreAccessError } from "../../../../../lib/order-store-error"
+import { enrichOrderWithSummaryTotals, minorMoneyToMajor, readOrderMoney, resolveBuyerOrderTotalsForStorefront } from "../../../../../lib/buyer-order-totals"
+import { enrichOrderLineItemsWithImages, resolveOrderLineItemThumbnail } from "../../../../../lib/order-line-item-display"
 import {
   ORDER_META_PAYMENT_STATUS,
   readOrderFulfillmentStatusMeta,
@@ -17,6 +19,7 @@ import {
   type BuyerRefundRequestRecord,
 } from "../../../../../lib/order-refund-request"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
+import { STORE_CORE_MODULE } from "../../../../../modules/store-core"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../../modules/buyer-refund-requests"
 import type BuyerRefundRequestsModuleService from "../../../../../modules/buyer-refund-requests/service"
 
@@ -80,28 +83,25 @@ const hasAuthenticatedMismatch = (req: MedusaRequest, order: DetailOrder) => {
   return Boolean(customerId && order.customer_id && order.customer_id !== customerId)
 }
 
-const readNumber = (value: unknown): number | null => {
-  if (typeof value === "number" && Number.isFinite(value)) return value
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
+const readNumber = (value: unknown): number | null => readOrderMoney(value)
 
 const normalizeItem = (item: OrderLineItem) => {
-  const unitPrice = readNumber(item.unit_price)
-  const subtotal = readNumber(item.subtotal) ?? readNumber(item.total)
+  const unitPriceMinor = readNumber(item.unit_price)
+  const quantity = readNumber(item.quantity) ?? 0
+  const subtotalMinor =
+    readNumber(item.subtotal) ??
+    readNumber(item.total) ??
+    (unitPriceMinor != null ? unitPriceMinor * quantity : null)
   return {
     id: item.id ?? "",
     product_id: item.product_id ?? null,
     variant_id: item.variant_id ?? null,
     title: item.title ?? item.product_title ?? "Untitled item",
     variant_title: item.variant_title ?? null,
-    thumbnail: item.thumbnail ?? null,
-    quantity: readNumber(item.quantity) ?? 0,
-    unit_price: unitPrice,
-    subtotal,
+    thumbnail: resolveOrderLineItemThumbnail(item),
+    quantity,
+    unit_price: minorMoneyToMajor(unitPriceMinor),
+    subtotal: minorMoneyToMajor(subtotalMinor),
     metadata: item.metadata ?? null,
   }
 }
@@ -123,14 +123,20 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const orderId = req.params.id as string
     const email = normalizeEmail(req.query?.email as string | undefined)
     const orderModule = req.scope.resolve(Modules.ORDER)
-    const order = await orderModule.retrieveOrder(orderId, {
+    const retrievedOrder = await orderModule.retrieveOrder(orderId, {
       relations: ["items", "shipping_address", "billing_address"],
     })
+    const enrichedOrder = await enrichOrderWithSummaryTotals(
+      req,
+      orderId,
+      retrievedOrder as unknown as Record<string, unknown>
+    )
+    const totals = resolveBuyerOrderTotalsForStorefront(enrichedOrder)
 
-    assertOrderBelongsToCurrentStore(req, order)
+    assertOrderBelongsToCurrentStore(req, retrievedOrder)
 
-    const hasAuthAccess = hasAuthenticatedAccess(req, order)
-    if (hasAuthenticatedMismatch(req, order)) {
+    const hasAuthAccess = hasAuthenticatedAccess(req, retrievedOrder)
+    if (hasAuthenticatedMismatch(req, retrievedOrder)) {
       return res.status(403).json({ error: "Customer does not match order" })
     }
 
@@ -138,14 +144,14 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       return res.status(400).json({ error: "email query parameter is required" })
     }
 
-    if (!hasAuthAccess && (!order.email || normalizeEmail(order.email) !== email)) {
+    if (!hasAuthAccess && (!retrievedOrder.email || normalizeEmail(retrievedOrder.email) !== email)) {
       return res.status(403).json({ error: "Email does not match order" })
     }
 
-    const metadata = order.metadata as Record<string, unknown> | null
+    const metadata = retrievedOrder.metadata as Record<string, unknown> | null
     const storeId = resolveCurrentStore(req).store_id
     const cancellationContext = hasAuthAccess
-      ? await loadCancellationContext(req, orderId, order)
+      ? await loadCancellationContext(req, orderId, retrievedOrder)
       : null
     const cancellation = hasAuthAccess && cancellationContext
       ? cancellationResponse(evaluateCancellationEligibility(cancellationContext, {
@@ -198,24 +204,32 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       }
     }
 
+    const responseItems = (retrievedOrder.items?.length
+      ? retrievedOrder.items
+      : (enrichedOrder.items as OrderLineItem[] | undefined) ?? []) as OrderLineItem[]
+    const storeCore = req.scope.resolve(STORE_CORE_MODULE) as {
+      listProducts: (filters: Record<string, unknown>) => Promise<Array<Record<string, unknown>>>
+    }
+    const displayItems = await enrichOrderLineItemsWithImages(storeCore, responseItems)
+
     res.status(200).json({
-      order_id: order.id,
-      display_id: order.display_id ?? null,
-      store_id: readOrderStoreId(order),
-      email: order.email ?? null,
-      status: order.status ?? null,
+      order_id: retrievedOrder.id,
+      display_id: retrievedOrder.display_id ?? null,
+      store_id: readOrderStoreId(retrievedOrder),
+      email: retrievedOrder.email ?? null,
+      status: retrievedOrder.status ?? null,
       payment_status: metadata?.[ORDER_META_PAYMENT_STATUS] ?? null,
       fulfillment_status: readOrderFulfillmentStatusMeta(metadata),
-      created_at: order.created_at ?? null,
-      currency_code: order.currency_code ?? null,
-      items: ((order.items ?? []) as OrderLineItem[]).map(normalizeItem),
-      shipping_address: order.shipping_address ?? null,
-      billing_address: order.billing_address ?? null,
-      subtotal: readNumber(order.subtotal),
-      shipping_total: readNumber(order.shipping_total),
-      discount_total: readNumber(order.discount_total),
-      tax_total: readNumber(order.tax_total),
-      total: readNumber(order.total),
+      created_at: retrievedOrder.created_at ?? null,
+      currency_code: retrievedOrder.currency_code ?? null,
+      items: displayItems.map(normalizeItem),
+      shipping_address: retrievedOrder.shipping_address ?? null,
+      billing_address: retrievedOrder.billing_address ?? null,
+      subtotal: totals.subtotal,
+      shipping_total: totals.shippingTotal,
+      discount_total: totals.discountTotal,
+      tax_total: totals.taxTotal,
+      total: totals.total,
       cancellation,
       refund_request: refundRequest,
     })

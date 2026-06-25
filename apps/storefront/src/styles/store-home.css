@@ -907,6 +907,28 @@
 .buyer-shop-identity-actions {
   display: flex;
   gap: 12px;
+  align-items: flex-start;
+}
+
+.buyer-shop-share-wrap {
+  position: relative;
+}
+
+.buyer-shop-share-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid #e4e7ec;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(16, 24, 40, 0.12);
+}
+
+.buyer-shop-share-popover .buyer-share-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .buyer-shop-share-status {
@@ -1471,6 +1493,82 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
   margin-top: 24px;
+}
+
+.buyer-shop-gallery-carousel {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.buyer-shop-gallery-frame {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+
+.buyer-shop-gallery-counter {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(20, 14, 10, 0.72);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.buyer-shop-gallery-nav {
+  min-width: 42px;
+  padding-inline: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.buyer-shop-gallery-frame img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--buyer-surface-muted);
+}
+
+.buyer-shop-gallery-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.buyer-shop-gallery-thumbnails {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.buyer-shop-gallery-thumbnails button {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 54px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--buyer-surface-muted);
+  cursor: pointer;
+}
+
+.buyer-shop-gallery-thumbnails button.active {
+  border-color: var(--buyer-primary);
+}
+
+.buyer-shop-gallery-thumbnails img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .buyer-shop-gallery img {

@@ -28,7 +28,14 @@ export function AccountSettingPlaceholderPage({ cartCount, setting }: { cartCoun
             onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))}
             onSwitchAccount={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))}
           />
-          {setting.slug === "security" ? <AccountSecurityContent customer={auth.customer} /> : <AccountSettingPlaceholderContent setting={setting} />}
+          {setting.slug === "security" ? (
+            <AccountSecurityContent
+              customer={auth.customer}
+              onCustomerUpdated={() => void auth.refreshCustomer()}
+            />
+          ) : (
+            <AccountSettingPlaceholderContent setting={setting} />
+          )}
         </section>
       )}
     </AccountAuthLayout>

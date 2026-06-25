@@ -1,7 +1,10 @@
+import { resolveStorePolicyDisplay } from "@ai-commerce/shared-types"
 import { type CartLineItem, type StoreCart, type StoreProduct } from "./mock-data"
 import { normalizeBuyerProduct, type BuyerProductApiInput } from "./buyer-product"
 import { buildShipmentTrackingEvents } from "./buyer-tracking-events"
 import { readBuyerPreferencesFromMetadata, type BuyerPreferences } from "./buyer-preferences"
+import { buildShareChannels, buildShareText } from "./share-channels"
+import { resolveStoreAssetUrl } from "./store-media-url"
 
 export type DataSource = "backend" | "mock" | "static"
 
@@ -22,7 +25,6 @@ export type BuyerStoreSettings = {
   returnsPolicy?: string
   cancellationPolicy?: string
   privacyPolicy?: string
-  faqs?: Array<{ question: string; answer: string }>
   metadata: Record<string, unknown>
 }
 
@@ -39,11 +41,16 @@ export type BuyerReview = {
   id: string
   customerName: string
   rating: number
+  logisticsRating?: number | null
+  overallRating?: number | null
+  imageUrls?: string[]
   title?: string
   content: string
   createdAt?: string
   productId?: string
   productTitle?: string
+  orderId?: string
+  orderDisplayId?: string | number | null
 }
 
 export type BuyerReviewsSummary = {
@@ -118,11 +125,16 @@ type ApiReview = {
   id?: string
   customer_name?: string | null
   rating?: number
+  logistics_rating?: number | null
+  overall_rating?: number | null
+  image_urls?: string[]
   title?: string | null
   content?: string | null
   created_at?: string
   product_id?: string
   product_title?: string
+  order_id?: string
+  order_display_id?: string | number | null
 }
 
 type ApiReviews = {
@@ -155,6 +167,17 @@ type ApiCartLineItem = {
   metadata?: Record<string, unknown> | null
 }
 
+type ApiCartAddress = {
+  first_name?: string | null
+  last_name?: string | null
+  address_1?: string | null
+  address_2?: string | null
+  city?: string | null
+  province?: string | null
+  postal_code?: string | null
+  country_code?: string | null
+}
+
 type ApiCart = {
   id?: string
   cart_id?: string
@@ -166,6 +189,7 @@ type ApiCart = {
   items?: ApiCartLineItem[]
   subtotal?: number
   total?: number
+  shipping_address?: ApiCartAddress | null
 }
 
 type ApiPaymentProvider = { id?: string; is_enabled?: boolean }
@@ -251,6 +275,7 @@ export type CompleteCartResponse = {
   currencyCode?: string
   storeId: string
   paymentProviderId?: string
+  paymentMethodLabel?: string | null
   paymentStatus?: unknown
   fulfillmentStatus?: unknown
   order?: unknown
@@ -260,6 +285,7 @@ type ApiCompleteCartResponse = {
   order_id?: string
   store_id?: string
   payment_provider_id?: string
+  payment_method_label?: string | null
   payment_status?: unknown
   fulfillment_status?: unknown
   order?: ApiCompletedOrder
@@ -425,11 +451,14 @@ type ApiMyOrder = {
   status?: string | null
   payment_status?: string | null
   fulfillment_status?: string | null
+  buyer_display_status?: BuyerOrderSummary["buyerDisplayStatus"]
+  buyer_display_status_label?: string
   currency_code?: string | null
   total?: number | null
   item_count?: number
   preview_items?: ApiMyOrderPreviewItem[]
   review_eligible?: boolean
+  review_completed?: boolean
   receipt_confirmation_required?: boolean
   receipt_confirmed_at?: string | null
   return_intent?: boolean
@@ -667,6 +696,8 @@ export type BuyerOrderSummary = {
   status?: string | null
   paymentStatus?: string | null
   fulfillmentStatus?: string | null
+  buyerDisplayStatus?: "cancelled" | "unpaid" | "packing" | "awaiting_receipt" | "awaiting_review" | "reviewed" | "completed" | "refunding"
+  buyerDisplayStatusLabel?: string
   currencyCode?: string | null
   total?: number | null
   itemCount: number
@@ -677,6 +708,7 @@ export type BuyerOrderSummary = {
     productId?: string | null
   }>
   reviewEligible?: boolean
+  reviewCompleted?: boolean
   receiptConfirmationRequired?: boolean
   receiptConfirmedAt?: string | null
   returnIntent?: boolean
@@ -715,11 +747,19 @@ const config = {
   backendUrl: readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
   publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
   storeId: readEnv("VITE_DEFAULT_STORE_ID", readEnv("NEXT_PUBLIC_STORE_ID", "default_store")),
+  aiWorkerPublicBase: (() => {
+    const explicit = readEnv("VITE_AI_WORKER_PUBLIC_BASE_URL", readEnv("NEXT_PUBLIC_AI_WORKER_PUBLIC_BASE_URL"))
+    if (explicit) return explicit.replace(/\/+$/, "")
+    const base = readEnv("VITE_AI_WORKER_BASE_URL", readEnv("NEXT_PUBLIC_AI_WORKER_BASE_URL", "http://127.0.0.1:8001"))
+    return `${base.replace(/\/+$/, "")}/static`
+  })(),
 }
 
 export const getStripePublishableKey = () => readEnv("VITE_STRIPE_PK")
 
 export const getBuyerStoreId = () => config.storeId || "default_store"
+
+export const getAiWorkerPublicBase = () => config.aiWorkerPublicBase
 
 export const getBuyerCartStorageKey = (storeId = getBuyerStoreId(), identity = "guest:anonymous") =>
   `citigoo:${storeId}:cart:${encodeURIComponent(identity)}`
@@ -744,6 +784,11 @@ const readNumber = (value: number | string | null | undefined) => {
 }
 
 const readString = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined)
+
+const resolveOrderItemThumbnailUrl = (thumbnail?: string | null) => {
+  if (!thumbnail?.trim()) return null
+  return resolveStoreAssetUrl(thumbnail, config.backendUrl, config.aiWorkerPublicBase) ?? thumbnail.trim()
+}
 
 const warnFallback = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : String(error)
@@ -777,6 +822,12 @@ const apiFetchWithStatus = async <T>(path: string, init: RequestInit = {}): Prom
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/failed to fetch|networkerror|load failed/i.test(message)) {
+      throw new Error("Unable to reach the store backend. Check that medusa-backend is running and restart it after updates.")
+    }
+    throw error instanceof Error ? error : new Error(message)
   })
   if (!response.ok) {
     const body = await response.text()
@@ -870,29 +921,31 @@ const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
   const metadata = settings?.metadata ?? {}
   const metadataString = (key: string) => typeof metadata[key] === "string" && metadata[key].trim() ? metadata[key].trim() : undefined
   const gallery = metadata.gallery_urls
+  const brandName = settings?.brand_name ?? "Nespresso"
+  const policies = resolveStorePolicyDisplay(metadata, brandName)
+  const backendBase = config.backendUrl
+  const galleryUrls = Array.isArray(gallery)
+    ? gallery
+        .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+        .map((value) => resolveStoreAssetUrl(value, backendBase) ?? value.trim())
+    : []
   return {
     storeId: settings?.store_id ?? config.storeId ?? "default_store",
-    brandName: settings?.brand_name ?? "Nespresso",
-    logoUrl: settings?.logo_url ?? undefined,
+    brandName,
+    logoUrl: resolveStoreAssetUrl(settings?.logo_url ?? undefined, backendBase),
     supportEmail: settings?.support_email ?? undefined,
     seoTitle: settings?.seo_title ?? undefined,
     seoDescription: settings?.seo_description ?? undefined,
     followerCount: typeof settings?.follower_count === "number" ? settings.follower_count : undefined,
     description: metadataString("description") ?? settings?.seo_description ?? undefined,
     announcement: metadataString("announcement"),
-    bannerUrl: metadataString("banner_url") ?? metadataString("hero_image_url"),
-    galleryUrls: Array.isArray(gallery) ? gallery.filter((value): value is string => typeof value === "string" && Boolean(value.trim())) : [],
-    shippingPolicy: metadataString("shipping_policy"),
-    paymentPolicy: metadataString("payment_policy"),
-    returnsPolicy: metadataString("returns_policy"),
-    cancellationPolicy: metadataString("cancellation_policy"),
-    privacyPolicy: metadataString("privacy_policy"),
-    faqs: Array.isArray(metadata.faqs) ? metadata.faqs.flatMap((entry) => {
-      if (!entry || typeof entry !== "object") return []
-      const question = (entry as Record<string, unknown>).question
-      const answer = (entry as Record<string, unknown>).answer
-      return typeof question === "string" && question.trim() && typeof answer === "string" && answer.trim() ? [{ question: question.trim(), answer: answer.trim() }] : []
-    }) : [],
+    bannerUrl: resolveStoreAssetUrl(metadataString("banner_url") ?? metadataString("hero_image_url"), backendBase),
+    galleryUrls,
+    shippingPolicy: policies.shippingPolicy,
+    paymentPolicy: policies.paymentPolicy,
+    returnsPolicy: policies.returnsPolicy,
+    cancellationPolicy: policies.cancellationPolicy,
+    privacyPolicy: policies.privacyPolicy,
     metadata,
   }
 }
@@ -910,11 +963,16 @@ const normalizeReview = (review: ApiReview, index: number): BuyerReview => ({
   id: review.review_id ?? review.id ?? `review-${index}`,
   customerName: review.customer_name ?? "Verified buyer",
   rating: review.rating ?? 5,
+  logisticsRating: review.logistics_rating ?? null,
+  overallRating: review.overall_rating ?? null,
+  imageUrls: review.image_urls ?? [],
   title: review.title ?? undefined,
   content: review.content ?? "",
   createdAt: review.created_at,
   productId: review.product_id,
   productTitle: review.product_title,
+  orderId: review.order_id,
+  orderDisplayId: review.order_display_id ?? null,
 })
 
 const normalizeReviews = (payload: ApiReviews, productId: string): BuyerReviewsSummary => ({
@@ -935,14 +993,12 @@ const fallbackShare = (product: StoreProduct): BuyerShareInfo => {
     description: product.description,
     imageUrl: product.imageUrl,
     productUrl,
-    shareText: `${product.title} ${productUrl}`,
-    channels: {
-      copy_link: {
-        enabled: true,
-        type: "copy",
-        value: productUrl,
-      },
-    },
+    shareText: buildShareText(product.title, productUrl),
+    channels: buildShareChannels({
+      pageUrl: productUrl,
+      title: product.title,
+      imageUrl: product.imageUrl,
+    }),
   }
 }
 
@@ -954,8 +1010,12 @@ const normalizeShare = (payload: ApiShare, product: StoreProduct): BuyerShareInf
     description: payload.description ?? product.description,
     imageUrl: payload.image_url ?? product.imageUrl,
     productUrl,
-    shareText: payload.share_text ?? `${product.title} ${productUrl}`,
-    channels: payload.channels ?? {},
+    shareText: payload.share_text ?? buildShareText(product.title, productUrl),
+    channels: payload.channels ?? buildShareChannels({
+      pageUrl: productUrl,
+      title: payload.title ?? product.title,
+      imageUrl: payload.image_url ?? product.imageUrl,
+    }),
   }
 }
 
@@ -982,6 +1042,20 @@ const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
   }
 }
 
+const normalizeCartShippingAddress = (address?: ApiCartAddress | null) => {
+  if (!address?.country_code || !address.address_1 || !address.city || !address.postal_code) return null
+  return {
+    firstName: address.first_name ?? undefined,
+    lastName: address.last_name ?? undefined,
+    address1: address.address_1,
+    address2: address.address_2 ?? undefined,
+    city: address.city,
+    province: address.province ?? undefined,
+    postalCode: address.postal_code,
+    countryCode: address.country_code.toLowerCase(),
+  }
+}
+
 const normalizeCart = (cart: ApiCart): StoreCart => {
   const items = (cart.items ?? []).map(normalizeCartLineItem)
   const rawSubtotal = readNumber(cart.subtotal)
@@ -1001,6 +1075,7 @@ const normalizeCart = (cart: ApiCart): StoreCart => {
     total,
     hasSubtotal: rawSubtotal != null || derivedSubtotalAvailable,
     hasTotal: rawTotal != null || rawSubtotal != null || derivedSubtotalAvailable,
+    shippingAddress: normalizeCartShippingAddress(cart.shipping_address),
   }
 }
 
@@ -1075,20 +1150,40 @@ export const submitProductReview = async (input: {
   email: string
   orderNumber: string
   rating: number
+  logisticsRating: number
+  overallRating: number
   title?: string
   content?: string
   customerName?: string
+  imageUrls?: string[]
 }) => apiFetch<ApiReviews>(`/store/products/${encodeURIComponent(input.productId)}/reviews`, {
   method: "POST",
   body: JSON.stringify({
     email: input.email,
     order_number: input.orderNumber,
     rating: input.rating,
+    logistics_rating: input.logisticsRating,
+    overall_rating: input.overallRating,
     title: input.title,
     content: input.content,
     customer_name: input.customerName,
+    image_urls: input.imageUrls ?? [],
   }),
 })
+
+export const uploadReviewImage = async (input: { fileBase64: string; contentType: string }) => {
+  const payload = await apiFetch<{ image_url?: string }>("/store/reviews/upload-image", {
+    method: "POST",
+    body: JSON.stringify({
+      file_base64: input.fileBase64,
+      content_type: input.contentType,
+    }),
+  })
+  if (!payload.image_url) {
+    throw new Error("Image upload did not return a URL")
+  }
+  return { imageUrl: payload.image_url }
+}
 
 export const fetchStoreReviews = async (): Promise<LoadResult<BuyerReviewsSummary>> => {
   try {
@@ -1108,12 +1203,38 @@ export const fetchProductShare = async (product: StoreProduct): Promise<LoadResu
   }
 }
 
-export const createCart = async () => {
+export const createCart = async (options?: { countryCode?: string; regionId?: string }) => {
+  let regionId = options?.regionId
+  if (!regionId) {
+    const regions = await listStoreRegions()
+    regionId = resolveStoreRegionId(regions, options?.countryCode ?? "us")
+  }
   const cart = await apiFetch<ApiCart>("/store/carts", {
     method: "POST",
-    body: JSON.stringify({ currency_code: "usd" }),
+    body: JSON.stringify({
+      currency_code: "usd",
+      ...(regionId ? { region_id: regionId } : {}),
+    }),
   })
   return normalizeCart(cart)
+}
+
+export type StoreRegionSummary = {
+  region_id: string
+  name: string
+  currency_code: string
+  country_codes: string[]
+}
+
+export const listStoreRegions = async (): Promise<StoreRegionSummary[]> => {
+  const payload = await apiFetch<{ regions: StoreRegionSummary[] }>("/store/market-regions")
+  return payload.regions ?? []
+}
+
+export const resolveStoreRegionId = (regions: StoreRegionSummary[], countryCode: string) => {
+  const normalized = countryCode.trim().toLowerCase()
+  const matched = regions.find((region) => region.country_codes.includes(normalized))
+  return matched?.region_id ?? regions[0]?.region_id
 }
 
 export const fetchCart = async (cartId: string) => {
@@ -1266,6 +1387,7 @@ export const completeCart = async (cartId: string, paymentProviderId?: string): 
     currencyCode: order?.currency_code,
     storeId: payload.store_id ?? getBuyerStoreId(),
     paymentProviderId: payload.payment_provider_id,
+    paymentMethodLabel: payload.payment_method_label ?? null,
     paymentStatus: payload.payment_status,
     fulfillmentStatus: payload.fulfillment_status,
     order,
@@ -1316,16 +1438,19 @@ export const getMyOrders = async ({
       status: order.status ?? null,
       paymentStatus: order.payment_status ?? null,
       fulfillmentStatus: order.fulfillment_status ?? null,
+      buyerDisplayStatus: order.buyer_display_status ?? undefined,
+      buyerDisplayStatusLabel: order.buyer_display_status_label ?? undefined,
       currencyCode: order.currency_code ?? null,
       total: order.total ?? null,
       itemCount: order.item_count ?? 0,
       previewItems: (order.preview_items ?? []).map((item) => ({
         title: item.title ?? "Untitled item",
-        thumbnail: item.thumbnail ?? null,
+        thumbnail: resolveOrderItemThumbnailUrl(item.thumbnail),
         quantity: item.quantity ?? 0,
         productId: item.product_id ?? null,
       })),
       reviewEligible: Boolean(order.review_eligible),
+      reviewCompleted: Boolean(order.review_completed),
       receiptConfirmationRequired: Boolean(order.receipt_confirmation_required),
       receiptConfirmedAt: order.receipt_confirmed_at ?? null,
       returnIntent: Boolean(order.return_intent),
@@ -1466,6 +1591,12 @@ const normalizeRefundCapability = (
   }
 }
 
+const readOrderMoneyMajor = (value: number | string | null | undefined) => {
+  if (value == null || value === "") return null
+  const numeric = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
 const normalizeOrderDetail = (payload: ApiOrderDetailResponse, orderId: string): BuyerOrderDetail => {
   return {
     orderId: payload.order_id ?? orderId,
@@ -1483,19 +1614,19 @@ const normalizeOrderDetail = (payload: ApiOrderDetailResponse, orderId: string):
       variantId: item.variant_id ?? null,
       title: item.title ?? "Untitled item",
       variantTitle: item.variant_title ?? null,
-      thumbnail: item.thumbnail ?? null,
+      thumbnail: resolveOrderItemThumbnailUrl(item.thumbnail),
       quantity: item.quantity ?? 0,
-      unitPrice: item.unit_price ?? null,
-      subtotal: item.subtotal ?? null,
+      unitPrice: readOrderMoneyMajor(item.unit_price),
+      subtotal: readOrderMoneyMajor(item.subtotal),
       metadata: item.metadata ?? null,
     })),
     shippingAddress: payload.shipping_address ?? null,
     billingAddress: payload.billing_address ?? null,
-    subtotal: payload.subtotal ?? null,
-    shippingTotal: payload.shipping_total ?? null,
-    discountTotal: payload.discount_total ?? null,
-    taxTotal: payload.tax_total ?? null,
-    total: payload.total ?? null,
+    subtotal: readOrderMoneyMajor(payload.subtotal),
+    shippingTotal: readOrderMoneyMajor(payload.shipping_total),
+    discountTotal: readOrderMoneyMajor(payload.discount_total),
+    taxTotal: readOrderMoneyMajor(payload.tax_total),
+    total: readOrderMoneyMajor(payload.total),
     cancellation: normalizeCancellation(payload.cancellation),
     refundRequest: normalizeRefundCapability(payload.refund_request),
   }
@@ -1678,6 +1809,133 @@ export const deleteCustomerAddress = async (addressId: string) => {
   return listCustomerAddresses()
 }
 
+export type BuyerPaymentMethod = {
+  id: string
+  type: string
+  brand?: string
+  last4?: string
+  expMonth?: number
+  expYear?: number
+  walletType?: string | null
+  isDefault: boolean
+  label: string
+}
+
+type ApiPaymentMethod = {
+  id?: string
+  type?: string
+  brand?: string
+  last4?: string
+  exp_month?: number
+  exp_year?: number
+  expMonth?: number
+  expYear?: number
+  wallet_type?: string | null
+  walletType?: string | null
+  is_default?: boolean
+  isDefault?: boolean
+  label?: string
+}
+
+const normalizePaymentMethod = (method: ApiPaymentMethod): BuyerPaymentMethod | null => {
+  if (!method.id) return null
+  return {
+    id: method.id,
+    type: method.type ?? "card",
+    brand: method.brand,
+    last4: method.last4,
+    expMonth: method.expMonth ?? method.exp_month,
+    expYear: method.expYear ?? method.exp_year,
+    walletType: method.walletType ?? method.wallet_type ?? null,
+    isDefault: Boolean(method.isDefault ?? method.is_default),
+    label: method.label ?? "Payment method",
+  }
+}
+
+export const listCustomerPaymentMethods = async () => {
+  const payload = await apiFetch<{
+    stripe_configured?: boolean
+    default_payment_method_id?: string | null
+    payment_methods?: ApiPaymentMethod[]
+  }>("/store/customers/me/payment-methods")
+
+  const paymentMethods = (payload.payment_methods ?? [])
+    .map(normalizePaymentMethod)
+    .filter((method): method is BuyerPaymentMethod => Boolean(method))
+
+  return {
+    stripeConfigured: Boolean(payload.stripe_configured),
+    defaultPaymentMethodId: payload.default_payment_method_id ?? null,
+    paymentMethods,
+  }
+}
+
+export const createCustomerPaymentMethodSetup = async () => {
+  const payload = await apiFetch<{ client_secret?: string; setup_intent_id?: string }>(
+    "/store/customers/me/payment-methods",
+    { method: "POST", body: JSON.stringify({}) }
+  )
+  if (!payload.client_secret?.includes("_secret_")) {
+    throw new Error("Stripe did not return a setup client secret.")
+  }
+  return {
+    clientSecret: payload.client_secret,
+    setupIntentId: payload.setup_intent_id ?? "",
+  }
+}
+
+export const deleteCustomerPaymentMethod = async (paymentMethodId: string) => {
+  await apiFetch(`/store/customers/me/payment-methods/${encodeURIComponent(paymentMethodId)}`, {
+    method: "DELETE",
+  })
+  return listCustomerPaymentMethods()
+}
+
+export const setDefaultCustomerPaymentMethod = async (paymentMethodId: string) => {
+  await apiFetch(`/store/customers/me/payment-methods/${encodeURIComponent(paymentMethodId)}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+  return listCustomerPaymentMethods()
+}
+
+export type BuyerEmailVerificationStatus = {
+  email?: string | null
+  verified: boolean
+  verifiedAt?: string | null
+}
+
+export const fetchBuyerEmailVerificationStatus = async (): Promise<BuyerEmailVerificationStatus> => {
+  const payload = await apiFetch<BuyerEmailVerificationStatus>("/store/customers/me/email-verification")
+  return {
+    email: payload.email ?? null,
+    verified: Boolean(payload.verified),
+    verifiedAt: payload.verifiedAt ?? null,
+  }
+}
+
+export const sendBuyerEmailVerification = async () => {
+  const payload = await apiFetch<{ sent?: boolean; email?: string; expires_at?: string; dev_code?: string }>(
+    "/store/customers/me/email-verification",
+    {
+      method: "POST",
+      body: JSON.stringify({ action: "send" }),
+    }
+  )
+  return payload
+}
+
+export const confirmBuyerEmailVerification = async (code: string) => {
+  const payload = await apiFetch<{ verified?: boolean; verifiedAt?: string; email?: string }>(
+    "/store/customers/me/email-verification",
+    {
+      method: "POST",
+      body: JSON.stringify({ action: "confirm", code }),
+    }
+  )
+  return payload
+}
+
 export const signOutCustomer = async () => {
   await apiFetch<{ success?: boolean }>("/auth/session", {
     method: "DELETE",
@@ -1697,4 +1955,42 @@ export const updateStoreFollowState = async (following: boolean) =>
   apiFetch<{ store_id: string; follower_count: number; following: boolean }>("/store/follow", {
     method: "POST",
     body: JSON.stringify({ following }),
+  })
+
+export type BuyerStoreMessage = {
+  id: string
+  senderRole: "buyer" | "seller"
+  body: string
+  orderId?: string | null
+  createdAt?: string
+}
+
+const normalizeStoreMessage = (message: {
+  message_id?: string
+  sender_role?: "buyer" | "seller"
+  body?: string
+  order_id?: string | null
+  created_at?: string
+}): BuyerStoreMessage => ({
+  id: message.message_id ?? "",
+  senderRole: message.sender_role ?? "buyer",
+  body: message.body ?? "",
+  orderId: message.order_id ?? null,
+  createdAt: message.created_at,
+})
+
+export const fetchBuyerStoreMessages = async () => {
+  const payload = await apiFetch<{ messages?: Array<Record<string, unknown>> }>("/store/messages")
+  return (payload.messages ?? []).map((message) =>
+    normalizeStoreMessage(message as Parameters<typeof normalizeStoreMessage>[0])
+  )
+}
+
+export const sendBuyerStoreMessage = async (input: { body: string; orderId?: string }) =>
+  apiFetch<{ message?: Record<string, unknown> }>("/store/messages", {
+    method: "POST",
+    body: JSON.stringify({
+      body: input.body,
+      order_id: input.orderId,
+    }),
   })
