@@ -8,12 +8,21 @@
   ],
   "scripts": {
     "dev": "npm --workspace apps/medusa-backend run dev",
+    "dev:seller": "npm --workspace apps/seller-dashboard run dev",
+    "dev:all": "npm --workspace apps/medusa-backend run dev & npm --workspace apps/seller-dashboard run dev",
     "build": "npm --workspace apps/medusa-backend run build",
     "seed": "npm --workspace apps/medusa-backend run seed",
-    "test": "npm --workspace apps/medusa-backend run test"
+    "test": "npm --workspace apps/medusa-backend run test",
+    "test:seller": "npm --workspace apps/seller-dashboard run test",
+    "test:e2e:seller": "npm --workspace apps/seller-dashboard run test:e2e",
+    "db:migrate": "npm --workspace apps/medusa-backend run db:migrate"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0"
   }
 }
 

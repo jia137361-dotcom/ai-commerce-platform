@@ -1,0 +1,5 @@
+citigooapi/
+__pycache__/
+*.pyc
+.pytest_cache/
+var/uploads/

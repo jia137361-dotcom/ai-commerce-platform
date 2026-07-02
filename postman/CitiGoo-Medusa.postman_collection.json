@@ -1,0 +1,110 @@
+{
+  "info": {
+    "name": "CitiGoo Medusa (Store + Admin)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:9000" },
+    { "key": "store_id", "value": "default_store" },
+    { "key": "cart_id", "value": "" },
+    { "key": "order_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Store — Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health"
+      }
+    },
+    {
+      "name": "Store — Create cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Store-Id", "value": "{{store_id}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"customer_email\": \"buyer@example.com\",\n  \"currency_code\": \"usd\"\n}" },
+        "url": "{{base_url}}/store/carts"
+      }
+    },
+    {
+      "name": "Store — Get cart",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Store-Id", "value": "{{store_id}}" }],
+        "url": "{{base_url}}/store/carts/{{cart_id}}"
+      }
+    },
+    {
+      "name": "Store — Complete cart (system payment)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Store-Id", "value": "{{store_id}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": "{{base_url}}/store/carts/{{cart_id}}/complete"
+      }
+    },
+    {
+      "name": "Store — Orders lookup (email + order_number)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Store-Id", "value": "{{store_id}}" }],
+        "url": "{{base_url}}/store/orders/lookup?email=buyer@example.com&order_number=1"
+      }
+    },
+    {
+      "name": "Store — Order tracking",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Store-Id", "value": "{{store_id}}" }],
+        "url": "{{base_url}}/store/orders/{{order_id}}/tracking?email=buyer@example.com"
+      }
+    },
+    {
+      "name": "Admin — List orders (scoped)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Store-Id", "value": "{{store_id}}" }],
+        "url": "{{base_url}}/admin/orders?limit=50"
+      }
+    },
+    {
+      "name": "Admin — Push fulfillment (mock supplier)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Store-Id", "value": "{{store_id}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"supplier\": \"mock\"\n}" },
+        "url": "{{base_url}}/admin/orders/{{order_id}}/push-fulfillment"
+      }
+    },
+    {
+      "name": "Admin — Mock shipment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Store-Id", "value": "{{store_id}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": "{{base_url}}/admin/orders/{{order_id}}/mock-shipment"
+      }
+    },
+    {
+      "name": "Admin — List fulfillment orders",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Store-Id", "value": "{{store_id}}" }],
+        "url": "{{base_url}}/admin/fulfillment-orders"
+      }
+    }
+  ]
+}

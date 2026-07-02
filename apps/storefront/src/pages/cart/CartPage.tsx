@@ -1,0 +1,199 @@
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { CartDeleteConfirm } from "../../components/cart/CartDeleteConfirm"
+import { CartItemCard } from "../../components/cart/CartItemCard"
+import { CartPageStatus } from "../../components/cart/CartPageStatus"
+import { CartSummaryCard } from "../../components/cart/CartSummaryCard"
+import { PageShell } from "../../components/layout/PageShell"
+import { StoreFooter } from "../../components/layout/StoreFooter"
+import { ProductCard } from "../../components/products/ProductCard"
+import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { normalizeBuyerCartItem } from "../../lib/buyer-cart"
+import {
+  deleteCartLineItem,
+  addCartLineItem,
+  createCart,
+  fetchCart,
+  fetchProducts,
+  getBuyerCartStorageKey,
+  getBuyerStoreId,
+  readBuyerPreferences,
+  updateCartLineItem,
+  type BuyerStoreSettings,
+} from "../../lib/buyer-api"
+import type { StoreCart, StoreProduct } from "../../lib/mock-data"
+import { removeCartItem, updateCartItemQuantity } from "./cart-actions"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+
+type CartPageProps = { onCartUpdated: (cart: StoreCart | null) => void }
+
+const cartSettings: BuyerStoreSettings = { storeId: getBuyerStoreId(), brandName: "Citigoo Official Store", metadata: {} }
+const cartDependencies = { updateLineItem: updateCartLineItem, deleteLineItem: deleteCartLineItem }
+
+export function CartPage({ onCartUpdated }: CartPageProps) {
+  const auth = useBuyerAuth()
+  const [cart, setCart] = useState<StoreCart | null>(null)
+  const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | undefined>()
+  const [lineErrors, setLineErrors] = useState<Record<string, string>>({})
+  const [updatingLineId, setUpdatingLineId] = useState<string | undefined>()
+  const [deleteTargetId, setDeleteTargetId] = useState<string | undefined>()
+  const [deleteError, setDeleteError] = useState<string | undefined>()
+  const [deleting, setDeleting] = useState(false)
+  const [loadVersion, setLoadVersion] = useState(0)
+  const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
+  const [preparingCheckout, setPreparingCheckout] = useState(false)
+
+  const storageKey = getBuyerCartStorageKey(
+    getBuyerStoreId(),
+    getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+  )
+
+  const loadCart = useCallback(async (isActive: () => boolean) => {
+    setLoading(true)
+    setLoadError(undefined)
+    const cartId = window.localStorage.getItem(storageKey)
+    if (!cartId) {
+      if (isActive()) { setCart(null); onCartUpdated(null); setLoading(false) }
+      return
+    }
+    try {
+      const splitKey = `citigoo:${getBuyerStoreId()}:split_checkout`
+      const splitRaw = window.sessionStorage.getItem(splitKey)
+      const split = splitRaw ? JSON.parse(splitRaw) as { sourceCartId?: string; checkoutCartId?: string } : null
+      const resolvedCartId = split?.checkoutCartId === cartId && split.sourceCartId ? split.sourceCartId : cartId
+      if (resolvedCartId !== cartId) {
+        window.localStorage.setItem(storageKey, resolvedCartId)
+        window.sessionStorage.removeItem(splitKey)
+      }
+      const loaded = await fetchCart(resolvedCartId)
+      if (isActive()) { setCart(loaded); setSelectedLineIds(new Set(loaded.items.map((item) => item.id))); onCartUpdated(loaded) }
+    } catch (error) {
+      if (isActive()) {
+        setLoadError(error instanceof Error ? error.message : "Unable to load cart.")
+        setCart(null)
+        onCartUpdated(null)
+      }
+    } finally {
+      if (isActive()) setLoading(false)
+    }
+  }, [onCartUpdated, storageKey])
+
+  useEffect(() => {
+    let active = true
+    void loadCart(() => active)
+    void fetchProducts().then((result) => {
+      if (active && result.source === "backend") setRecommendations(result.data.slice(0, 4))
+    })
+    return () => { active = false }
+  }, [loadCart, loadVersion])
+
+  const items = useMemo(() => cart?.items.map(normalizeBuyerCartItem) ?? [], [cart])
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+  const deleteTarget = items.find((item) => item.id === deleteTargetId) ?? null
+  const selectedItems = cart?.items.filter((item) => selectedLineIds.has(item.id)) ?? []
+  const selectedCart = cart ? {
+    ...cart,
+    items: selectedItems,
+    subtotal: selectedItems.reduce((sum, item) => sum + item.total, 0),
+    total: selectedItems.reduce((sum, item) => sum + item.total, 0),
+  } : null
+
+  const prepareSelectedCheckout = async () => {
+    if (!cart || !selectedItems.length || preparingCheckout) return
+    if (selectedItems.length === cart.items.length) {
+      window.location.assign("/checkout")
+      return
+    }
+    if (selectedItems.some((item) => !item.variantId)) {
+      setLoadError("A selected item has no purchasable variant.")
+      return
+    }
+    setPreparingCheckout(true)
+    try {
+      let checkoutCart = await createCart({
+        countryCode: readBuyerPreferences(auth.customer).countryCode,
+      })
+      for (const item of selectedItems) {
+        checkoutCart = await addCartLineItem(checkoutCart.id, item.variantId!, item.quantity)
+      }
+      window.sessionStorage.setItem(`citigoo:${getBuyerStoreId()}:split_checkout`, JSON.stringify({
+        sourceCartId: cart.id,
+        checkoutCartId: checkoutCart.id,
+        selectedLineIds: selectedItems.map((item) => item.id),
+      }))
+      window.localStorage.setItem(storageKey, checkoutCart.id)
+      window.location.assign("/checkout")
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Unable to prepare selected checkout.")
+      setPreparingCheckout(false)
+    }
+  }
+
+  const updateQuantity = async (lineId: string, quantity: number) => {
+    if (!cart?.id || updatingLineId) return
+    setUpdatingLineId(lineId)
+    setLineErrors((errors) => ({ ...errors, [lineId]: "" }))
+    try {
+      const updated = await updateCartItemQuantity(cart.id, lineId, quantity, cartDependencies)
+      setCart(updated)
+      onCartUpdated(updated)
+    } catch (error) {
+      setLineErrors((errors) => ({ ...errors, [lineId]: error instanceof Error ? error.message : "Unable to update quantity." }))
+    } finally {
+      setUpdatingLineId(undefined)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!cart?.id || !deleteTarget || deleting) return
+    setDeleting(true)
+    setDeleteError(undefined)
+    try {
+      const updated = await removeCartItem(cart.id, deleteTarget.id, cartDependencies)
+      setCart(updated)
+      onCartUpdated(updated)
+      setDeleteTargetId(undefined)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to remove this item.")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const empty = !cart || !items.length
+  return (
+    <PageShell
+      className="buyer-cart-page"
+      contentClassName="buyer-cart-shell-content"
+      header={<StoreTopBar settings={cartSettings} cartCount={itemCount} />}
+      footer={<StoreFooter />}
+    >
+      <header className="buyer-cart-page-header"><div><p>Your basket</p><h1>Shopping cart</h1></div><a href="/store">Continue shopping</a></header>
+      <CartPageStatus loading={loading} error={loadError} empty={empty} onRetry={() => setLoadVersion((version) => version + 1)} />
+
+      {!loading && !loadError && cart && items.length ? (
+        <section className="buyer-cart-layout">
+          <div className="buyer-cart-list" aria-label="Cart items">
+            {items.map((item) => <div key={item.id}><CartItemCard
+              item={item}
+              currencyCode={cart.currencyCode}
+              updating={updatingLineId === item.id}
+              error={lineErrors[item.id] || undefined}
+              onQuantityChange={(lineId, quantity) => void updateQuantity(lineId, quantity)}
+              onDeleteRequest={(lineId) => { setDeleteTargetId(lineId); setDeleteError(undefined) }}
+              selected={selectedLineIds.has(item.id)}
+              onSelectedChange={(selected) => setSelectedLineIds((current) => { const next = new Set(current); if (selected) next.add(item.id); else next.delete(item.id); return next })}
+            /></div>)}
+          </div>
+          {selectedCart ? <CartSummaryCard cart={selectedCart} onCheckout={() => void prepareSelectedCheckout()} preparing={preparingCheckout} /> : null}
+        </section>
+      ) : null}
+
+      {recommendations.length && !loading ? <section className="buyer-cart-recommendations-new"><header><p>More to discover</p><h2>Recommended for you</h2></header><div>{recommendations.map((product) => <div key={product.id}><ProductCard product={product} /></div>)}</div></section> : null}
+
+      <CartDeleteConfirm item={deleteTarget} deleting={deleting} error={deleteError} onCancel={() => { if (!deleting) setDeleteTargetId(undefined) }} onConfirm={() => void confirmDelete()} />
+    </PageShell>
+  )
+}
