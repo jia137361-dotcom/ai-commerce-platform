@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "npm --workspace apps/medusa-backend run dev",
     "dev:seller": "npm --workspace apps/seller-dashboard run dev",
-    "dev:all": "npm --workspace apps/medusa-backend run dev & npm --workspace apps/seller-dashboard run dev",
+    "dev:storefront": "npm --workspace apps/storefront run dev",
+    "dev:all-frontend": "concurrently -n seller,storefront -c green,magenta \"npm run dev:seller\" \"npm run dev:storefront\"",
+    "dev:all": "concurrently -n backend,seller,storefront -c blue,green,magenta \"npm run dev\" \"npm run dev:seller\" \"npm run dev:storefront\"",
     "build": "npm --workspace apps/medusa-backend run build",
     "seed": "npm --workspace apps/medusa-backend run seed",
     "test": "npm --workspace apps/medusa-backend run test",
@@ -21,8 +23,8 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "concurrently": "^10.0.3",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0"
   }
 }
-

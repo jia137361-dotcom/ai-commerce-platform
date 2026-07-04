@@ -1994,3 +1994,77 @@ export const sendBuyerStoreMessage = async (input: { body: string; orderId?: str
       order_id: input.orderId,
     }),
   })
+
+// ---- Designer SDK ----
+
+export type DesignConfig = {
+  sdkBaseUrl: string
+  token: string
+  basicProductId: string
+  viewId?: string | null
+  designType?: number
+}
+
+type ApiDesignConfig = {
+  sdk_base_url?: string
+  token?: string
+  basic_product_id?: string
+  view_id?: string | null
+  design_type?: number
+}
+
+export const fetchProductDesignConfig = async (productId: string): Promise<DesignConfig> => {
+  const payload = await apiFetch<ApiDesignConfig>(
+    `/store/products/${encodeURIComponent(productId)}/design-config`
+  )
+  if (!payload.token || !payload.basic_product_id || !payload.sdk_base_url) {
+    throw new Error("Design config is incomplete")
+  }
+  return {
+    sdkBaseUrl: payload.sdk_base_url,
+    token: payload.token,
+    basicProductId: payload.basic_product_id,
+    viewId: payload.view_id ?? null,
+    designType: payload.design_type,
+  }
+}
+
+export type DesignCompleteInput = {
+  s2bProductId: number | string
+  basicProductId: number | string
+  quantity?: number
+}
+
+export type DesignCompleteResult = {
+  mcProductId: string
+  title: string
+  mockupUrl?: string | null
+  price?: number
+}
+
+type ApiDesignCompleteResult = {
+  mc_product_id?: string
+  title?: string
+  mockup_url?: string | null
+  price?: number
+}
+
+export const completeDesignSession = async (input: DesignCompleteInput): Promise<DesignCompleteResult> => {
+  const payload = await apiFetch<ApiDesignCompleteResult>("/store/design-sessions/complete", {
+    method: "POST",
+    body: JSON.stringify({
+      s2b_product_id: input.s2bProductId,
+      basic_product_id: input.basicProductId,
+      quantity: input.quantity ?? 1,
+    }),
+  })
+  if (!payload.mc_product_id) {
+    throw new Error("Design session did not return a product ID")
+  }
+  return {
+    mcProductId: payload.mc_product_id,
+    title: payload.title ?? "Custom Design",
+    mockupUrl: payload.mockup_url ?? null,
+    price: payload.price,
+  }
+}

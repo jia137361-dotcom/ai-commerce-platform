@@ -17,6 +17,7 @@ import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
+import { DesignerPage } from "./pages/design/DesignerPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
 import { useBuyerAuth } from "./auth/useBuyerAuth"
@@ -56,6 +57,16 @@ function App() {
 
   const onCartUpdated = (cart: StoreCart | null) => {
     setCartCount(cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
+  }
+
+  if (path.startsWith("/design/")) {
+    return (
+      <DesignerPage
+        productId={decodeURIComponent(path.split("/").pop() ?? "")}
+        cartCount={cartCount}
+        onCartUpdated={onCartUpdated}
+      />
+    )
   }
 
   if (path.startsWith("/products/")) {

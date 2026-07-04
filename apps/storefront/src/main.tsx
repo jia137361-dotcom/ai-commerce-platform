@@ -12,6 +12,7 @@ import "./styles/orders.css"
 import "./styles/account.css"
 import "./styles/static-info.css"
 import "./styles/design-system.css"
+import "./styles/designer.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

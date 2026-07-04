@@ -65,6 +65,11 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
       <Button className="buyer-product-add-button" loading={adding || authLoading} disabled={!purchaseState.canAdd || adding || authLoading} onClick={onAddToCart}>
         {authLoading ? "Checking account..." : adding ? "Adding..." : requiresSignIn ? "Sign in to add to cart" : "Add to cart"}
       </Button>
+      {product.hasDesigner && product.id ? (
+        <a href={`/design/${encodeURIComponent(product.id)}`} className="designer-entry-button">
+          Customize This Product
+        </a>
+      ) : null}
       {requiresSignIn ? <p className="buyer-product-checkout-note">Browsing is open to everyone. Sign in before adding this option to your cart.</p> : null}
       <p className="buyer-product-checkout-note">
         Available for purchase in: <strong>{formatProductRegionNames(product.supportedRegions)}</strong>.

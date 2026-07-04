@@ -27,6 +27,10 @@ export type StoreProduct = {
   supplierId?: string
   supplierProductId?: string
   supplierVariantId?: string
+  basicProductId?: string
+  viewId?: string
+  designType?: number
+  hasDesigner?: boolean
   isCartAddable?: boolean
   averageRating?: number | null
   reviewCount?: number
