@@ -3,7 +3,7 @@ import { Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../../../../../lib/store-context"
 import { readOrderStoreId } from "../../../../../../../lib/order-store-context"
 import { canConfirmReceipt } from "../../../../../../../lib/buyer-order-display"
-import { readOrderFulfillmentStatusString } from "../../../../../../../lib/order-custom-metadata"
+import { resolveBuyerOrderFulfillmentStatus } from "../../../../../../../lib/order-custom-metadata"
 import { releaseSellerPayout } from "../../../../../../../lib/seller-order-payout"
 
 type AuthenticatedRequest = MedusaRequest & { auth_context?: { actor_id?: string } }
@@ -19,7 +19,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   }
 
   const metadata = (order.metadata ?? {}) as Record<string, unknown>
-  const fulfillmentStatus = readOrderFulfillmentStatusString(metadata)
+  const fulfillmentStatus = resolveBuyerOrderFulfillmentStatus(metadata)
   if (!canConfirmReceipt({ fulfillmentStatus, receiptConfirmed: false })) {
     return res.status(409).json({ error: "Receipt can be confirmed only after the order has shipped" })
   }

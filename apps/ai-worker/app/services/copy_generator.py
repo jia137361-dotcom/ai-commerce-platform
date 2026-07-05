@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from app.config import get_settings
+from app.config import get_effective_settings, get_settings, resolve_image_generation_mode
 from app.tools.deepseek_client import DeepSeekClient, DeepSeekError
 
 
@@ -47,7 +47,7 @@ async def generate_product_copy(
     color: str | None,
     size: str | None,
 ) -> dict[str, Any]:
-    settings = get_settings()
+    settings = get_effective_settings()
     copy_provider = (settings.copy_gen_provider or "deepseek").strip().lower()
 
     if copy_provider == "dashscope":
@@ -55,7 +55,8 @@ async def generate_product_copy(
     else:
         has_key = bool(settings.deepseek_api_key.strip())
 
-    if settings.mock_generation or not has_key:
+    use_mock, _ = resolve_image_generation_mode(settings)
+    if use_mock or not has_key:
         return _mock_copy(prompt, product_name, base_cost)
 
     variant_bits = []

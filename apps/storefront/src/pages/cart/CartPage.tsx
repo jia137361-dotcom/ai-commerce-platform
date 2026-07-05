@@ -7,154 +7,259 @@ import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import { ProductCard } from "../../components/products/ProductCard"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { Button } from "../../components/ui/Button"
+import { Card } from "../../components/ui/Card"
 import { normalizeBuyerCartItem } from "../../lib/buyer-cart"
 import {
-  deleteCartLineItem,
   addCartLineItem,
   createCart,
-  fetchCart,
-  fetchProducts,
+  deleteCartLineItem,
+  fetchMarketplaceProducts,
   getBuyerCartStorageKey,
-  getBuyerStoreId,
+  marketplaceBuyerSettings,
+  preparePlatformCheckout,
   readBuyerPreferences,
+  setActiveBuyerStoreId,
   updateCartLineItem,
-  type BuyerStoreSettings,
 } from "../../lib/buyer-api"
+import {
+  composePlatformLineKey,
+  fetchPlatformCart,
+  parsePlatformLineKey,
+  type PlatformCartGroup,
+} from "../../lib/buyer-platform-cart"
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
+import { writePlatformCheckoutSession } from "../../lib/platform-checkout-session"
 import { removeCartItem, updateCartItemQuantity } from "./cart-actions"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 
 type CartPageProps = { onCartUpdated: (cart: StoreCart | null) => void }
 
-const cartSettings: BuyerStoreSettings = { storeId: getBuyerStoreId(), brandName: "Citigoo Official Store", metadata: {} }
-const cartDependencies = { updateLineItem: updateCartLineItem, deleteLineItem: deleteCartLineItem }
-
 export function CartPage({ onCartUpdated }: CartPageProps) {
   const auth = useBuyerAuth()
-  const [cart, setCart] = useState<StoreCart | null>(null)
+  const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+  const [groups, setGroups] = useState<PlatformCartGroup[]>([])
   const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | undefined>()
   const [lineErrors, setLineErrors] = useState<Record<string, string>>({})
-  const [updatingLineId, setUpdatingLineId] = useState<string | undefined>()
-  const [deleteTargetId, setDeleteTargetId] = useState<string | undefined>()
+  const [updatingLineKey, setUpdatingLineKey] = useState<string | undefined>()
+  const [deleteTargetKey, setDeleteTargetKey] = useState<string | undefined>()
   const [deleteError, setDeleteError] = useState<string | undefined>()
   const [deleting, setDeleting] = useState(false)
   const [loadVersion, setLoadVersion] = useState(0)
-  const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
-  const [preparingCheckout, setPreparingCheckout] = useState(false)
-
-  const storageKey = getBuyerCartStorageKey(
-    getBuyerStoreId(),
-    getBuyerCartIdentity(auth.customer?.id, window.localStorage)
-  )
+  const [selectedLineKeys, setSelectedLineKeys] = useState<Set<string>>(new Set())
+  const [preparingCheckoutStoreId, setPreparingCheckoutStoreId] = useState<string | undefined>()
+  const [preparingPlatformCheckout, setPreparingPlatformCheckout] = useState(false)
 
   const loadCart = useCallback(async (isActive: () => boolean) => {
     setLoading(true)
     setLoadError(undefined)
-    const cartId = window.localStorage.getItem(storageKey)
-    if (!cartId) {
-      if (isActive()) { setCart(null); onCartUpdated(null); setLoading(false) }
-      return
-    }
     try {
-      const splitKey = `citigoo:${getBuyerStoreId()}:split_checkout`
-      const splitRaw = window.sessionStorage.getItem(splitKey)
-      const split = splitRaw ? JSON.parse(splitRaw) as { sourceCartId?: string; checkoutCartId?: string } : null
-      const resolvedCartId = split?.checkoutCartId === cartId && split.sourceCartId ? split.sourceCartId : cartId
-      if (resolvedCartId !== cartId) {
-        window.localStorage.setItem(storageKey, resolvedCartId)
-        window.sessionStorage.removeItem(splitKey)
-      }
-      const loaded = await fetchCart(resolvedCartId)
-      if (isActive()) { setCart(loaded); setSelectedLineIds(new Set(loaded.items.map((item) => item.id))); onCartUpdated(loaded) }
+      const platformCart = await fetchPlatformCart(window.localStorage, cartIdentity)
+      if (!isActive()) return
+      setGroups(platformCart.groups)
+      const allLineKeys = platformCart.groups.flatMap((group) =>
+        group.cart.items.map((item) => composePlatformLineKey(group.storeId, item.id))
+      )
+      setSelectedLineKeys(new Set(allLineKeys))
+      const aggregate = platformCart.groups[0]?.cart ?? null
+      onCartUpdated(
+        aggregate
+          ? {
+              ...aggregate,
+              items: platformCart.groups.flatMap((group) => group.cart.items),
+              subtotal: platformCart.grandSubtotal,
+              total: platformCart.grandSubtotal,
+            }
+          : null
+      )
     } catch (error) {
       if (isActive()) {
         setLoadError(error instanceof Error ? error.message : "Unable to load cart.")
-        setCart(null)
+        setGroups([])
         onCartUpdated(null)
       }
     } finally {
       if (isActive()) setLoading(false)
     }
-  }, [onCartUpdated, storageKey])
+  }, [cartIdentity, onCartUpdated])
 
   useEffect(() => {
     let active = true
     void loadCart(() => active)
-    void fetchProducts().then((result) => {
+    void fetchMarketplaceProducts().then((result) => {
       if (active && result.source === "backend") setRecommendations(result.data.slice(0, 4))
     })
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [loadCart, loadVersion])
 
-  const items = useMemo(() => cart?.items.map(normalizeBuyerCartItem) ?? [], [cart])
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
-  const deleteTarget = items.find((item) => item.id === deleteTargetId) ?? null
-  const selectedItems = cart?.items.filter((item) => selectedLineIds.has(item.id)) ?? []
-  const selectedCart = cart ? {
-    ...cart,
-    items: selectedItems,
-    subtotal: selectedItems.reduce((sum, item) => sum + item.total, 0),
-    total: selectedItems.reduce((sum, item) => sum + item.total, 0),
-  } : null
+  const itemCount = groups.reduce(
+    (sum, group) => sum + group.cart.items.reduce((inner, item) => inner + item.quantity, 0),
+    0
+  )
 
-  const prepareSelectedCheckout = async () => {
-    if (!cart || !selectedItems.length || preparingCheckout) return
-    if (selectedItems.length === cart.items.length) {
-      window.location.assign("/checkout")
-      return
+  const deleteTarget = useMemo(() => {
+    if (!deleteTargetKey) return null
+    const parsed = parsePlatformLineKey(deleteTargetKey)
+    if (!parsed) return null
+    const group = groups.find((entry) => entry.storeId === parsed.storeId)
+    const item = group?.cart.items.find((entry) => entry.id === parsed.lineId)
+    if (!group || !item) return null
+    return {
+      key: deleteTargetKey,
+      group,
+      item: normalizeBuyerCartItem({ ...item, storeId: group.storeId }),
     }
-    if (selectedItems.some((item) => !item.variantId)) {
-      setLoadError("A selected item has no purchasable variant.")
-      return
-    }
-    setPreparingCheckout(true)
-    try {
-      let checkoutCart = await createCart({
-        countryCode: readBuyerPreferences(auth.customer).countryCode,
+  }, [deleteTargetKey, groups])
+
+  const storeScopedDependencies = (storeId: string) => ({
+    updateLineItem: (cartId: string, lineId: string, quantity: number) =>
+      updateCartLineItem(cartId, lineId, quantity, { storeId }),
+    deleteLineItem: (cartId: string, lineId: string) =>
+      deleteCartLineItem(cartId, lineId, { storeId }),
+  })
+
+  const checkoutAllStores = async () => {
+    if (preparingPlatformCheckout || preparingCheckoutStoreId || groups.length < 2) return
+    const eligibleGroups = groups
+      .map((group) => {
+        const selectedItems = group.cart.items.filter((item) =>
+          selectedLineKeys.has(composePlatformLineKey(group.storeId, item.id))
+        )
+        return selectedItems.length ? { group, selectedItems } : null
       })
-      for (const item of selectedItems) {
-        checkoutCart = await addCartLineItem(checkoutCart.id, item.variantId!, item.quantity)
+      .filter(Boolean) as Array<{ group: PlatformCartGroup; selectedItems: PlatformCartGroup["cart"]["items"] }>
+    if (eligibleGroups.length < 2) {
+      setLoadError("Select items from at least two stores to use merged checkout.")
+      return
+    }
+    setPreparingPlatformCheckout(true)
+    setLoadError(undefined)
+    try {
+      const preparedGroups: Array<{ store_id: string; cart_id: string; store_name: string }> = []
+      for (const entry of eligibleGroups) {
+        let checkoutCartId = entry.group.cart.id
+        if (entry.selectedItems.length !== entry.group.cart.items.length) {
+          const checkoutCart = await createCart({
+            storeId: entry.group.storeId,
+            countryCode: readBuyerPreferences(auth.customer).countryCode,
+          })
+          let nextCart = checkoutCart
+          for (const item of entry.selectedItems) {
+            if (!item.variantId) throw new Error("A selected item has no purchasable variant.")
+            nextCart = await addCartLineItem(nextCart.id, item.variantId, item.quantity, {
+              storeId: entry.group.storeId,
+            })
+          }
+          checkoutCartId = nextCart.id
+        }
+        preparedGroups.push({
+          store_id: entry.group.storeId,
+          cart_id: checkoutCartId,
+          store_name: entry.group.storeName,
+        })
       }
-      window.sessionStorage.setItem(`citigoo:${getBuyerStoreId()}:split_checkout`, JSON.stringify({
-        sourceCartId: cart.id,
-        checkoutCartId: checkoutCart.id,
-        selectedLineIds: selectedItems.map((item) => item.id),
-      }))
-      window.localStorage.setItem(storageKey, checkoutCart.id)
-      window.location.assign("/checkout")
+      const prepared = await preparePlatformCheckout(
+        preparedGroups.map((group) => ({ store_id: group.store_id, cart_id: group.cart_id }))
+      )
+      writePlatformCheckoutSession({
+        platform_checkout_id: prepared.platform_checkout_id,
+        completed_order_ids: [],
+        completed_store_ids: [],
+        grand_subtotal: prepared.grand_subtotal,
+        grand_total: prepared.grand_total,
+        currency_code: prepared.currency_code,
+        groups: prepared.groups.map((group) => ({
+          store_id: group.store_id,
+          cart_id: group.cart_id,
+          store_name: group.store_name,
+          platform_checkout_index: group.platform_checkout_index,
+          platform_checkout_count: group.platform_checkout_count,
+          subtotal: group.subtotal,
+          total: group.total,
+          currency_code: group.currency_code,
+        })),
+      })
+      for (const group of prepared.groups) {
+        setActiveBuyerStoreId(group.store_id)
+        window.localStorage.setItem(getBuyerCartStorageKey(group.store_id, cartIdentity), group.cart_id)
+      }
+      window.location.assign("/checkout/platform")
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Unable to prepare selected checkout.")
-      setPreparingCheckout(false)
+      setLoadError(error instanceof Error ? error.message : "Unable to prepare merged checkout.")
+      setPreparingPlatformCheckout(false)
     }
   }
 
-  const updateQuantity = async (lineId: string, quantity: number) => {
-    if (!cart?.id || updatingLineId) return
-    setUpdatingLineId(lineId)
-    setLineErrors((errors) => ({ ...errors, [lineId]: "" }))
+  const checkoutStoreGroup = async (group: PlatformCartGroup) => {
+    if (preparingCheckoutStoreId) return
+    const selectedItems = group.cart.items.filter((item) =>
+      selectedLineKeys.has(composePlatformLineKey(group.storeId, item.id))
+    )
+    if (!selectedItems.length) {
+      setLoadError("Select at least one item from this store to checkout.")
+      return
+    }
+    setPreparingCheckoutStoreId(group.storeId)
     try {
-      const updated = await updateCartItemQuantity(cart.id, lineId, quantity, cartDependencies)
-      setCart(updated)
-      onCartUpdated(updated)
+      let checkoutCart = group.cart
+      if (selectedItems.length !== group.cart.items.length) {
+        checkoutCart = await createCart({
+          storeId: group.storeId,
+          countryCode: readBuyerPreferences(auth.customer).countryCode,
+        })
+        for (const item of selectedItems) {
+          if (!item.variantId) throw new Error("A selected item has no purchasable variant.")
+          checkoutCart = await addCartLineItem(checkoutCart.id, item.variantId, item.quantity, {
+            storeId: group.storeId,
+          })
+        }
+      }
+      setActiveBuyerStoreId(group.storeId)
+      window.localStorage.setItem(getBuyerCartStorageKey(group.storeId, cartIdentity), checkoutCart.id)
+      window.location.assign(`/checkout?store=${encodeURIComponent(group.storeId)}`)
     } catch (error) {
-      setLineErrors((errors) => ({ ...errors, [lineId]: error instanceof Error ? error.message : "Unable to update quantity." }))
+      setLoadError(error instanceof Error ? error.message : "Unable to prepare checkout for this store.")
+      setPreparingCheckoutStoreId(undefined)
+    }
+  }
+
+  const updateQuantity = async (lineKey: string, quantity: number) => {
+    const parsed = parsePlatformLineKey(lineKey)
+    if (!parsed || updatingLineKey) return
+    const group = groups.find((entry) => entry.storeId === parsed.storeId)
+    if (!group) return
+    setUpdatingLineKey(lineKey)
+    setLineErrors((errors) => ({ ...errors, [lineKey]: "" }))
+    try {
+      await updateCartItemQuantity(group.cart.id, parsed.lineId, quantity, storeScopedDependencies(group.storeId))
+      await loadCart(() => true)
+    } catch (error) {
+      setLineErrors((errors) => ({
+        ...errors,
+        [lineKey]: error instanceof Error ? error.message : "Unable to update quantity.",
+      }))
     } finally {
-      setUpdatingLineId(undefined)
+      setUpdatingLineKey(undefined)
     }
   }
 
   const confirmDelete = async () => {
-    if (!cart?.id || !deleteTarget || deleting) return
+    if (!deleteTarget || deleting) return
     setDeleting(true)
     setDeleteError(undefined)
     try {
-      const updated = await removeCartItem(cart.id, deleteTarget.id, cartDependencies)
-      setCart(updated)
-      onCartUpdated(updated)
-      setDeleteTargetId(undefined)
+      await removeCartItem(
+        deleteTarget.group.cart.id,
+        deleteTarget.item.id,
+        storeScopedDependencies(deleteTarget.group.storeId)
+      )
+      setDeleteTargetKey(undefined)
+      await loadCart(() => true)
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Unable to remove this item.")
     } finally {
@@ -162,38 +267,141 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     }
   }
 
-  const empty = !cart || !items.length
+  const empty = !groups.length
   return (
     <PageShell
       className="buyer-cart-page"
       contentClassName="buyer-cart-shell-content"
-      header={<StoreTopBar settings={cartSettings} cartCount={itemCount} />}
+      header={<StoreTopBar settings={marketplaceBuyerSettings} cartCount={itemCount} marketplaceMode />}
       footer={<StoreFooter />}
     >
-      <header className="buyer-cart-page-header"><div><p>Your basket</p><h1>Shopping cart</h1></div><a href="/store">Continue shopping</a></header>
+      <header className="buyer-cart-page-header">
+        <div>
+          <p>Your basket</p>
+          <h1>Shopping cart</h1>
+          <small>{groups.length ? `${groups.length} store${groups.length === 1 ? "" : "s"}` : "Cross-store cart"}</small>
+        </div>
+        <a href="/">Continue shopping</a>
+      </header>
       <CartPageStatus loading={loading} error={loadError} empty={empty} onRetry={() => setLoadVersion((version) => version + 1)} />
 
-      {!loading && !loadError && cart && items.length ? (
-        <section className="buyer-cart-layout">
-          <div className="buyer-cart-list" aria-label="Cart items">
-            {items.map((item) => <div key={item.id}><CartItemCard
-              item={item}
-              currencyCode={cart.currencyCode}
-              updating={updatingLineId === item.id}
-              error={lineErrors[item.id] || undefined}
-              onQuantityChange={(lineId, quantity) => void updateQuantity(lineId, quantity)}
-              onDeleteRequest={(lineId) => { setDeleteTargetId(lineId); setDeleteError(undefined) }}
-              selected={selectedLineIds.has(item.id)}
-              onSelectedChange={(selected) => setSelectedLineIds((current) => { const next = new Set(current); if (selected) next.add(item.id); else next.delete(item.id); return next })}
-            /></div>)}
-          </div>
-          {selectedCart ? <CartSummaryCard cart={selectedCart} onCheckout={() => void prepareSelectedCheckout()} preparing={preparingCheckout} /> : null}
+      {!loading && !loadError && groups.length >= 2 ? (
+        <section className="buyer-platform-cart-merge">
+          <Card as="aside" className="buyer-platform-cart-merge-card">
+            <header>
+              <p>Multi-store checkout</p>
+              <h2>Checkout all selected stores</h2>
+            </header>
+            <p>Complete one shared checkout flow, then pay each store separately. Orders will be linked under the same platform checkout batch.</p>
+            <Button
+              onClick={() => void checkoutAllStores()}
+              disabled={preparingPlatformCheckout || Boolean(preparingCheckoutStoreId)}
+            >
+              {preparingPlatformCheckout ? "Preparing merged checkout…" : "Checkout all stores"}
+            </Button>
+          </Card>
         </section>
       ) : null}
 
-      {recommendations.length && !loading ? <section className="buyer-cart-recommendations-new"><header><p>More to discover</p><h2>Recommended for you</h2></header><div>{recommendations.map((product) => <div key={product.id}><ProductCard product={product} /></div>)}</div></section> : null}
+      {!loading && !loadError && groups.length ? (
+        <div className="buyer-platform-cart-groups">
+          {groups.map((group) => {
+            const visibleItems = group.cart.items.map((item) => ({
+              key: composePlatformLineKey(group.storeId, item.id),
+              item: normalizeBuyerCartItem({ ...item, storeId: group.storeId }),
+            }))
+            const selectedItems = group.cart.items.filter((item) =>
+              selectedLineKeys.has(composePlatformLineKey(group.storeId, item.id))
+            )
+            const selectedCart: StoreCart = {
+              ...group.cart,
+              items: selectedItems,
+              subtotal: selectedItems.reduce((sum, item) => sum + item.total, 0),
+              total: selectedItems.reduce((sum, item) => sum + item.total, 0),
+            }
 
-      <CartDeleteConfirm item={deleteTarget} deleting={deleting} error={deleteError} onCancel={() => { if (!deleting) setDeleteTargetId(undefined) }} onConfirm={() => void confirmDelete()} />
+            return (
+              <section key={group.storeId} className="buyer-platform-cart-group">
+                <header className="buyer-platform-cart-group-header">
+                  <div>
+                    <p>Store</p>
+                    <h2>
+                      {group.storeSlug ? (
+                        <a href={`/shops/${encodeURIComponent(group.storeSlug)}`}>{group.storeName}</a>
+                      ) : (
+                        group.storeName
+                      )}
+                    </h2>
+                  </div>
+                  <span>{group.cart.items.length} item{group.cart.items.length === 1 ? "" : "s"}</span>
+                </header>
+                <div className="buyer-cart-layout">
+                  <div className="buyer-cart-list" aria-label={`Cart items from ${group.storeName}`}>
+                    {visibleItems.map(({ key, item }) => (
+                      <div key={key}>
+                        <CartItemCard
+                          item={item}
+                          currencyCode={group.cart.currencyCode}
+                          updating={updatingLineKey === key}
+                          error={lineErrors[key] || undefined}
+                          onQuantityChange={(_, quantity) => void updateQuantity(key, quantity)}
+                          onDeleteRequest={() => {
+                            setDeleteTargetKey(key)
+                            setDeleteError(undefined)
+                          }}
+                          selected={selectedLineKeys.has(key)}
+                          onSelectedChange={(selected) =>
+                            setSelectedLineKeys((current) => {
+                              const next = new Set(current)
+                              if (selected) next.add(key)
+                              else next.delete(key)
+                              return next
+                            })
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {selectedItems.length ? (
+                    <CartSummaryCard
+                      cart={selectedCart}
+                      onCheckout={() => void checkoutStoreGroup(group)}
+                      preparing={preparingCheckoutStoreId === group.storeId}
+                      checkoutLabel={`Checkout ${group.storeName}`}
+                    />
+                  ) : null}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {recommendations.length && !loading ? (
+        <section className="buyer-cart-recommendations-new">
+          <header>
+            <p>More to discover</p>
+            <h2>Recommended for you</h2>
+          </header>
+          <div>
+            {recommendations.map((product) => (
+              <div key={`${product.storeId ?? "store"}-${product.id}`}>
+                <ProductCard product={product} />
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <CartDeleteConfirm
+        item={deleteTarget?.item ?? null}
+        deleting={deleting}
+        error={deleteError}
+        onCancel={() => {
+          if (!deleting) setDeleteTargetKey(undefined)
+        }}
+        onConfirm={() => void confirmDelete()}
+      />
     </PageShell>
   )
 }

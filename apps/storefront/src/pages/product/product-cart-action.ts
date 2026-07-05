@@ -1,6 +1,11 @@
 import type { StoreCart } from "../../lib/mock-data"
+import { registerStoreCart } from "../../lib/buyer-platform-cart"
 
 type ProductCartActionInput = {
+  storeId: string
+  storeName?: string
+  storeSlug?: string
+  cartIdentity: string
   variantId: string
   quantity: number
   storageKey: string
@@ -20,16 +25,25 @@ export async function addProductSelectionToCart(input: ProductCartActionInput) {
   try {
     const updated = await input.addLineItem(cartId, input.variantId, input.quantity)
     input.storage.setItem(input.storageKey, updated.id)
+    registerStoreCart(input.storage, input.cartIdentity, input.storeId, updated.id, {
+      storeName: input.storeName,
+      storeSlug: input.storeSlug,
+    })
     return updated
   } catch (error) {
     console.warn("[buyer-api] add to cart failed, creating a fresh store-scoped cart", {
       message: error instanceof Error ? error.message : String(error),
       storageKey: input.storageKey,
+      storeId: input.storeId,
     })
     const created = await input.createCart()
     input.storage.setItem(input.storageKey, created.id)
     const updated = await input.addLineItem(created.id, input.variantId, input.quantity)
     input.storage.setItem(input.storageKey, updated.id)
+    registerStoreCart(input.storage, input.cartIdentity, input.storeId, updated.id, {
+      storeName: input.storeName,
+      storeSlug: input.storeSlug,
+    })
     return updated
   }
 }

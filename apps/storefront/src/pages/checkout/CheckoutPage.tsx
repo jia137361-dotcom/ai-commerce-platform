@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { CheckoutAddress } from "../../components/checkout/CheckoutAddressPanel"
 import { CheckoutAddressCard } from "../../components/checkout/CheckoutAddressCard"
 import type { CheckoutContact } from "../../components/checkout/CheckoutContactForm"
@@ -20,13 +20,14 @@ import {
   fetchStoreSettings,
   getCartShippingOptions,
   getBuyerCartStorageKey,
-  getBuyerStoreId,
+  getScopedBuyerStoreId,
   getStripePublishableKey,
   initializeCartPaymentSession,
   listCartPaymentProviders,
   listCustomerAddresses,
   readBuyerPreferences,
   selectCartShippingMethod,
+  setActiveBuyerStoreId,
   updateCartAddress,
   updateCartContact,
   type CartShippingOption,
@@ -40,6 +41,11 @@ import type { StoreCart } from "../../lib/mock-data"
 import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
 import { resolveCheckoutState } from "./checkout-state"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import {
+  markPlatformCheckoutOrderComplete,
+  nextPendingPlatformCheckoutGroup,
+  readPlatformCheckoutSession,
+} from "../../lib/platform-checkout-session"
 import { isCheckoutCountryCode, shippingUnavailableMessage } from "./checkout-countries"
 import {
   chooseDefaultPaymentProvider,
@@ -133,6 +139,16 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   })
   const { canPlaceOrder, disabledReason: placeOrderDisabledReason } = checkoutState
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
+  const checkoutSearchParams = useMemo(() => new URLSearchParams(window.location.search), [])
+  const checkoutStoreId = checkoutSearchParams.get("store")?.trim() || getScopedBuyerStoreId()
+  const platformCheckoutId = checkoutSearchParams.get("platform_checkout_id")?.trim() || ""
+  const platformCheckoutIndex = Number(checkoutSearchParams.get("platform_checkout_index"))
+  const platformCheckoutCount = Number(checkoutSearchParams.get("platform_checkout_count"))
+  const platformCheckoutActive =
+    Boolean(platformCheckoutId) &&
+    Number.isFinite(platformCheckoutIndex) &&
+    Number.isFinite(platformCheckoutCount) &&
+    platformCheckoutCount > 0
 
   useEffect(() => {
     let active = true
@@ -140,13 +156,16 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     const load = async () => {
       setLoading(true)
       setError(undefined)
-      const settingsResult = await fetchStoreSettings()
+      const checkoutStoreId =
+        new URLSearchParams(window.location.search).get("store")?.trim() || getScopedBuyerStoreId()
+      setActiveBuyerStoreId(checkoutStoreId)
+      const settingsResult = await fetchStoreSettings({ storeId: checkoutStoreId })
       if (active) {
         setSettings(settingsResult.data)
       }
 
       const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
-      const cartId = window.localStorage.getItem(getBuyerCartStorageKey(getBuyerStoreId(), cartIdentity))
+      const cartId = window.localStorage.getItem(getBuyerCartStorageKey(checkoutStoreId, cartIdentity))
       if (!cartId) {
         if (active) {
           setCart(null)
@@ -157,12 +176,12 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       }
 
       try {
-        const loaded = await fetchCart(cartId)
+        const loaded = await fetchCart(cartId, { storeId: checkoutStoreId })
         if (!active) return
         let activeCart = loaded
         if (auth.customer) {
           try {
-            activeCart = await attachCustomerToCart(loaded.id)
+            activeCart = await attachCustomerToCart(loaded.id, { storeId: checkoutStoreId })
           } catch (attachError) {
             console.warn("[checkout] unable to attach authenticated customer to cart", attachError)
           }
@@ -477,26 +496,37 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setPlacingOrder(true)
     setCompleteError(undefined)
     try {
+      const completeOptions = {
+        paymentProviderId: providerId,
+        storeId: checkoutStoreId,
+        platformCheckout: platformCheckoutActive
+          ? {
+              platformCheckoutId,
+              platformCheckoutIndex,
+              platformCheckoutCount,
+            }
+          : undefined,
+      }
       const result = auth.customer
         ? (
             await completeCheckoutOrder({
               cart,
               customerId: auth.customer.id,
-              bindCustomer: attachCustomerToCart,
+              bindCustomer: (cartId) => attachCustomerToCart(cartId, { storeId: checkoutStoreId }),
               saveContact: saveContactForCart,
-              complete: (cartId) => completeCart(cartId, providerId),
+              complete: (cartId) => completeCart(cartId, completeOptions),
             })
           ).result
         : (await completeGuestCheckoutOrder({
             cart,
             saveContact: saveContactForCart,
-            complete: (cartId) => completeCart(cartId, providerId),
+            complete: (cartId) => completeCart(cartId, completeOptions),
           })).result
       if (!result.email) {
         console.warn("[checkout] complete cart returned an order without email", result)
       }
 
-      const storeId = getBuyerStoreId()
+      const storeId = checkoutStoreId
       const successPayload = {
         order_id: result.orderId,
         display_id: result.displayId,
@@ -509,6 +539,10 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         paymentProviderId: result.paymentProviderId ?? providerId,
         paymentMethodLabel: stripePaymentMethodLabel ?? result.paymentMethodLabel ?? undefined,
         paymentStatus: result.paymentStatus,
+        platformCheckoutId: platformCheckoutActive ? platformCheckoutId : undefined,
+        platformCheckoutIndex: platformCheckoutActive ? platformCheckoutIndex : undefined,
+        platformCheckoutCount: platformCheckoutActive ? platformCheckoutCount : undefined,
+        storeId,
       }
 
       const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
@@ -526,8 +560,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         window.localStorage.removeItem(cartStorageKey)
       }
       window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
+      if (platformCheckoutActive) {
+        markPlatformCheckoutOrderComplete(storeId, result.orderId)
+      }
       onCartUpdated(null)
-      window.location.assign(`/checkout/success?order_id=${encodeURIComponent(result.orderId)}`)
+      const successParams = new URLSearchParams({ order_id: result.orderId })
+      if (platformCheckoutActive) successParams.set("platform_checkout", "1")
+      window.location.assign(`/checkout/success?${successParams.toString()}`)
     } catch (completeErrorValue) {
       const message = propagateCompleteError
         ? STRIPE_ORDER_CREATION_FAILED_MESSAGE
@@ -544,7 +583,20 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
 
   return (
     <PageShell className="buyer-checkout-page" contentClassName="buyer-checkout-shell-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
-      <header className="buyer-checkout-page-header"><div><p>Secure checkout</p><h1>Checkout</h1><span>Review your contact, delivery, and order summary.</span></div><a href="/cart">Back to cart</a></header>
+      <header className="buyer-checkout-page-header">
+        <div>
+          <p>Secure checkout</p>
+          <h1>Checkout</h1>
+          <span>
+            {platformCheckoutActive
+              ? `Platform checkout · store ${platformCheckoutIndex + 1} of ${platformCheckoutCount}`
+              : "Review your contact, delivery, and order summary."}
+          </span>
+        </div>
+        <a href={platformCheckoutActive ? "/checkout/platform" : "/cart"}>
+          {platformCheckoutActive ? "Back to platform checkout" : "Back to cart"}
+        </a>
+      </header>
       <CheckoutPageStatus loading={loading} error={error} empty={!cart || !cart.items.length} onRetry={() => setLoadVersion((version) => version + 1)} />
       {!loading && !error && cart?.items.length ? (
           <section className="buyer-checkout-layout">

@@ -52,6 +52,9 @@ export type BuyerProductApiInput = {
   average_rating?: number | null
   review_count?: number
   category_ids?: string[] | null
+  store_id?: string | null
+  store_name?: string | null
+  store_slug?: string | null
 }
 
 export const normalizeBuyerProductImage = (product: BuyerProductApiInput) =>
@@ -144,5 +147,8 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     reviewCount: product.review_count ?? 0,
     tags: Array.isArray(product.tags) ? product.tags : [],
     variants,
+    storeId: product.store_id ?? undefined,
+    storeName: product.store_name ?? undefined,
+    storeSlug: product.store_slug ?? undefined,
   }
 }

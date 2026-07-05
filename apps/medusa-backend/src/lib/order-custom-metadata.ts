@@ -1,6 +1,9 @@
 /** 自定义订单 metadata：与 Medusa Order 并存，供店铺/履约/支付状态展示 */
 
 export const ORDER_META_STORE_ID = "store_id"
+export const ORDER_META_PLATFORM_CHECKOUT_ID = "platform_checkout_id"
+export const ORDER_META_PLATFORM_CHECKOUT_INDEX = "platform_checkout_index"
+export const ORDER_META_PLATFORM_CHECKOUT_COUNT = "platform_checkout_count"
 export const ORDER_META_PAYMENT_STATUS = "payment_status"
 export const ORDER_META_SELLER_PAYOUT_STATUS = "seller_payout_status"
 export const ORDER_META_SELLER_PAYOUT_TRANSFER_ID = "seller_payout_transfer_id"
@@ -48,6 +51,24 @@ export function readOrderFulfillmentStatusString(
   return typeof value === "string" ? value : null
 }
 
+/** Buyer-facing fulfillment: honor delivery evidence when metadata stage lags behind shipments. */
+export function resolveBuyerOrderFulfillmentStatus(
+  meta: Record<string, unknown> | null | undefined
+): string {
+  const stored = readOrderFulfillmentStatusString(meta)
+  if (stored === "delivered" || stored === "shipped") {
+    return stored
+  }
+  if (meta?.mock_delivery_evidence === true) {
+    return "delivered"
+  }
+  const deliveredAt = meta?.delivered_at ?? meta?.mock_delivered_at
+  if (typeof deliveredAt === "string" && deliveredAt.trim()) {
+    return "delivered"
+  }
+  return stored ?? "none"
+}
+
 /** Medusa Admin 订单表的 FulfillmentStatusCell 只接受原生履约枚举字符串 */
 const MEDUSA_ADMIN_ORDER_FULFILLMENT_KEYS = [
   "not_fulfilled",
@@ -83,6 +104,8 @@ export function toMedusaAdminOrderFulfillmentStatus(
       return "requires_action"
     case "shipped":
       return "shipped"
+    case "delivered":
+      return "delivered"
     default:
       return "not_fulfilled"
   }

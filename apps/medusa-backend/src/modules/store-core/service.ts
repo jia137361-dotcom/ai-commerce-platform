@@ -18,6 +18,8 @@ import SupplierOrderItem from "./models/supplier-order-item"
 import AiGenerationJob from "./models/ai-generation-job"
 import StoreNotification from "./models/store-notification"
 import StoreMessage from "./models/store-message"
+import PlatformOperator from "./models/platform-operator"
+import PlatformAuditEvent from "./models/platform-audit-event"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -39,6 +41,8 @@ class StoreCoreModuleService extends MedusaService({
   AiGenerationJob,
   StoreNotification,
   StoreMessage,
+  PlatformOperator,
+  PlatformAuditEvent,
 }) {}
 
 export default StoreCoreModuleService

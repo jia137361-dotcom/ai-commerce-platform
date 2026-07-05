@@ -10,8 +10,8 @@ import {
   StaticPageNavigation,
   TermsContent,
 } from "../../components/info/StaticInfoContent"
-import { fetchStoreSettings, type BuyerStoreSettings } from "../../lib/buyer-api"
-import { useEffect, useState, type ReactNode } from "react"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { type ReactNode } from "react"
 
 type InfoPageProps = {
   cartCount: number
@@ -19,23 +19,13 @@ type InfoPageProps = {
   children: ReactNode
 }
 
-const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
-  brandName: "Citigoo Official Store",
-  metadata: {},
-}
-
 export function InfoPage({ cartCount, title, children }: InfoPageProps) {
-  const [settings, setSettings] = useState(fallbackSettings)
-
-  useEffect(() => {
-    void fetchStoreSettings().then((result) => setSettings(result.data))
-  }, [])
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
 
   return (
     <PageShell
       className="buyer-info-page"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
     >
       <Card as="article" className="buyer-info-card">

@@ -21,11 +21,12 @@ export const normalizeBuyerCartItem = (item: CartLineItem): BuyerCartItemView =>
     ...(item.selectedOptions ?? []).map((option) => `${option.name}: ${option.value}`),
   ].filter(Boolean)
   const isAvailable = Boolean(item.id && item.variantId && item.quantity > 0)
+  const storeQuery = item.storeId ? `?store=${encodeURIComponent(item.storeId)}` : ""
   return {
     id: item.id,
     title: item.title || "Cart item",
     imageUrl: item.imageUrl || undefined,
-    productHref: item.productId ? `/products/${encodeURIComponent(item.productId)}` : "/store",
+    productHref: item.productId ? `/products/${encodeURIComponent(item.productId)}${storeQuery}` : "/",
     variantLabel: specs.length ? specs.join(" · ") : item.variantId ? "Default option" : undefined,
     quantity: Math.max(1, Math.floor(item.quantity || 1)),
     unitPrice: item.hasUnitPrice === false ? undefined : item.unitPrice,

@@ -9,12 +9,14 @@ import {
   createCart,
   fetchStoreSettings,
   getBuyerCartStorageKey,
+  getScopedBuyerStoreId,
   type BuyerStoreSettings,
   type DesignConfig,
   type DesignCompleteResult,
 } from "../../lib/buyer-api"
 import type { StoreCart } from "../../lib/mock-data"
 import { addProductSelectionToCart } from "../product/product-cart-action"
+import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 
 type DesignerPageProps = {
   productId: string
@@ -43,9 +45,11 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
     let active = true
     ;(async () => {
       try {
+        const storeFromQuery = new URLSearchParams(window.location.search).get("store")
+        const storeId = getScopedBuyerStoreId(storeFromQuery)
         const [configResult, settingsResult] = await Promise.all([
           fetchProductDesignConfig(productId),
-          fetchStoreSettings(),
+          fetchStoreSettings({ storeId }),
         ])
         if (!active) return
         setConfig(configResult)
@@ -107,13 +111,18 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
     setAdding(true)
     setAddNotice(undefined)
     try {
+      const cartIdentity = getBuyerCartIdentity(undefined, window.localStorage)
       const result = await addProductSelectionToCart({
+        storeId: settings.storeId,
+        storeName: settings.brandName,
+        cartIdentity,
         variantId: savedResult.mcProductId,
         quantity: 1,
-        storageKey: getBuyerCartStorageKey(settings.storeId, "guest:anonymous"),
+        storageKey: getBuyerCartStorageKey(settings.storeId, cartIdentity),
         storage: window.localStorage,
-        createCart: () => createCart(),
-        addLineItem: addCartLineItem,
+        createCart: () => createCart({ storeId: settings.storeId }),
+        addLineItem: (cartId, variantId, quantity) =>
+          addCartLineItem(cartId, variantId, quantity, { storeId: settings.storeId }),
       })
       onCartUpdated(result)
       setAddNotice({ tone: "success", message: "Added to cart." })
@@ -130,7 +139,7 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
     setConfig(null)
   }
 
-  const sdkUrl = config ? `${config.sdkBaseUrl}/index.html?token=${encodeURIComponent(config.token)}&basic_product_id=${encodeURIComponent(config.basicProductId)}${config.viewId ? `&view_id=${encodeURIComponent(config.viewId)}` : ""}` : ""
+  const sdkUrl = config?.designerUrl ?? ""
 
   return (
     <PageShell className="buyer-designer-page" contentClassName="designer-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>

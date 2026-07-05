@@ -8,11 +8,10 @@ import { Card } from "../../components/ui/Card"
 import { ErrorState, LoadingState } from "../../components/ui/States"
 import {
   fetchBuyerStoreMessages,
-  fetchStoreSettings,
   sendBuyerStoreMessage,
   type BuyerStoreMessage,
-  type BuyerStoreSettings,
 } from "../../lib/buyer-api"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type StoreMessagesPageProps = {
   cartCount: number
@@ -21,16 +20,12 @@ type StoreMessagesPageProps = {
 
 export function StoreMessagesPage({ cartCount, orderId }: StoreMessagesPageProps) {
   const auth = useBuyerAuth()
-  const [settings, setSettings] = useState<BuyerStoreSettings>({ storeId: "default_store", brandName: "Citigoo", metadata: {} })
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const [messages, setMessages] = useState<BuyerStoreMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
-
-  useEffect(() => {
-    void fetchStoreSettings().then((result) => setSettings(result.data))
-  }, [])
 
   useEffect(() => {
     if (!auth.customer) {
@@ -64,7 +59,7 @@ export function StoreMessagesPage({ cartCount, orderId }: StoreMessagesPageProps
   return (
     <PageShell
       className="buyer-messages-page"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
     >
       <header className="buyer-messages-header">

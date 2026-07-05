@@ -13,8 +13,12 @@ import {
 } from "../../../../../lib/buyer-order-display"
 import {
   ORDER_META_PAYMENT_STATUS,
+  ORDER_META_PLATFORM_CHECKOUT_COUNT,
+  ORDER_META_PLATFORM_CHECKOUT_ID,
+  ORDER_META_PLATFORM_CHECKOUT_INDEX,
   readOrderFulfillmentStatusMeta,
   readOrderFulfillmentStatusString,
+  resolveBuyerOrderFulfillmentStatus,
 } from "../../../../../lib/order-custom-metadata"
 import { enrichOrderLineItemsWithImages, resolveOrderLineItemThumbnail } from "../../../../../lib/order-line-item-display"
 
@@ -57,12 +61,12 @@ const readHeader = (req: MedusaRequest, name: string) => {
   return Array.isArray(value) ? value[0] : value
 }
 
-const validateHeaders = (req: MedusaRequest) => {
+const validateHeaders = (req: MedusaRequest, options?: { platformScope?: boolean }) => {
   if (!readHeader(req, "x-publishable-api-key")) {
     return "x-publishable-api-key is required"
   }
 
-  if (!readHeader(req, "x-store-id")) {
+  if (!options?.platformScope && !readHeader(req, "x-store-id")) {
     return "X-Store-Id is required"
   }
 
@@ -134,7 +138,7 @@ const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<
   const metadata = order.metadata ?? null
   const items = order.items ?? []
   const paymentStatus = metadata?.[ORDER_META_PAYMENT_STATUS] ?? null
-  const fulfillmentStatus = readOrderFulfillmentStatusString(metadata)
+  const fulfillmentStatus = resolveBuyerOrderFulfillmentStatus(metadata)
   const receiptConfirmed = readReceiptConfirmed(order)
   const receiptConfirmationRequired = canConfirmReceipt({
     fulfillmentStatus,
@@ -171,6 +175,19 @@ const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<
     review_eligible: reviewEligible,
     review_completed: reviewCompleted,
     return_intent: Boolean(order.id) && returnOrderIds.has(order.id!),
+    store_id: typeof metadata?.store_id === "string" ? metadata.store_id : null,
+    platform_checkout_id:
+      typeof metadata?.[ORDER_META_PLATFORM_CHECKOUT_ID] === "string"
+        ? metadata[ORDER_META_PLATFORM_CHECKOUT_ID]
+        : null,
+    platform_checkout_index:
+      typeof metadata?.[ORDER_META_PLATFORM_CHECKOUT_INDEX] === "number"
+        ? metadata[ORDER_META_PLATFORM_CHECKOUT_INDEX]
+        : null,
+    platform_checkout_count:
+      typeof metadata?.[ORDER_META_PLATFORM_CHECKOUT_COUNT] === "number"
+        ? metadata[ORDER_META_PLATFORM_CHECKOUT_COUNT]
+        : null,
     currency_code: order.currency_code ?? null,
     total: readNumber(order.total),
     item_count: items.reduce((sum, item) => sum + (readNumber(item.quantity) ?? 0), 0),
@@ -292,7 +309,9 @@ const readCustomerEmailForDiagnostics = async (
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
-    const headerError = validateHeaders(req)
+    const scope = readStringFilter(req.query?.scope)
+    const platformScope = scope === "platform" || scope === "all"
+    const headerError = validateHeaders(req, { platformScope })
     if (headerError) {
       return res.status(401).json({
         error: { code: "CUSTOMER_ORDERS_HEADER_REQUIRED", message: headerError },
@@ -303,6 +322,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     if (!customerId) {
       return res.status(401).json({ error: "Customer session is required" })
     }
+
+    const { assertActiveCustomer } = await import("../../../../../lib/customer-session")
+    if (!(await assertActiveCustomer(req, res, customerId))) return
 
     const limit = readPositiveInt(req.query?.limit, 20, 100)
     const offset = readPositiveInt(req.query?.offset, 0)
@@ -320,18 +342,22 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const filtered = orders
       .filter((order) => orderMatchesAuthenticatedCustomer(order, customerId))
-      .filter((order) => readOrderStoreId(order) === storeId)
+      .filter((order) => platformScope || readOrderStoreId(order) === storeId)
       .filter((order) => !paymentStatus || order.metadata?.[ORDER_META_PAYMENT_STATUS] === paymentStatus)
-      .filter((order) => !fulfillmentStatus || readOrderFulfillmentStatusMeta(order.metadata ?? null) === fulfillmentStatus)
+      .filter((order) => !fulfillmentStatus || resolveBuyerOrderFulfillmentStatus(order.metadata ?? null) === fulfillmentStatus)
 
     let reviewedOrderIds = new Set<string>()
     let returnOrderIds = new Set<string>()
     try {
       const storeCore = req.scope.resolve(STORE_CORE_MODULE) as any
-      const reviews = await storeCore.listProductReviews({ store_id: storeId, status: "published" })
+      const reviews = platformScope
+        ? await storeCore.listProductReviews({ status: "published" })
+        : await storeCore.listProductReviews({ store_id: storeId, status: "published" })
       reviewedOrderIds = new Set(reviews.map((review: any) => review.order_id).filter(Boolean))
       const refunds = req.scope.resolve(BUYER_REFUND_REQUESTS_MODULE) as any
-      const requests = await refunds.listBuyerRefundRequests({ customer_id: customerId, store_id: storeId })
+      const requests = platformScope
+        ? await refunds.listBuyerRefundRequests({ customer_id: customerId })
+        : await refunds.listBuyerRefundRequests({ customer_id: customerId, store_id: storeId })
       returnOrderIds = new Set(requests.map((request: any) => request.order_id).filter(Boolean))
     } catch {
       // Optional aggregates remain empty if a module is unavailable.
@@ -342,11 +368,11 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
             bucket,
             status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
             paymentStatus: String(order.metadata?.[ORDER_META_PAYMENT_STATUS] ?? ""),
-            fulfillmentStatus: readOrderFulfillmentStatusString(order.metadata ?? null) ?? "none",
+            fulfillmentStatus: resolveBuyerOrderFulfillmentStatus(order.metadata ?? null) ?? "none",
             orderId: order.id,
             receiptConfirmed: readReceiptConfirmed(order),
             reviewEligible:
-              ["shipped", "delivered"].includes(readOrderFulfillmentStatusString(order.metadata ?? null) ?? "") &&
+              ["shipped", "delivered"].includes(resolveBuyerOrderFulfillmentStatus(order.metadata ?? null) ?? "") &&
               readReceiptConfirmed(order) &&
               Boolean(order.id) &&
               !reviewedOrderIds.has(order.id!),

@@ -5,6 +5,33 @@ import { buildShipmentTrackingEvents } from "./buyer-tracking-events"
 import { readBuyerPreferencesFromMetadata, type BuyerPreferences } from "./buyer-preferences"
 import { buildShareChannels, buildShareText } from "./share-channels"
 import { resolveStoreAssetUrl } from "./store-media-url"
+import {
+  getBuyerStoreId,
+  getDefaultBuyerStoreId,
+  getLegacyDefaultStoreId,
+  getPersistedBuyerStoreId,
+  getScopedBuyerStoreId,
+  isMarketplaceContext,
+  isMarketplaceStoreId,
+  MARKETPLACE_STORE_ID,
+  resetActiveBuyerStoreId,
+  resolveBuyerStoreId,
+  setActiveBuyerStoreId,
+} from "./buyer-store-context"
+
+export {
+  getBuyerStoreId,
+  getDefaultBuyerStoreId,
+  getLegacyDefaultStoreId,
+  getPersistedBuyerStoreId,
+  getScopedBuyerStoreId,
+  isMarketplaceContext,
+  isMarketplaceStoreId,
+  MARKETPLACE_STORE_ID,
+  resetActiveBuyerStoreId,
+  resolveBuyerStoreId,
+  setActiveBuyerStoreId,
+}
 
 export type DataSource = "backend" | "mock" | "static"
 
@@ -81,6 +108,17 @@ export type LoadResult<T> = {
   data: T
   source: DataSource
   error?: string
+}
+
+export type MarketplaceStore = {
+  storeId: string
+  name: string
+  slug: string
+  logoUrl?: string
+  bannerUrl?: string
+  description?: string
+  brandName: string
+  productCount: number
 }
 
 type ApiStoreSettings = {
@@ -462,6 +500,10 @@ type ApiMyOrder = {
   receipt_confirmation_required?: boolean
   receipt_confirmed_at?: string | null
   return_intent?: boolean
+  store_id?: string | null
+  platform_checkout_id?: string | null
+  platform_checkout_index?: number | null
+  platform_checkout_count?: number | null
 }
 
 type ApiMyOrdersResponse = {
@@ -712,6 +754,10 @@ export type BuyerOrderSummary = {
   receiptConfirmationRequired?: boolean
   receiptConfirmedAt?: string | null
   returnIntent?: boolean
+  storeId?: string | null
+  platformCheckoutId?: string | null
+  platformCheckoutIndex?: number | null
+  platformCheckoutCount?: number | null
 }
 
 export type BuyerOrdersPage = {
@@ -728,11 +774,18 @@ export type BuyerOrdersQuery = {
   paymentStatus?: string
   fulfillmentStatus?: string
   bucket?: string
+  scope?: "platform" | "all"
+}
+
+export const marketplaceBuyerSettings: BuyerStoreSettings = {
+  storeId: MARKETPLACE_STORE_ID,
+  brandName: "Citigoo Marketplace",
+  metadata: {},
 }
 
 const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
-  brandName: "Nespresso",
+  storeId: getLegacyDefaultStoreId(),
+  brandName: "Citigoo",
   metadata: {},
   galleryUrls: [],
 }
@@ -746,7 +799,6 @@ const isPlaceholderValue = (value: string) =>
 const config = {
   backendUrl: readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
   publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
-  storeId: readEnv("VITE_DEFAULT_STORE_ID", readEnv("NEXT_PUBLIC_STORE_ID", "default_store")),
   aiWorkerPublicBase: (() => {
     const explicit = readEnv("VITE_AI_WORKER_PUBLIC_BASE_URL", readEnv("NEXT_PUBLIC_AI_WORKER_PUBLIC_BASE_URL"))
     if (explicit) return explicit.replace(/\/+$/, "")
@@ -757,17 +809,85 @@ const config = {
 
 export const getStripePublishableKey = () => readEnv("VITE_STRIPE_PK")
 
-export const getBuyerStoreId = () => config.storeId || "default_store"
-
 export const getAiWorkerPublicBase = () => config.aiWorkerPublicBase
 
 export const getBuyerCartStorageKey = (storeId = getBuyerStoreId(), identity = "guest:anonymous") =>
   `citigoo:${storeId}:cart:${encodeURIComponent(identity)}`
 
-const headers = () => ({
+const resolveRequestStoreId = (storeId?: string) => storeId ?? resolveBuyerStoreId() ?? undefined
+
+const headers = (storeId?: string) => {
+  const resolved = resolveRequestStoreId(storeId)
+  return {
+    "x-publishable-api-key": config.publishableKey,
+    ...(resolved ? { "X-Store-Id": resolved } : {}),
+  }
+}
+
+const platformHeaders = () => ({
   "x-publishable-api-key": config.publishableKey,
-  "X-Store-Id": config.storeId || "default_store",
 })
+
+const isPlatformCustomerOrdersPath = (path: string) =>
+  /\/store\/customers\/me\/orders(?:\?|$)/.test(path) &&
+  (path.includes("scope=platform") || path.includes("scope=all"))
+
+type StoreScopedRequestOptions = {
+  storeId?: string
+}
+
+const storeScopedFetch = async <T>(
+  path: string,
+  init: RequestInit = {},
+  options?: StoreScopedRequestOptions
+) => {
+  const backendUrl = config.backendUrl.replace(/\/+$/, "")
+  if (!backendUrl) {
+    throw new Error("VITE_MEDUSA_BASE_URL is missing")
+  }
+  if (isPlaceholderValue(config.publishableKey)) {
+    throw new Error("VITE_PUBLISHABLE_API_KEY is missing or still a placeholder")
+  }
+
+  const scopedStoreId = getScopedBuyerStoreId(options?.storeId)
+
+  const response = await fetch(`${backendUrl}${path}`, {
+    ...init,
+    credentials: init.credentials ?? "include",
+    headers: {
+      ...headers(scopedStoreId),
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(init.headers ?? {}),
+    },
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/failed to fetch|networkerror|load failed/i.test(message)) {
+      throw new Error("Unable to reach the store backend. Check that medusa-backend is running and restart it after updates.")
+    }
+    throw error instanceof Error ? error : new Error(message)
+  })
+
+  if (!response.ok) {
+    const body = await response.text()
+    let parsed: { error?: { code?: string; message?: string } | string } | undefined
+    try {
+      parsed = body ? JSON.parse(body) : undefined
+    } catch {
+      parsed = undefined
+    }
+    const errorPayload = parsed?.error
+    const message =
+      typeof errorPayload === "object" && errorPayload.message
+        ? errorPayload.message
+        : typeof errorPayload === "string"
+          ? errorPayload
+          : `HTTP ${response.status}${body ? `: ${body.slice(0, 180)}` : ""}`
+    throw Object.assign(new Error(message), { status: response.status, payload: parsed })
+  }
+
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}
 
 export const formatBuyerMoney = (value: number | undefined, currency = "USD") => {
   const amount = Number.isFinite(value) ? (value as number) : 0
@@ -795,7 +915,7 @@ const warnFallback = (label: string, error: unknown) => {
   console.warn(`[buyer-api] ${label} fallback`, {
     message,
     backendUrl: config.backendUrl,
-    storeId: config.storeId || "default_store",
+    storeId: getBuyerStoreId(),
   })
   return message
 }
@@ -818,7 +938,7 @@ const apiFetchWithStatus = async <T>(path: string, init: RequestInit = {}): Prom
     ...init,
     credentials: init.credentials ?? "include",
     headers: {
-      ...headers(),
+      ...(isPlatformCustomerOrdersPath(path) ? platformHeaders() : headers()),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },
@@ -930,7 +1050,7 @@ const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
         .map((value) => resolveStoreAssetUrl(value, backendBase) ?? value.trim())
     : []
   return {
-    storeId: settings?.store_id ?? config.storeId ?? "default_store",
+    storeId: settings?.store_id ?? getBuyerStoreId(),
     brandName,
     logoUrl: resolveStoreAssetUrl(settings?.logo_url ?? undefined, backendBase),
     supportEmail: settings?.support_email ?? undefined,
@@ -1090,16 +1210,37 @@ const normalizePaymentSession = (session?: ApiPaymentSession): BuyerPaymentSessi
   }
 }
 
-export const fetchStoreSettings = async (): Promise<LoadResult<BuyerStoreSettings>> => {
+export const fetchBuyerPageSettings = async (options?: {
+  storeId?: string
+  marketplace?: boolean
+}): Promise<LoadResult<BuyerStoreSettings>> => {
+  const explicitStoreId = options?.storeId?.trim()
+  const marketplace = options?.marketplace ?? (!explicitStoreId && !resolveBuyerStoreId())
+  if (marketplace && !explicitStoreId) {
+    return { data: marketplaceBuyerSettings, source: "static" }
+  }
+
+  const storeId = getScopedBuyerStoreId(explicitStoreId)
   try {
     return {
-      data: normalizeSettings(await apiFetch<ApiStoreSettings>("/store/settings")),
+      data: normalizeSettings(
+        await storeScopedFetch<ApiStoreSettings>("/store/settings", {}, { storeId })
+      ),
       source: "backend",
     }
   } catch (error) {
-    return { data: fallbackSettings, source: "static", error: warnFallback("settings", error) }
+    return {
+      data: marketplace ? marketplaceBuyerSettings : { ...fallbackSettings, storeId },
+      source: "static",
+      error: warnFallback("settings", error),
+    }
   }
 }
+
+export const fetchStoreSettings = async (options?: {
+  storeId?: string
+  marketplace?: boolean
+}) => fetchBuyerPageSettings(options)
 
 export const fetchProductCategories = async (): Promise<LoadResult<BuyerCategory[]>> => {
   try {
@@ -1124,9 +1265,89 @@ export const fetchProducts = async (): Promise<LoadResult<StoreProduct[]>> => {
   }
 }
 
-export const fetchProductDetail = async (productId: string): Promise<LoadResult<StoreProduct>> => {
+type ApiMarketplaceStores = {
+  stores?: Array<{
+    store_id?: string
+    name?: string
+    slug?: string
+    logo_url?: string | null
+    banner_url?: string | null
+    description?: string | null
+    brand_name?: string | null
+    product_count?: number
+  }>
+  count?: number
+}
+
+type ApiMarketplaceStoreDetail = {
+  store?: ApiMarketplaceStores["stores"] extends Array<infer T> ? T : never
+}
+
+const normalizeMarketplaceStore = (store: NonNullable<ApiMarketplaceStores["stores"]>[number]): MarketplaceStore => ({
+  storeId: store.store_id ?? "",
+  name: store.name ?? "Untitled store",
+  slug: store.slug ?? "",
+  logoUrl: store.logo_url ?? undefined,
+  bannerUrl: store.banner_url ?? undefined,
+  description: store.description ?? undefined,
+  brandName: store.brand_name ?? store.name ?? "Store",
+  productCount: store.product_count ?? 0,
+})
+
+export const fetchMarketplaceStores = async (query = ""): Promise<LoadResult<MarketplaceStore[]>> => {
   try {
-    const payload = await apiFetch<ApiProductDetail>(`/store/products/${encodeURIComponent(productId)}`)
+    const params = new URLSearchParams({ limit: "48" })
+    if (query.trim()) params.set("q", query.trim())
+    const payload = await apiFetch<ApiMarketplaceStores>(`/store/stores?${params.toString()}`)
+    return {
+      data: (payload.stores ?? []).map(normalizeMarketplaceStore),
+      source: "backend",
+    }
+  } catch (error) {
+    return { data: [], source: "static", error: warnFallback("marketplace stores", error) }
+  }
+}
+
+export const fetchMarketplaceStoreBySlug = async (slug: string): Promise<LoadResult<MarketplaceStore | null>> => {
+  try {
+    const payload = await apiFetch<ApiMarketplaceStoreDetail>(`/store/stores/${encodeURIComponent(slug)}`)
+    if (!payload.store) {
+      return { data: null, source: "backend", error: "Store not found" }
+    }
+    return { data: normalizeMarketplaceStore(payload.store), source: "backend" }
+  } catch (error) {
+    return { data: null, source: "static", error: warnFallback("marketplace store", error) }
+  }
+}
+
+export const fetchMarketplaceProducts = async (options?: {
+  query?: string
+  storeId?: string
+}): Promise<LoadResult<StoreProduct[]>> => {
+  try {
+    const params = new URLSearchParams({ limit: "48" })
+    if (options?.query?.trim()) params.set("q", options.query.trim())
+    if (options?.storeId?.trim()) params.set("store_id", options.storeId.trim())
+    const payload = await apiFetch<ApiProducts>(`/store/marketplace/products?${params.toString()}`)
+    const products = (payload.products ?? []).map(normalizeBuyerProduct)
+    return { data: products, source: "backend" }
+  } catch (error) {
+    return { data: [], source: "static", error: warnFallback("marketplace products", error) }
+  }
+}
+
+export const fetchProductDetail = async (
+  productId: string,
+  options?: { storeId?: string }
+): Promise<LoadResult<StoreProduct>> => {
+  try {
+    // Store context must go via X-Store-Id header. Query params like ?store= hit Medusa's
+    // core /store/products/:id route and fail with "Unrecognized fields: 'store'".
+    const payload = await storeScopedFetch<ApiProductDetail>(
+      `/store/products/${encodeURIComponent(productId)}`,
+      {},
+      { storeId: options?.storeId }
+    )
     if (!payload.product) {
       throw new Error("Backend returned no product")
     }
@@ -1203,19 +1424,27 @@ export const fetchProductShare = async (product: StoreProduct): Promise<LoadResu
   }
 }
 
-export const createCart = async (options?: { countryCode?: string; regionId?: string }) => {
+export const createCart = async (options?: {
+  countryCode?: string
+  regionId?: string
+  storeId?: string
+}) => {
   let regionId = options?.regionId
   if (!regionId) {
     const regions = await listStoreRegions()
     regionId = resolveStoreRegionId(regions, options?.countryCode ?? "us")
   }
-  const cart = await apiFetch<ApiCart>("/store/carts", {
-    method: "POST",
-    body: JSON.stringify({
-      currency_code: "usd",
-      ...(regionId ? { region_id: regionId } : {}),
-    }),
-  })
+  const cart = await storeScopedFetch<ApiCart>(
+    "/store/carts",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        currency_code: "usd",
+        ...(regionId ? { region_id: regionId } : {}),
+      }),
+    },
+    { storeId: options?.storeId }
+  )
   return normalizeCart(cart)
 }
 
@@ -1237,41 +1466,62 @@ export const resolveStoreRegionId = (regions: StoreRegionSummary[], countryCode:
   return matched?.region_id ?? regions[0]?.region_id
 }
 
-export const fetchCart = async (cartId: string) => {
-  return normalizeCart(await apiFetch<ApiCart>(`/store/carts/${encodeURIComponent(cartId)}`))
+export const fetchCart = async (cartId: string, options?: StoreScopedRequestOptions) => {
+  return normalizeCart(
+    await storeScopedFetch<ApiCart>(`/store/carts/${encodeURIComponent(cartId)}`, {}, options)
+  )
 }
 
-export const attachCustomerToCart = async (cartId: string) => {
-  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/customer`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  })
+export const attachCustomerToCart = async (cartId: string, options?: StoreScopedRequestOptions) => {
+  const payload = await storeScopedFetch<ApiCartMutation>(
+    `/store/carts/${encodeURIComponent(cartId)}/customer`,
+    { method: "POST", body: JSON.stringify({}) },
+    options
+  )
   return normalizeCart(payload.cart ?? payload)
 }
 
-export const addCartLineItem = async (cartId: string, variantId: string, quantity: number) => {
-  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items`, {
-    method: "POST",
-    body: JSON.stringify({ variant_id: variantId, quantity }),
-  })
+export const addCartLineItem = async (
+  cartId: string,
+  variantId: string,
+  quantity: number,
+  options?: StoreScopedRequestOptions
+) => {
+  const payload = await storeScopedFetch<ApiCartMutation>(
+    `/store/carts/${encodeURIComponent(cartId)}/line-items`,
+    { method: "POST", body: JSON.stringify({ variant_id: variantId, quantity }) },
+    options
+  )
   if (payload.cart || payload.items) {
     return normalizeCart(payload.cart ?? payload)
   }
-  return fetchCart(cartId)
+  return fetchCart(cartId, options)
 }
 
-export const updateCartLineItem = async (cartId: string, lineId: string, quantity: number) => {
-  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`, {
-    method: "PUT",
-    body: JSON.stringify({ quantity }),
-  })
+export const updateCartLineItem = async (
+  cartId: string,
+  lineId: string,
+  quantity: number,
+  options?: StoreScopedRequestOptions
+) => {
+  const payload = await storeScopedFetch<ApiCartMutation>(
+    `/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`,
+    { method: "PUT", body: JSON.stringify({ quantity }) },
+    options
+  )
   return normalizeCart(payload.cart ?? payload)
 }
 
-export const deleteCartLineItem = async (cartId: string, lineId: string) => {
-  const payload = await apiFetch<ApiCartMutation>(`/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`, {
-    method: "DELETE",
-  })
+export const deleteCartLineItem = async (
+  cartId: string,
+  lineId: string,
+  options?: StoreScopedRequestOptions
+) => {
+  const payload = await storeScopedFetch<ApiCartMutation>(
+    `/store/carts/${encodeURIComponent(cartId)}/line-items/${encodeURIComponent(lineId)}`,
+    { method: "DELETE" },
+    options
+  )
   return normalizeCart(payload.cart ?? payload)
 }
 
@@ -1373,11 +1623,73 @@ export const selectCartShippingMethod = async (cartId: string, optionId: string)
   return normalizeCart(payload.cart ?? payload)
 }
 
-export const completeCart = async (cartId: string, paymentProviderId?: string): Promise<CompleteCartResponse> => {
-  const payload = await apiFetch<ApiCompleteCartResponse>(`/store/carts/${encodeURIComponent(cartId)}/complete`, {
+export type PreparedPlatformCheckout = {
+  platform_checkout_id: string
+  group_count: number
+  grand_subtotal: number
+  grand_total: number
+  currency_code: string
+  groups: Array<{
+    store_id: string
+    cart_id: string
+    store_name: string
+    item_count: number
+    subtotal: number
+    total: number
+    currency_code: string
+    platform_checkout_index: number
+    platform_checkout_count: number
+  }>
+}
+
+export const preparePlatformCheckout = async (
+  groups: Array<{ store_id: string; cart_id: string }>
+): Promise<PreparedPlatformCheckout> =>
+  apiFetch<PreparedPlatformCheckout>("/store/platform/checkout/prepare", {
     method: "POST",
-    body: JSON.stringify(paymentProviderId ? { payment_provider_id: paymentProviderId } : {}),
+    body: JSON.stringify({ groups }),
   })
+
+export const getPlatformCheckoutOrders = async (platformCheckoutId: string) =>
+  apiFetch<{
+    platform_checkout_id: string
+    order_count: number
+    orders: Array<{
+      order_id: string
+      display_id: string | number | null
+      store_id: string
+      store_name: string
+      total: number | null
+      currency_code: string | null
+      created_at: string | null
+      status: string | null
+    }>
+  }>(`/store/platform/checkout/${encodeURIComponent(platformCheckoutId)}/orders`)
+
+export const completeCart = async (
+  cartId: string,
+  options?: {
+    paymentProviderId?: string
+    storeId?: string
+    platformCheckout?: {
+      platformCheckoutId: string
+      platformCheckoutIndex: number
+      platformCheckoutCount: number
+    }
+  }
+): Promise<CompleteCartResponse> => {
+  const body: Record<string, unknown> = {}
+  if (options?.paymentProviderId) body.payment_provider_id = options.paymentProviderId
+  if (options?.platformCheckout) {
+    body.platform_checkout_id = options.platformCheckout.platformCheckoutId
+    body.platform_checkout_index = options.platformCheckout.platformCheckoutIndex
+    body.platform_checkout_count = options.platformCheckout.platformCheckoutCount
+  }
+  const payload = await storeScopedFetch<ApiCompleteCartResponse>(
+    `/store/carts/${encodeURIComponent(cartId)}/complete`,
+    { method: "POST", body: JSON.stringify(body) },
+    { storeId: options?.storeId }
+  )
   const order = payload.order
   return {
     orderId: payload.order_id ?? order?.id ?? "",
@@ -1418,6 +1730,7 @@ export const getMyOrders = async ({
   paymentStatus,
   fulfillmentStatus,
   bucket,
+  scope,
 }: BuyerOrdersQuery = {}): Promise<BuyerOrdersPage> => {
   const params = new URLSearchParams({
     limit: String(limit),
@@ -1427,6 +1740,7 @@ export const getMyOrders = async ({
   if (paymentStatus) params.set("payment_status", paymentStatus)
   if (fulfillmentStatus) params.set("fulfillment_status", fulfillmentStatus)
   if (bucket) params.set("bucket", bucket)
+  if (scope) params.set("scope", scope)
 
   const { status: httpStatus, payload } = await apiFetchWithStatus<ApiMyOrdersResponse>(`/store/customers/me/orders?${params.toString()}`)
   const rawOrders = Array.isArray(payload.orders) ? payload.orders : []
@@ -1454,6 +1768,10 @@ export const getMyOrders = async ({
       receiptConfirmationRequired: Boolean(order.receipt_confirmation_required),
       receiptConfirmedAt: order.receipt_confirmed_at ?? null,
       returnIntent: Boolean(order.return_intent),
+      storeId: order.store_id ?? null,
+      platformCheckoutId: order.platform_checkout_id ?? null,
+      platformCheckoutIndex: order.platform_checkout_index ?? null,
+      platformCheckoutCount: order.platform_checkout_count ?? null,
     }))
   if (import.meta.env.DEV) {
     console.info("[account-orders-api] response", {
@@ -2003,6 +2321,8 @@ export type DesignConfig = {
   basicProductId: string
   viewId?: string | null
   designType?: number
+  designerUrl: string
+  editorMode?: "new" | "redesign"
 }
 
 type ApiDesignConfig = {
@@ -2011,6 +2331,8 @@ type ApiDesignConfig = {
   basic_product_id?: string
   view_id?: string | null
   design_type?: number
+  designer_url?: string
+  editor_mode?: "new" | "redesign"
 }
 
 export const fetchProductDesignConfig = async (productId: string): Promise<DesignConfig> => {
@@ -2020,12 +2342,21 @@ export const fetchProductDesignConfig = async (productId: string): Promise<Desig
   if (!payload.token || !payload.basic_product_id || !payload.sdk_base_url) {
     throw new Error("Design config is incomplete")
   }
+  const sdkBaseUrl = payload.sdk_base_url
+  const designerUrl =
+    payload.designer_url ??
+    `${sdkBaseUrl.replace(/\/$/, "")}/singleDesign?${new URLSearchParams({
+      token: payload.token,
+      basicProductId: payload.basic_product_id,
+    }).toString()}`
   return {
-    sdkBaseUrl: payload.sdk_base_url,
+    sdkBaseUrl,
     token: payload.token,
     basicProductId: payload.basic_product_id,
     viewId: payload.view_id ?? null,
     designType: payload.design_type,
+    designerUrl,
+    editorMode: payload.editor_mode,
   }
 }
 

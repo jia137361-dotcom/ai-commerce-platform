@@ -1611,3 +1611,111 @@
     padding: 28px 22px;
   }
 }
+
+.buyer-marketplace-hero {
+  margin: 0 auto 32px;
+  max-width: 960px;
+  padding: 32px 20px 0;
+}
+
+.buyer-marketplace-eyebrow {
+  color: var(--buyer-brand, #2563eb);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.buyer-marketplace-hero h1 {
+  font-size: clamp(28px, 4vw, 40px);
+  margin: 8px 0 12px;
+}
+
+.buyer-marketplace-hero p {
+  color: #64748b;
+  max-width: 640px;
+}
+
+.buyer-marketplace-section {
+  margin: 0 auto 40px;
+  max-width: 1200px;
+  padding: 0 20px;
+}
+
+.buyer-marketplace-search-row {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+
+.buyer-marketplace-search-row input {
+  flex: 1;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.buyer-marketplace-search-row button {
+  border: 0;
+  border-radius: 12px;
+  background: var(--buyer-brand, #2563eb);
+  color: #fff;
+  font-weight: 600;
+  padding: 0 18px;
+}
+
+.buyer-marketplace-store-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.buyer-marketplace-store-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  text-decoration: none;
+}
+
+.buyer-marketplace-store-media {
+  align-items: center;
+  background: linear-gradient(135deg, #eff6ff, #f8fafc);
+  display: flex;
+  height: 120px;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.buyer-marketplace-store-media img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.buyer-marketplace-store-media span {
+  color: #2563eb;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.buyer-marketplace-store-body {
+  padding: 16px;
+}
+
+.buyer-marketplace-store-body h3 {
+  color: #0f172a;
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
+.buyer-marketplace-store-body p,
+.buyer-marketplace-status,
+.buyer-marketplace-error {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.buyer-marketplace-error {
+  color: #b91c1c;
+}

@@ -1,4 +1,9 @@
 import type { NormalizedProduct } from "@ai-commerce/shared-types"
+import { resolveStoreAssetUrl } from "./store-media-url"
+
+const MEDUSA_URL = import.meta.env.VITE_MEDUSA_URL ?? "http://localhost:9000"
+const AI_WORKER_PUBLIC_BASE =
+  import.meta.env.VITE_AI_WORKER_PUBLIC_BASE_URL ?? "http://127.0.0.1:8001/static"
 
 export type ProductGalleryItem = {
   id: string
@@ -81,7 +86,8 @@ export const buildProductGallery = (
   const unique = new Map<string, ProductGalleryItem>()
   for (const item of gallery) {
     if (!item.url) continue
-    const cachedItem = { ...item, url: withCacheBust(item.url, cacheKey) }
+    const resolvedUrl = resolveStoreAssetUrl(item.url, MEDUSA_URL, AI_WORKER_PUBLIC_BASE) ?? item.url
+    const cachedItem = { ...item, url: withCacheBust(resolvedUrl, cacheKey) }
     const existing = unique.get(item.id)
     if (!existing) {
       unique.set(item.id, cachedItem)

@@ -16,6 +16,7 @@ export type AiWorkerGenerateResult = {
   seo: { title: string; description: string }
   price_suggestion: number
   mock_mode?: boolean
+  mock_mode_reason?: string | null
 }
 
 export type AiWorkerGenerateInput = {

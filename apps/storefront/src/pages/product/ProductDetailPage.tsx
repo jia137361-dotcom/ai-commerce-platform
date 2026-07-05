@@ -18,7 +18,9 @@ import {
   fetchProductShare,
   fetchStoreSettings,
   getBuyerCartStorageKey,
+  getScopedBuyerStoreId,
   readBuyerPreferences,
+  setActiveBuyerStoreId,
   type BuyerReviewsSummary,
   type BuyerShareInfo,
   type BuyerStoreSettings,
@@ -55,15 +57,23 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const [loadVersion, setLoadVersion] = useState(0)
   const reviewOrderNumber = new URLSearchParams(window.location.search).get("reviewOrder")
   const viewReviewOrderNumber = new URLSearchParams(window.location.search).get("viewReviewOrder")
+  const storeFromQuery = new URLSearchParams(window.location.search).get("store")
+  const productStoreId = useMemo(
+    () => getScopedBuyerStoreId(storeFromQuery),
+    [storeFromQuery]
+  )
 
   const loadProduct = useCallback(async (isActive: () => boolean) => {
     setLoading(true)
     setFatalError(undefined)
     setAddNotice(undefined)
+    if (storeFromQuery) {
+      setActiveBuyerStoreId(storeFromQuery)
+    }
     const [productResult, reviewsResult, settingsResult, productsResult] = await Promise.all([
-      fetchProductDetail(productId),
+      fetchProductDetail(productId, { storeId: productStoreId }),
       fetchProductReviews(productId),
-      fetchStoreSettings(),
+      fetchStoreSettings({ storeId: productStoreId }),
       fetchProducts(),
     ])
     if (!isActive()) return
@@ -105,7 +115,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       { label: "share", message: shareResult.error },
     ].filter((notice): notice is Notice => Boolean(notice.message)))
     setLoading(false)
-  }, [productId])
+  }, [productId, productStoreId, storeFromQuery])
 
   useEffect(() => {
     let active = true
@@ -130,17 +140,28 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     setAdding(true)
     setAddNotice(undefined)
     try {
+      const cartStoreId =
+        product.storeId ??
+        storeFromQuery ??
+        settings.storeId
+      const cartIdentity = getBuyerCartIdentity(auth.customer.id, window.localStorage)
+      setActiveBuyerStoreId(cartStoreId)
       const updated = await addProductSelectionToCart({
+        storeId: cartStoreId,
+        storeName: product.storeName ?? settings.brandName,
+        storeSlug: product.storeSlug,
+        cartIdentity,
         variantId: selectedVariant.id,
         quantity,
-        storageKey: getBuyerCartStorageKey(
-          settings.storeId,
-          getBuyerCartIdentity(auth.customer.id, window.localStorage)
-        ),
+        storageKey: getBuyerCartStorageKey(cartStoreId, cartIdentity),
         storage: window.localStorage,
         createCart: () =>
-          createCart({ countryCode: readBuyerPreferences(auth.customer).countryCode }),
-        addLineItem: addCartLineItem,
+          createCart({
+            storeId: cartStoreId,
+            countryCode: readBuyerPreferences(auth.customer).countryCode,
+          }),
+        addLineItem: (cartId, variantId, qty) =>
+          addCartLineItem(cartId, variantId, qty, { storeId: cartStoreId }),
       })
       onCartUpdated(updated)
       setAddNotice({ tone: "success", message: "Added to cart." })

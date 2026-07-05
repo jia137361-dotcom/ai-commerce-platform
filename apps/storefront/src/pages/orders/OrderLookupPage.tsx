@@ -1,40 +1,21 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { OrderLookupForm } from "../../components/orders/OrderLookupForm"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
-import {
-  fetchStoreSettings,
-  lookupOrder,
-  type BuyerStoreSettings,
-} from "../../lib/buyer-api"
+import { lookupOrder } from "../../lib/buyer-api"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type OrderLookupPageProps = {
   cartCount: number
 }
 
-const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
-  brandName: "Citigoo",
-  metadata: {},
-}
-
 export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
-  const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const [email, setEmail] = useState("")
   const [displayId, setDisplayId] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | undefined>()
-
-  useEffect(() => {
-    let active = true
-    void fetchStoreSettings().then((result) => {
-      if (active) setSettings(result.data)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
 
   const handleSubmit = async () => {
     setError(undefined)
@@ -67,7 +48,7 @@ export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
     <PageShell
       className="buyer-orders-page"
       contentClassName="buyer-orders-main buyer-order-lookup-main"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
     >
         <OrderLookupForm

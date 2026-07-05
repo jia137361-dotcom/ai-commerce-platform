@@ -47,28 +47,106 @@ export async function getProductDetail(client: S2bdiyClient, productId: number |
   return client.request<Record<string, unknown>>(`/open/v1/product/${productId}`, { method: "GET" })
 }
 export function extractMockupImageUrl(productDetail: Record<string, unknown>): string | null {
+  const gallery = extractProductMockupGalleryFromS2bDetail(productDetail)
+  return gallery[0]?.url ?? null
+}
+
+export type S2bProductGalleryItem = {
+  id: string
+  label: string
+  url: string
+  kind: "mockup" | "design" | "print_file"
+}
+
+const MOCKUP_VIEW_LABELS = ["Front", "Back", "Side", "On-body", "Detail"]
+
+const readImageSrc = (value: unknown): string | null => {
+  if (typeof value === "string" && value.trim()) return value.trim()
+  if (value && typeof value === "object" && typeof (value as Record<string, unknown>).src === "string") {
+    const src = (value as Record<string, unknown>).src as string
+    return src.trim() || null
+  }
+  return null
+}
+
+export function extractProductMockupGalleryFromS2bDetail(
+  productDetail: Record<string, unknown>
+): S2bProductGalleryItem[] {
+  const seen = new Set<string>()
+  const items: S2bProductGalleryItem[] = []
+
+  const pushMockup = (url: string, label?: string) => {
+    if (!url || seen.has(url)) return
+    seen.add(url)
+    const index = items.length
+    items.push({
+      id: index === 0 ? "mockup_front" : `mockup_${index + 1}`,
+      label: label ?? MOCKUP_VIEW_LABELS[index] ?? `View ${index + 1}`,
+      url,
+      kind: "mockup",
+    })
+  }
+
+  const showImages = productDetail.show_images
+  if (Array.isArray(showImages)) {
+    for (const block of showImages) {
+      if (!block || typeof block !== "object") continue
+      const row = block as Record<string, unknown>
+      const colorName =
+        typeof row.color_name === "string" && row.color_name.trim() ? row.color_name.trim() : null
+      const images = row.images
+      if (!Array.isArray(images)) continue
+      images.forEach((image, imageIndex) => {
+        const src = readImageSrc(image)
+        if (!src) return
+        const label =
+          images.length > 1 && colorName
+            ? `${colorName} ${imageIndex + 1}`
+            : colorName ?? undefined
+        pushMockup(src, label)
+      })
+    }
+  }
+
   const variants = productDetail.variants
   if (Array.isArray(variants)) {
     for (const variant of variants) {
       if (!variant || typeof variant !== "object") continue
       const showImages = (variant as Record<string, unknown>).show_images
-      if (typeof showImages === "string" && showImages.length > 0) return showImages
-      if (Array.isArray(showImages) && showImages.length > 0) {
-        const first = showImages[0]
-        if (typeof first === "string") return first
-        if (first && typeof first === "object" && typeof (first as Record<string, unknown>).src === "string") return (first as Record<string, unknown>).src as string
+      const src = readImageSrc(showImages)
+      if (src) pushMockup(src)
+    }
+  }
+
+  return items
+}
+
+export function mergeProductGalleryWithS2bMockups(
+  existingGallery: unknown,
+  mockups: S2bProductGalleryItem[]
+): S2bProductGalleryItem[] {
+  const preserved: S2bProductGalleryItem[] = []
+  if (Array.isArray(existingGallery)) {
+    for (const item of existingGallery) {
+      if (!item || typeof item !== "object") continue
+      const row = item as Record<string, unknown>
+      if (row.kind === "mockup") continue
+      if (
+        typeof row.id === "string" &&
+        typeof row.label === "string" &&
+        typeof row.url === "string" &&
+        (row.kind === "design" || row.kind === "print_file")
+      ) {
+        preserved.push({
+          id: row.id,
+          label: row.label,
+          url: row.url,
+          kind: row.kind,
+        })
       }
     }
   }
-  const showImages = productDetail.show_images
-  if (Array.isArray(showImages) && showImages.length > 0) {
-    const block = showImages[0] as Record<string, unknown> | undefined
-    if (block) {
-      const images = block.images as Array<Record<string, unknown>> | undefined
-      if (Array.isArray(images) && images.length > 0 && typeof images[0]?.src === "string") return images[0].src as string
-    }
-  }
-  return null
+  return [...mockups, ...preserved]
 }
 
 // ---- Standalone (backward compat) ----

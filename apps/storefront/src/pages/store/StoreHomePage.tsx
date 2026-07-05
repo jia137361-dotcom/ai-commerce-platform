@@ -11,20 +11,23 @@ import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import {
   fetchProductCategories,
   fetchProducts,
+  fetchMarketplaceStoreBySlug,
   fetchStoreSettings,
   fetchStoreReviews,
+  setActiveBuyerStoreId,
   type BuyerReviewsSummary,
   type BuyerCategory,
   type BuyerStoreSettings,
   type DataSource,
 } from "../../lib/buyer-api"
+import { enterLegacyDefaultStoreContext, getLegacyDefaultStoreId } from "../../lib/buyer-store-context"
 import type { StoreProduct } from "../../lib/mock-data"
 
-type StoreHomePageProps = { cartCount: number }
+type StoreHomePageProps = { cartCount: number; storeSlug?: string }
 type Notice = { key: string; message: string }
 
 const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
+  storeId: getLegacyDefaultStoreId(),
   brandName: "Citigoo Official Store",
   galleryUrls: [],
   metadata: {},
@@ -42,7 +45,7 @@ function StoreFooter() {
   )
 }
 
-export function StoreHomePage({ cartCount }: StoreHomePageProps) {
+export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [categories, setCategories] = useState<BuyerCategory[]>([{ id: "all", name: "All items" }])
   const [products, setProducts] = useState<StoreProduct[]>([])
@@ -87,9 +90,27 @@ export function StoreHomePage({ cartCount }: StoreHomePageProps) {
 
   useEffect(() => {
     let active = true
-    void loadStore(() => active)
-    return () => { active = false }
-  }, [loadStore, loadVersion])
+    const boot = async () => {
+      setLoading(true)
+      if (storeSlug) {
+        const storeResult = await fetchMarketplaceStoreBySlug(storeSlug)
+        if (!active) return
+        if (!storeResult.data) {
+          setLoading(false)
+          setNotices([{ key: "store-missing", message: storeResult.error ?? "Store not found" }])
+          return
+        }
+        setActiveBuyerStoreId(storeResult.data.storeId)
+      } else {
+        enterLegacyDefaultStoreContext()
+      }
+      await loadStore(() => active)
+    }
+    void boot()
+    return () => {
+      active = false
+    }
+  }, [loadStore, loadVersion, storeSlug])
 
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab")

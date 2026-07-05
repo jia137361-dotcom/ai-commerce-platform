@@ -95,6 +95,9 @@ export const buildAiJobPayload = (body: Record<string, unknown>): AiGenerationPa
     typeof body.marketplace_category === "string" ? body.marketplace_category : null,
   marketplace_category_label:
     typeof body.marketplace_category_label === "string" ? body.marketplace_category_label : null,
+  style_preset: typeof body.style_preset === "string" ? body.style_preset : null,
+  style_preset_label:
+    typeof body.style_preset_label === "string" ? body.style_preset_label : null,
   medusa_product_id: typeof body.medusa_product_id === "string" ? body.medusa_product_id : null,
   medusa_variant_id:
     typeof body.medusa_variant_id === "string" ? body.medusa_variant_id : null,

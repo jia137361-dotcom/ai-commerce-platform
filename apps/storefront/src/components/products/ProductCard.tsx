@@ -8,7 +8,8 @@ type ProductCardProps = {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
-  const href = `/products/${encodeURIComponent(product.id)}`
+  const storeQuery = product.storeId ? `?store=${encodeURIComponent(product.storeId)}` : ""
+  const href = `/products/${encodeURIComponent(product.id)}${storeQuery}`
   const available = Boolean(product.isCartAddable && product.medusaVariantId)
   const rating = product.averageRating ? product.averageRating.toFixed(1) : null
 
@@ -26,7 +27,7 @@ export function ProductCard({ product }: ProductCardProps) {
         {!available ? <StatusBadge tone="neutral">Unavailable</StatusBadge> : null}
       </a>
       <div className="buyer-shop-product-body">
-        <p>{product.category || "Uncategorized"}</p>
+        <p>{(product.storeName ?? product.category) || "Uncategorized"}</p>
         <h3><a href={href}>{product.title}</a></h3>
         <div className="buyer-shop-product-meta">
           <span aria-label={rating ? `Rated ${rating} out of 5` : "No ratings yet"}>

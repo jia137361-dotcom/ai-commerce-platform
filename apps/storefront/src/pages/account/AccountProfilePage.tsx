@@ -1,24 +1,18 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { AccountAuthLayout } from "../../components/account/AccountAuthLayout"
 import { AccountAuthRequired } from "../../components/account/AccountAuthRequired"
 import { AccountNavigation } from "../../components/account/AccountNavigation"
 import { AccountProfileForm } from "../../components/account/AccountProfileForm"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
-import { fetchStoreSettings, type BuyerStoreSettings } from "../../lib/buyer-api"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { LoadingState } from "../../components/ui/States"
 
-const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo", metadata: {} }
-
 export function AccountProfilePage({ cartCount }: { cartCount: number }) {
-  const [settings, setSettings] = useState(fallbackSettings)
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const auth = useBuyerAuth()
-
-  useEffect(() => {
-    void fetchStoreSettings().then((result) => setSettings(result.data))
-  }, [])
 
   const submit = async (input: { firstName?: string; lastName?: string; phone?: string }) => {
     setSaving(true)
@@ -35,7 +29,7 @@ export function AccountProfilePage({ cartCount }: { cartCount: number }) {
   }
 
   return (
-    <AccountAuthLayout settings={settings} cartCount={cartCount}>
+    <AccountAuthLayout settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode}>
       {auth.isLoading ? (
         <LoadingState label="Loading buyer profile..." />
       ) : !auth.customer ? (

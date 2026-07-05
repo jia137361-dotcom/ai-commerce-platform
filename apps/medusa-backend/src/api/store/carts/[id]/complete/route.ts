@@ -23,6 +23,7 @@ import { pushOrderToS2bdiy } from "../../../../../lib/s2bdiy/push-s2b-order"
 import { isS2bdiyEnabled } from "../../../../../modules/suppliers/s2bdiy/config"
 import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
 import { resolvePaymentMethodLabelFromClientSecret } from "../../../../../lib/stripe-payment-method-label"
+import { applyPlatformCheckoutMetadata } from "../../../../../lib/marketplace/platform-checkout"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
@@ -76,7 +77,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     const cartId = req.params.id as string
-    const body = (req.body || {}) as { payment_provider_id?: string }
+    const body = (req.body || {}) as {
+      payment_provider_id?: string
+      platform_checkout_id?: string
+      platform_checkout_index?: number
+      platform_checkout_count?: number
+    }
     const providerId = body.payment_provider_id?.trim() || DEFAULT_PAYMENT_PROVIDER
 
     const cartModule = req.scope.resolve(Modules.CART)
@@ -212,6 +218,17 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
     await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
+    if (
+      body.platform_checkout_id &&
+      typeof body.platform_checkout_index === "number" &&
+      typeof body.platform_checkout_count === "number"
+    ) {
+      await applyPlatformCheckoutMetadata(req.scope, orderId, {
+        platform_checkout_id: body.platform_checkout_id.trim(),
+        platform_checkout_index: body.platform_checkout_index,
+        platform_checkout_count: body.platform_checkout_count,
+      })
+    }
     if (paymentMethodLabel) {
       const existingMeta = (completedOrder.metadata ?? {}) as Record<string, unknown>
       await orderModule.updateOrders(orderId, {

@@ -13,7 +13,7 @@ import {
   REVIEW_MAX_IMAGES,
   summarizeProductReviews,
 } from "../../../../../lib/product-reviews"
-import { readOrderFulfillmentStatusMeta } from "../../../../../lib/order-custom-metadata"
+import { resolveBuyerOrderFulfillmentStatus } from "../../../../../lib/order-custom-metadata"
 import { isReceiptConfirmed } from "../../../../../lib/order-receipt-confirmation"
 import {
   getStoreCoreService,
@@ -221,7 +221,7 @@ export const POST = async (
     )
   }
 
-  if (readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null) !== "delivered") {
+  if (resolveBuyerOrderFulfillmentStatus(order.metadata as Record<string, unknown> | null) !== "delivered") {
     return sendError(res, 403, "REVIEW_NOT_ALLOWED", "Reviews are available only after delivery")
   }
   if (!isReceiptConfirmed(order)) {

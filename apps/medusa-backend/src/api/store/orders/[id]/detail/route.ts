@@ -6,7 +6,7 @@ import { enrichOrderWithSummaryTotals, minorMoneyToMajor, readOrderMoney, resolv
 import { enrichOrderLineItemsWithImages, resolveOrderLineItemThumbnail } from "../../../../../lib/order-line-item-display"
 import {
   ORDER_META_PAYMENT_STATUS,
-  readOrderFulfillmentStatusMeta,
+  resolveBuyerOrderFulfillmentStatus,
 } from "../../../../../lib/order-custom-metadata"
 import {
   cancellationResponse,
@@ -219,7 +219,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       email: retrievedOrder.email ?? null,
       status: retrievedOrder.status ?? null,
       payment_status: metadata?.[ORDER_META_PAYMENT_STATUS] ?? null,
-      fulfillment_status: readOrderFulfillmentStatusMeta(metadata),
+      fulfillment_status: resolveBuyerOrderFulfillmentStatus(metadata),
       created_at: retrievedOrder.created_at ?? null,
       currency_code: retrievedOrder.currency_code ?? null,
       items: displayItems.map(normalizeItem),

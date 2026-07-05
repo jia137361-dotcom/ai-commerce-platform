@@ -12,6 +12,10 @@ export type CheckoutSuccessInfo = {
   paymentProviderId?: string
   paymentMethodLabel?: string | null
   paymentStatus?: unknown
+  platformCheckoutId?: string
+  platformCheckoutIndex?: number
+  platformCheckoutCount?: number
+  storeId?: string
 }
 
 const resolvePaymentMethodDisplay = (info: CheckoutSuccessInfo) => {

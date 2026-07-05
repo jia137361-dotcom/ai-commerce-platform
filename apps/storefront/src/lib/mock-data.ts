@@ -36,6 +36,9 @@ export type StoreProduct = {
   reviewCount?: number
   tags?: string[]
   variants?: BuyerProductVariant[]
+  storeId?: string
+  storeName?: string
+  storeSlug?: string
 }
 
 export type BuyerProductVariant = {
@@ -64,6 +67,7 @@ export type CartLineItem = {
   selectedOptions?: SelectedOption[]
   supplierColorId?: string
   supplierSizeId?: string
+  storeId?: string
 }
 
 export type SelectedOption = {

@@ -45,3 +45,4 @@ class GenerateProductResponse(BaseModel):
     seo: SeoPayload
     price_suggestion: float
     mock_mode: bool = False
+    mock_mode_reason: str | None = None

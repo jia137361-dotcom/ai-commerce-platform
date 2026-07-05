@@ -10,7 +10,16 @@ describe("addProductSelectionToCart", () => {
     const addLineItem = jest.fn(async () => cart("cart_existing"))
     const createCart = jest.fn(async () => cart("cart_new"))
 
-    await addProductSelectionToCart({ variantId: "variant_selected", quantity: 3, storageKey: "cart-key", storage, createCart, addLineItem })
+    await addProductSelectionToCart({
+      storeId: "default_store",
+      cartIdentity: "guest:test",
+      variantId: "variant_selected",
+      quantity: 3,
+      storageKey: "cart-key",
+      storage,
+      createCart,
+      addLineItem,
+    })
 
     expect(addLineItem).toHaveBeenCalledTimes(1)
     expect(addLineItem).toHaveBeenCalledWith("cart_existing", "variant_selected", 3)

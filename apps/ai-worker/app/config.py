@@ -104,12 +104,37 @@ def get_settings() -> Settings:
     """Load settings from apps/medusa-backend/.env (re-read each call for dev)."""
     settings = Settings()
     settings.ensure_fal_env()
-    if not settings.mock_generation:
-        provider = (settings.image_gen_provider or "fal").strip().lower()
-        if provider == "openai" and not settings.openai_api_key.strip():
-            settings = settings.model_copy(update={"mock_generation": True})
-        elif provider == "fal" and not settings.fal_key.strip():
-            settings = settings.model_copy(update={"mock_generation": True})
-        elif provider == "dashscope" and not settings.dashscope_api_key.strip():
-            settings = settings.model_copy(update={"mock_generation": True})
+    return settings
+
+
+def resolve_image_generation_mode(settings: Settings | None = None) -> tuple[bool, str | None]:
+    """
+    Returns (use_mock, reason). reason is set when mock is forced despite AI_WORKER_MOCK_GENERATION=false.
+    """
+    cfg = settings or get_settings()
+    if cfg.mock_generation:
+        return True, "AI_WORKER_MOCK_GENERATION=true"
+
+    provider = (cfg.image_gen_provider or "fal").strip().lower()
+    if provider == "openai":
+        if not cfg.openai_api_key.strip():
+            return True, "OPENAI_API_KEY is not set"
+    elif provider == "dashscope":
+        if not cfg.dashscope_api_key.strip():
+            return True, "DASHSCOPE_API_KEY is not set"
+    elif provider == "fal":
+        if not cfg.fal_key.strip():
+            return True, "FAL_KEY is not set"
+    else:
+        return True, f"Unknown IMAGE_GEN_PROVIDER={provider!r}"
+
+    return False, None
+
+
+def get_effective_settings() -> Settings:
+    """Settings with mock_generation resolved from env + provider key availability."""
+    settings = get_settings()
+    use_mock, _reason = resolve_image_generation_mode(settings)
+    if use_mock and not settings.mock_generation:
+        return settings.model_copy(update={"mock_generation": True})
     return settings

@@ -52,4 +52,5 @@ async def generate_product(body: GenerateProductRequest) -> GenerateProductRespo
         ),
         price_suggestion=float(result["price_suggestion"]),
         mock_mode=bool(result.get("mock_mode")),
+        mock_mode_reason=result.get("mock_mode_reason"),
     )

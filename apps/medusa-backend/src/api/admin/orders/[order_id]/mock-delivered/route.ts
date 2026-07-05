@@ -76,6 +76,19 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     }
     await orderModule.updateOrders(orderId, { metadata })
 
+    const refreshed = await orderModule.retrieveOrder(orderId)
+    const refreshedMeta = normalizeOrderMetadata(refreshed.metadata as Record<string, unknown> | null)
+    if (refreshedMeta[ORDER_META_FULFILLMENT_STATUS] !== "delivered") {
+      await orderModule.updateOrders(orderId, {
+        metadata: {
+          ...refreshedMeta,
+          [ORDER_META_FULFILLMENT_STATUS]: "delivered",
+          mock_delivered_at: deliveredAt.toISOString(),
+          mock_delivery_evidence: true,
+        },
+      })
+    }
+
     return res.status(200).json({
       order_id: orderId,
       store_id: storeId,

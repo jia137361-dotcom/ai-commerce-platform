@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 import { Layout } from "./components/Layout"
 import { LoginPage } from "./pages/Login"
+import { RegisterPage } from "./pages/Register"
 import { ProductListPage } from "./pages/Products/ProductList"
 import { EditDraftPage } from "./pages/Products/EditDraft"
 import { OrderListPage } from "./pages/Orders/OrderList"
@@ -21,6 +22,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route
         element={
           <RequireAuth>

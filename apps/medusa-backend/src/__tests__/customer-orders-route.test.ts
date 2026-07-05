@@ -156,6 +156,26 @@ describe("GET /store/customers/me/orders", () => {
     expect(res.status).toHaveBeenCalledWith(401)
   })
 
+  it("allows missing store header when scope=platform", async () => {
+    const { req } = createReq({
+      query: { scope: "platform" },
+      headers: { "x-publishable-api-key": "pk_test" },
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      count: 3,
+      orders: [
+        { order_id: "order_a1" },
+        { order_id: "order_a2" },
+        { order_id: "order_other_store" },
+      ],
+    })
+  })
+
   it("returns only current customer orders for current store", async () => {
     const { req } = createReq()
     const res = createRes()

@@ -12,7 +12,6 @@ import {
   createCustomerAddress,
   deleteCustomerAddress,
   fetchStoreFollowState,
-  fetchStoreSettings,
   listCustomerAddresses,
   readBuyerPreferences,
   updateBuyerPreferences,
@@ -22,12 +21,12 @@ import {
   type BuyerCustomerAddressInput,
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { CHECKOUT_COUNTRIES } from "../checkout/checkout-countries"
 import { customerAddressToInput } from "./account-settings-state"
 
 export type AccountSettingsSlug = "addresses" | "payment-methods" | "country-region" | "currency" | "coupons" | "following"
 
-const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo", metadata: {} }
 const currencies = [
   { code: "usd", label: "USD", symbol: "$" },
   { code: "eur", label: "EUR", symbol: "€" },
@@ -159,8 +158,7 @@ function FollowingList({ settings }: { settings: BuyerStoreSettings }) {
 
 export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; slug: AccountSettingsSlug }) {
   const auth = useBuyerAuth()
-  const [settings, setSettings] = useState(fallbackSettings)
-  useEffect(() => { void fetchStoreSettings().then((result) => setSettings(result.data)) }, [])
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const content = useMemo(() => {
     if (slug === "addresses") return <AddressBook />
     if (slug === "payment-methods") return <PaymentMethodsPanel />
@@ -170,5 +168,5 @@ export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; sl
     return <AccountCouponsEmpty />
   }, [settings, slug])
 
-  return <AccountAuthLayout settings={settings} cartCount={cartCount}>{auth.isLoading ? <LoadingState label="Loading account settings..." /> : !auth.customer ? <AccountAuthRequired /> : <section className="buyer-account-layout"><AccountNavigation customer={auth.customer} onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))} onSwitchAccount={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))} />{content}</section>}</AccountAuthLayout>
+  return <AccountAuthLayout settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode}>{auth.isLoading ? <LoadingState label="Loading account settings..." /> : !auth.customer ? <AccountAuthRequired /> : <section className="buyer-account-layout"><AccountNavigation customer={auth.customer} onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))} onSwitchAccount={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))} />{content}</section>}</AccountAuthLayout>
 }

@@ -11,7 +11,10 @@ import {
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const productId = (req.params.id ?? req.params.product_id) as string
-  const { store_id: storeId } = resolveCurrentStore(req)
+  const query = req.query as { store_id?: string; store?: string }
+  const queryStoreId = query.store_id?.trim() || query.store?.trim()
+  const { store_id: headerStoreId } = resolveCurrentStore(req)
+  const storeId = queryStoreId || headerStoreId
   const storeCoreService = getStoreCoreService(req)
 
   const products = await storeCoreService.listProducts({

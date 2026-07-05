@@ -1,25 +1,18 @@
-import { useEffect, useState } from "react"
 import { AccountAuthLayout } from "../../components/account/AccountAuthLayout"
 import { AccountNavigation } from "../../components/account/AccountNavigation"
 import { AccountAuthRequired } from "../../components/account/AccountAuthRequired"
-import { fetchStoreSettings, type BuyerStoreSettings } from "../../lib/buyer-api"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
 import { LoadingState } from "../../components/ui/States"
 
-const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo", metadata: {} }
-
 export function AccountHomePage({ cartCount }: { cartCount: number }) {
-  const [settings, setSettings] = useState(fallbackSettings)
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const auth = useBuyerAuth()
 
-  useEffect(() => {
-    void fetchStoreSettings().then((result) => setSettings(result.data))
-  }, [])
-
   return (
-    <AccountAuthLayout settings={settings} cartCount={cartCount}>
+    <AccountAuthLayout settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode}>
       {auth.isLoading ? (
         <LoadingState label="Loading buyer account..." />
       ) : !auth.customer ? (

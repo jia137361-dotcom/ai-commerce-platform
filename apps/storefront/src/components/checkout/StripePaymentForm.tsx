@@ -17,12 +17,17 @@ export function StripePaymentForm({
   const elements = useElements()
   const [error, setError] = useState<string>()
   const [confirming, setConfirming] = useState(false)
+  const [elementReady, setElementReady] = useState(false)
 
   const submit = async () => {
-    if (!stripe || !elements || !canSubmit || confirming || placing) return
+    if (!stripe || !elements || !elementReady || !canSubmit || confirming || placing) return
     setConfirming(true)
     setError(undefined)
     try {
+      const { error: submitError } = await elements.submit()
+      if (submitError) {
+        throw new Error(submitError.message || "Stripe payment confirmation failed.")
+      }
       await confirmStripePaymentAndComplete({
         stripe,
         elements,
@@ -38,10 +43,17 @@ export function StripePaymentForm({
 
   return (
     <div className="buyer-checkout-stripe-form">
-      <PaymentElement options={{ layout: "tabs" }} />
+      <PaymentElement
+        options={{ layout: "tabs" }}
+        onReady={() => setElementReady(true)}
+        onLoadError={(event) => {
+          setElementReady(false)
+          setError(event.error.message || "Unable to load the Stripe payment form.")
+        }}
+      />
       <StripeTestModeHint />
       {error ? <p className="buyer-checkout-inline-error" role="alert">{error}</p> : null}
-      <Button loading={confirming || placing} disabled={!stripe || !elements || !canSubmit || confirming || placing} onClick={() => void submit()}>
+      <Button loading={confirming || placing} disabled={!stripe || !elements || !elementReady || !canSubmit || confirming || placing} onClick={() => void submit()}>
         {placing ? "Creating order..." : confirming ? "Confirming payment..." : "Pay with Stripe and place order"}
       </Button>
     </div>

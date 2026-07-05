@@ -9,7 +9,7 @@ import {
   parseOptionalNumber,
   requireText,
 } from "../../api/_helpers/store-core"
-import { getS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { isS2bdiyEnabled } from "../../modules/suppliers/s2bdiy/config"
 import {
   provisionS2bProductForMcProduct,
   resolveS2bIdsFromEnvOrVariant,
@@ -24,6 +24,8 @@ export type AiGenerationPayload = {
   category_ids?: string[]
   marketplace_category?: string | null
   marketplace_category_label?: string | null
+  style_preset?: string | null
+  style_preset_label?: string | null
   medusa_product_id?: string | null
   medusa_variant_id?: string | null
 }
@@ -122,6 +124,20 @@ export async function generateAndCreateDraft(
     parseOptionalNumber(generated.price_suggestion) ??
     price
 
+  const basicProductId =
+    supplierProduct.basic_product_id != null
+      ? String(supplierProduct.basic_product_id)
+      : process.env.S2BDIY_TEST_BASIC_PRODUCT_ID ?? null
+  const supplierSizeId =
+    supplierVariant.supplier_size_id != null
+      ? String(supplierVariant.supplier_size_id)
+      : process.env.S2BDIY_TEST_SIZE_ID ?? null
+  const supplierColorId =
+    supplierVariant.supplier_color_id != null
+      ? String(supplierVariant.supplier_color_id)
+      : process.env.S2BDIY_TEST_COLOR_ID ?? null
+  const viewId = process.env.S2BDIY_TEST_VIEW_ID ?? "1"
+
   const categoryIds = Array.isArray(payload.category_ids) ? payload.category_ids : []
   if (categoryIds.length) {
     const categories = await storeCoreService.listProductCategories({
@@ -160,6 +176,11 @@ export async function generateAndCreateDraft(
     platform_product_id: platformProductId,
     supplier_product_id: supplierProductId,
     supplier_variant_id: supplierVariantId,
+    basic_product_id: basicProductId,
+    supplier_size_id: supplierSizeId,
+    supplier_color_id: supplierColorId,
+    view_id: viewId,
+    design_type: 1,
     medusa_product_id: requireText(payload.medusa_product_id),
     medusa_variant_id: requireText(payload.medusa_variant_id),
     design_image_url: generated.design_image_url,
@@ -175,25 +196,22 @@ export async function generateAndCreateDraft(
       seo: generated.seo ?? {},
       print_position: printPosition,
       ai_worker_mock_mode: generated.mock_mode ?? false,
+      ai_worker_mock_mode_reason:
+        typeof generated.mock_mode_reason === "string" ? generated.mock_mode_reason : null,
       market_confidence: 0.82,
       marketplace_category: payload.marketplace_category ?? null,
       marketplace_category_label: payload.marketplace_category_label ?? null,
+      style_preset: payload.style_preset ?? null,
+      style_preset_label: payload.style_preset_label ?? null,
       gallery: Array.isArray(generated.gallery) ? generated.gallery : [],
       requires_shipping: true,
     },
   })
 
   let s2bProvisionError: string | null = null
-  if (getS2bdiyConfig() && generated.print_file_url) {
+  if (isS2bdiyEnabled() && generated.print_file_url) {
     await report(85, "s2b_provision")
-    const spRows = await storeCoreService.listSupplierProducts({ id: supplierProductId })
-    const sp = spRows[0] as Record<string, unknown> | undefined
-    const basicFromCatalog =
-      sp?.basic_product_id != null ? String(sp.basic_product_id) : null
-    const productForS2b = {
-      ...(product as Record<string, unknown>),
-      ...(basicFromCatalog ? { basic_product_id: basicFromCatalog } : {}),
-    }
+    const productForS2b = product as Record<string, unknown>
     const s2bIds = resolveS2bIdsFromEnvOrVariant(supplierVariant, productForS2b)
     if (s2bIds) {
       try {
@@ -212,6 +230,19 @@ export async function generateAndCreateDraft(
         console.error("S2BDIY provision failed:", error)
       }
     }
+  }
+
+  if (isS2bdiyEnabled() && generated.print_file_url) {
+    const existingMetadata = (product.metadata ?? {}) as Record<string, unknown>
+    await storeCoreService.updateProducts({
+      selector: { id: product.id },
+      data: {
+        metadata: {
+          ...existingMetadata,
+          s2b_provision_error: s2bProvisionError,
+        },
+      },
+    })
   }
 
   const refreshed = await getMcProductById(storeCoreService, product.id, storeId)

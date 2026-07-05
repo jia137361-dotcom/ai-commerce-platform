@@ -11,7 +11,6 @@ import { Card } from "../../components/ui/Card"
 import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
-  fetchStoreSettings,
   getBuyerStoreId,
   getAuthenticatedOrderDetail,
   getOrderDetail,
@@ -19,8 +18,8 @@ import {
   formatBuyerMoney,
   type BuyerOrderDetail,
   type BuyerOrderTracking,
-  type BuyerStoreSettings,
 } from "../../lib/buyer-api"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { hasOrderTrackingData } from "./order-tracking-state"
 
 type OrderTrackingPageProps = {
@@ -28,16 +27,10 @@ type OrderTrackingPageProps = {
   cartCount: number
 }
 
-const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
-  brandName: "Citigoo",
-  metadata: {},
-}
+const checkoutSuccessKey = (storeId?: string) => `citigoo:${storeId ?? getBuyerStoreId()}:checkout_success`
 
-const checkoutSuccessKey = () => `citigoo:${getBuyerStoreId()}:checkout_success`
-
-const readSessionEmail = (orderId: string) => {
-  const raw = window.sessionStorage.getItem(checkoutSuccessKey())
+const readSessionEmail = (orderId: string, storeId?: string) => {
+  const raw = window.sessionStorage.getItem(checkoutSuccessKey(storeId))
   if (!raw) return undefined
   try {
     const parsed = JSON.parse(raw) as { orderId?: string; order_id?: string; email?: string | null }
@@ -51,7 +44,7 @@ const readSessionEmail = (orderId: string) => {
 
 export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps) {
   const auth = useBuyerAuth()
-  const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const [tracking, setTracking] = useState<BuyerOrderTracking | null>(null)
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -61,16 +54,6 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
   const email = auth.customer ? undefined : guestEmail
   const displayId = params.get("display_id") ?? undefined
-
-  useEffect(() => {
-    let active = true
-    void fetchStoreSettings().then((result) => {
-      if (active) setSettings(result.data)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
 
   useEffect(() => {
     let active = true
@@ -120,7 +103,7 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
     <PageShell
       className="buyer-orders-page"
       contentClassName="buyer-orders-main"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
     >
         {loading ? (

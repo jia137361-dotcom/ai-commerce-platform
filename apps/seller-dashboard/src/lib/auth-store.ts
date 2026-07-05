@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { setToken } from "./api-client"
+import { clearSellerStoreId } from "./seller-store-id"
 
 type AuthState = {
   email: string | null
@@ -19,6 +20,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   logout: () => {
     setToken(null)
+    clearSellerStoreId()
     localStorage.removeItem("seller_email")
     set({ email: null })
   },

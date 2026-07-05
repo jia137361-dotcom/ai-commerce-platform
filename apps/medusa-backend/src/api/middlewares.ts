@@ -1,7 +1,22 @@
 import { defineMiddlewares } from "@medusajs/framework/http"
+import { sellerPublicCorsMiddleware } from "../lib/http/seller-public-cors"
+import { sellerAdminGuardMiddleware } from "../lib/platform-admin/seller-admin-guard"
+import { enforceActiveStoreMiddleware } from "../lib/store-context/enforce-active-store"
 
 export default defineMiddlewares({
   routes: [
+    {
+      matcher: "/seller/*",
+      middlewares: [sellerPublicCorsMiddleware],
+    },
+    {
+      matcher: "/admin/*",
+      middlewares: [sellerAdminGuardMiddleware],
+    },
+    {
+      matcher: "/store/*",
+      middlewares: [enforceActiveStoreMiddleware],
+    },
     {
       method: ["POST"],
       matcher: "/admin/store-settings/logo",

@@ -5,9 +5,10 @@ import type { BuyerStoreSettings } from "../../lib/buyer-api"
 type StoreTopBarProps = {
   settings: BuyerStoreSettings
   cartCount: number
+  marketplaceMode?: boolean
 }
 
-export function StoreTopBar({ settings, cartCount }: StoreTopBarProps) {
+export function StoreTopBar({ settings, cartCount, marketplaceMode = false }: StoreTopBarProps) {
   const auth = useBuyerAuth()
   const { locale, toggleLocale, t } = useBuyerLocale()
   const accountHref = auth.customer ? "/account" : "/account/sign-in"
@@ -16,7 +17,7 @@ export function StoreTopBar({ settings, cartCount }: StoreTopBarProps) {
 
   return (
     <header className="buyer-store-topbar">
-      <a className="buyer-store-logo" href="/store" aria-label="Citigoo home">
+      <a className="buyer-store-logo" href="/" aria-label="Citigoo home">
         <span>Citi</span>goo
       </a>
       <div className="buyer-store-ship">
@@ -27,8 +28,8 @@ export function StoreTopBar({ settings, cartCount }: StoreTopBarProps) {
         </div>
       </div>
       <nav className="buyer-store-mainnav" aria-label="Store navigation">
-        <a className="active" href="/store">{t("stores")}</a>
-        <a href="/store?tab=locals">{t("locals")}</a>
+        <a className={marketplaceMode ? "active" : ""} href="/">{t("stores")}</a>
+        {!marketplaceMode ? <a className="active" href={window.location.pathname}>{settings.brandName}</a> : null}
       </nav>
       <div className="buyer-store-actions">
         <a className="buyer-store-account" href={accountHref}>

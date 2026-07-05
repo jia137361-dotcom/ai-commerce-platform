@@ -4,7 +4,17 @@ import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 
-export function CartSummaryCard({ cart, onCheckout, preparing = false }: { cart: StoreCart; onCheckout?: () => void; preparing?: boolean }) {
+export function CartSummaryCard({
+  cart,
+  onCheckout,
+  preparing = false,
+  checkoutLabel = "Proceed to checkout",
+}: {
+  cart: StoreCart
+  onCheckout?: () => void
+  preparing?: boolean
+  checkoutLabel?: string
+}) {
   const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0)
   const checkoutReady = canCheckoutCart(cart)
   return (
@@ -16,8 +26,8 @@ export function CartSummaryCard({ cart, onCheckout, preparing = false }: { cart:
         <div className="total"><dt>Total</dt><dd><MoneyText amount={cart.hasTotal === false ? undefined : cart.total} currencyCode={cart.currencyCode} /></dd></div>
       </dl>
       {!checkoutReady ? <p className="buyer-cart-summary-warning">Resolve unavailable items or missing prices before checkout.</p> : null}
-      <Button href={onCheckout ? undefined : "/checkout"} onClick={onCheckout} disabled={!checkoutReady || preparing}>{preparing ? "Preparing checkout…" : "Proceed to checkout"}</Button>
-      <Button variant="ghost" href="/store">Continue shopping</Button>
+      <Button href={onCheckout ? undefined : "/checkout"} onClick={onCheckout} disabled={!checkoutReady || preparing}>{preparing ? "Preparing checkout…" : checkoutLabel}</Button>
+      <Button variant="ghost" href="/">Continue shopping</Button>
     </Card>
   )
 }

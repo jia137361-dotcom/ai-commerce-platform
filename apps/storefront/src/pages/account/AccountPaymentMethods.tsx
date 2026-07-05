@@ -12,7 +12,7 @@ import {
   setDefaultCustomerPaymentMethod,
   type BuyerPaymentMethod,
 } from "../../lib/buyer-api"
-import { isValidStripePublishableKey } from "../checkout/checkout-payment"
+import { describeStripePublishableKeyIssue, isValidStripePublishableKey } from "../checkout/checkout-payment"
 
 function paymentMethodIcon(method: BuyerPaymentMethod) {
   if (method.walletType === "apple_pay") return ""
@@ -23,6 +23,7 @@ function paymentMethodIcon(method: BuyerPaymentMethod) {
 export function AccountPaymentMethods() {
   const stripePublishableKey = getStripePublishableKey()
   const stripeReady = isValidStripePublishableKey(stripePublishableKey)
+  const stripeKeyIssue = describeStripePublishableKeyIssue(stripePublishableKey)
   const [methods, setMethods] = useState<BuyerPaymentMethod[]>([])
   const [stripeConfigured, setStripeConfigured] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -51,7 +52,7 @@ export function AccountPaymentMethods() {
   const startAdd = async () => {
     setError(undefined)
     if (!stripeReady) {
-      setError("Configure VITE_STRIPE_PK in apps/storefront/.env.local, then restart the storefront.")
+      setError(stripeKeyIssue ?? "Configure VITE_STRIPE_PK in apps/storefront/.env.local, then restart the storefront.")
       return
     }
     if (!stripeConfigured) {
@@ -92,7 +93,7 @@ export function AccountPaymentMethods() {
         <div className="buyer-account-empty-state">
           <span aria-hidden="true">💳</span>
           <h2>Publishable key required</h2>
-          <p>Add VITE_STRIPE_PK=pk_test_... to apps/storefront/.env.local and restart the storefront.</p>
+          <p>{stripeKeyIssue ?? "Add VITE_STRIPE_PK=pk_test_... to apps/storefront/.env.local and restart the storefront."}</p>
         </div>
       ) : adding && setupSecret && stripePromise ? (
         <Elements stripe={stripePromise} options={{ clientSecret: setupSecret, appearance: { theme: "stripe" } }}>

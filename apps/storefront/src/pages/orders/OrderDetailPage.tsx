@@ -17,13 +17,12 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   cancelAuthenticatedOrder,
   createRefundRequest,
-  fetchStoreSettings,
   getBuyerStoreId,
   getAuthenticatedOrderDetail,
   getOrderDetail,
   type BuyerOrderDetail,
-  type BuyerStoreSettings,
 } from "../../lib/buyer-api"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { resolveOrderDetailActions } from "./order-detail-state"
 
 type OrderDetailPageProps = {
@@ -31,16 +30,10 @@ type OrderDetailPageProps = {
   cartCount: number
 }
 
-const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
-  brandName: "Citigoo",
-  metadata: {},
-}
+const checkoutSuccessKey = (storeId?: string) => `citigoo:${storeId ?? getBuyerStoreId()}:checkout_success`
 
-const checkoutSuccessKey = () => `citigoo:${getBuyerStoreId()}:checkout_success`
-
-const readSessionEmail = (orderId: string) => {
-  const raw = window.sessionStorage.getItem(checkoutSuccessKey())
+const readSessionEmail = (orderId: string, storeId?: string) => {
+  const raw = window.sessionStorage.getItem(checkoutSuccessKey(storeId))
   if (!raw) return undefined
   try {
     const parsed = JSON.parse(raw) as { orderId?: string; order_id?: string; email?: string | null }
@@ -54,7 +47,7 @@ const readSessionEmail = (orderId: string) => {
 
 export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const auth = useBuyerAuth()
-  const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
@@ -73,16 +66,6 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const params = new URLSearchParams(window.location.search)
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
   const email = auth.customer ? undefined : guestEmail
-
-  useEffect(() => {
-    let active = true
-    void fetchStoreSettings().then((result) => {
-      if (active) setSettings(result.data)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
 
   useEffect(() => {
     let active = true
@@ -201,7 +184,7 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
     <PageShell
       className="buyer-orders-page"
       contentClassName="buyer-orders-main"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
     >
         {loading ? (

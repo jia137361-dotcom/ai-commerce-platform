@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from PIL import Image, ImageDraw
 
-from app.config import get_settings
+from app.config import get_effective_settings, get_settings, resolve_image_generation_mode
 from app.services.copy_generator import generate_product_copy
 from app.services.image_processing import export_product_gallery, normalize_master_artwork
 from app.services.medusa_client import MedusaClient, MedusaClientError
@@ -23,9 +23,16 @@ async def _mock_design_image(prompt: str, *, width: int, height: int) -> Path:
     settings = get_settings()
     upload_dir = settings.upload_path
     upload_dir.mkdir(parents=True, exist_ok=True)
-    img = Image.new("RGBA", (min(width, 1024), min(height, 1024)), (30, 30, 40, 255))
+    w = min(width, 1024)
+    h = min(height, 1024)
+    img = Image.new("RGBA", (w, h), (255, 248, 240, 255))
     draw = ImageDraw.Draw(img)
-    draw.text((40, 40), prompt[:80], fill=(255, 255, 255, 255))
+    # Brand-orange accent block so mock mode is visibly distinct from failed loads.
+    draw.rectangle((w // 8, h // 8, w * 7 // 8, h * 7 // 8), fill=(255, 102, 0, 255))
+    draw.rectangle((w // 4, h // 4, w * 3 // 4, h * 3 // 4), fill=(255, 255, 255, 230))
+    label = (prompt[:60] + "…") if len(prompt) > 60 else prompt
+    draw.text((w // 4 + 12, h // 2 - 24), "Mock AI Design", fill=(30, 30, 40, 255))
+    draw.text((w // 4 + 12, h // 2 + 8), label or "preview", fill=(80, 80, 90, 255))
     tmp = upload_dir / f"mock_design_{uuid4().hex}.png"
     img.save(tmp, format="PNG")
     return tmp
@@ -41,11 +48,12 @@ async def generate_product_assets(
     base_cost: float | None = None,
     generation_request_id: str | None = None,
 ) -> dict:
-    settings = get_settings()
+    settings = get_effective_settings()
+    use_mock, mock_reason = resolve_image_generation_mode(settings)
     ai_job_id = generation_request_id or f"job_{uuid4().hex[:16]}"
 
     ctx: dict | None = None
-    if not settings.mock_generation:
+    if not use_mock:
         medusa = MedusaClient()
         supplier_payload: dict | None = None
         try:
@@ -131,7 +139,11 @@ async def generate_product_assets(
         artwork_prompt[:200],
     )
 
-    if settings.mock_generation:
+    if use_mock:
+        logger.warning(
+            "AI image generation using mock placeholder (%s)",
+            mock_reason or "mock mode",
+        )
         raw_design_path = await _mock_design_image(
             artwork_prompt or prompt,
             width=int(design_template["design_area_width"]),
@@ -185,5 +197,6 @@ async def generate_product_assets(
         "tags": copy["tags"],
         "seo": copy["seo"],
         "price_suggestion": copy["price_suggestion"],
-        "mock_mode": settings.mock_generation,
+        "mock_mode": use_mock,
+        "mock_mode_reason": mock_reason,
     }

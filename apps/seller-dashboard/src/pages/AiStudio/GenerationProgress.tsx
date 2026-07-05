@@ -18,6 +18,8 @@ type JobResponse = AiJobProgress & {
 
 type ProgressLocationState = {
   prompt?: string
+  styledPrompt?: string
+  styleLabel?: string
   productName?: string
   marketplaceCategory?: string
 }
@@ -31,10 +33,29 @@ export function GenerationProgressPage() {
   const [error, setError] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
   const [showErrorLogs, setShowErrorLogs] = useState(false)
+  const [aiWorkerMock, setAiWorkerMock] = useState<{ active: boolean; reason?: string } | null>(
+    null
+  )
   const state = (location.state ?? {}) as ProgressLocationState
-  const displayPrompt = job?.prompt ?? state.prompt ?? "—"
-  const displayProductName = state.productName ?? "Custom merchandise"
+  const displayPrompt = job?.prompt ?? state.styledPrompt ?? state.prompt ?? "—"
+  const displayProductName = state.productName ?? "White T-shirt"
   const displayCategory = state.marketplaceCategory
+  const displayStyle = state.styleLabel
+
+  useEffect(() => {
+    void fetch("http://127.0.0.1:8001/health")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { mock_generation?: boolean; mock_mode_reason?: string } | null) => {
+        if (!data) return
+        setAiWorkerMock({
+          active: Boolean(data.mock_generation),
+          reason: data.mock_mode_reason || undefined,
+        })
+      })
+      .catch(() => {
+        setAiWorkerMock(null)
+      })
+  }, [])
 
   useEffect(() => {
     if (!jobId) return
@@ -49,9 +70,13 @@ export function GenerationProgressPage() {
     const applyJob = (res: JobResponse) => {
       setJob(res)
       if (res.status === "complete" && res.product_id) {
-        navigate(`/ai-studio/complete/${res.product_id}`, {
+        navigate(`/products/${res.product_id}/edit?review=ai`, {
           replace: true,
-          state: { generation: res.result?.generation, jobId },
+          state: {
+            generation: res.result?.generation,
+            jobId,
+            aiReview: true,
+          },
         })
       }
       if (res.status === "failed") {
@@ -199,6 +224,19 @@ export function GenerationProgressPage() {
         Our neural network is crafting your custom artisanal merchandise design.
       </p>
 
+      {aiWorkerMock?.active ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-medium">真实 AI 生图当前已跳过</p>
+          <p className="mt-1">
+            {aiWorkerMock.reason === "DASHSCOPE_API_KEY is not set"
+              ? "请在 apps/medusa-backend/.env 配置 DASHSCOPE_API_KEY，并重启 npm run dev:full。"
+              : aiWorkerMock.reason
+                ? `原因：${aiWorkerMock.reason}`
+                : "AI Worker 处于 mock 模式，将使用本地占位图而非 DashScope 生图。"}
+          </p>
+        </div>
+      ) : null}
+
       <Card className="mb-8 text-center">
         <div className="mx-auto mb-4 text-3xl text-brand">⏳</div>
         <p className="text-xl font-semibold">Generating…</p>
@@ -217,6 +255,10 @@ export function GenerationProgressPage() {
           <div className="rounded-lg bg-slate-50 p-3 text-sm">
             <p className="text-xs font-semibold uppercase text-slate-400">Your Prompt</p>
             <p className="mt-1 text-slate-700">{displayPrompt}</p>
+          </div>
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
+            <p className="text-xs font-semibold uppercase text-slate-400">Style preset</p>
+            <p className="mt-1">{displayStyle ?? "—"}</p>
           </div>
           <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
             <p className="text-xs font-semibold uppercase text-slate-400">Merchandise category</p>

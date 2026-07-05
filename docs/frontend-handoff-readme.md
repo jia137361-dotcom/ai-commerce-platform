@@ -33,14 +33,24 @@ Use these documents together:
 | AI worker | `http://127.0.0.1:8001` | Local mock or configured AI generation and static generated files |
 | Seller dashboard | `http://127.0.0.1:5173` | Seller/admin frontend |
 | Buyer storefront | `http://127.0.0.1:5174` | Buyer frontend |
+| Platform ops | `http://127.0.0.1:5175` | Cross-store operations console (`/admin/platform/*`) |
 
 Recommended startup order:
 
 1. PostgreSQL and Redis.
 2. Medusa backend.
 3. AI worker when testing AI Studio or generated images.
-4. Buyer storefront and seller dashboard.
+4. Buyer storefront, seller dashboard, and platform ops (`npm run dev:all` starts all four).
 5. Run health checks, then the smoke checklist.
+
+Platform ops first-time setup:
+
+```bash
+cd apps/medusa-backend
+npm run platform:ops:bootstrap   # grants platform_operator to PLATFORM_OPS_OPERATOR_EMAIL
+```
+
+Login at `http://127.0.0.1:5175` with a Medusa admin user that has been bootstrapped as a platform operator.
 
 ## Important machine-local boundaries
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { OrderHistoryAuthRequired } from "../../components/orders/OrderHistoryAuthRequired"
-import { OrderHistoryCard } from "../../components/orders/OrderHistoryCard"
+import { OrderHistoryGroupSection } from "../../components/orders/OrderHistoryGroupSection"
 import { OrderHistoryEmptyState } from "../../components/orders/OrderHistoryEmptyState"
 import { OrderHistoryHeader } from "../../components/orders/OrderHistoryHeader"
 import { OrderHistoryTabs, orderHistoryFilters, type OrderHistoryFilter } from "../../components/orders/OrderHistoryTabs"
@@ -9,35 +9,21 @@ import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
-import { confirmOrderReceived, fetchStoreSettings, getMyOrders, type BuyerOrdersPage, type BuyerStoreSettings } from "../../lib/buyer-api"
+import { confirmOrderReceived, getMyOrders, type BuyerOrdersPage } from "../../lib/buyer-api"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { groupOrdersForHistory } from "./order-history-groups"
 
 type OrderHistoryPageProps = {
   cartCount: number
 }
 
-const fallbackSettings: BuyerStoreSettings = {
-  storeId: "default_store",
-  brandName: "Citigoo",
-  metadata: {},
-}
-
 export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
-  const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
+  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const [ordersPage, setOrdersPage] = useState<BuyerOrdersPage | null>(null)
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState<string | undefined>()
   const [activeFilter, setActiveFilter] = useState<OrderHistoryFilter>(orderHistoryFilters[0])
   const auth = useBuyerAuth()
-
-  useEffect(() => {
-    let active = true
-    void fetchStoreSettings().then((result) => {
-      if (active) setSettings(result.data)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
 
   useEffect(() => {
     let active = true
@@ -53,6 +39,7 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
           limit: 100,
           offset: 0,
           bucket: activeFilter.bucket,
+          scope: "platform",
         })
         if (!active) return
         setOrdersPage(page)
@@ -74,11 +61,13 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
     setActiveFilter(filter)
   }
 
+  const orderGroups = ordersPage?.orders ? groupOrdersForHistory(ordersPage.orders) : []
+
   return (
     <PageShell
       className="buyer-orders-page"
       contentClassName="buyer-orders-main buyer-order-history-main"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
     >
       <OrderHistoryHeader signedInEmail={auth.customer?.email} />
@@ -94,15 +83,17 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
             message={ordersError}
             action={{ label: "Retry", onClick: () => window.location.reload() }}
           />
-        ) : ordersPage?.orders.length ? (
+        ) : orderGroups.length ? (
           <section className="buyer-order-history-list" aria-label="Authenticated order history">
-            {ordersPage.orders.map((order) => (
-              <div key={order.orderId}>
-                <OrderHistoryCard
-                  order={order}
+            {orderGroups.map((group) => (
+              <div key={group.key}>
+                <OrderHistoryGroupSection
+                  group={group}
                   customerEmail={auth.customer?.email}
                   customerName={[auth.customer?.firstName, auth.customer?.lastName].filter(Boolean).join(" ") || undefined}
-                  onConfirmReceipt={async (orderId) => { await confirmOrderReceived(orderId) }}
+                  onConfirmReceipt={async (orderId) => {
+                    await confirmOrderReceived(orderId)
+                  }}
                   onReviewSubmitted={() => window.location.reload()}
                   onRefundSubmitted={() => window.location.reload()}
                 />

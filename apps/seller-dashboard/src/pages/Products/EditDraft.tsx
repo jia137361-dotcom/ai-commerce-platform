@@ -1,9 +1,13 @@
-import { FormEvent, useEffect, useState } from "react"
+import { FormEvent, useEffect, useMemo, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch, ApiError, STOREFRONT_URL } from "../../lib/api-client"
 import { storeProductPath, storeProductPermanentDeletePath } from "../../lib/store-product-api"
 import { buildProductGallery } from "../../lib/product-gallery"
+import {
+  needsS2bProvisionBeforePublish,
+  resolveProductFulfillmentStatus,
+} from "../../lib/product-fulfillment-status"
 import { useToast } from "../../components/ToastProvider"
 import { Badge } from "../../components/ui/Badge"
 import { Button } from "../../components/ui/Button"
@@ -11,6 +15,7 @@ import { Card } from "../../components/ui/Card"
 import { Input, Label, Textarea } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { Skeleton } from "../../components/ui/EmptyState"
+import { ProductEditorPanel } from "../../components/ProductEditorPanel"
 import type { NormalizedProduct, ProductRegionSummary, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type SupplierVariant = {
@@ -26,6 +31,8 @@ type SupplierVariant = {
 type EditLocationState = {
   product?: NormalizedProduct
   generation?: Record<string, unknown>
+  jobId?: string
+  aiReview?: boolean
 }
 
 const toVariantRows = (
@@ -78,6 +85,12 @@ export function EditDraftPage() {
 
   const stateProduct = (location.state as EditLocationState | null)?.product
   const stateGeneration = (location.state as EditLocationState | null)?.generation
+  const stateJobId = (location.state as EditLocationState | null)?.jobId
+  const aiReviewFromQuery = new URLSearchParams(location.search).get("review") === "ai"
+  const aiReview =
+    aiReviewFromQuery ||
+    Boolean((location.state as EditLocationState | null)?.aiReview) ||
+    Boolean(stateGeneration)
 
   const { data, isLoading } = useQuery({
     queryKey: ["product", id],
@@ -129,6 +142,21 @@ export function EditDraftPage() {
   const [supportedRegionIds, setSupportedRegionIds] = useState<string[]>([])
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
 
+  const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
+
+  const { data: jobData } = useQuery({
+    queryKey: ["ai-job", resolvedJobId],
+    enabled: Boolean(resolvedJobId) && Boolean(product) && product.status === "draft",
+    queryFn: () =>
+      apiFetch<{
+        result?: {
+          generation?: Record<string, unknown>
+          s2b_provision_error?: string | null
+        }
+      }>(`/admin/ai/jobs/${resolvedJobId}`),
+    retry: false,
+  })
+
   useEffect(() => {
     const p = data?.product ?? stateProduct
     if (!p) return
@@ -174,10 +202,44 @@ export function EditDraftPage() {
     setVariantsInitialized(true)
   }, [supplierData, product, variants.length, variantsInitialized, price])
 
-  const { mockups, diyAssets } = buildProductGallery(product, stateGeneration, {
-    cacheKey: product?.ai_job_id ?? null,
+  const { mockups, diyAssets } = buildProductGallery(product, stateGeneration ?? jobData?.result?.generation, {
+    cacheKey: resolvedJobId,
+    preferProduct: Boolean(product?.metadata?.gallery),
   })
   const previewOptions = mockups
+
+  const s2bProvisionError =
+    (typeof product?.metadata?.s2b_provision_error === "string"
+      ? product.metadata.s2b_provision_error
+      : null) ??
+    jobData?.result?.s2b_provision_error ??
+    null
+
+  const fulfillmentStatus = useMemo(
+    () => resolveProductFulfillmentStatus(product, { s2bProvisionError }),
+    [product, s2bProvisionError]
+  )
+
+  const styleLabel =
+    typeof product?.metadata?.style_preset_label === "string"
+      ? product.metadata.style_preset_label
+      : typeof stateGeneration?.style_preset_label === "string"
+        ? stateGeneration.style_preset_label
+        : typeof jobData?.result?.generation?.style_preset_label === "string"
+          ? jobData.result.generation.style_preset_label
+          : null
+
+  const aiMockMode =
+    product?.metadata?.ai_worker_mock_mode === true ||
+    jobData?.result?.generation?.mock_mode === true
+
+  const aiMockModeReason =
+    (typeof product?.metadata?.ai_worker_mock_mode_reason === "string"
+      ? product.metadata.ai_worker_mock_mode_reason
+      : null) ??
+    (typeof jobData?.result?.generation?.mock_mode_reason === "string"
+      ? jobData.result.generation.mock_mode_reason
+      : null)
 
   const activePreviewUrl =
     previewOptions.find((option) => option.id === previewKey)?.url ??
@@ -280,6 +342,57 @@ export function EditDraftPage() {
     },
   })
 
+  const provisionS2bMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{
+        provisioned: boolean
+        s2b_provision_error?: string | null
+      }>(`/admin/products/${id}/provision-s2b`, { method: "POST" }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["product", id] })
+      if (res.provisioned) {
+        toast.push("S2BDIY fulfillment linked", "success")
+      } else if (res.s2b_provision_error) {
+        toast.push(res.s2b_provision_error, "error")
+      }
+    },
+    onError: (err: unknown) => {
+      toast.push(formatError(err), "error")
+    },
+  })
+
+  const confirmPublishMutation = useMutation({
+    mutationFn: async () => {
+      await apiFetch(storeProductPath(id!), {
+        method: "PUT",
+        body: JSON.stringify(buildPayload()),
+      })
+      if (needsS2bProvisionBeforePublish(product, { s2bProvisionError })) {
+        const provision = await apiFetch<{
+          provisioned: boolean
+          s2b_provision_error?: string | null
+        }>(`/admin/products/${id}/provision-s2b`, { method: "POST" })
+        if (!provision.provisioned) {
+          throw new ApiError(
+            502,
+            "S2B_PROVISION_FAILED",
+            provision.s2b_provision_error ?? "S2BDIY provisioning failed"
+          )
+        }
+      }
+      return apiFetch(`/admin/products/${id}/publish`, { method: "POST" })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] })
+      queryClient.invalidateQueries({ queryKey: ["product", id] })
+      toast.push("Design confirmed and published to storefront", "success")
+      navigate("/products")
+    },
+    onError: (err: unknown) => {
+      toast.push(formatError(err), "error")
+    },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: () => apiFetch(storeProductPath(id!), { method: "DELETE" }),
     onSuccess: () => navigate("/products"),
@@ -363,8 +476,8 @@ export function EditDraftPage() {
 
   if (isLoading && !stateProduct) {
     return (
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Skeleton className="aspect-square" />
+      <div className="space-y-6">
+        <Skeleton className="h-[min(78vh,920px)] min-h-[560px]" />
         <Skeleton className="h-96" />
       </div>
     )
@@ -383,37 +496,80 @@ export function EditDraftPage() {
   }
 
   const isArchived = product.status === "archived"
+  const isDraft = !isArchived && product.status === "draft"
+  const isAiDraftReview =
+    isDraft &&
+    (aiReview ||
+      product.source === "ai" ||
+      Boolean(product.ai_job_id) ||
+      Boolean(product.platform_product_id) ||
+      fulfillmentStatus.state !== "not_applicable")
+  const useConfirmPublish = isAiDraftReview
   const isBusy =
     saveMutation.isPending ||
     publishMutation.isPending ||
+    confirmPublishMutation.isPending ||
+    provisionS2bMutation.isPending ||
     restoreMutation.isPending ||
     duplicateMutation.isPending
 
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Link to="/products" className="text-slate-500 hover:text-brand">
             ← Back
           </Link>
-          <h1 className="text-2xl font-bold">{isArchived ? "Archived product" : "Edit Draft"}</h1>
+          <div>
+            {isAiDraftReview ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-emerald-600">
+                  <span aria-hidden>✓</span>
+                  <h1 className="text-2xl font-bold text-slate-900">Review AI Design</h1>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  Preview mockups in the editor, edit copy and pricing, then publish.
+                </p>
+                {styleLabel ? (
+                  <p className="mt-2 inline-flex rounded-full bg-brand-light px-3 py-1 text-xs font-medium text-brand">
+                    Style: {styleLabel}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <h1 className="text-2xl font-bold">{isArchived ? "Archived product" : "Edit Draft"}</h1>
+            )}
+          </div>
           <Badge label={product.status} />
         </div>
         <div className="flex gap-2">
           {!isArchived ? (
             <>
-              <Button variant="outline" type="button" onClick={openPreview}>
-                Preview
-              </Button>
-              {product.status === "draft" ? (
-                <Button
-                  disabled={isBusy}
-                  onClick={() => {
-                    if (validateBeforeSave()) publishMutation.mutate()
-                  }}
-                >
-                  {publishMutation.isPending ? "Publishing…" : "Publish"}
+              {!isDraft ? (
+                <Button variant="outline" type="button" onClick={openPreview}>
+                  Preview
                 </Button>
+              ) : null}
+              {product.status === "draft" ? (
+                useConfirmPublish ? (
+                  <Button
+                    disabled={isBusy}
+                    onClick={() => {
+                      if (validateBeforeSave()) confirmPublishMutation.mutate()
+                    }}
+                  >
+                    {confirmPublishMutation.isPending ? "Publishing…" : "Confirm & Publish"}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={isBusy}
+                    onClick={() => {
+                      if (validateBeforeSave()) publishMutation.mutate()
+                    }}
+                  >
+                    {publishMutation.isPending ? "Publishing…" : "Publish"}
+                  </Button>
+                )
               ) : product.is_cart_addable === false ? (
                 <Button
                   disabled={isBusy}
@@ -452,8 +608,33 @@ export function EditDraftPage() {
         </div>
       ) : null}
 
-      <form onSubmit={onSubmit} className="grid gap-8 lg:grid-cols-2">
+      <form
+        onSubmit={onSubmit}
+        className={isDraft ? "flex flex-col gap-6" : "grid gap-8 lg:grid-cols-2"}
+      >
         <div className="space-y-4">
+          {isDraft && id ? (
+            <Card className="overflow-hidden p-0">
+              <div className="border-b bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Product Editor
+              </div>
+              <ProductEditorPanel
+                productId={id}
+                mockups={previewOptions}
+                diyAssets={diyAssets}
+                aiMockMode={aiMockMode}
+                aiMockModeReason={aiMockModeReason}
+                className="p-3 sm:p-4"
+                onDesignSaved={() => {
+                  void queryClient.invalidateQueries({ queryKey: ["product", id] })
+                  toast.push("Design saved in editor", "success")
+                }}
+              />
+            </Card>
+          ) : null}
+
+          {!isDraft && !isArchived ? (
+          <>
           <Card className="overflow-hidden p-0">
             {activePreviewUrl ? (
               <img
@@ -472,6 +653,7 @@ export function EditDraftPage() {
               </div>
             ) : null}
           </Card>
+
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               T-shirt Mockup Preview
@@ -542,6 +724,8 @@ export function EditDraftPage() {
                 ))}
               </div>
             </Card>
+          ) : null}
+          </>
           ) : null}
         </div>
 
@@ -643,6 +827,46 @@ export function EditDraftPage() {
               </div>
             ) : null}
           </div>
+
+          {fulfillmentStatus.state !== "not_applicable" ? (
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-900">S2BDIY Fulfillment</p>
+            <p className="mt-1 text-sm text-slate-500">{fulfillmentStatus.detail}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                  fulfillmentStatus.state === "ready"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : fulfillmentStatus.state === "error"
+                      ? "bg-red-50 text-red-700"
+                      : fulfillmentStatus.state === "pending"
+                        ? "bg-amber-50 text-amber-800"
+                        : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {fulfillmentStatus.label}
+              </span>
+              {fulfillmentStatus.state === "ready" && fulfillmentStatus.s2bProductId ? (
+                <span className="font-mono text-xs text-slate-500">
+                  S2B #{fulfillmentStatus.s2bProductId}
+                </span>
+              ) : null}
+            </div>
+            {isAiDraftReview &&
+            (fulfillmentStatus.state === "pending" || fulfillmentStatus.state === "error") &&
+            fulfillmentStatus.canRetry ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4"
+                disabled={isBusy}
+                onClick={() => provisionS2bMutation.mutate()}
+              >
+                {provisionS2bMutation.isPending ? "Linking S2BDIY…" : "Retry S2BDIY provisioning"}
+              </Button>
+            ) : null}
+          </div>
+          ) : null}
 
           <div className="rounded-lg border border-slate-200 p-4">
             <p className="text-sm font-semibold text-slate-900">Fulfillment</p>
@@ -784,15 +1008,29 @@ export function EditDraftPage() {
               Save as Draft
             </Button>
             {product.status === "draft" ? (
-              <Button
-                type="button"
-                disabled={isBusy}
-                onClick={() => {
-                  if (validateBeforeSave()) publishMutation.mutate()
-                }}
-              >
-                {publishMutation.isPending ? "Publishing…" : "Publish to Storefront"}
-              </Button>
+              useConfirmPublish ? (
+                <Button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => {
+                    if (validateBeforeSave()) confirmPublishMutation.mutate()
+                  }}
+                >
+                  {confirmPublishMutation.isPending
+                    ? "Confirming & publishing…"
+                    : "Confirm & Publish to Storefront"}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => {
+                    if (validateBeforeSave()) publishMutation.mutate()
+                  }}
+                >
+                  {publishMutation.isPending ? "Publishing…" : "Publish to Storefront"}
+                </Button>
+              )
             ) : product.is_cart_addable === false ? (
               <Button
                 type="button"

@@ -5,7 +5,24 @@ import { resolveStripePaymentMethodLabel } from "../../lib/stripe-payment-method
 export const isStripeProviderId = (providerId?: string) => Boolean(providerId?.startsWith("pp_stripe_"))
 
 export const isValidStripePublishableKey = (publishableKey: string) =>
-  publishableKey.startsWith("pk_test_") || publishableKey.startsWith("pk_live_")
+  (publishableKey.startsWith("pk_test_") || publishableKey.startsWith("pk_live_")) &&
+  !/^pk_(test|live)_x+$/i.test(publishableKey) &&
+  publishableKey !== "pk_test_xxx" &&
+  publishableKey !== "pk_replace_me"
+
+export const describeStripePublishableKeyIssue = (publishableKey: string) => {
+  const key = publishableKey.trim()
+  if (!key) {
+    return "Add VITE_STRIPE_PK=pk_test_... to apps/storefront/.env.local and restart the storefront."
+  }
+  if (key.startsWith("sk_test_") || key.startsWith("sk_live_")) {
+    return "VITE_STRIPE_PK must be the Stripe publishable key (pk_test_...), not the secret key (sk_test_...). Copy the Publishable key from Stripe Dashboard → Developers → API keys."
+  }
+  if (!isValidStripePublishableKey(key)) {
+    return "Add a valid Stripe publishable key to VITE_STRIPE_PK (pk_test_... or pk_live_...), then restart the storefront."
+  }
+  return null
+}
 
 export const chooseDefaultPaymentProvider = (
   providers: BuyerPaymentProvider[],

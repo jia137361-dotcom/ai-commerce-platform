@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react"
 import type { StoreCart } from "./lib/mock-data"
-import { fetchCart, getBuyerCartStorageKey, getBuyerStoreId } from "./lib/buyer-api"
 import { CartPage } from "./pages/cart/CartPage"
 import { CheckoutPage } from "./pages/checkout/CheckoutPage"
 import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
+import { PlatformCheckoutPage } from "./pages/checkout/PlatformCheckoutPage"
 import { AccountHomePage } from "./pages/account/AccountHomePage"
 import { AccountProfilePage } from "./pages/account/AccountProfilePage"
 import { RegisterPage } from "./pages/account/RegisterPage"
@@ -19,9 +19,12 @@ import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { DesignerPage } from "./pages/design/DesignerPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
+import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
 import { HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
 import { useBuyerAuth } from "./auth/useBuyerAuth"
-import { getBuyerCartIdentity, removeLegacySharedCartKey } from "./lib/buyer-cart-storage"
+import { countPlatformCartItems } from "./lib/buyer-platform-cart"
+import { getBuyerCartIdentity } from "./lib/buyer-cart-storage"
+import { hydrateBuyerStoreContext, syncRouteStoreContext } from "./lib/buyer-store-context"
 
 function App() {
   const auth = useBuyerAuth()
@@ -29,23 +32,25 @@ function App() {
   const [cartCount, setCartCount] = useState(0)
 
   useEffect(() => {
-    const onPop = () => setPath(window.location.pathname)
+    hydrateBuyerStoreContext()
+    syncRouteStoreContext(window.location.pathname)
+  }, [])
+
+  useEffect(() => {
+    const onPop = () => {
+      const nextPath = window.location.pathname
+      setPath(nextPath)
+      syncRouteStoreContext(nextPath)
+    }
     window.addEventListener("popstate", onPop)
     return () => window.removeEventListener("popstate", onPop)
   }, [])
 
   const refreshCartCount = async () => {
-    const storeId = getBuyerStoreId()
-    removeLegacySharedCartKey(storeId, window.localStorage)
     const identity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
-    const cartId = window.localStorage.getItem(getBuyerCartStorageKey(storeId, identity))
-    if (!cartId) {
-      setCartCount(0)
-      return
-    }
     try {
-      const cart = await fetchCart(cartId)
-      setCartCount(cart.items.reduce((sum, item) => sum + item.quantity, 0))
+      const total = await countPlatformCartItems(window.localStorage, identity)
+      setCartCount(total)
     } catch {
       setCartCount(0)
     }
@@ -85,6 +90,10 @@ function App() {
 
   if (path.startsWith("/checkout/success")) {
     return <CheckoutSuccessPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/checkout/platform")) {
+    return <PlatformCheckoutPage cartCount={cartCount} />
   }
 
   if (path.startsWith("/checkout")) {
@@ -151,7 +160,20 @@ function App() {
     return <PrivacyPage cartCount={cartCount} />
   }
 
-  return <StoreHomePage cartCount={cartCount} />
+  if (path.startsWith("/shops/")) {
+    const slug = decodeURIComponent(path.split("/")[2] ?? "")
+    return <StoreHomePage cartCount={cartCount} storeSlug={slug} />
+  }
+
+  if (path.startsWith("/store")) {
+    return <StoreHomePage cartCount={cartCount} />
+  }
+
+  if (path === "/" || path.startsWith("/?")) {
+    return <MarketplaceHomePage cartCount={cartCount} />
+  }
+
+  return <MarketplaceHomePage cartCount={cartCount} />
 }
 
 export default App
