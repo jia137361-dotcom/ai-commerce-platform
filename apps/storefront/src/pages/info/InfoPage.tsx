@@ -4,9 +4,16 @@ import { StoreFooter } from "../../components/layout/StoreFooter"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { Card } from "../../components/ui/Card"
 import {
+  AboutUsContent,
+  ContactUsContent,
   DraftLegalNotice,
   HelpContent,
+  OrderStatusContent,
+  PaymentMethodContent,
+  PoliciesContent,
   PrivacyContent,
+  RefundAndReplacementContent,
+  ShippingInformationContent,
   StaticPageNavigation,
   TermsContent,
 } from "../../components/info/StaticInfoContent"
@@ -47,6 +54,62 @@ export function HelpPage({ cartCount }: { cartCount: number }) {
   return (
     <InfoPage cartCount={cartCount} title="Help Center">
       <HelpContent />
+    </InfoPage>
+  )
+}
+
+export function ContactUsPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Contact Us">
+      <ContactUsContent />
+    </InfoPage>
+  )
+}
+
+export function ShippingInformationPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Shipping Information">
+      <ShippingInformationContent />
+    </InfoPage>
+  )
+}
+
+export function PaymentMethodPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Payment Method">
+      <PaymentMethodContent />
+    </InfoPage>
+  )
+}
+
+export function OrderStatusInfoPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Order Status">
+      <OrderStatusContent />
+    </InfoPage>
+  )
+}
+
+export function PoliciesPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Policies">
+      <PoliciesContent />
+    </InfoPage>
+  )
+}
+
+export function AboutUsPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="About Us">
+      <AboutUsContent />
+    </InfoPage>
+  )
+}
+
+export function RefundAndReplacementPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Refund and Replacement">
+      <RefundAndReplacementContent />
     </InfoPage>
   )
 }

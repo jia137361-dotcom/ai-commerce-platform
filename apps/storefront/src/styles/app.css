@@ -862,7 +862,7 @@ input {
   width: min(1220px, calc(100% - 32px));
   margin: 0 auto 42px;
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.35fr repeat(4, minmax(0, 1fr));
   gap: 24px;
   border-top: 1px solid #e7e2de;
   padding-top: 28px;
@@ -873,7 +873,7 @@ input {
   display: block;
   margin-bottom: 8px;
   color: #211d1a;
-  font-size: 22px;
+  font-size: 18px;
 }
 
 .store-footer nav,

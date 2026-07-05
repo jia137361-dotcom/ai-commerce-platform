@@ -20,6 +20,8 @@ import StoreNotification from "./models/store-notification"
 import StoreMessage from "./models/store-message"
 import PlatformOperator from "./models/platform-operator"
 import PlatformAuditEvent from "./models/platform-audit-event"
+import WarehouseRegion from "./models/warehouse-region"
+import ShipToRegion from "./models/ship-to-region"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -43,6 +45,8 @@ class StoreCoreModuleService extends MedusaService({
   StoreMessage,
   PlatformOperator,
   PlatformAuditEvent,
+  WarehouseRegion,
+  ShipToRegion,
 }) {}
 
 export default StoreCoreModuleService

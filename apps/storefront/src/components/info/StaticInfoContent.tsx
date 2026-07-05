@@ -75,6 +75,111 @@ export function HelpContent() {
   )
 }
 
+export function ContactUsContent() {
+  return (
+    <InfoSections sections={[
+      {
+        title: "Contact Citigoo",
+        body: <p>For internal staging support, contact the Citigoo team through the approved project support channel. Final public contact methods should be reviewed before production launch.</p>,
+      },
+      {
+        title: "Company address",
+        body: <p>Citigoo Limited, RM 1805, 18/F, Hollywood Plaza, 610 Nathan Road, Kowloon, Hong Kong.</p>,
+      },
+    ]} />
+  )
+}
+
+export function ShippingInformationContent() {
+  return (
+    <InfoSections sections={[
+      {
+        title: "Shipping regions",
+        body: <p>Available shipping destinations are aligned with the supplier logistics catalog. Sanctioned or blocked regions must not accept orders or shipping.</p>,
+      },
+      {
+        title: "Delivery estimates",
+        body: <p>Delivery time depends on product preparation, shipping-from warehouse, destination country or region, and the carrier service available for the order.</p>,
+      },
+    ]} />
+  )
+}
+
+export function PaymentMethodContent() {
+  return (
+    <InfoSections sections={[
+      {
+        title: "Payment methods",
+        body: <p>Checkout payment options depend on the active staging payment provider and the buyer's region. Production payment copy requires final provider confirmation.</p>,
+      },
+      {
+        title: "Payment authorization",
+        body: <p>In the current local demo flow, payment may be authorized without confirmed capture. Do not treat authorization as proof that money was collected.</p>,
+      },
+    ]} />
+  )
+}
+
+export function OrderStatusContent() {
+  return (
+    <InfoSections sections={[
+      {
+        title: "Track an order",
+        body: <p>Signed-in buyers can review order history from their account. Guests can use the order lookup page with their checkout email and order display ID.</p>,
+      },
+      {
+        title: "Supplier fulfillment status",
+        body: <p>Fulfillment and carrier milestones appear after supplier synchronization returns shipment data for the order.</p>,
+      },
+    ]} />
+  )
+}
+
+export function PoliciesContent() {
+  return (
+    <InfoSections sections={[
+      {
+        title: "Policies",
+        body: <p>This page groups Citigoo marketplace policy placeholders for internal staging. Final terms, privacy, copyright, cookie, and acceptable-use policies require legal review.</p>,
+      },
+      {
+        title: "Buyer and seller responsibilities",
+        body: <p>Policy details for marketplace buyers, sellers, suppliers, fulfillment, disputes, and content moderation are not final until approved for production.</p>,
+      },
+    ]} />
+  )
+}
+
+export function AboutUsContent() {
+  return (
+    <InfoSections sections={[
+      {
+        title: "About Citigoo",
+        body: <p>Citigoo is building a marketplace for customizable products, AI-assisted design, and supplier-backed fulfillment workflows.</p>,
+      },
+      {
+        title: "Company",
+        body: <p>Citigoo Limited is located at RM 1805, 18/F, Hollywood Plaza, 610 Nathan Road, Kowloon, Hong Kong.</p>,
+      },
+    ]} />
+  )
+}
+
+export function RefundAndReplacementContent() {
+  return (
+    <InfoSections sections={[
+      {
+        title: "Refund and replacement",
+        body: <p>Refund and replacement requests may be reviewed for product abnormalities, damaged fragile items, package return exceptions, or other after-sales issues.</p>,
+      },
+      {
+        title: "Current staging limitation",
+        body: <p>A submitted request means pending review. It is not proof of provider refund execution, approval, or a completed financial return.</p>,
+      },
+    ]} />
+  )
+}
+
 export function TermsContent() {
   return (
     <InfoSections sections={[

@@ -20,7 +20,18 @@ import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { DesignerPage } from "./pages/design/DesignerPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
-import { HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
+import {
+  AboutUsPage,
+  ContactUsPage,
+  HelpPage,
+  OrderStatusInfoPage,
+  PaymentMethodPage,
+  PoliciesPage,
+  PrivacyPage,
+  RefundAndReplacementPage,
+  ShippingInformationPage,
+  TermsPage,
+} from "./pages/info/InfoPage"
 import { useBuyerAuth } from "./auth/useBuyerAuth"
 import { countPlatformCartItems } from "./lib/buyer-platform-cart"
 import { getBuyerCartIdentity } from "./lib/buyer-cart-storage"
@@ -148,8 +159,36 @@ function App() {
     return <AccountHomePage cartCount={cartCount} />
   }
 
+  if (path.startsWith("/help/contact-us")) {
+    return <ContactUsPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/help/shipping-information")) {
+    return <ShippingInformationPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/help/payment-method")) {
+    return <PaymentMethodPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/help/order-status")) {
+    return <OrderStatusInfoPage cartCount={cartCount} />
+  }
+
   if (path.startsWith("/help")) {
     return <HelpPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/policies")) {
+    return <PoliciesPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/about-us")) {
+    return <AboutUsPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/refund-and-replacement")) {
+    return <RefundAndReplacementPage cartCount={cartCount} />
   }
 
   if (path.startsWith("/terms")) {

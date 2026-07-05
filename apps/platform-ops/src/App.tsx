@@ -7,6 +7,7 @@ import { BuyersPage, BuyerDetailPage } from "./pages/Buyers"
 import { StoresPage, StoreDetailPage } from "./pages/Stores"
 import { OrdersPage, OrderDetailPage } from "./pages/Orders"
 import { ActivityPage } from "./pages/Activity"
+import { LogisticsPage } from "./pages/Logistics"
 import { getToken } from "./lib/api-client"
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="stores/:id" element={<StoreDetailPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="orders/:id" element={<OrderDetailPage />} />
+        <Route path="logistics" element={<LogisticsPage />} />
         <Route path="activity" element={<ActivityPage />} />
       </Route>
     </Routes>

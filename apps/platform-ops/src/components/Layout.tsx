@@ -11,6 +11,7 @@ const NAV = [
   { to: "/buyers", label: "买家" },
   { to: "/stores", label: "店铺" },
   { to: "/orders", label: "订单" },
+  { to: "/logistics", label: "物流" },
   { to: "/activity", label: "活动" },
 ]
 

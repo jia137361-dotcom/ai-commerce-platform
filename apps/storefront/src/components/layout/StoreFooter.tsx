@@ -28,14 +28,27 @@ export function StoreFooter() {
   return (
     <footer className="store-footer">
       <div>
-        <strong>Citigoo</strong>
-        <p>Defining modern commerce through curated products, reliable fulfillment, and protected checkout.</p>
+        <strong>Ciiverse</strong>
+        <p>Citigoo Limited</p>
+        <p>RM 1805, 18/F, Hollywood Plaza, 610 Nathan Road, Kowloon, Hong Kong</p>
+        <p>© 2026 Citigoo Limited</p>
       </div>
-      <nav aria-label="Store footer">
-        <a href="/store">Shopping</a>
-        <a href="/orders/lookup">Order Tracking</a>
-        <a href="/store?tab=about">Shipping & Returns</a>
-        <a href="/store?tab=reviews">Reviews</a>
+      <nav aria-label="Information">
+        <strong>Information</strong>
+        <a href="/about-us">About Us</a>
+        <a href="/policies">Policies</a>
+      </nav>
+      <nav aria-label="Customer Service">
+        <strong>Customer Service</strong>
+        <a href="/refund-and-replacement">Refund and Replacement</a>
+        <a href="/help/shipping-information">Shipping Information</a>
+        <a href="/help/payment-method">Payment Method</a>
+        <a href="/help/order-status">Order Status</a>
+      </nav>
+      <nav aria-label="Help">
+        <strong>Help</strong>
+        <a href="/help">Help Center</a>
+        <a href="/help/contact-us">Contact Us</a>
       </nav>
       <form className="newsletter-form" onSubmit={(event) => void onSubmit(event)}>
         <label htmlFor="newsletter-email">{t("newsletter")}</label>
