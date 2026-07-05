@@ -1,11 +1,62 @@
-import type { ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { SectionHeader } from "../layout/SectionHeader"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
+import { HELP_CATEGORIES, type HelpArticleWithCategory } from "./help-center-content"
 
 type InfoSection = {
   title: string
   body: ReactNode
+}
+
+type ShipToRegion = {
+  id: string
+  zone: string
+  country_region_en: string
+  country_region_zh: string
+  country_code: string
+  phone_code: string | null
+  abbreviation: string
+  enabled: boolean
+  blocked: boolean
+  blocked_reason: string | null
+  sort_order: number
+  raw_json: Record<string, unknown> | null
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+}
+
+type ShipToRegionsResponse = {
+  count: number
+  regions: ShipToRegion[]
+}
+
+const logisticsBackendUrl =
+  (import.meta.env.VITE_MEDUSA_BACKEND_URL as string | undefined)?.trim() ||
+  (import.meta.env.VITE_MEDUSA_BASE_URL as string | undefined)?.trim() ||
+  (import.meta.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL as string | undefined)?.trim() ||
+  "http://127.0.0.1:9000"
+const logisticsPublishableKey =
+  (import.meta.env.VITE_MEDUSA_PUBLISHABLE_KEY as string | undefined)?.trim() ||
+  (import.meta.env.VITE_PUBLISHABLE_API_KEY as string | undefined)?.trim() ||
+  (import.meta.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY as string | undefined)?.trim()
+
+const isMissingPublishableKey = (value?: string) =>
+  !value || value.length === 0 || value === "pk_replace_me"
+
+const groupRegionsByZone = (regions: ShipToRegion[]) => {
+  const groups = new Map<string, ShipToRegion[]>()
+  for (const region of regions) {
+    const zone = region.zone || "Other"
+    groups.set(zone, [...(groups.get(zone) ?? []), region])
+  }
+  return Array.from(groups.entries())
+    .map(([zone, zoneRegions]) => ({
+      zone,
+      regions: zoneRegions.sort((a, b) => a.sort_order - b.sort_order),
+    }))
+    .sort((a, b) => a.zone.localeCompare(b.zone))
 }
 
 function InfoSections({ sections }: { sections: InfoSection[] }) {
@@ -18,6 +69,91 @@ function InfoSections({ sections }: { sections: InfoSection[] }) {
         </Card>
       ))}
     </div>
+  )
+}
+
+function SupportedShippingRegions() {
+  const [regions, setRegions] = useState<ShipToRegion[]>([])
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [error, setError] = useState<string>()
+  const missingKey = isMissingPublishableKey(logisticsPublishableKey)
+
+  useEffect(() => {
+    if (missingKey) {
+      setStatus("error")
+      setError("VITE_MEDUSA_PUBLISHABLE_KEY is missing or still a placeholder.")
+      return
+    }
+
+    const controller = new AbortController()
+    setStatus("loading")
+    setError(undefined)
+
+    fetch(`${logisticsBackendUrl}/store/logistics/ship-to-regions`, {
+      signal: controller.signal,
+      headers: {
+        "x-publishable-api-key": logisticsPublishableKey ?? "",
+      },
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(body?.error?.message ?? response.statusText)
+        }
+        return body as ShipToRegionsResponse
+      })
+      .then((body) => {
+        setRegions(body.regions.filter((region) => region.enabled && !region.blocked))
+        setStatus("success")
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) return
+        setStatus("error")
+        setError(fetchError instanceof Error ? fetchError.message : "Unable to load supported shipping regions.")
+      })
+
+    return () => controller.abort()
+  }, [missingKey])
+
+  const groupedRegions = useMemo(() => groupRegionsByZone(regions), [regions])
+
+  return (
+    <section className="buyer-shipping-regions" aria-label="Supported shipping regions">
+      <header>
+        <div>
+          <p>Supported Shipping Regions</p>
+          <h3>
+            {status === "success"
+              ? `We currently support shipping to ${regions.length} countries and regions.`
+              : "Supported shipping regions"}
+          </h3>
+        </div>
+      </header>
+
+      {status === "loading" || status === "idle" ? (
+        <p className="buyer-shipping-regions-message">Loading supported regions...</p>
+      ) : status === "error" ? (
+        <p className="buyer-shipping-regions-error" role="alert">{error}</p>
+      ) : groupedRegions.length ? (
+        <div className="buyer-shipping-region-zones">
+          {groupedRegions.map((group) => (
+            <article className="buyer-shipping-region-zone" key={group.zone}>
+              <h4>{group.zone}</h4>
+              <div>
+                {group.regions.map((region) => (
+                  <span key={region.id} title={`${region.country_region_en} (${region.abbreviation})`}>
+                    {region.country_region_en}
+                    <small>{region.country_region_zh} · {region.abbreviation}</small>
+                  </span>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="buyer-shipping-regions-message">No supported shipping regions are available yet.</p>
+      )}
+    </section>
   )
 }
 
@@ -42,36 +178,44 @@ export function DraftLegalNotice() {
 
 export function HelpContent() {
   return (
-    <InfoSections sections={[
-      {
-        title: "How to order",
-        body: <p>Browse the store, choose a product, add it to your cart, then review quantities and product details before continuing to checkout.</p>,
-      },
-      {
-        title: "How checkout works",
-        body: <p>Checkout collects buyer contact details, a shipping address, and an available shipping method before placing the order.</p>,
-      },
-      {
-        title: "Payment authorization",
-        body: <p>Current local payment mode authorizes payment but does not capture it. An authorization is not evidence that money was collected.</p>,
-      },
-      {
-        title: "Cancel an order",
-        body: <p>Cancel order may be available before capture and fulfillment. Availability is determined by the current order state and is shown on authenticated order details.</p>,
-      },
-      {
-        title: "Request a refund",
-        body: <p>A refund request means pending review, not money returned. The current local provider has no verified real refund execution.</p>,
-      },
-      {
-        title: "Guest order lookup",
-        body: <p>Guests can use the order display ID and checkout email on the <a href="/orders/lookup">order lookup page</a>. Guest lookup does not expose authenticated cancellation or refund-request actions.</p>,
-      },
-      {
-        title: "Support and contact",
-        body: <p>This is an internal support placeholder. For demo assistance, use <a href="mailto:support@citigoo.example">support@citigoo.example</a>; replace it with an approved support channel before production.</p>,
-      },
-    ]} />
+    <div className="buyer-help-landing">
+      <p className="buyer-help-intro">
+        Find practical guidance for accounts, orders, product design, shipping, payments, after-sales support, AI tools, and platform policies.
+      </p>
+      <div className="buyer-help-category-grid">
+        {HELP_CATEGORIES.map((category) => (
+          <section className="buyer-help-category" key={category.title}>
+            <header>
+              <h2>{category.title}</h2>
+              <p>{category.description}</p>
+            </header>
+            <div className="buyer-help-article-list">
+              {category.articles.map((entry) => (
+                <a className="buyer-help-article-link" href={`/help/${entry.slug}`} key={entry.slug}>
+                  {entry.title}
+                </a>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function HelpArticleContent({ article }: { article: HelpArticleWithCategory }) {
+  return (
+    <div className="buyer-help-article">
+      <p className="buyer-help-category-label">{article.category}</p>
+      <p className="buyer-help-article-intro">{article.intro}</p>
+      <InfoSections sections={article.sections.map((section) => ({
+        title: section.heading,
+        body: <p>{section.body}</p>,
+      }))} />
+      <div className="buyer-help-backlink">
+        <a href="/help">Back to Help Center</a>
+      </div>
+    </div>
   )
 }
 
@@ -92,16 +236,19 @@ export function ContactUsContent() {
 
 export function ShippingInformationContent() {
   return (
-    <InfoSections sections={[
-      {
-        title: "Shipping regions",
-        body: <p>Available shipping destinations are aligned with the supplier logistics catalog. Sanctioned or blocked regions must not accept orders or shipping.</p>,
-      },
-      {
-        title: "Delivery estimates",
-        body: <p>Delivery time depends on product preparation, shipping-from warehouse, destination country or region, and the carrier service available for the order.</p>,
-      },
-    ]} />
+    <>
+      <InfoSections sections={[
+        {
+          title: "Shipping regions",
+          body: <p>Available shipping destinations are aligned with the supplier logistics catalog. Sanctioned or blocked regions must not accept orders or shipping.</p>,
+        },
+        {
+          title: "Delivery estimates",
+          body: <p>Delivery time depends on product preparation, shipping-from warehouse, destination country or region, and the carrier service available for the order.</p>,
+        },
+      ]} />
+      <SupportedShippingRegions />
+    </>
   )
 }
 

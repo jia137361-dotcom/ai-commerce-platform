@@ -23,6 +23,7 @@ import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
 import {
   AboutUsPage,
   ContactUsPage,
+  HelpArticlePage,
   HelpPage,
   OrderStatusInfoPage,
   PaymentMethodPage,
@@ -159,20 +160,24 @@ function App() {
     return <AccountHomePage cartCount={cartCount} />
   }
 
-  if (path.startsWith("/help/contact-us")) {
+  if (path === "/help/contact-us") {
     return <ContactUsPage cartCount={cartCount} />
   }
 
-  if (path.startsWith("/help/shipping-information")) {
+  if (path === "/help/shipping-information") {
     return <ShippingInformationPage cartCount={cartCount} />
   }
 
-  if (path.startsWith("/help/payment-method")) {
+  if (path === "/help/payment-method") {
     return <PaymentMethodPage cartCount={cartCount} />
   }
 
-  if (path.startsWith("/help/order-status")) {
+  if (path === "/help/order-status") {
     return <OrderStatusInfoPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/help/")) {
+    return <HelpArticlePage cartCount={cartCount} slug={decodeURIComponent(path.split("/")[2] ?? "")} />
   }
 
   if (path.startsWith("/help")) {

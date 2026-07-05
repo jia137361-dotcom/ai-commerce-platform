@@ -7,6 +7,7 @@ import {
   AboutUsContent,
   ContactUsContent,
   DraftLegalNotice,
+  HelpArticleContent,
   HelpContent,
   OrderStatusContent,
   PaymentMethodContent,
@@ -17,6 +18,7 @@ import {
   StaticPageNavigation,
   TermsContent,
 } from "../../components/info/StaticInfoContent"
+import { findHelpArticle } from "../../components/info/help-center-content"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { type ReactNode } from "react"
 
@@ -54,6 +56,24 @@ export function HelpPage({ cartCount }: { cartCount: number }) {
   return (
     <InfoPage cartCount={cartCount} title="Help Center">
       <HelpContent />
+    </InfoPage>
+  )
+}
+
+export function HelpArticlePage({ cartCount, slug }: { cartCount: number; slug: string }) {
+  const article = findHelpArticle(slug)
+
+  if (!article) {
+    return (
+      <InfoPage cartCount={cartCount} title="Help Center">
+        <HelpContent />
+      </InfoPage>
+    )
+  }
+
+  return (
+    <InfoPage cartCount={cartCount} title={article.title}>
+      <HelpArticleContent article={article} />
     </InfoPage>
   )
 }

@@ -1,26 +1,7 @@
+import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { PageHeader } from "../components/PageHeader"
-import {
-  DataTable,
-  DataTableCell,
-  DataTableHead,
-  DataTableHeaderCell,
-  DataTableRow,
-  EmptyState,
-  StatusBadge,
-  TableSkeleton,
-} from "../components/ui"
-import { apiFetch } from "../lib/api-client"
-
-type WarehouseRegion = {
-  id: string
-  name_en: string
-  name_zh: string
-  country_code: string | null
-  s2bdiy_count: number | null
-  enabled: boolean
-  notes: string | null
-}
+import { Badge, EmptyState, StatusBadge, TableSkeleton } from "../components/ui"
 
 type ShipToRegion = {
   id: string
@@ -33,109 +14,203 @@ type ShipToRegion = {
   enabled: boolean
   blocked: boolean
   blocked_reason: string | null
+  sort_order: number
+  raw_json: Record<string, unknown> | null
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
 }
 
-const statusFor = (enabled: boolean, blocked?: boolean) =>
-  blocked ? "disabled" : enabled ? "active" : "disabled"
+type ShipToRegionsResponse = {
+  count: number
+  regions: ShipToRegion[]
+}
+
+type GroupedRegions = Array<{
+  zone: string
+  regions: ShipToRegion[]
+}>
+
+const backendUrl =
+  import.meta.env.VITE_MEDUSA_BACKEND_URL ??
+  import.meta.env.VITE_MEDUSA_URL ??
+  "http://127.0.0.1:9000"
+const publishableKey = import.meta.env.VITE_MEDUSA_PUBLISHABLE_KEY
+
+const isMissingKey = (value?: string) =>
+  !value || value.trim().length === 0 || value === "pk_replace_me"
+
+const statusFor = (region: ShipToRegion) =>
+  region.blocked ? "disabled" : region.enabled ? "active" : "disabled"
+
+const regionMatches = (region: ShipToRegion, search: string) => {
+  const needle = search.trim().toLowerCase()
+  if (!needle) return true
+
+  return [
+    region.country_region_en,
+    region.country_region_zh,
+    region.country_code,
+    region.abbreviation,
+    region.zone,
+  ].some((value) => value.toLowerCase().includes(needle))
+}
+
+const groupByZone = (regions: ShipToRegion[]): GroupedRegions => {
+  const groups = new Map<string, ShipToRegion[]>()
+  for (const region of regions) {
+    const zone = region.zone || "Uncategorized"
+    groups.set(zone, [...(groups.get(zone) ?? []), region])
+  }
+  return Array.from(groups.entries())
+    .map(([zone, zoneRegions]) => ({
+      zone,
+      regions: zoneRegions.sort((a, b) => a.sort_order - b.sort_order),
+    }))
+    .sort((a, b) => a.zone.localeCompare(b.zone))
+}
+
+async function fetchShipToRegions(): Promise<ShipToRegionsResponse> {
+  if (isMissingKey(publishableKey)) {
+    throw new Error("VITE_MEDUSA_PUBLISHABLE_KEY is missing or still a placeholder.")
+  }
+
+  const response = await fetch(`${backendUrl}/store/logistics/ship-to-regions`, {
+    headers: {
+      "x-publishable-api-key": publishableKey ?? "",
+    },
+  })
+  const body = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const message = body?.error?.message ?? response.statusText
+    throw new Error(message || "Unable to load ship-to regions.")
+  }
+
+  return body as ShipToRegionsResponse
+}
 
 export function LogisticsPage() {
-  const warehouseQuery = useQuery({
-    queryKey: ["platform-logistics-warehouse-regions"],
-    queryFn: () =>
-      apiFetch<{ regions: WarehouseRegion[]; count: number }>(
-        "/admin/platform/logistics/warehouse-regions"
-      ),
-  })
-  const shipToQuery = useQuery({
-    queryKey: ["platform-logistics-ship-to-regions"],
-    queryFn: () =>
-      apiFetch<{ regions: ShipToRegion[]; count: number }>(
-        "/admin/platform/logistics/ship-to-regions"
-      ),
+  const [search, setSearch] = useState("")
+  const [zoneFilter, setZoneFilter] = useState("all")
+  const missingKey = isMissingKey(publishableKey)
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["store-logistics-ship-to-regions"],
+    queryFn: fetchShipToRegions,
+    enabled: !missingKey,
   })
 
-  const loading = warehouseQuery.isLoading || shipToQuery.isLoading
-  const warehouseRegions = warehouseQuery.data?.regions ?? []
-  const shipToRegions = shipToQuery.data?.regions ?? []
+  const regions = data?.regions ?? []
+  const zones = useMemo(
+    () => Array.from(new Set(regions.map((region) => region.zone))).sort((a, b) => a.localeCompare(b)),
+    [regions]
+  )
+  const filteredRegions = useMemo(
+    () =>
+      regions.filter((region) => {
+        const matchesZone = zoneFilter === "all" || region.zone === zoneFilter
+        return matchesZone && regionMatches(region, search)
+      }),
+    [regions, search, zoneFilter]
+  )
+  const groupedRegions = useMemo(() => groupByZone(filteredRegions), [filteredRegions])
+  const enabledCount = regions.filter((region) => region.enabled).length
+  const blockedCount = regions.filter((region) => region.blocked).length
 
   return (
     <div>
       <PageHeader
         title="物流配置"
-        description="只读查看发货仓库地区和可配送国家/地区。编辑能力留到 Phase 2。"
+        description="只读查看 Store API 返回的可配送国家/地区，用于 Phase 1 验证。"
       />
 
-      {loading ? (
+      {missingKey ? (
+        <EmptyState
+          title="缺少 Publishable Key"
+          description="Set VITE_MEDUSA_PUBLISHABLE_KEY in apps/platform-ops/.env.local and restart Vite."
+        />
+      ) : isLoading ? (
         <TableSkeleton />
+      ) : error instanceof Error ? (
+        <EmptyState title="加载物流地区失败" description={error.message} />
       ) : (
-        <div className="grid gap-8">
-          <section>
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Warehouse regions</h2>
-            {warehouseRegions.length === 0 ? (
-              <EmptyState title="暂无仓库地区" description="运行 logistics bootstrap 后会显示数据。" />
-            ) : (
-              <DataTable>
-                <DataTableHead>
-                  <tr>
-                    <DataTableHeaderCell>Name</DataTableHeaderCell>
-                    <DataTableHeaderCell>Country</DataTableHeaderCell>
-                    <DataTableHeaderCell>S2BDIY count</DataTableHeaderCell>
-                    <DataTableHeaderCell>Status</DataTableHeaderCell>
-                    <DataTableHeaderCell>Notes</DataTableHeaderCell>
-                  </tr>
-                </DataTableHead>
-                <tbody>
-                  {warehouseRegions.map((region) => (
-                    <DataTableRow key={region.id}>
-                      <DataTableCell>
-                        <div className="font-medium text-slate-900">{region.name_en}</div>
-                        <div className="text-xs text-slate-500">{region.name_zh}</div>
-                      </DataTableCell>
-                      <DataTableCell>{region.country_code ?? "—"}</DataTableCell>
-                      <DataTableCell>{region.s2bdiy_count ?? "—"}</DataTableCell>
-                      <DataTableCell><StatusBadge status={statusFor(region.enabled)} /></DataTableCell>
-                      <DataTableCell>{region.notes || "—"}</DataTableCell>
-                    </DataTableRow>
-                  ))}
-                </tbody>
-              </DataTable>
-            )}
+        <div className="grid gap-6">
+          <section className="grid gap-3 rounded-card border border-slate-200 bg-white p-5 shadow-card md:grid-cols-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total regions</p>
+              <p className="mt-1 text-3xl font-bold text-slate-900">{data?.count ?? regions.length}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Enabled</p>
+              <p className="mt-1 text-3xl font-bold text-emerald-700">{enabledCount}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Blocked</p>
+              <p className="mt-1 text-3xl font-bold text-red-600">{blockedCount}</p>
+            </div>
           </section>
 
-          <section>
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Ship-to regions</h2>
-            {shipToRegions.length === 0 ? (
-              <EmptyState title="暂无可配送地区" description="运行 logistics bootstrap 后会显示数据。" />
-            ) : (
-              <DataTable>
-                <DataTableHead>
-                  <tr>
-                    <DataTableHeaderCell>Country / Region</DataTableHeaderCell>
-                    <DataTableHeaderCell>Zone</DataTableHeaderCell>
-                    <DataTableHeaderCell>Code</DataTableHeaderCell>
-                    <DataTableHeaderCell>Phone</DataTableHeaderCell>
-                    <DataTableHeaderCell>Status</DataTableHeaderCell>
-                  </tr>
-                </DataTableHead>
-                <tbody>
-                  {shipToRegions.map((region) => (
-                    <DataTableRow key={region.id}>
-                      <DataTableCell>
-                        <div className="font-medium text-slate-900">{region.country_region_en}</div>
-                        <div className="text-xs text-slate-500">{region.country_region_zh}</div>
-                      </DataTableCell>
-                      <DataTableCell>{region.zone}</DataTableCell>
-                      <DataTableCell>{region.abbreviation}</DataTableCell>
-                      <DataTableCell>{region.phone_code ?? "—"}</DataTableCell>
-                      <DataTableCell>
-                        <StatusBadge status={statusFor(region.enabled, region.blocked)} />
-                      </DataTableCell>
-                    </DataTableRow>
-                  ))}
-                </tbody>
-              </DataTable>
-            )}
+          <section className="grid gap-3 rounded-card border border-slate-200 bg-white p-5 shadow-card md:grid-cols-[1fr_240px]">
+            <label className="grid gap-1 text-sm font-medium text-slate-700">
+              Search
+              <input
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Country, 中国, code, abbreviation, zone"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-700">
+              Zone
+              <select
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+                value={zoneFilter}
+                onChange={(event) => setZoneFilter(event.target.value)}
+              >
+                <option value="all">All zones</option>
+                {zones.map((zone) => (
+                  <option value={zone} key={zone}>{zone}</option>
+                ))}
+              </select>
+            </label>
           </section>
+
+          {groupedRegions.length === 0 ? (
+            <EmptyState title="没有匹配地区" description="Try another search or zone filter." />
+          ) : (
+            groupedRegions.map((group) => (
+              <section className="rounded-card border border-slate-200 bg-white shadow-card" key={group.zone}>
+                <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">{group.zone}</h2>
+                    <p className="text-sm text-slate-500">{group.regions.length} countries and regions</p>
+                  </div>
+                  <Badge label={group.zone} />
+                </header>
+                <div className="grid divide-y divide-slate-100">
+                  {group.regions.map((region) => (
+                    <article className="grid gap-3 px-5 py-4 md:grid-cols-[1.2fr_0.7fr_0.7fr_0.8fr]" key={region.id}>
+                      <div>
+                        <h3 className="font-semibold text-slate-900">{region.country_region_en}</h3>
+                        <p className="text-sm text-slate-500">{region.country_region_zh}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Code</p>
+                        <p className="font-mono text-sm text-slate-700">{region.country_code.toUpperCase()} / {region.abbreviation}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Phone</p>
+                        <p className="text-sm text-slate-700">{region.phone_code ?? "—"}</p>
+                      </div>
+                      <div className="flex items-center md:justify-end">
+                        <StatusBadge status={statusFor(region)} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
         </div>
       )}
     </div>
