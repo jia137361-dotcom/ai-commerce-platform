@@ -11,6 +11,7 @@ import { LoadingState } from "../../components/ui/States"
 import {
   createCustomerAddress,
   deleteCustomerAddress,
+  fetchShipToRegions,
   fetchStoreFollowState,
   listCustomerAddresses,
   readBuyerPreferences,
@@ -19,6 +20,7 @@ import {
   updateStoreFollowState,
   type BuyerCustomerAddress,
   type BuyerCustomerAddressInput,
+  type BuyerShipToRegion,
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
@@ -37,6 +39,48 @@ const currencies = [
   { code: "jpy", label: "JPY", symbol: "¥" },
   { code: "sgd", label: "SGD", symbol: "S$" },
 ]
+
+type RegionOption = Pick<BuyerShipToRegion, "id" | "zone" | "country_region_en" | "country_region_zh" | "country_code" | "abbreviation">
+
+const fallbackShipToRegions: RegionOption[] = CHECKOUT_COUNTRIES.map((country) => ({
+  id: `fallback_${country.code}`,
+  zone: "Supported regions",
+  country_region_en: country.name,
+  country_region_zh: "",
+  country_code: country.code,
+  abbreviation: country.code.toUpperCase(),
+})).sort((a, b) => a.country_region_en.localeCompare(b.country_region_en))
+
+const normalizeCountryCode = (value: string) => value.trim().toLowerCase()
+
+const uniqueRegionOptions = (regions: BuyerShipToRegion[]): RegionOption[] => {
+  const seen = new Set<string>()
+  return regions
+    .filter((region) => region.enabled && !region.blocked)
+    .filter((region) => {
+      const code = normalizeCountryCode(region.country_code)
+      if (!code || seen.has(code)) return false
+      seen.add(code)
+      return true
+    })
+    .map((region) => ({
+      id: region.id,
+      zone: region.zone,
+      country_region_en: region.country_region_en,
+      country_region_zh: region.country_region_zh,
+      country_code: normalizeCountryCode(region.country_code),
+      abbreviation: region.abbreviation,
+    }))
+    .sort((a, b) => a.zone.localeCompare(b.zone) || a.country_region_en.localeCompare(b.country_region_en))
+}
+
+const regionLabel = (region?: RegionOption) =>
+  region?.country_region_en || region?.abbreviation || region?.country_code.toUpperCase() || "United States"
+
+const selectedRegionLabels = (regions: RegionOption[], selectedCodes: string[]) => {
+  const selected = new Set(selectedCodes)
+  return regions.filter((region) => selected.has(region.country_code))
+}
 
 const emptyAddress: BuyerCustomerAddressInput = {
   label: "Home",
@@ -119,28 +163,190 @@ function AddressBook() {
   </SettingsFrame>
 }
 
-function PreferenceList({ kind }: { kind: "country" | "currency" }) {
+function CountryRegionPreferences() {
   const auth = useBuyerAuth()
   const current = readBuyerPreferences(auth.customer)
-  const [selected, setSelected] = useState(kind === "country" ? current.countryCode : current.currencyCode)
+  const [regions, setRegions] = useState<RegionOption[]>(fallbackShipToRegions)
+  const [loading, setLoading] = useState(true)
+  const [usingFallback, setUsingFallback] = useState(false)
+  const [query, setQuery] = useState("")
+  const [selectedCodes, setSelectedCodes] = useState<string[]>(current.countryCodes)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string>()
-  const options = kind === "country" ? CHECKOUT_COUNTRIES.map((entry) => ({ code: entry.code, label: entry.name, symbol: entry.code.toUpperCase() })) : currencies
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    void fetchShipToRegions()
+      .then((result) => {
+        if (!active) return
+        const options = uniqueRegionOptions(result.data)
+        setRegions(options.length ? options : fallbackShipToRegions)
+        setUsingFallback(result.source !== "backend" || !options.length)
+      })
+      .catch(() => {
+        if (!active) return
+        setRegions(fallbackShipToRegions)
+        setUsingFallback(true)
+      })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const availableCodes = new Set(regions.map((region) => region.country_code))
+    const normalizedSelected = selectedCodes.filter((code) => availableCodes.has(code))
+    if (normalizedSelected.join("|") !== selectedCodes.join("|")) setSelectedCodes(normalizedSelected)
+  }, [regions, selectedCodes])
+
+  const selectedSet = useMemo(() => new Set(selectedCodes), [selectedCodes])
+  const selectedRegionIds = regions.filter((region) => selectedSet.has(region.country_code)).map((region) => region.id)
+  const selectedRegions = useMemo(() => selectedRegionLabels(regions, selectedCodes), [regions, selectedCodes])
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredRegions = useMemo(() => {
+    if (!normalizedQuery) return regions
+    return regions.filter((region) => [
+      region.country_region_en,
+      region.country_region_zh,
+      region.country_code,
+      region.abbreviation,
+      region.zone,
+    ].some((value) => value.toLowerCase().includes(normalizedQuery)))
+  }, [normalizedQuery, regions])
+  const groupedRegions = useMemo(() => filteredRegions.reduce<Record<string, RegionOption[]>>((groups, region) => {
+    const zone = region.zone || "Other"
+    groups[zone] = [...(groups[zone] ?? []), region]
+    return groups
+  }, {}), [filteredRegions])
+
+  const toggleRegion = (region: RegionOption) => {
+    const code = region.country_code
+    setMessage(undefined)
+    setSelectedCodes((currentCodes) => {
+      if (currentCodes.includes(code)) {
+        return currentCodes.filter((entry) => entry !== code)
+      }
+      return [...currentCodes, code]
+    })
+  }
+
+  const selectAll = () => {
+    setMessage(undefined)
+    const allCodes = regions.map((region) => region.country_code)
+    setSelectedCodes(allCodes)
+  }
+
+  const clearAll = () => {
+    setMessage(undefined)
+    setSelectedCodes([])
+  }
+
+  const save = async () => {
+    const nextSelected = selectedCodes
+    const nextSelectedRegionIds = regions.filter((region) => nextSelected.includes(region.country_code)).map((region) => region.id)
+    setSelectedCodes(nextSelected)
+    setSaving(true)
+    setMessage(undefined)
+    try {
+      await updateBuyerPreferences({
+        countryCode: "",
+        defaultCountryCode: "",
+        countryCodes: nextSelected,
+        shipToRegionIds: nextSelectedRegionIds,
+        defaultShipToRegionId: undefined,
+      })
+      await auth.refreshCustomer()
+      setMessage("Regions saved to your buyer account.")
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Unable to save regions.") }
+    finally { setSaving(false) }
+  }
+
+  return <SettingsFrame title="Country & region">
+    <div className="buyer-region-preferences">
+      <p className="buyer-account-setting-note">Choose the regions you commonly ship to. You will still select a specific delivery address at checkout.</p>
+      <label className="buyer-region-search">
+        <span>Search country or region</span>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search country or region" />
+      </label>
+      <div className="buyer-region-summary">
+        <div><span>Selected regions</span><strong>{selectedCodes.length} selected</strong></div>
+        <div><span>Checkout rule</span><strong>Address decides</strong></div>
+      </div>
+      <section className="buyer-region-selected-panel">
+        <h2>Selected regions</h2>
+        {selectedRegions.length ? (
+          <div>
+            {selectedRegions.map((region) => (
+              <span key={region.id}>{regionLabel(region)} <small>{region.country_code.toUpperCase()}</small></span>
+            ))}
+          </div>
+        ) : (
+          <p>No regions selected. Select at least one region before adding products to cart.</p>
+        )}
+      </section>
+      {usingFallback ? <p className="buyer-account-warning">Showing a fallback region list because the live ship-to regions could not be loaded.</p> : null}
+      <div className="buyer-region-actions">
+        <Button variant="secondary" onClick={selectAll} disabled={loading || !regions.length}>Select all</Button>
+        <Button variant="ghost" onClick={clearAll} disabled={loading}>Clear all</Button>
+      </div>
+      <div className="buyer-region-list" aria-busy={loading || saving}>
+        {loading ? <LoadingState label="Loading supported regions..." /> : filteredRegions.length ? Object.entries(groupedRegions).map(([zone, zoneRegions]) => (
+          <section key={zone} className="buyer-region-zone">
+            <h2>{zone}</h2>
+            {zoneRegions.map((region) => {
+              const selected = selectedSet.has(region.country_code)
+              return <article key={region.id} className={selected ? "selected" : ""}>
+                <label>
+                  <input type="checkbox" checked={selected} onChange={() => toggleRegion(region)} />
+                  <span>
+                    <strong>{region.country_region_en}</strong>
+                    {region.country_region_zh ? <small>{region.country_region_zh}</small> : null}
+                    <small>{[region.zone, region.country_code.toUpperCase(), region.abbreviation].filter(Boolean).join(" / ")}</small>
+                  </span>
+                </label>
+                {selected ? <span className="buyer-region-selected-badge">Selected</span> : null}
+              </article>
+            })}
+          </section>
+        )) : <p className="buyer-account-empty-inline">No matching regions found.</p>}
+      </div>
+      <footer className="buyer-region-save">
+        <Button loading={saving} onClick={() => void save()}>{saving ? "Saving..." : "Save regions"}</Button>
+      </footer>
+      <p className="buyer-account-setting-note">Preferred regions help browsing and add-to-cart checks. Checkout availability still depends on the actual shipping address and product shipping regions.</p>
+      {message ? <p className={message.startsWith("Regions saved") ? "buyer-account-success" : "buyer-account-error"} role="status">{message}</p> : null}
+    </div>
+  </SettingsFrame>
+}
+
+function CurrencyPreferenceList() {
+  const auth = useBuyerAuth()
+  const current = readBuyerPreferences(auth.customer)
+  const [selected, setSelected] = useState(current.currencyCode)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string>()
 
   const save = async (code: string) => {
     setSelected(code); setSaving(true); setMessage(undefined)
     try {
-      await updateBuyerPreferences(kind === "country" ? { countryCode: code } : { currencyCode: code })
+      await updateBuyerPreferences({ currencyCode: code })
       await auth.refreshCustomer()
       setMessage("Preference saved to your buyer account.")
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Unable to save preference.") }
     finally { setSaving(false) }
   }
 
-  return <SettingsFrame title={kind === "country" ? "Country & region" : "Currency"}>
-    <div className="buyer-preference-list" aria-busy={saving}>{options.map((option) => <button key={option.code} type="button" className={selected === option.code ? "selected" : ""} onClick={() => void save(option.code)}><span>{option.label}</span><small>{option.symbol}</small>{selected === option.code ? <strong aria-label="Selected">✓</strong> : null}</button>)}</div>
-    <p className="buyer-account-setting-note">{kind === "country" ? "Used as the default country for new delivery addresses and checkout. Shipping availability still depends on the cart region." : "Saved as your display preference. Current cart prices and payment remain in the currency supplied by the store region; no exchange rate is invented."}</p>
-    {message ? <p className={message.startsWith("Preference saved") ? "buyer-account-success" : "buyer-account-error"} role="status">{message}</p> : null}
+  return <SettingsFrame title="Currency">
+    <div className="buyer-region-preferences">
+      <p className="buyer-account-setting-note">Choose a display currency preference. Product checkout still uses the currency supplied by the store region.</p>
+      <div className="buyer-region-summary">
+        <div><span>Display currency</span><strong>{selected.toUpperCase()}</strong></div>
+        <div><span>Checkout rule</span><strong>Store currency</strong></div>
+      </div>
+      <div className="buyer-preference-list compact" aria-busy={saving}>{currencies.map((option) => <button key={option.code} type="button" className={selected === option.code ? "selected" : ""} onClick={() => void save(option.code)}><span>{option.label}</span><small>{option.symbol}</small>{selected === option.code ? <strong aria-label="Selected">✓</strong> : null}</button>)}</div>
+      <p className="buyer-account-setting-note">No exchange rate is invented here. Store browsing currency conversion can be added later once the platform has a trusted rate source.</p>
+      {message ? <p className={message.startsWith("Preference saved") ? "buyer-account-success" : "buyer-account-error"} role="status">{message}</p> : null}
+    </div>
   </SettingsFrame>
 }
 
@@ -153,7 +359,7 @@ function FollowingList({ settings }: { settings: BuyerStoreSettings }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   useEffect(() => { void fetchStoreFollowState().then((state) => setFollowing(state.following)).catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load following state.")).finally(() => setLoading(false)) }, [])
-  return <SettingsFrame title="Following stores">{loading ? <LoadingState label="Loading followed stores..." /> : error ? <p className="buyer-account-error">{error}</p> : following ? <div className="buyer-following-list"><article>{settings.logoUrl ? <img src={settings.logoUrl} alt="" /> : <span>{settings.brandName.slice(0, 1)}</span>}<div><h2>{settings.brandName}</h2><p>Following this store</p></div><Button href="/store" variant="secondary">View</Button><Button variant="ghost" onClick={() => void updateStoreFollowState(false).then(() => setFollowing(false))}>Unfollow</Button></article></div> : <div className="buyer-account-empty-state"><span aria-hidden="true">♡</span><h2>No followed stores</h2><p>Stores you follow will appear here.</p><Button href="/store">Browse store</Button></div>}</SettingsFrame>
+  return <SettingsFrame title="Following stores">{loading ? <LoadingState label="Loading followed stores..." /> : error ? <p className="buyer-account-error">{error}</p> : following ? <div className="buyer-following-list"><article>{settings.logoUrl ? <img src={settings.logoUrl} alt="" /> : <span>{settings.brandName.slice(0, 1)}</span>}<div><h2>{settings.brandName}</h2><p>Following this store</p></div><Button href="/" variant="secondary">View stores</Button><Button variant="ghost" onClick={() => void updateStoreFollowState(false).then(() => setFollowing(false))}>Unfollow</Button></article></div> : <div className="buyer-account-empty-state"><span aria-hidden="true">♡</span><h2>No followed stores</h2><p>Stores you follow will appear here.</p><Button href="/">Browse stores</Button></div>}</SettingsFrame>
 }
 
 export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; slug: AccountSettingsSlug }) {
@@ -162,8 +368,8 @@ export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; sl
   const content = useMemo(() => {
     if (slug === "addresses") return <AddressBook />
     if (slug === "payment-methods") return <PaymentMethodsPanel />
-    if (slug === "country-region") return <PreferenceList kind="country" />
-    if (slug === "currency") return <PreferenceList kind="currency" />
+    if (slug === "country-region") return <CountryRegionPreferences />
+    if (slug === "currency") return <CurrencyPreferenceList />
     if (slug === "following") return <FollowingList settings={settings} />
     return <AccountCouponsEmpty />
   }, [settings, slug])

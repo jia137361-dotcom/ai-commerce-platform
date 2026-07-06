@@ -95,13 +95,10 @@ export const syncRouteStoreContext = (pathname: string) => {
     pathname.startsWith("/orders") ||
     pathname.startsWith("/help") ||
     pathname.startsWith("/terms") ||
-    pathname.startsWith("/privacy")
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/store")
   ) {
     enterMarketplaceContext()
     return
-  }
-
-  if (pathname.startsWith("/store")) {
-    enterLegacyDefaultStoreContext()
   }
 }

@@ -25,3 +25,23 @@ scripts/dev3-full-backend-pipeline.local.env
 
 .tmp/
 apps/medusa-backend/static/logos/
+
+# local env/secrets
+.env
+.env.local
+apps/*/.env
+apps/*/.env.local
+
+# local database dumps
+*.dump
+
+# generated ai-worker files
+apps/ai-worker/var/
+
+# generated review/static uploads
+apps/medusa-backend/static/reviews/
+
+# local env backups / staging secrets
+*.env
+*.env.*
+apps/*/.env.*
