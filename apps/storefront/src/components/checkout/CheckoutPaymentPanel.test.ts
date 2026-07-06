@@ -20,4 +20,15 @@ describe("CheckoutPaymentPanel", () => {
     expect(html).toContain("after Medusa returns a valid payment")
     expect(html).not.toContain("Pay with Stripe")
   })
+
+  it("blocks payment setup until checkout prerequisites are ready", () => {
+    const html = renderToStaticMarkup(createElement(CheckoutPaymentPanel, {
+      providers: [{ id: "pp_stripe_stripe", isStripe: true }],
+      selectedProviderId: "pp_stripe_stripe",
+      stripePublishableKey: "pk_test_example",
+      blockedReason: "Select and save a shipping method before adding payment.",
+    }))
+    expect(html).toContain("Select and save a shipping method before adding payment.")
+    expect(html).not.toContain("after Medusa returns a valid payment")
+  })
 })

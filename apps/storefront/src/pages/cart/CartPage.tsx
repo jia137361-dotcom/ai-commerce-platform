@@ -367,7 +367,7 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
                       cart={selectedCart}
                       onCheckout={() => void checkoutStoreGroup(group)}
                       preparing={preparingCheckoutStoreId === group.storeId}
-                      checkoutLabel={`Checkout ${group.storeName}`}
+                      checkoutLabel="Checkout"
                     />
                   ) : null}
                 </div>

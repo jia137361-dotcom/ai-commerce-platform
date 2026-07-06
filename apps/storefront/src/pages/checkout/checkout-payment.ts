@@ -1,6 +1,6 @@
 import type { BuyerPaymentProvider, BuyerPaymentSession } from "../../lib/buyer-api"
-import type { Stripe, StripeElements } from "@stripe/stripe-js"
-import { resolveStripePaymentMethodLabel } from "../../lib/stripe-payment-method"
+import type { PaymentMethod, Stripe, StripeElements } from "@stripe/stripe-js"
+import { formatStripePaymentMethodLabel, resolveStripePaymentMethodLabel } from "../../lib/stripe-payment-method"
 
 export const isStripeProviderId = (providerId?: string) => Boolean(providerId?.startsWith("pp_stripe_"))
 
@@ -16,12 +16,18 @@ export const describeStripePublishableKeyIssue = (publishableKey: string) => {
     return "Add VITE_STRIPE_PK=pk_test_... to apps/storefront/.env.local and restart the storefront."
   }
   if (key.startsWith("sk_test_") || key.startsWith("sk_live_")) {
-    return "VITE_STRIPE_PK must be the Stripe publishable key (pk_test_...), not the secret key (sk_test_...). Copy the Publishable key from Stripe Dashboard → Developers → API keys."
+    return "VITE_STRIPE_PK is using a Stripe secret key. Use the publishable key pk_test_... in the storefront. Keep sk_test_... only in the backend."
   }
-  if (!isValidStripePublishableKey(key)) {
+  if (isValidStripePublishableKey(key)) {
+    return null
+  }
+  if (/^pk_(test|live)_x+$/i.test(key) || key === "pk_test_xxx" || key === "pk_replace_me") {
     return "Add a valid Stripe publishable key to VITE_STRIPE_PK (pk_test_... or pk_live_...), then restart the storefront."
   }
-  return null
+  if (key.startsWith("pk_")) {
+    return "VITE_STRIPE_PK must be the Stripe publishable key pk_test_..., not the Medusa publishable API key."
+  }
+  return "Add a valid Stripe publishable key to VITE_STRIPE_PK (pk_test_... or pk_live_...), then restart the storefront."
 }
 
 export const chooseDefaultPaymentProvider = (
@@ -43,8 +49,18 @@ const COMPLETABLE_STRIPE_STATUSES = new Set(["succeeded", "processing", "require
 export const STRIPE_ORDER_CREATION_FAILED_MESSAGE =
   "Payment succeeded, but order creation failed because shipping validation failed. Please contact support or retry with a new cart."
 
+type StripeWithPaymentMethodLookup = Pick<Stripe, "confirmPayment"> & {
+  retrievePaymentMethod?: (paymentMethod: string) => Promise<{ paymentMethod?: PaymentMethod | null }>
+}
+
+const isProductRegionUnavailableError = (error: unknown) => {
+  const payload = (error as { payload?: { error?: { code?: string } | string } } | null)?.payload
+  const errorPayload = payload?.error
+  return typeof errorPayload === "object" && errorPayload.code === "PRODUCT_REGION_UNAVAILABLE"
+}
+
 export async function confirmStripePaymentAndComplete<T>(input: {
-  stripe: Pick<Stripe, "confirmPayment">
+  stripe: StripeWithPaymentMethodLookup
   elements: StripeElements
   returnUrl: string
   complete: (paymentMethodLabel?: string) => Promise<T>
@@ -60,13 +76,24 @@ export async function confirmStripePaymentAndComplete<T>(input: {
   if (!status || !COMPLETABLE_STRIPE_STATUSES.has(status)) {
     throw new Error(`Stripe payment is not ready to complete${status ? ` (${status})` : ""}.`)
   }
-  const paymentMethodLabel = paymentIntent
+  let paymentMethodLabel = paymentIntent
     ? await resolveStripePaymentMethodLabel(paymentIntent)
     : undefined
+  if (
+    paymentIntent &&
+    typeof paymentIntent.payment_method === "string" &&
+    input.stripe.retrievePaymentMethod
+  ) {
+    const retrieved = await input.stripe.retrievePaymentMethod(paymentIntent.payment_method)
+    if (retrieved.paymentMethod) {
+      paymentMethodLabel = formatStripePaymentMethodLabel(retrieved.paymentMethod)
+    }
+  }
   try {
     const orderResult = await input.complete(paymentMethodLabel)
     return { result: orderResult, paymentMethodLabel }
-  } catch {
+  } catch (error) {
+    if (isProductRegionUnavailableError(error)) throw error
     throw new Error(STRIPE_ORDER_CREATION_FAILED_MESSAGE)
   }
 }

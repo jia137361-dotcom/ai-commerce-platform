@@ -2,6 +2,7 @@ import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { StatusBadge } from "../ui/StatusBadge"
+import type { StoreCart } from "../../lib/mock-data"
 
 export type CheckoutSuccessInfo = {
   orderId: string
@@ -16,6 +17,8 @@ export type CheckoutSuccessInfo = {
   platformCheckoutIndex?: number
   platformCheckoutCount?: number
   storeId?: string
+  shippingAddress?: StoreCart["shippingAddress"]
+  items?: StoreCart["items"]
 }
 
 const resolvePaymentMethodDisplay = (info: CheckoutSuccessInfo) => {
@@ -27,11 +30,18 @@ const resolvePaymentMethodDisplay = (info: CheckoutSuccessInfo) => {
 
 export function CheckoutSuccessSummary({ info, isAuthenticated = false }: { info: CheckoutSuccessInfo; isAuthenticated?: boolean }) {
   const orderLabel = info.displayId ? `#${info.displayId}` : info.orderId
-  const trackingHref = isAuthenticated ? `/account/orders/${encodeURIComponent(info.orderId)}/tracking` : info.email ? `/account/orders/${encodeURIComponent(info.orderId)}/tracking?${new URLSearchParams({ email: info.email }).toString()}` : undefined
   const detailHref = isAuthenticated ? `/account/orders/${encodeURIComponent(info.orderId)}` : info.email ? `/account/orders/${encodeURIComponent(info.orderId)}?${new URLSearchParams({ email: info.email }).toString()}` : undefined
   const stripePayment = info.paymentProviderId?.startsWith("pp_stripe_")
   const returnedPaymentStatus = typeof info.paymentStatus === "string" ? info.paymentStatus : undefined
   const paymentMethodDisplay = resolvePaymentMethodDisplay(info)
+  const address = info.shippingAddress
+  const addressLines = address ? [
+    [address.firstName, address.lastName].filter(Boolean).join(" "),
+    address.address1,
+    address.address2,
+    [address.city, address.province, address.postalCode].filter(Boolean).join(", "),
+    address.countryCode?.toUpperCase(),
+  ].filter(Boolean) : []
   return (
     <Card as="section" className="buyer-checkout-success-card">
       <div className="buyer-checkout-success-icon" aria-hidden="true">✓</div>
@@ -45,10 +55,28 @@ export function CheckoutSuccessSummary({ info, isAuthenticated = false }: { info
         <div><dt>Total</dt><dd><MoneyText amount={info.total} currencyCode={info.currencyCode} /></dd></div>
         <div><dt>Payment method</dt><dd>{paymentMethodDisplay}</dd></div>
       </dl>
+      <div className="buyer-checkout-success-details">
+        <section>
+          <h2>Shipping address</h2>
+          <p>{addressLines.length ? addressLines.map((line) => <span key={line}>{line}<br /></span>) : "Not provided"}</p>
+        </section>
+        <section>
+          <h2>Items</h2>
+          <div className="buyer-checkout-success-items">
+            {(info.items ?? []).map((item) => (
+              <article key={item.id}>
+                <div>{item.imageUrl ? <img src={item.imageUrl} alt="" /> : <span>No image</span>}</div>
+                <span><strong>{item.title}</strong><small>Qty {item.quantity}{item.variantTitle ? ` · ${item.variantTitle}` : ""}</small></span>
+                <MoneyText amount={item.total} currencyCode={info.currencyCode} />
+              </article>
+            ))}
+            {!(info.items ?? []).length ? <p>Order items will be available on the order detail page.</p> : null}
+          </div>
+        </section>
+      </div>
       <div className="buyer-checkout-success-actions">
         {detailHref ? <Button href={detailHref}>View order</Button> : null}
-        {trackingHref ? <Button variant="secondary" href={trackingHref}>Track order</Button> : null}
-        <Button variant="ghost" href="/store">Continue shopping</Button>
+        <Button variant="ghost" href="/">Continue shopping</Button>
       </div>
       <p className="buyer-checkout-success-note">Cancellation remains subject to backend payment and fulfillment checks. This page never derives paid/captured state from frontend-only confirmation.</p>
     </Card>

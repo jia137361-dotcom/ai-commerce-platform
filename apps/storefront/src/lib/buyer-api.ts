@@ -35,6 +35,29 @@ export {
 
 export type DataSource = "backend" | "mock" | "static"
 
+export type BuyerApiErrorPayload = {
+  error?: {
+    code?: string
+    message?: string
+    items?: unknown[]
+  } | string
+}
+
+export type BuyerApiError = Error & {
+  status?: number
+  code?: string
+  payload?: BuyerApiErrorPayload
+}
+
+export const buyerApiErrorCode = (error: unknown) => {
+  const payload = (error as Partial<BuyerApiError> | null)?.payload
+  const errorPayload = payload?.error
+  return typeof errorPayload === "object" ? errorPayload.code : undefined
+}
+
+export const isProductRegionUnavailableError = (error: unknown) =>
+  buyerApiErrorCode(error) === "PRODUCT_REGION_UNAVAILABLE"
+
 export type BuyerStoreSettings = {
   storeId: string
   brandName: string
@@ -479,6 +502,7 @@ type ApiMyOrderPreviewItem = {
   thumbnail?: string | null
   quantity?: number
   product_id?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 type ApiMyOrder = {
@@ -748,6 +772,7 @@ export type BuyerOrderSummary = {
     thumbnail?: string | null
     quantity: number
     productId?: string | null
+    metadata?: Record<string, unknown> | null
   }>
   reviewEligible?: boolean
   reviewCompleted?: boolean
@@ -785,7 +810,7 @@ export const marketplaceBuyerSettings: BuyerStoreSettings = {
 
 const fallbackSettings: BuyerStoreSettings = {
   storeId: getLegacyDefaultStoreId(),
-  brandName: "Citigoo",
+  brandName: "Store",
   metadata: {},
   galleryUrls: [],
 }
@@ -869,7 +894,7 @@ const storeScopedFetch = async <T>(
 
   if (!response.ok) {
     const body = await response.text()
-    let parsed: { error?: { code?: string; message?: string } | string } | undefined
+    let parsed: BuyerApiErrorPayload | undefined
     try {
       parsed = body ? JSON.parse(body) : undefined
     } catch {
@@ -960,8 +985,10 @@ const apiFetchWithStatus = async <T>(path: string, init: RequestInit = {}): Prom
     if (import.meta.env.DEV) {
       console.warn("[buyer-api] response error", {
         path,
+        method: init.method ?? "GET",
+        request_body: typeof init.body === "string" ? init.body : undefined,
         http_status: response.status,
-        raw_response: body,
+        response_body: body,
       })
     }
     const errorPayload = parsed?.error
@@ -1210,6 +1237,21 @@ const normalizePaymentSession = (session?: ApiPaymentSession): BuyerPaymentSessi
   }
 }
 
+const describeApiError = (error: unknown) => {
+  if (!(error instanceof Error)) return String(error)
+  const apiError = error as BuyerApiError
+  const payload = apiError.payload?.error
+  const code = typeof payload === "object" ? payload.code : apiError.code
+  const message = typeof payload === "object" && payload.message
+    ? payload.message
+    : typeof payload === "string"
+      ? payload
+      : error.message
+  return [apiError.status ? `HTTP ${apiError.status}` : "", code, message]
+    .filter(Boolean)
+    .join(": ")
+}
+
 export const fetchBuyerPageSettings = async (options?: {
   storeId?: string
   marketplace?: boolean
@@ -1242,9 +1284,9 @@ export const fetchStoreSettings = async (options?: {
   marketplace?: boolean
 }) => fetchBuyerPageSettings(options)
 
-export const fetchProductCategories = async (): Promise<LoadResult<BuyerCategory[]>> => {
+export const fetchProductCategories = async (options?: StoreScopedRequestOptions): Promise<LoadResult<BuyerCategory[]>> => {
   try {
-    const payload = await apiFetch<ApiCategories>("/store/product-categories")
+    const payload = await storeScopedFetch<ApiCategories>("/store/product-categories", {}, options)
     const categories = (payload.categories ?? []).map(normalizeCategory)
     return {
       data: [{ id: "all", name: "All", slug: "all", sortOrder: -1 }, ...categories],
@@ -1255,13 +1297,37 @@ export const fetchProductCategories = async (): Promise<LoadResult<BuyerCategory
   }
 }
 
-export const fetchProducts = async (): Promise<LoadResult<StoreProduct[]>> => {
+export const fetchProducts = async (options?: StoreScopedRequestOptions): Promise<LoadResult<StoreProduct[]>> => {
   try {
-    const payload = await apiFetch<ApiProducts>("/store/products")
+    const payload = await storeScopedFetch<ApiProducts>("/store/products", {}, options)
     const products = (payload.products ?? []).map(normalizeBuyerProduct)
     return { data: products, source: "backend" }
   } catch (error) {
     return { data: [], source: "static", error: warnFallback("products", error) }
+  }
+}
+
+export type BuyerShipToRegion = {
+  id: string
+  zone: string
+  country_region_en: string
+  country_region_zh: string
+  country_code: string
+  phone_code: string
+  abbreviation: string
+  enabled: boolean
+  blocked: boolean
+}
+
+export const fetchShipToRegions = async (): Promise<LoadResult<BuyerShipToRegion[]>> => {
+  try {
+    const payload = await apiFetch<{ regions?: BuyerShipToRegion[] }>("/store/logistics/ship-to-regions")
+    return {
+      data: (payload.regions ?? []).filter((region) => region.enabled && !region.blocked),
+      source: "backend",
+    }
+  } catch (error) {
+    return { data: [], source: "static", error: warnFallback("ship-to regions", error) }
   }
 }
 
@@ -1368,6 +1434,7 @@ export const fetchProductReviews = async (productId: string): Promise<LoadResult
 
 export const submitProductReview = async (input: {
   productId: string
+  storeId?: string | null
   email: string
   orderNumber: string
   rating: number
@@ -1377,20 +1444,24 @@ export const submitProductReview = async (input: {
   content?: string
   customerName?: string
   imageUrls?: string[]
-}) => apiFetch<ApiReviews>(`/store/products/${encodeURIComponent(input.productId)}/reviews`, {
-  method: "POST",
-  body: JSON.stringify({
-    email: input.email,
-    order_number: input.orderNumber,
-    rating: input.rating,
-    logistics_rating: input.logisticsRating,
-    overall_rating: input.overallRating,
-    title: input.title,
-    content: input.content,
-    customer_name: input.customerName,
-    image_urls: input.imageUrls ?? [],
-  }),
-})
+}) => storeScopedFetch<ApiReviews>(
+  `/store/products/${encodeURIComponent(input.productId)}/reviews`,
+  {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      order_number: input.orderNumber,
+      rating: input.rating,
+      logistics_rating: input.logisticsRating,
+      overall_rating: input.overallRating,
+      title: input.title,
+      content: input.content,
+      customer_name: input.customerName,
+      image_urls: input.imageUrls ?? [],
+    }),
+  },
+  { storeId: input.storeId ?? undefined }
+)
 
 export const uploadReviewImage = async (input: { fileBase64: string; contentType: string }) => {
   const payload = await apiFetch<{ image_url?: string }>("/store/reviews/upload-image", {
@@ -1406,9 +1477,9 @@ export const uploadReviewImage = async (input: { fileBase64: string; contentType
   return { imageUrl: payload.image_url }
 }
 
-export const fetchStoreReviews = async (): Promise<LoadResult<BuyerReviewsSummary>> => {
+export const fetchStoreReviews = async (options?: StoreScopedRequestOptions): Promise<LoadResult<BuyerReviewsSummary>> => {
   try {
-    const payload = await apiFetch<ApiReviews>("/store/reviews")
+    const payload = await storeScopedFetch<ApiReviews>("/store/reviews", {}, options)
     return { data: normalizeReviews(payload, "store"), source: "backend" }
   } catch (error) {
     return { data: emptyReviews("store"), source: "static", error: warnFallback("store reviews", error) }
@@ -1592,20 +1663,54 @@ export const initializeCartPaymentSession = async (
   cartId: string,
   providerId: string
 ): Promise<BuyerPaymentSession> => {
-  const collectionPayload = await apiFetch<ApiPaymentCollectionResponse>("/store/payment-collections", {
-    method: "POST",
-    body: JSON.stringify({ cart_id: cartId }),
-  })
+  const collectionPath = "/store/payment-collections"
+  const collectionBody = { cart_id: cartId }
+  if (import.meta.env.DEV) {
+    console.info("[checkout-payment] creating payment collection", {
+      path: collectionPath,
+      method: "POST",
+      body: collectionBody,
+    })
+  }
+  let collectionPayload: ApiPaymentCollectionResponse
+  try {
+    collectionPayload = await apiFetch<ApiPaymentCollectionResponse>(collectionPath, {
+      method: "POST",
+      body: JSON.stringify(collectionBody),
+    })
+  } catch (error) {
+    throw Object.assign(
+      new Error(`Unable to create payment collection: ${describeApiError(error)}`),
+      error instanceof Error ? { status: (error as BuyerApiError).status, code: (error as BuyerApiError).code, payload: (error as BuyerApiError).payload } : {}
+    )
+  }
   const collectionId = collectionPayload.payment_collection?.id
   if (!collectionId) throw new Error("Medusa did not return a payment collection for this cart.")
 
-  const sessionPayload = await apiFetch<ApiPaymentCollectionResponse>(
-    `/store/payment-collections/${encodeURIComponent(collectionId)}/payment-sessions`,
-    {
+  const sessionPath = `/store/payment-collections/${encodeURIComponent(collectionId)}/payment-sessions`
+  const sessionBody = { provider_id: providerId }
+  if (import.meta.env.DEV) {
+    console.info("[checkout-payment] creating payment session", {
+      path: sessionPath,
       method: "POST",
-      body: JSON.stringify({ provider_id: providerId }),
-    }
-  )
+      body: sessionBody,
+    })
+  }
+  let sessionPayload: ApiPaymentCollectionResponse
+  try {
+    sessionPayload = await apiFetch<ApiPaymentCollectionResponse>(
+      sessionPath,
+      {
+        method: "POST",
+        body: JSON.stringify(sessionBody),
+      }
+    )
+  } catch (error) {
+    throw Object.assign(
+      new Error(`Unable to create ${providerId} payment session: ${describeApiError(error)}`),
+      error instanceof Error ? { status: (error as BuyerApiError).status, code: (error as BuyerApiError).code, payload: (error as BuyerApiError).payload } : {}
+    )
+  }
   const sessions = sessionPayload.payment_collection?.payment_sessions ?? []
   const session = normalizePaymentSession(sessions.find((candidate) => candidate.provider_id === providerId))
   if (!session) throw new Error("Medusa did not return the selected payment session.")
@@ -1761,7 +1866,8 @@ export const getMyOrders = async ({
         title: item.title ?? "Untitled item",
         thumbnail: resolveOrderItemThumbnailUrl(item.thumbnail),
         quantity: item.quantity ?? 0,
-        productId: item.product_id ?? null,
+        productId: item.product_id ?? readString(item.metadata?.mc_product_id),
+        metadata: item.metadata ?? null,
       })),
       reviewEligible: Boolean(order.review_eligible),
       reviewCompleted: Boolean(order.review_completed),
@@ -1794,10 +1900,11 @@ export const getMyOrders = async ({
   }
 }
 
-export const confirmOrderReceived = async (orderId: string) => {
-  return apiFetch<{ order_id: string; status: string; confirmed_at: string }>(
+export const confirmOrderReceived = async (orderId: string, options?: { storeId?: string | null }) => {
+  return storeScopedFetch<{ order_id: string; status: string; confirmed_at: string }>(
     `/store/customers/me/orders/${encodeURIComponent(orderId)}/confirm-received`,
-    { method: "POST" }
+    { method: "POST" },
+    { storeId: options?.storeId ?? undefined }
   )
 }
 
@@ -1834,11 +1941,15 @@ const normalizeSupplierOrderTracking = (supplierOrder: ApiSupplierOrderTracking)
   lastSyncedAt: supplierOrder.last_synced_at ?? null,
 })
 
-export const getOrderTracking = async (orderId: string, email?: string): Promise<BuyerOrderTracking> => {
+export const getOrderTracking = async (orderId: string, email?: string, options?: { storeId?: string | null }): Promise<BuyerOrderTracking> => {
   const params = new URLSearchParams()
   if (email) params.set("email", email.trim().toLowerCase())
   const query = params.toString()
-  const payload = await apiFetch<ApiOrderTrackingResponse>(`/store/orders/${encodeURIComponent(orderId)}/tracking${query ? `?${query}` : ""}`)
+  const payload = await storeScopedFetch<ApiOrderTrackingResponse>(
+    `/store/orders/${encodeURIComponent(orderId)}/tracking${query ? `?${query}` : ""}`,
+    {},
+    { storeId: options?.storeId ?? undefined }
+  )
   const shipments = (payload.shipments ?? []).map(normalizeShipment)
   const supplierOrders = (payload.supplier_orders ?? []).map(normalizeSupplierOrderTracking)
   return {
@@ -1853,17 +1964,23 @@ export const getOrderTracking = async (orderId: string, email?: string): Promise
   }
 }
 
-export const getOrderDetail = async (orderId: string, email?: string): Promise<BuyerOrderDetail> => {
+export const getOrderDetail = async (orderId: string, email?: string, options?: { storeId?: string | null }): Promise<BuyerOrderDetail> => {
   const params = new URLSearchParams()
   if (email) params.set("email", email.trim().toLowerCase())
   const query = params.toString()
-  const payload = await apiFetch<ApiOrderDetailResponse>(`/store/orders/${encodeURIComponent(orderId)}/detail${query ? `?${query}` : ""}`)
+  const payload = await storeScopedFetch<ApiOrderDetailResponse>(
+    `/store/orders/${encodeURIComponent(orderId)}/detail${query ? `?${query}` : ""}`,
+    {},
+    { storeId: options?.storeId ?? undefined }
+  )
   return normalizeOrderDetail(payload, orderId)
 }
 
-export const getAuthenticatedOrderDetail = async (orderId: string): Promise<BuyerOrderDetail> => {
-  const payload = await apiFetch<ApiOrderDetailResponse>(
-    `/store/customers/me/orders/${encodeURIComponent(orderId)}`
+export const getAuthenticatedOrderDetail = async (orderId: string, options?: { storeId?: string | null }): Promise<BuyerOrderDetail> => {
+  const payload = await storeScopedFetch<ApiOrderDetailResponse>(
+    `/store/customers/me/orders/${encodeURIComponent(orderId)}`,
+    {},
+    { storeId: options?.storeId ?? undefined }
   )
   return normalizeOrderDetail(payload, orderId)
 }
@@ -2081,9 +2198,21 @@ export const updateBuyerPreferences = async (input: Partial<BuyerPreferences>) =
   const current = await getCurrentCustomer()
   if (!current) throw new Error("Sign in to save account preferences.")
   const previous = readBuyerPreferences(current)
-  const next = {
-    country_code: (input.countryCode ?? previous.countryCode).toLowerCase(),
+  const countryCode = (input.defaultCountryCode ?? input.countryCode ?? previous.defaultCountryCode).toLowerCase()
+  const countryCodes = (input.countryCodes ?? previous.countryCodes)
+    .map((code) => code.toLowerCase())
+    .filter(Boolean)
+  const shipToRegionIds = input.shipToRegionIds ?? previous.shipToRegionIds
+  const selectedCountryCodes = countryCodes.length
+    ? Array.from(new Set(countryCode && !countryCodes.includes(countryCode) ? [countryCode, ...countryCodes] : countryCodes))
+    : []
+  const next: Record<string, unknown> = {
+    country_code: countryCode || null,
+    country_codes: selectedCountryCodes,
+    default_country_code: countryCode || null,
     currency_code: (input.currencyCode ?? previous.currencyCode).toLowerCase(),
+    ship_to_region_ids: shipToRegionIds,
+    default_ship_to_region_id: input.defaultShipToRegionId ?? previous.defaultShipToRegionId ?? null,
   }
   const payload = await apiFetch<ApiCustomerResponse>("/store/customers/me", {
     method: "POST",

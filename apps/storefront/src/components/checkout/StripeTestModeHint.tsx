@@ -1,4 +1,3 @@
-import { getStripePublishableKey } from "../../lib/buyer-api"
 import { isValidStripePublishableKey } from "../../pages/checkout/checkout-payment"
 
 const TEST_CARDS = [
@@ -8,9 +7,8 @@ const TEST_CARDS = [
   { label: "需 3DS 验证", number: "4000 0025 0000 3155" },
 ] as const
 
-export function StripeTestModeHint() {
-  const key = getStripePublishableKey()
-  if (!isValidStripePublishableKey(key) || !key.startsWith("pk_test_")) return null
+export function StripeTestModeHint({ stripePublishableKey = "" }: { stripePublishableKey?: string }) {
+  if (!isValidStripePublishableKey(stripePublishableKey) || !stripePublishableKey.startsWith("pk_test_")) return null
 
   return (
     <details className="buyer-stripe-test-hint">

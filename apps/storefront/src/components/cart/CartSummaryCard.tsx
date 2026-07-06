@@ -8,7 +8,7 @@ export function CartSummaryCard({
   cart,
   onCheckout,
   preparing = false,
-  checkoutLabel = "Proceed to checkout",
+  checkoutLabel = "Checkout",
 }: {
   cart: StoreCart
   onCheckout?: () => void
@@ -26,7 +26,7 @@ export function CartSummaryCard({
         <div className="total"><dt>Total</dt><dd><MoneyText amount={cart.hasTotal === false ? undefined : cart.total} currencyCode={cart.currencyCode} /></dd></div>
       </dl>
       {!checkoutReady ? <p className="buyer-cart-summary-warning">Resolve unavailable items or missing prices before checkout.</p> : null}
-      <Button href={onCheckout ? undefined : "/checkout"} onClick={onCheckout} disabled={!checkoutReady || preparing}>{preparing ? "Preparing checkout…" : checkoutLabel}</Button>
+      <Button href={onCheckout ? undefined : "/checkout"} onClick={onCheckout} disabled={!checkoutReady || preparing}>{preparing ? "Preparing checkout..." : checkoutLabel}</Button>
       <Button variant="ghost" href="/">Continue shopping</Button>
     </Card>
   )

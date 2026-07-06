@@ -17,12 +17,14 @@ import {
   createCustomerAddress,
   deleteCartLineItem,
   fetchCart,
+  fetchShipToRegions,
   fetchStoreSettings,
   getCartShippingOptions,
   getBuyerCartStorageKey,
   getScopedBuyerStoreId,
   getStripePublishableKey,
   initializeCartPaymentSession,
+  isProductRegionUnavailableError,
   listCartPaymentProviders,
   listCustomerAddresses,
   readBuyerPreferences,
@@ -35,6 +37,7 @@ import {
   type BuyerPaymentSession,
   type BuyerStoreSettings,
   type BuyerCustomerAddress,
+  type BuyerShipToRegion,
 } from "../../lib/buyer-api"
 import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
 import type { StoreCart } from "../../lib/mock-data"
@@ -46,15 +49,17 @@ import {
   nextPendingPlatformCheckoutGroup,
   readPlatformCheckoutSession,
 } from "../../lib/platform-checkout-session"
-import { isCheckoutCountryCode, shippingUnavailableMessage } from "./checkout-countries"
+import { CHECKOUT_COUNTRIES, isCheckoutCountryCode, shippingUnavailableMessage } from "./checkout-countries"
 import {
   chooseDefaultPaymentProvider,
+  describeStripePublishableKeyIssue,
   hasValidStripeClientSecret,
   isStripeProviderId,
   isValidStripePublishableKey,
   STRIPE_ORDER_CREATION_FAILED_MESSAGE,
 } from "./checkout-payment"
 import { savedAddressToCheckout, cartShippingAddressToCheckout, hasPersistedCartShippingAddress, type CartShippingAddress } from "./checkout-saved-address"
+import type { CheckoutCountryOption } from "../../components/checkout/CheckoutAddressCard"
 
 type CheckoutPageProps = {
   cartCount: number
@@ -81,6 +86,24 @@ const initialAddress: CheckoutAddress = {
   address2: "",
   postalCode: "",
   label: "Home",
+}
+
+const fallbackCheckoutCountryOptions: CheckoutCountryOption[] = CHECKOUT_COUNTRIES.map((country) => ({ code: country.code, name: country.name }))
+
+const shipToRegionsToCountryOptions = (regions: BuyerShipToRegion[]): CheckoutCountryOption[] => {
+  const seen = new Set<string>()
+  return regions
+    .filter((region) => region.enabled && !region.blocked)
+    .map((region) => ({
+      code: region.country_code.trim().toLowerCase(),
+      name: region.country_region_en || region.abbreviation || region.country_code.toUpperCase(),
+    }))
+    .filter((country) => {
+      if (!country.code || seen.has(country.code)) return false
+      seen.add(country.code)
+      return true
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
@@ -115,14 +138,28 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [loadVersion, setLoadVersion] = useState(0)
   const [saveToAddressBook, setSaveToAddressBook] = useState(true)
   const [usingNewAddress, setUsingNewAddress] = useState(false)
+  const [countryOptions, setCountryOptions] = useState<CheckoutCountryOption[]>(fallbackCheckoutCountryOptions)
   const skipAddressResetRef = useRef(false)
   const autoSavedAddressRef = useRef(false)
 
   const emailVerified = !auth.customer || isBuyerEmailVerified(auth.customer.metadata)
   const contactIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim()) && contact.phone.trim().length >= 4 && contact.name.trim().length > 1
-  const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && isCheckoutCountryCode(address.country))
+  const checkoutCountryCodes = useMemo(() => new Set(countryOptions.map((country) => country.code)), [countryOptions])
+  const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && (checkoutCountryCodes.has(address.country) || isCheckoutCountryCode(address.country)))
+  const buyerPreferences = readBuyerPreferences(auth.customer)
   const stripePublishableKey = getStripePublishableKey()
   const stripeSelected = isStripeProviderId(selectedPaymentProviderId)
+  const paymentPrerequisitesReady =
+    contactIsValid && (!requiresShippingMethod || (addressSaved && shippingMethodSaved))
+  const paymentBlockedReason = !contactIsValid
+    ? "Enter a valid receiver name, phone, and email before adding payment."
+    : !requiresShippingMethod
+      ? undefined
+      : !addressSaved
+      ? "Select or save a shipping address before adding payment."
+      : !shippingMethodSaved
+        ? "Select and save a shipping method before adding payment."
+        : undefined
   const paymentSessionReady = !stripeSelected || hasValidStripeClientSecret(paymentSession)
   const checkoutState = resolveCheckoutState({
     cart,
@@ -284,13 +321,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   }, [contact, address])
 
   useEffect(() => {
-    if (!stripeSelected || !cart || (requiresShippingMethod && !shippingMethodSaved)) {
+    if (!stripeSelected || !cart || !paymentPrerequisitesReady) {
       setPaymentSession(null)
       return
     }
     if (!isValidStripePublishableKey(stripePublishableKey)) {
       setPaymentSession(null)
-      setPaymentError("VITE_STRIPE_PK must be configured with a Stripe publishable key (pk_test_ or pk_live_).")
+      setPaymentError(describeStripePublishableKeyIssue(stripePublishableKey) ?? "VITE_STRIPE_PK must be configured with a Stripe publishable key (pk_test_ or pk_live_).")
       return
     }
     let active = true
@@ -301,7 +338,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       .catch((value) => { if (active) { setPaymentSession(null); setPaymentError(value instanceof Error ? value.message : "Unable to initialize Stripe payment.") } })
       .finally(() => { if (active) setPaymentPreparing(false) })
     return () => { active = false }
-  }, [cart?.id, cart?.total, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
+  }, [cart?.id, cart?.total, paymentPrerequisitesReady, selectedPaymentProviderId, stripePublishableKey, stripeSelected])
 
   useEffect(() => {
     if (!auth.customer || contactTouched || contact.email || contact.name || contact.phone) return
@@ -313,14 +350,23 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   }, [auth.customer, contact.email, contact.name, contact.phone, contactTouched])
 
   useEffect(() => {
+    let active = true
+    void fetchShipToRegions().then((result) => {
+      if (!active) return
+      const options = shipToRegionsToCountryOptions(result.data)
+      if (options.length) setCountryOptions(options)
+    }).catch((reason) => console.warn("[checkout] unable to load ship-to countries", reason))
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
     if (!auth.customer) {
       setSavedAddresses([])
       setSelectedAddressId("")
       return
     }
     let active = true
-    const preferences = readBuyerPreferences(auth.customer)
-    setAddress((current) => current.address1 ? current : { ...current, country: preferences.countryCode })
+    setAddress((current) => current.address1 || !buyerPreferences.countryCode ? current : { ...current, country: buyerPreferences.countryCode })
     void listCustomerAddresses().then((addresses) => {
       if (!active) return
       setSavedAddresses(addresses)
@@ -464,11 +510,6 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     }
   }
 
-  const handleSaveContact = async () => {
-    if (!cart) throw new Error("Checkout cart is unavailable.")
-    return saveContactForCart(cart)
-  }
-
   const handleSelectShippingMethod = async (optionId: string) => {
     if (!cart) return
     setSelectedShippingOptionId(optionId)
@@ -543,6 +584,8 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         platformCheckoutIndex: platformCheckoutActive ? platformCheckoutIndex : undefined,
         platformCheckoutCount: platformCheckoutActive ? platformCheckoutCount : undefined,
         storeId,
+        shippingAddress: cart.shippingAddress,
+        items: cart.items,
       }
 
       const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
@@ -568,7 +611,9 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       if (platformCheckoutActive) successParams.set("platform_checkout", "1")
       window.location.assign(`/checkout/success?${successParams.toString()}`)
     } catch (completeErrorValue) {
-      const message = propagateCompleteError
+      const message = isProductRegionUnavailableError(completeErrorValue)
+        ? "This item does not ship to your selected region. Change your shipping region or remove unavailable items to continue."
+        : propagateCompleteError
         ? STRIPE_ORDER_CREATION_FAILED_MESSAGE
         : completeErrorValue instanceof Error
           ? completeErrorValue.message
@@ -619,10 +664,10 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
                 canSaveToAddressBook={Boolean(auth.customer && !selectedAddressId)}
                 contact={contact}
                 onContactChange={(nextContact) => { setContactTouched(true); setContact(nextContact) }}
-                onSaveContact={() => { void handleSaveContact().catch(() => undefined) }}
-                contactStatus={contactStatus}
                 contactError={contactError}
                 emailVerified={emailVerified}
+                countryOptions={countryOptions}
+                preferredCountryCodes={buyerPreferences.countryCodes}
               />
               <CheckoutShippingCard required={requiresShippingMethod} addressSaved={addressSaved} loading={shippingLoading} error={shippingError} options={shippingOptions} selectedId={selectedShippingOptionId} methodSaved={shippingMethodSaved} onSelect={(id) => void handleSelectShippingMethod(id)} />
               <CheckoutPaymentPanel
@@ -633,6 +678,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
                 stripePublishableKey={stripePublishableKey}
                 preparing={paymentPreparing}
                 error={paymentError}
+                blockedReason={paymentBlockedReason}
                 canSubmit={canPlaceOrder}
                 placing={placingOrder}
                 onStripeComplete={(paymentMethodLabel) => handlePlaceOrder(selectedPaymentProviderId, true, paymentMethodLabel)}

@@ -35,6 +35,8 @@ const readSuccessInfo = (): CheckoutSuccessInfo | null => {
       platformCheckoutIndex?: number
       platformCheckoutCount?: number
       storeId?: string
+      shippingAddress?: CheckoutSuccessInfo["shippingAddress"]
+      items?: CheckoutSuccessInfo["items"]
     }
     const storedOrderId = parsed.orderId ?? parsed.order_id
     if (storedOrderId && (!orderId || storedOrderId === orderId)) {
@@ -51,6 +53,8 @@ const readSuccessInfo = (): CheckoutSuccessInfo | null => {
         platformCheckoutIndex: parsed.platformCheckoutIndex,
         platformCheckoutCount: parsed.platformCheckoutCount,
         storeId: parsed.storeId,
+        shippingAddress: parsed.shippingAddress,
+        items: parsed.items,
       }
     }
   } catch (error) {

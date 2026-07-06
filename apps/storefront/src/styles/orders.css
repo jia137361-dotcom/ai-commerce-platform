@@ -157,11 +157,212 @@
   margin-top: 22px;
 }
 
+.buyer-order-detail-redesign {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.buyer-order-progress-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  position: relative;
+  margin-top: 22px;
+  border-radius: 8px;
+  padding: 32px 28px;
+  background: #fff;
+  border: 1px solid #e8edf4;
+}
+
+.buyer-order-progress-rail::before {
+  content: "";
+  position: absolute;
+  left: 54px;
+  right: 54px;
+  top: 52px;
+  height: 4px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.buyer-order-progress-rail article {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 9px;
+  justify-items: center;
+  text-align: center;
+}
+
+.buyer-order-progress-rail article span {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #e5e7eb;
+  color: #5f6877;
+  font-weight: 900;
+}
+
+.buyer-order-progress-rail article.done span {
+  background: #ff6b16;
+  color: #fff;
+}
+
+.buyer-order-progress-rail article.done::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 50%;
+  top: 20px;
+  height: 4px;
+  background: #ff6b16;
+}
+
+.buyer-order-progress-rail article.done + article.done::before {
+  left: -50%;
+  right: 50%;
+}
+
+.buyer-order-progress-rail strong {
+  color: #202636;
+  font-size: 14px;
+}
+
+.buyer-order-progress-rail small {
+  color: #687386;
+  font-size: 12px;
+}
+
 .buyer-order-detail-main,
 .buyer-order-detail-side {
   display: grid;
   align-content: start;
   gap: 22px;
+}
+
+.buyer-order-logistics-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 26px;
+  border: 1px solid #e8edf4;
+  border-radius: 8px;
+  padding: 28px;
+  background: #fff;
+}
+
+.buyer-order-logistics-card h2,
+.buyer-order-logistics-card p {
+  margin: 0;
+}
+
+.buyer-order-logistics-card h2 {
+  margin-top: 10px;
+  font-size: 24px;
+}
+
+.buyer-order-logistics-card > div > p {
+  margin-top: 10px;
+  color: #667083;
+}
+
+.buyer-order-logistics-badge {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #fff0e8;
+  color: #ef5a14;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.buyer-order-logistics-card nav {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+}
+
+.buyer-order-logistics-card > section {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+  padding-top: 28px;
+}
+
+.buyer-order-logistics-card > section p {
+  margin: 4px 0 0;
+  color: #4b5563;
+  line-height: 1.55;
+}
+
+.buyer-order-logistics-card > section strong {
+  display: block;
+  margin-top: 4px;
+  color: #ef5a14;
+}
+
+.buyer-order-logistics-card > section small {
+  display: block;
+  margin-top: 5px;
+  color: #ef5a14;
+  font-weight: 800;
+}
+
+.buyer-order-info-card,
+.buyer-order-quick-actions {
+  padding: 28px;
+}
+
+.buyer-order-info-card dl {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+}
+
+.buyer-order-info-card dt,
+.buyer-order-info-card dd {
+  margin: 0;
+}
+
+.buyer-order-info-card dt {
+  color: #687386;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.buyer-order-info-card dd {
+  margin-top: 6px;
+  color: #151923;
+  font-weight: 800;
+}
+
+.buyer-order-quick-actions > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.buyer-order-quick-actions a {
+  min-height: 76px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #202636;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.buyer-order-quick-actions a:hover {
+  border-color: #ffb38d;
+  background: #fff8f3;
+  color: #ef5a14;
 }
 
 .buyer-order-detail-section {
@@ -1153,4 +1354,120 @@
   border-radius: 8px;
   padding: 12px;
   font: inherit;
+}
+
+/* Clean order detail overrides */
+.buyer-order-detail-header,
+.buyer-order-detail-section,
+.buyer-order-actions {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.buyer-order-detail-header {
+  align-items: center;
+  background: #fff;
+}
+
+.buyer-order-detail-header h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.buyer-order-status-pills {
+  justify-content: flex-end;
+}
+
+.buyer-order-detail-grid {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.buyer-order-detail-side {
+  position: sticky;
+  top: 18px;
+}
+
+.buyer-order-detail-item {
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 14px 0;
+}
+
+.buyer-order-detail-thumb {
+  width: 76px;
+  height: 76px;
+}
+
+.buyer-order-detail-item h3 {
+  line-height: 1.35;
+}
+
+.buyer-order-detail-price {
+  text-align: right;
+}
+
+.buyer-order-data-grid {
+  grid-template-columns: 1fr;
+}
+
+.buyer-order-actions .buyer-ui-button,
+.buyer-order-actions a {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .buyer-order-detail-header,
+  .buyer-order-detail-grid,
+  .buyer-order-logistics-card,
+  .buyer-order-logistics-card > section {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-order-progress-rail {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .buyer-order-progress-rail::before,
+  .buyer-order-progress-rail article.done::before,
+  .buyer-order-progress-rail article.done + article.done::before {
+    display: none;
+  }
+
+  .buyer-order-progress-rail article {
+    justify-items: start;
+    grid-template-columns: 42px minmax(0, 1fr);
+    text-align: left;
+  }
+
+  .buyer-order-progress-rail article small {
+    grid-column: 2;
+  }
+
+  .buyer-order-status-pills {
+    justify-content: flex-start;
+  }
+
+  .buyer-order-detail-side {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-order-detail-item {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .buyer-order-detail-price {
+    grid-column: 2;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .buyer-order-logistics-card nav,
+  .buyer-order-quick-actions > div {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
 }

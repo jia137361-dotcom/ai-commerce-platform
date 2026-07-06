@@ -8,10 +8,18 @@ type CheckoutSummaryCardProps = { cart: StoreCart; canPlaceOrder: boolean; disab
 
 export function CheckoutSummaryCard({ cart, canPlaceOrder, disabledReason, onPlaceOrder, placing, shippingAmount }: CheckoutSummaryCardProps) {
   const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0)
+  const address = cart.shippingAddress
   return (
     <Card as="aside" className="buyer-checkout-summary-card">
       <header><p>Order summary</p><h2>{itemCount} item{itemCount === 1 ? "" : "s"}</h2></header>
       <CheckoutItemList cart={cart} />
+      {address ? (
+        <section className="buyer-checkout-summary-address">
+          <strong>Shipping to</strong>
+          <p>{[address.firstName, address.lastName].filter(Boolean).join(" ") || "Receiver"}</p>
+          <p>{[address.address1, address.city, address.province, address.countryCode?.toUpperCase()].filter(Boolean).join(", ")}</p>
+        </section>
+      ) : null}
       <dl>
         <div><dt>Subtotal</dt><dd><MoneyText amount={cart.hasSubtotal === false ? undefined : cart.subtotal} currencyCode={cart.currencyCode} /></dd></div>
         <div><dt>Shipping</dt><dd>{shippingAmount == null ? "Pending" : <MoneyText amount={shippingAmount} currencyCode={cart.currencyCode} />}</dd></div>

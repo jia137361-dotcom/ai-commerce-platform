@@ -223,6 +223,16 @@
   font-weight: 700;
 }
 
+.buyer-checkout-info-note {
+  margin: 16px 28px 0;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
 .buyer-checkout-contact-error {
   margin: 18px 28px 0;
 }
@@ -1189,4 +1199,192 @@
   grid-row: 1 / 3;
   color: var(--buyer-primary);
   font-size: 18px;
+}
+
+/* Address-first checkout overrides */
+.buyer-checkout-address-overview {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px 24px;
+}
+
+.buyer-checkout-selected-address {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.buyer-checkout-selected-address.empty {
+  display: grid;
+  background: #fff;
+  border-style: dashed;
+}
+
+.buyer-checkout-selected-address p {
+  margin: 8px 0 0;
+  color: #667085;
+  line-height: 1.55;
+}
+
+.buyer-checkout-address-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.buyer-checkout-address-modal {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.buyer-checkout-address-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-checkout-address-picker > button:not(.buyer-ui-button) {
+  width: 100%;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+  text-align: left;
+}
+
+.buyer-checkout-address-picker > button.selected {
+  border-color: #ff5a14;
+  background: #fff7ed;
+}
+
+.buyer-checkout-address-picker span {
+  display: grid;
+  gap: 4px;
+}
+
+.buyer-checkout-address-picker small {
+  color: #667085;
+}
+
+.buyer-checkout-address-form-grid {
+  padding: 0;
+}
+
+.buyer-checkout-summary-address {
+  margin: 14px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.buyer-checkout-summary-address strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.buyer-checkout-summary-address p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.buyer-checkout-payment-message {
+  margin: 0 24px 24px;
+  border-radius: 8px;
+}
+
+.buyer-checkout-success-card {
+  text-align: left;
+}
+
+.buyer-checkout-success-icon,
+.buyer-checkout-success-kicker,
+.buyer-checkout-success-card h1,
+.buyer-checkout-success-copy,
+.buyer-checkout-success-status {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.buyer-checkout-success-details {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 28px;
+}
+
+.buyer-checkout-success-details section {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.buyer-checkout-success-details h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.buyer-checkout-success-details p {
+  margin: 0;
+  color: #667085;
+  line-height: 1.55;
+}
+
+.buyer-checkout-success-items {
+  display: grid;
+  gap: 10px;
+}
+
+.buyer-checkout-success-items article {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.buyer-checkout-success-items article > div {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.buyer-checkout-success-items img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.buyer-checkout-success-items span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.buyer-checkout-success-items small {
+  color: #667085;
+}
+
+@media (max-width: 760px) {
+  .buyer-checkout-selected-address {
+    display: grid;
+  }
+
+  .buyer-checkout-success-card dl,
+  .buyer-checkout-success-items article {
+    grid-template-columns: 1fr;
+  }
 }
