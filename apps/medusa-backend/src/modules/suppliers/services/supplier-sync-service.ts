@@ -1,16 +1,70 @@
-import { getBasicProduct, getProduct } from "../s2bdiy/s2bdiy-product"
 import type StoreCoreModuleService from "../../store-core/service"
+import { requireSupplierAdapter } from "../registry"
+import type { SyncData } from "../adapter"
 
 export type SyncContext = {
   storeCoreService: StoreCoreModuleService
+  storeId?: string
+}
+
+// Ensure a product category exists for the given S2BDIY category, return its ID
+async function ensureCategory(
+  storeCoreService: StoreCoreModuleService,
+  storeId: string,
+  s2bCategory: { id: number; name: string; en_name?: string }
+): Promise<string> {
+  // Check if category already exists with this supplier_category_id
+  const existing = (await storeCoreService.listProductCategories({
+    store_id: storeId,
+  } as any)) as any[]
+
+  const match = existing.find((c: any) => c.supplier_category_id === String(s2bCategory.id))
+  if (match) return match.id
+
+  const name = s2bCategory.en_name || s2bCategory.name || `Category ${s2bCategory.id}`
+  const slug = (s2bCategory.en_name || `cat-${s2bCategory.id}`)
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+
+  // Check by slug to avoid duplicates
+  const bySlug = existing.find((c: any) => c.slug === slug)
+  if (bySlug) {
+    // Update with supplier_category_id if missing
+    if (!bySlug.supplier_category_id) {
+      await storeCoreService.updateProductCategories({
+        selector: { id: bySlug.id },
+        data: { supplier_category_id: String(s2bCategory.id) } as any,
+      })
+    }
+    return bySlug.id
+  }
+
+  const created = await storeCoreService.createProductCategories({
+    store_id: storeId,
+    name,
+    slug,
+    description: s2bCategory.name !== name ? s2bCategory.name : null,
+  } as any)
+
+  // Set supplier_category_id (column exists in DB but may not be in model)
+  try {
+    await storeCoreService.updateProductCategories({
+      selector: { id: created.id },
+      data: { supplier_category_id: String(s2bCategory.id) } as any,
+    })
+  } catch {
+    // Column might not be in the ORM model yet, ignore
+  }
+
+  return created.id
 }
 
 export async function syncBasicProduct(
   basicProductId: number,
   supplierId: string,
-  { storeCoreService }: SyncContext
+  { storeCoreService, storeId }: SyncContext
 ) {
-  const data = await getBasicProduct(basicProductId)
+  const adapter = requireSupplierAdapter(supplierId)
+  const data = await adapter.syncProduct(basicProductId)
 
   // Upsert supplier product
   const existing = await storeCoreService.listSupplierProducts({
@@ -20,18 +74,18 @@ export async function syncBasicProduct(
   const supplierProductData = {
     supplier_id: supplierId,
     basic_product_id: String(data.id),
-    basic_product_code: data.code ?? null,
+    basic_product_code: (data as any).code ?? null,
     basic_product_name: data.name ?? null,
     basic_product_en_name: data.en_name ?? null,
     name: data.name ?? `Basic Product ${data.id}`,
     category: "apparel",
-    purchase_price: data.purchase_price ?? null,
+    purchase_price: Number(data.purchase_price) || null,
     product_show_master_image: data.product_show_master_image ?? null,
     produce_country: data.produce_country ?? null,
     warehouse_name: data.warehouse_name ?? null,
     deliver_goods_text: data.deliver_goods_text ?? null,
-    base_cost: data.purchase_price ?? 0,
-    raw_json: data as unknown as Record<string, unknown>,
+    base_cost: Number(data.purchase_price) || 0,
+    raw_json: data.raw ?? (data as unknown as Record<string, unknown>),
   }
 
   let supplierProductId: string
@@ -76,11 +130,11 @@ export async function syncBasicProduct(
         size_name: size?.name ?? null,
         color_name: color?.name ?? null,
         sku: item.code ?? `S2B-${data.id}-${item.id}`,
-        cost: item.price ?? 0,
-        weight: item.weight ?? null,
-        length: item.length ?? null,
-        width: item.width ?? null,
-        height: item.height ?? null,
+        cost: Number(item.price) || 0,
+        weight: Number(item.weight) || null,
+        length: Number(item.length) || null,
+        width: Number(item.width) || null,
+        height: Number(item.height) || null,
         raw_json: item as unknown as Record<string, unknown>,
       }
 
@@ -107,9 +161,11 @@ export async function syncBasicProduct(
       supplier_product_id: supplierProductId,
     })
 
+    // print_areas are at top level, match by view_id
+    const printAreas = data.print_areas ?? []
+
     for (const view of data.views) {
-      const printAreas = view.print_areas ?? []
-      const area = printAreas[0]
+      const area = printAreas.find((pa: any) => pa.view_id === view.id)
 
       const specData = {
         supplier_product_id: supplierProductId,
@@ -118,10 +174,10 @@ export async function syncBasicProduct(
         view_name: view.name ?? null,
         view_en_name: view.en_name ?? null,
         print_position: view.name ?? "front",
-        print_file_width: area?.width ?? 0,
-        print_file_height: area?.height ?? 0,
-        design_area_width: area?.width ?? null,
-        design_area_height: area?.height ?? null,
+        print_file_width: Number(area?.width) || 0,
+        print_file_height: Number(area?.height) || 0,
+        design_area_width: Number(area?.width) || null,
+        design_area_height: Number(area?.height) || null,
         design_area_unit: "px" as const,
         design_type: 1,
         tip_level: String(view.tip_level ?? ""),
@@ -145,83 +201,24 @@ export async function syncBasicProduct(
     }
   }
 
-  return {
-    supplier_product_id: supplierProductId,
-    basic_product_id: data.id,
-    variant_count: data.items?.length ?? 0,
-    view_count: data.views?.length ?? 0,
-  }
-}
-
-export async function syncProductDetail(
-  supplierProductId: number,
-  { storeCoreService }: SyncContext
-) {
-  const data = await getProduct(supplierProductId)
-
-  // Extract best mockup image
-  let mockupUrl: string | null = null
-
-  for (const variant of data.variants ?? []) {
-    const imgs = variant.show_images?.[0]?.images
-    if (imgs?.length) {
-      mockupUrl = imgs[0].src
-      break
-    }
-  }
-
-  if (!mockupUrl) {
-    const imgs = data.show_images?.[0]?.images
-    if (imgs?.length) {
-      mockupUrl = imgs[0].src
-    }
-  }
-
-  // Update supplier product with mockup
-  const citigooProducts = await storeCoreService.listSupplierProducts({
-    supplier_product_id: String(supplierProductId),
-  })
-
-  if (citigooProducts.length > 0) {
-    await storeCoreService.updateSupplierProducts({
-      selector: { id: citigooProducts[0].id },
-      data: {
-        supplier_mockup_image_url: mockupUrl,
-        supplier_product_code: data.product_code ?? null,
-        supplier_product_name: data.product_name ?? null,
-      },
-    })
-  }
-
-  // Sync variant details
-  if (data.variants?.length) {
-    const existingVariants = await storeCoreService.listSupplierProductVariants({
-      supplier_product_id: citigooProducts[0]?.id,
-    })
-
-    for (const variant of data.variants) {
-      const match = existingVariants.find(
-        (v: any) => v.supplier_size_id === String(variant.size_id) && v.supplier_color_id === String(variant.color_id)
-      )
-
-      if (match) {
-        await storeCoreService.updateSupplierProductVariants({
-          selector: { id: match.id },
-          data: {
-            size_name: variant.size_name ?? match.size_name,
-            color_name: variant.color_name ?? match.color_name,
-            weight: variant.weight ?? match.weight,
-            length: variant.length ?? match.length,
-            width: variant.width ?? match.width,
-            height: variant.height ?? match.height,
-          },
-        })
+  // Sync categories from S2BDIY
+  const categoryIds: string[] = []
+  if (data.categorys?.length && storeId) {
+    for (const s2bCat of data.categorys) {
+      try {
+        const catId = await ensureCategory(storeCoreService, storeId, s2bCat)
+        categoryIds.push(catId)
+      } catch {
+        // Skip category sync errors
       }
     }
   }
 
   return {
     supplier_product_id: supplierProductId,
-    supplier_mockup_image_url: mockupUrl,
+    basic_product_id: data.id,
+    variant_count: data.items?.length ?? 0,
+    view_count: data.views?.length ?? 0,
+    category_ids: categoryIds,
   }
 }

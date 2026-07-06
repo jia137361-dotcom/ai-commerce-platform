@@ -5,6 +5,7 @@ const Supplier = model.define("mc_supplier", {
   code: model.text(),
   name: model.text(),
   country: model.text().nullable(),
+  adapter_type: model.text().default("s2bdiy"),
   api_base_url: model.text().nullable(),
   test_api_base_url: model.text().nullable(),
   status: model.enum(["active", "inactive", "archived"]).default("active"),

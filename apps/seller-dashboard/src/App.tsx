@@ -11,6 +11,9 @@ import { CreateProductPage } from "./pages/AiStudio/CreateProduct"
 import { GenerationProgressPage } from "./pages/AiStudio/GenerationProgress"
 import { GenerationCompletePage } from "./pages/AiStudio/GenerationComplete"
 import { ProductReviewsPage, StoreMessagesPage as SellerStoreMessagesPage } from "./pages/Reviews/ProductReviews"
+import { SupplierCatalogPage } from "./pages/Supplier/SupplierCatalog"
+import { SupplierListPage } from "./pages/Suppliers/SupplierList"
+import { ErrorBoundary } from "./components/ErrorBoundary"
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("seller_admin_token")
@@ -38,6 +41,9 @@ export default function App() {
         <Route path="reviews" element={<ProductReviewsPage />} />
         <Route path="messages" element={<SellerStoreMessagesPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="suppliers" element={<SupplierListPage />} />
+        <Route path="suppliers/:supplierId/catalog" element={<ErrorBoundary><SupplierCatalogPage /></ErrorBoundary>} />
+        <Route path="supplier-catalog" element={<Navigate to="/suppliers" replace />} />
         <Route path="ai-studio/create" element={<CreateProductPage />} />
         <Route path="ai-studio/progress/:jobId" element={<GenerationProgressPage />} />
         <Route path="ai-studio/complete/:productId" element={<GenerationCompletePage />} />

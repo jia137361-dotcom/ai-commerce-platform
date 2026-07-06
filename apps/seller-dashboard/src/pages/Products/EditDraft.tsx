@@ -146,7 +146,7 @@ export function EditDraftPage() {
 
   const { data: jobData } = useQuery({
     queryKey: ["ai-job", resolvedJobId],
-    enabled: Boolean(resolvedJobId) && Boolean(product) && product.status === "draft",
+    enabled: Boolean(resolvedJobId) && Boolean(product) && product!.status === "draft",
     queryFn: () =>
       apiFetch<{
         result?: {

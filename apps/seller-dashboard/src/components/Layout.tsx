@@ -8,6 +8,7 @@ import type { StoreNotification } from "@ai-commerce/shared-types"
 
 const NAV = [
   { to: "/products", label: "Products" },
+  { to: "/suppliers", label: "Suppliers" },
   { to: "/orders", label: "Orders" },
   { to: "/reviews", label: "Reviews" },
   { to: "/messages", label: "Messages" },
@@ -109,6 +110,7 @@ export function Navbar() {
 
   const isActive = (to: string) => {
     if (to === "/products") return location.pathname.startsWith("/products")
+    if (to === "/suppliers") return location.pathname.startsWith("/suppliers")
     if (to === "/orders") return location.pathname.startsWith("/orders")
     if (to === "/reviews") return location.pathname.startsWith("/reviews")
     if (to === "/messages") return location.pathname.startsWith("/messages")

@@ -7,6 +7,8 @@ export interface S2bBasicProductResponse {
   purchase_price: number; produce_country: string; warehouse_name: string
   deliver_goods_text: string; product_show_master_image: string; transport_types_arr: unknown[]
   colors: S2bColor[]; sizes: S2bSize[]; items: S2bItem[]; views: S2bView[]
+  print_areas: S2bPrintArea[]
+  categorys: Array<{ id: number; name: string; en_name: string }>
 }
 export interface S2bColor { id: number; name: string }
 export interface S2bSize { id: number; name: string }
@@ -150,6 +152,15 @@ export function mergeProductGalleryWithS2bMockups(
 }
 
 // ---- Standalone (backward compat) ----
-export async function getBasicProduct(id: number): Promise<S2bBasicProductResponse> { return s2bGet(`/open/v1/basicProduct/${id}`) }
-export async function getProduct(id: number): Promise<S2bProductDetailResponse> { return s2bGet(`/open/v1/product/${id}`) }
-export async function quickCreate(params: S2bQuickCreateRequest): Promise<S2bQuickCreateResponse> { return s2bPost("/open/v1/product/quickCreate", params) }
+export async function getBasicProduct(id: number): Promise<S2bBasicProductResponse> {
+  const res = await s2bGet<Record<string, unknown>>(`/open/v1/basicProduct/${id}`)
+  return (res.data ?? res) as S2bBasicProductResponse
+}
+export async function getProduct(id: number): Promise<S2bProductDetailResponse> {
+  const res = await s2bGet<Record<string, unknown>>(`/open/v1/product/${id}`)
+  return (res.data ?? res) as S2bProductDetailResponse
+}
+export async function quickCreate(params: S2bQuickCreateRequest): Promise<S2bQuickCreateResponse> {
+  const res = await s2bPost<Record<string, unknown>>("/open/v1/product/quickCreate", params)
+  return (res.data ?? res) as S2bQuickCreateResponse
+}

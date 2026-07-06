@@ -1,6 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { getStoreCoreService, requireText, sendError } from "../../../_helpers/store-core"
 import { syncBasicProduct } from "../../../../modules/suppliers/services/supplier-sync-service"
+import { resolveCurrentStore } from "../../../../lib/store-context"
 
 type SyncBasicProductBody = {
   basic_product_id: number
@@ -21,10 +22,12 @@ export const POST = async (req: MedusaRequest<SyncBasicProductBody>, res: Medusa
   }
 
   const storeCoreService = getStoreCoreService(req)
+  const { store_id: storeId } = resolveCurrentStore(req)
 
   try {
     const result = await syncBasicProduct(Number(basicProductId), supplierId, {
       storeCoreService,
+      storeId,
     })
 
     return res.status(201).json({
