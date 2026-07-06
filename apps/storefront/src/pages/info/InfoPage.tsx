@@ -5,7 +5,10 @@ import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { Card } from "../../components/ui/Card"
 import {
   AboutUsContent,
+  AcceptableUsePolicyContent,
   ContactUsContent,
+  CookiePolicyContent,
+  CopyrightPolicyContent,
   DraftLegalNotice,
   HelpArticleContent,
   HelpContent,
@@ -13,6 +16,7 @@ import {
   PaymentMethodContent,
   PoliciesContent,
   PrivacyContent,
+  RefundPolicyContent,
   RefundAndReplacementContent,
   ShippingInformationContent,
   StaticPageNavigation,
@@ -146,6 +150,38 @@ export function PrivacyPage({ cartCount }: { cartCount: number }) {
   return (
     <InfoPage cartCount={cartCount} title="Privacy Policy">
       <PrivacyContent />
+    </InfoPage>
+  )
+}
+
+export function CookiePolicyPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Cookie Policy">
+      <CookiePolicyContent />
+    </InfoPage>
+  )
+}
+
+export function CopyrightPolicyPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Copyright Policy">
+      <CopyrightPolicyContent />
+    </InfoPage>
+  )
+}
+
+export function AcceptableUsePolicyPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Acceptable Use Policy">
+      <AcceptableUsePolicyContent />
+    </InfoPage>
+  )
+}
+
+export function RefundPolicyPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Refund Policy">
+      <RefundPolicyContent />
     </InfoPage>
   )
 }

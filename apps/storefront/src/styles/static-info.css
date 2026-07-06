@@ -140,6 +140,31 @@
   padding-top: var(--buyer-space-4);
 }
 
+.buyer-policy-index {
+  display: grid;
+  gap: var(--buyer-space-5);
+}
+
+.buyer-policy-link-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--buyer-space-3);
+}
+
+.buyer-policy-link-list a {
+  border: 1px solid var(--buyer-border);
+  border-radius: 8px;
+  background: var(--buyer-surface-muted);
+  padding: var(--buyer-space-3) var(--buyer-space-4);
+  color: var(--buyer-focus);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.buyer-policy-link-list a:hover {
+  text-decoration: underline;
+}
+
 .buyer-shipping-regions {
   display: grid;
   gap: var(--buyer-space-4);

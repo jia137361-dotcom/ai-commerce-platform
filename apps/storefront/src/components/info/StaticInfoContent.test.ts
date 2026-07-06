@@ -8,18 +8,16 @@ import {
 } from "./StaticInfoContent"
 
 describe("buyer static information pages", () => {
-  it("renders help sections for ordering, payment, cancellation, refunds, lookup, and support", () => {
+  it("renders help center categories and article links", () => {
     const html = renderToStaticMarkup(createElement(HelpContent))
 
-    expect(html).toContain("How to order")
-    expect(html).toContain("How checkout works")
-    expect(html).toContain("Payment authorization")
-    expect(html).toContain("Cancel an order")
-    expect(html).toContain("Request a refund")
-    expect(html).toContain("Guest order lookup")
-    expect(html).toContain("Support and contact")
-    expect(html).toContain("authorizes payment but does not capture")
-    expect(html).toContain("pending review, not money returned")
+    expect(html).toContain("Getting Started")
+    expect(html).toContain("Order Management")
+    expect(html).toContain("Payments &amp; Billing")
+    expect(html).toContain("Copyright &amp; Legal")
+    expect(html).toContain('href="/help/create-account"')
+    expect(html).toContain('href="/help/refund-policy"')
+    expect(html).toContain('href="/help/cookie-policy"')
   })
 
   it("does not claim captured or refunded payment in the terms", () => {

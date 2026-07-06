@@ -37,10 +37,14 @@ export function StoreFooter() {
         <strong>Information</strong>
         <a href="/about-us">About Us</a>
         <a href="/policies">Policies</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/cookie-policy">Cookie Policy</a>
       </nav>
       <nav aria-label="Customer Service">
         <strong>Customer Service</strong>
         <a href="/refund-and-replacement">Refund and Replacement</a>
+        <a href="/refund-policy">Refund Policy</a>
         <a href="/help/shipping-information">Shipping Information</a>
         <a href="/help/payment-method">Payment Method</a>
         <a href="/help/order-status">Order Status</a>
@@ -49,6 +53,8 @@ export function StoreFooter() {
         <strong>Help</strong>
         <a href="/help">Help Center</a>
         <a href="/help/contact-us">Contact Us</a>
+        <a href="/copyright-policy">Copyright Policy</a>
+        <a href="/acceptable-use-policy">Acceptable Use Policy</a>
       </nav>
       <form className="newsletter-form" onSubmit={(event) => void onSubmit(event)}>
         <label htmlFor="newsletter-email">{t("newsletter")}</label>

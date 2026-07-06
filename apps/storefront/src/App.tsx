@@ -22,13 +22,17 @@ import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
 import {
   AboutUsPage,
+  AcceptableUsePolicyPage,
   ContactUsPage,
+  CookiePolicyPage,
+  CopyrightPolicyPage,
   HelpArticlePage,
   HelpPage,
   OrderStatusInfoPage,
   PaymentMethodPage,
   PoliciesPage,
   PrivacyPage,
+  RefundPolicyPage,
   RefundAndReplacementPage,
   ShippingInformationPage,
   TermsPage,
@@ -196,12 +200,28 @@ function App() {
     return <RefundAndReplacementPage cartCount={cartCount} />
   }
 
+  if (path.startsWith("/refund-policy")) {
+    return <RefundPolicyPage cartCount={cartCount} />
+  }
+
   if (path.startsWith("/terms")) {
     return <TermsPage cartCount={cartCount} />
   }
 
   if (path.startsWith("/privacy")) {
     return <PrivacyPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/cookie-policy")) {
+    return <CookiePolicyPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/copyright-policy")) {
+    return <CopyrightPolicyPage cartCount={cartCount} />
+  }
+
+  if (path.startsWith("/acceptable-use-policy")) {
+    return <AcceptableUsePolicyPage cartCount={cartCount} />
   }
 
   if (path.startsWith("/shops/")) {
