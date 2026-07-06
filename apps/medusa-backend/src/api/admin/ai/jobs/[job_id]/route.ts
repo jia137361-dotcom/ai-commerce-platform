@@ -12,11 +12,16 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const job = jobs[0]
 
   if (!job) {
-    return sendError(res, 404, "VALIDATION_ERROR", "AI job not found")
+    return sendError(res, 404, "AI_JOB_NOT_FOUND", "AI job not found")
   }
 
   if (job.store_id !== storeId) {
-    return sendError(res, 403, "VALIDATION_ERROR", "AI job does not belong to current store")
+    return sendError(
+      res,
+      403,
+      "AI_JOB_STORE_MISMATCH",
+      "This AI generation job belongs to another store. Please start a new generation for the current store."
+    )
   }
 
   return res.json(normalizeAiJobResponse(job as Record<string, unknown>))

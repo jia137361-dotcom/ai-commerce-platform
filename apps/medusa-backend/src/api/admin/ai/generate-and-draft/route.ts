@@ -8,7 +8,6 @@ import {
 } from "../../../_helpers/store-core"
 
 type GenerateAndDraftBody = {
-  store_id?: string
   prompt?: string
   platform_product_id?: string
   supplier_product_id?: string
@@ -50,7 +49,7 @@ async function handleGenerateAndDraft(
   }
 
   const context = resolveCurrentStore(req)
-  const storeId = requireText(body.store_id) ?? context.store_id
+  const storeId = context.store_id
   const storeCoreService = getStoreCoreService(req)
 
   const stores = await storeCoreService.listStores({ id: storeId })
@@ -83,8 +82,8 @@ async function handleGenerateAndDraft(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "generate-and-draft failed"
     if (message.includes("AI worker")) {
-      return sendError(res, 502, "VALIDATION_ERROR", message)
+      return sendError(res, 502, "AI_PROVIDER_UNAVAILABLE", message)
     }
-    return sendError(res, 400, "VALIDATION_ERROR", message)
+    return sendError(res, 400, "AI_JOB_FAILED", message)
   }
 }

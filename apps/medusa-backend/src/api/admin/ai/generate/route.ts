@@ -18,7 +18,7 @@ export const POST = async (req: MedusaRequest<GenerateBody>, res: MedusaResponse
     }
 
     const context = resolveCurrentStore(req)
-    const storeId = requireText(body.store_id) ?? context.store_id
+    const storeId = context.store_id
     const storeCoreService = getStoreCoreService(req)
     const stores = await storeCoreService.listStores({ id: storeId })
     if (!stores.length) {
@@ -31,8 +31,6 @@ export const POST = async (req: MedusaRequest<GenerateBody>, res: MedusaResponse
     return res.status(202).json(normalizeAiJobResponse(job as Record<string, unknown>))
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to enqueue AI job"
-    return res.status(500).json({
-      error: { code: "INTERNAL_ERROR", message },
-    })
+    return sendError(res, 500, "AI_JOB_FAILED", message)
   }
 }

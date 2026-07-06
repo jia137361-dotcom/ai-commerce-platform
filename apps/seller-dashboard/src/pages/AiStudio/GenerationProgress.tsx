@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
-import { apiFetch, MEDUSA_URL } from "../../lib/api-client"
+import { ApiError, apiFetch, MEDUSA_URL } from "../../lib/api-client"
 import { useToast } from "../../components/ToastProvider"
 import { Badge } from "../../components/ui/Badge"
 import { Button } from "../../components/ui/Button"
@@ -24,6 +24,32 @@ type ProgressLocationState = {
   marketplaceCategory?: string
 }
 
+type JobAccessIssue = "store_mismatch" | "not_found" | null
+
+const STORE_MISMATCH_MESSAGE =
+  "This AI generation job belongs to another store. Please start a new generation for the current store."
+
+const JOB_NOT_FOUND_MESSAGE = "This AI generation job could not be found. Please start a new generation."
+
+const resolveJobAccessIssue = (error: unknown): { issue: JobAccessIssue; message: string } | null => {
+  if (!(error instanceof ApiError)) {
+    return null
+  }
+
+  if (
+    error.code === "AI_JOB_STORE_MISMATCH" ||
+    (error.code === "VALIDATION_ERROR" && /does not belong|another store|current store/i.test(error.message))
+  ) {
+    return { issue: "store_mismatch", message: STORE_MISMATCH_MESSAGE }
+  }
+
+  if (error.code === "AI_JOB_NOT_FOUND" || error.status === 404) {
+    return { issue: "not_found", message: JOB_NOT_FOUND_MESSAGE }
+  }
+
+  return null
+}
+
 export function GenerationProgressPage() {
   const { jobId } = useParams<{ jobId: string }>()
   const location = useLocation()
@@ -31,6 +57,7 @@ export function GenerationProgressPage() {
   const toast = useToast()
   const [job, setJob] = useState<JobResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [jobAccessIssue, setJobAccessIssue] = useState<JobAccessIssue>(null)
   const [retrying, setRetrying] = useState(false)
   const [showErrorLogs, setShowErrorLogs] = useState(false)
   const [aiWorkerMock, setAiWorkerMock] = useState<{ active: boolean; reason?: string } | null>(
@@ -62,12 +89,37 @@ export function GenerationProgressPage() {
 
     setJob(null)
     setError(null)
+    setJobAccessIssue(null)
 
     let es: EventSource | null = null
     let pollTimer: ReturnType<typeof setInterval> | null = null
+    let stopped = false
     const token = localStorage.getItem("seller_admin_token")
 
+    const stopPolling = () => {
+      stopped = true
+      es?.close()
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+    }
+
+    const handleJobAccessError = (err: unknown) => {
+      const accessIssue = resolveJobAccessIssue(err)
+      if (!accessIssue) {
+        return false
+      }
+
+      stopPolling()
+      setJob(null)
+      setJobAccessIssue(accessIssue.issue)
+      setError(accessIssue.message)
+      return true
+    }
+
     const applyJob = (res: JobResponse) => {
+      if (stopped) return
       setJob(res)
       if (res.status === "complete" && res.product_id) {
         navigate(`/products/${res.product_id}/edit?review=ai`, {
@@ -85,10 +137,12 @@ export function GenerationProgressPage() {
     }
 
     const poll = async () => {
+      if (stopped) return
       try {
         const res = await apiFetch<JobResponse>(`/admin/ai/jobs/${jobId}`)
         applyJob(res)
       } catch (err: unknown) {
+        if (handleJobAccessError(err)) return
         setError(err instanceof Error ? err.message : "Poll failed")
       }
     }
@@ -143,8 +197,7 @@ export function GenerationProgressPage() {
     }
 
     return () => {
-      es?.close()
-      if (pollTimer) clearInterval(pollTimer)
+      stopPolling()
     }
   }, [jobId, navigate])
 
@@ -152,11 +205,19 @@ export function GenerationProgressPage() {
     if (!jobId) return
     setRetrying(true)
     setError(null)
+    setJobAccessIssue(null)
     try {
       await apiFetch(`/admin/ai/jobs/${jobId}/retry`, { method: "POST" })
       toast.push("Retrying generation…", "info")
       setJob((prev) => (prev ? { ...prev, status: "queued", progress: 0 } : prev))
     } catch (err: unknown) {
+      const accessIssue = resolveJobAccessIssue(err)
+      if (accessIssue) {
+        setJob(null)
+        setJobAccessIssue(accessIssue.issue)
+        setError(accessIssue.message)
+        return
+      }
       setError(err instanceof Error ? err.message : "Retry failed")
     } finally {
       setRetrying(false)
@@ -173,28 +234,46 @@ export function GenerationProgressPage() {
         : "In progress"
 
   if (error) {
+    const isAccessIssue = Boolean(jobAccessIssue)
+
     return (
       <div className="mx-auto max-w-3xl">
         <h1 className="text-3xl font-bold">AI Generation Status</h1>
-        <p className="mt-2 text-slate-500">Monitoring your visual assets in real-time.</p>
+        <p className="mt-2 text-slate-500">
+          {isAccessIssue
+            ? "This generation cannot continue from the current seller store."
+            : "Monitoring your visual assets in real-time."}
+        </p>
         <div className="mt-8 grid gap-6 md:grid-cols-2">
-          <Card className="text-center">
+          {!isAccessIssue ? (
+            <Card className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-brand bg-brand-light text-2xl">
+                ⏳
+              </div>
+              <p className="font-semibold">Waiting in queue…</p>
+              <p className="mt-2 text-sm text-slate-500">Your request is being prepared.</p>
+              <Badge label="queued" className="mt-4" />
+            </Card>
+          ) : null}
+          <Card className={isAccessIssue ? "text-center md:col-span-2" : "text-center"}>
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-brand bg-brand-light text-2xl">
-              ⏳
-            </div>
-            <p className="font-semibold">Waiting in queue…</p>
-            <p className="mt-2 text-sm text-slate-500">Your request is being prepared.</p>
-            <Badge label="queued" className="mt-4" />
-          </Card>
-          <Card className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-2xl text-red-600">
               !
             </div>
-            <p className="font-semibold">Generation Failed</p>
+            <p className="font-semibold">
+              {isAccessIssue ? "Start a New Generation" : "Generation Failed"}
+            </p>
             <div className="mt-4 rounded-lg bg-red-50 p-3 text-left text-sm text-red-700">{error}</div>
-            <div className="mt-4 flex justify-center gap-2">
-              <Button onClick={() => void retry()} disabled={retrying}>
-                Retry Generation
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {!isAccessIssue ? (
+                <Button onClick={() => void retry()} disabled={retrying}>
+                  Retry Generation
+                </Button>
+              ) : null}
+              <Button type="button" onClick={() => navigate("/ai-studio/create")}>
+                Start New Generation
+              </Button>
+              <Button variant="outline" type="button" onClick={() => navigate("/ai-studio/create")}>
+                Create Manual Draft
               </Button>
               <Button variant="outline" type="button" onClick={() => setShowErrorLogs(true)}>
                 View Error Logs
