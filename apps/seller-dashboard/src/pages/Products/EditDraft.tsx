@@ -16,7 +16,7 @@ import { Input, Label, Textarea } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { Skeleton } from "../../components/ui/EmptyState"
 import { ProductEditorPanel } from "../../components/ProductEditorPanel"
-import type { NormalizedProduct, ProductRegionSummary, ProductVariantRow } from "@ai-commerce/shared-types"
+import type { NormalizedProduct, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type SupplierVariant = {
   supplier_variant_id: string
@@ -34,6 +34,52 @@ type EditLocationState = {
   jobId?: string
   aiReview?: boolean
 }
+
+type SalesRegionMode = "all_supported" | "selected"
+
+type ShipToRegion = {
+  id: string
+  zone: string
+  country_region_en: string
+  country_region_zh: string
+  country_code: string
+  phone_code: string
+  abbreviation: string
+  enabled: boolean
+  blocked: boolean
+  blocked_reason?: string | null
+  sort_order: number
+}
+
+const readStringArray = (value: unknown) =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+
+const readSalesRegionMode = (metadata?: Record<string, unknown> | null): SalesRegionMode =>
+  metadata?.sales_region_mode === "selected" ? "selected" : "all_supported"
+
+const filterShipToRegions = (regions: ShipToRegion[], query: string) => {
+  const term = query.trim().toLowerCase()
+  if (!term) return regions
+
+  return regions.filter((region) =>
+    [
+      region.country_region_en,
+      region.country_region_zh,
+      region.country_code,
+      region.abbreviation,
+      region.zone,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(term))
+  )
+}
+
+const groupRegionsByZone = (regions: ShipToRegion[]) =>
+  regions.reduce<Record<string, ShipToRegion[]>>((groups, region) => {
+    const zone = region.zone?.trim() || "Other"
+    groups[zone] = [...(groups[zone] ?? []), region]
+    return groups
+  }, {})
 
 const toVariantRows = (
   rows: unknown,
@@ -108,14 +154,14 @@ export function EditDraftPage() {
   })
 
   const {
-    data: regionData,
-    isLoading: regionsLoading,
-    isError: regionsError,
-    error: regionsFetchError,
+    data: shipToRegionData,
+    isLoading: shipToRegionsLoading,
+    isError: shipToRegionsError,
+    error: shipToRegionsFetchError,
   } = useQuery({
-    queryKey: ["market-regions"],
+    queryKey: ["ship-to-regions"],
     queryFn: () =>
-      apiFetch<{ regions: ProductRegionSummary[] }>("/admin/market-regions?ensure=true"),
+      apiFetch<{ regions: ShipToRegion[] }>("/admin/logistics/ship-to-regions"),
   })
 
   const { data: supplierData } = useQuery({
@@ -139,7 +185,9 @@ export function EditDraftPage() {
   const [newCategoryName, setNewCategoryName] = useState("")
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
   const [requiresShipping, setRequiresShipping] = useState(true)
-  const [supportedRegionIds, setSupportedRegionIds] = useState<string[]>([])
+  const [salesRegionMode, setSalesRegionMode] = useState<SalesRegionMode>("all_supported")
+  const [salesRegionIds, setSalesRegionIds] = useState<string[]>([])
+  const [salesRegionSearch, setSalesRegionSearch] = useState("")
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
 
   const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
@@ -173,12 +221,8 @@ export function EditDraftPage() {
           ? p.metadata.requires_shipping
           : Boolean(p.supplier_product_id || p.platform_product_id)
     )
-    const savedRegionIds = Array.isArray(p.supported_region_ids)
-      ? p.supported_region_ids
-      : Array.isArray(p.metadata?.supported_region_ids)
-        ? p.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
-        : []
-    setSupportedRegionIds(savedRegionIds)
+    setSalesRegionMode(readSalesRegionMode(p.metadata))
+    setSalesRegionIds(readStringArray(p.metadata?.sales_region_ids))
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
@@ -252,23 +296,30 @@ export function EditDraftPage() {
     }
   }, [product?.product_id, product?.metadata?.gallery, previewKey, previewOptions.length])
 
-  useEffect(() => {
-    if (!regionData?.regions.length || supportedRegionIds.length) return
-    if (!product) return
-    const savedRegionIds = Array.isArray(product.supported_region_ids)
-      ? product.supported_region_ids
-      : Array.isArray(product.metadata?.supported_region_ids)
-        ? product.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
-        : []
-    if (!savedRegionIds.length) {
-      setSupportedRegionIds(regionData.regions.map((region) => region.region_id))
-    }
-  }, [product, regionData, supportedRegionIds.length])
-
   const parsePrice = () => {
     const parsed = Number(price)
     return Number.isFinite(parsed) ? parsed : NaN
   }
+
+  const supportedShipToRegions = useMemo(
+    () => (shipToRegionData?.regions ?? []).filter((region) => region.enabled && !region.blocked),
+    [shipToRegionData]
+  )
+
+  const selectedSalesRegionSet = useMemo(() => new Set(salesRegionIds), [salesRegionIds])
+
+  const filteredShipToRegions = useMemo(
+    () => filterShipToRegions(supportedShipToRegions, salesRegionSearch),
+    [salesRegionSearch, supportedShipToRegions]
+  )
+
+  const groupedShipToRegions = useMemo(
+    () => groupRegionsByZone(filteredShipToRegions),
+    [filteredShipToRegions]
+  )
+
+  const effectiveSalesRegionIds =
+    salesRegionMode === "selected" ? salesRegionIds : supportedShipToRegions.map((region) => region.id)
 
   const buildPayload = () => ({
     title: title.trim(),
@@ -278,11 +329,11 @@ export function EditDraftPage() {
     category_ids: categoryIds,
     variants,
     requires_shipping: requiresShipping,
-    supported_region_ids: supportedRegionIds,
     metadata: {
       ...(product?.metadata ?? {}),
       requires_shipping: requiresShipping,
-      supported_region_ids: supportedRegionIds,
+      sales_region_mode: salesRegionMode,
+      sales_region_ids: salesRegionMode === "selected" ? salesRegionIds : [],
     },
   })
 
@@ -316,7 +367,7 @@ export function EditDraftPage() {
       toast.push("Enter a valid base price", "error")
       return false
     }
-    if (!supportedRegionIds.length) {
+    if (salesRegionMode === "selected" && !salesRegionIds.length) {
       toast.push("Select at least one sales region", "error")
       return false
     }
@@ -893,52 +944,169 @@ export function EditDraftPage() {
           <div className="rounded-lg border border-slate-200 p-4">
             <p className="text-sm font-semibold text-slate-900">Sales regions</p>
             <p className="mt-1 text-sm text-slate-500">
-              Choose where buyers can purchase this product. Checkout addresses must match a supported region.
+              Choose where buyers can purchase this product. Checkout enforcement will be added in a later phase.
             </p>
-            {regionsError ? (
+            {shipToRegionsError ? (
               <p className="mt-3 text-sm text-red-600">
                 Failed to load regions
-                {regionsFetchError instanceof Error ? `: ${regionsFetchError.message}` : "."}
+                {shipToRegionsFetchError instanceof Error ? `: ${shipToRegionsFetchError.message}` : "."}
               </p>
-            ) : regionData?.regions.length ? (
-              <div className="mt-4 grid gap-2">
-                {regionData.regions.map((region) => {
-                  const checked = supportedRegionIds.includes(region.region_id)
-                  return (
-                    <label
-                      key={region.region_id}
-                      className="flex items-start gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
-                    >
+            ) : supportedShipToRegions.length ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label
+                    className={`rounded-lg border p-3 text-sm ${
+                      salesRegionMode === "all_supported"
+                        ? "border-brand bg-brand-light/40"
+                        : "border-slate-200"
+                    }`}
+                  >
+                    <span className="flex items-start gap-3">
                       <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 rounded border-slate-300"
-                        checked={checked}
+                        type="radio"
+                        className="mt-1 h-4 w-4"
+                        checked={salesRegionMode === "all_supported"}
                         disabled={isArchived}
-                        onChange={(event) => {
-                          setSupportedRegionIds((current) => {
-                            if (event.target.checked) {
-                              return Array.from(new Set([...current, region.region_id]))
-                            }
-                            return current.filter((id) => id !== region.region_id)
-                          })
-                        }}
+                        onChange={() => setSalesRegionMode("all_supported")}
                       />
                       <span>
-                        <span className="font-medium text-slate-900">{region.name}</span>
+                        <span className="font-medium text-slate-900">All supported regions</span>
                         <span className="mt-1 block text-slate-500">
-                          {region.country_codes.map((code) => code.toUpperCase()).join(", ")} · {region.currency_code.toUpperCase()}
+                          Available in all {supportedShipToRegions.length} currently supported ship-to regions.
                         </span>
                       </span>
-                    </label>
-                  )
-                })}
+                    </span>
+                  </label>
+                  <label
+                    className={`rounded-lg border p-3 text-sm ${
+                      salesRegionMode === "selected"
+                        ? "border-brand bg-brand-light/40"
+                        : "border-slate-200"
+                    }`}
+                  >
+                    <span className="flex items-start gap-3">
+                      <input
+                        type="radio"
+                        className="mt-1 h-4 w-4"
+                        checked={salesRegionMode === "selected"}
+                        disabled={isArchived}
+                        onChange={() => setSalesRegionMode("selected")}
+                      />
+                      <span>
+                        <span className="font-medium text-slate-900">Selected regions</span>
+                        <span className="mt-1 block text-slate-500">
+                          {salesRegionIds.length} selected. Limit this product to specific countries or regions.
+                        </span>
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {salesRegionMode === "selected" ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">
+                          {salesRegionIds.length} of {supportedShipToRegions.length} regions selected
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Search by English name, Chinese name, country code, abbreviation, or zone.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isArchived}
+                          onClick={() => setSalesRegionIds(supportedShipToRegions.map((region) => region.id))}
+                        >
+                          Select all
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isArchived}
+                          onClick={() => setSalesRegionIds([])}
+                        >
+                          Clear all
+                        </Button>
+                      </div>
+                    </div>
+                    <Input
+                      className="mt-3"
+                      value={salesRegionSearch}
+                      disabled={isArchived}
+                      placeholder="Search regions, country codes, or zones"
+                      onChange={(event) => setSalesRegionSearch(event.target.value)}
+                    />
+                    <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-slate-200 bg-white">
+                      {Object.entries(groupedShipToRegions).map(([zone, regions]) => (
+                        <div key={zone} className="border-b border-slate-100 last:border-b-0">
+                          <div className="sticky top-0 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {zone}
+                          </div>
+                          <div className="grid gap-0">
+                            {regions.map((region) => {
+                              const checked = selectedSalesRegionSet.has(region.id)
+                              return (
+                                <label
+                                  key={region.id}
+                                  className="flex items-start gap-3 border-t border-slate-100 px-3 py-2 text-sm text-slate-700 first:border-t-0"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-1 h-4 w-4 rounded border-slate-300"
+                                    checked={checked}
+                                    disabled={isArchived}
+                                    onChange={(event) => {
+                                      setSalesRegionIds((current) => {
+                                        if (event.target.checked) {
+                                          return Array.from(new Set([...current, region.id]))
+                                        }
+                                        return current.filter((selectedId) => selectedId !== region.id)
+                                      })
+                                    }}
+                                  />
+                                  <span>
+                                    <span className="font-medium text-slate-900">
+                                      {region.country_region_en}
+                                    </span>
+                                    {region.country_region_zh ? (
+                                      <span className="ml-2 text-slate-500">{region.country_region_zh}</span>
+                                    ) : null}
+                                    <span className="mt-1 block text-xs text-slate-500">
+                                      {[region.country_code, region.phone_code, region.abbreviation]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </span>
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      {!filteredShipToRegions.length ? (
+                        <p className="px-3 py-6 text-center text-sm text-slate-500">
+                          No regions match your search.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    This product will be marked available in {effectiveSalesRegionIds.length} supported regions.
+                  </p>
+                )}
               </div>
-            ) : regionsLoading ? (
+            ) : shipToRegionsLoading ? (
               <p className="mt-3 text-sm text-slate-500">Loading available regions...</p>
             ) : (
-              <p className="mt-3 text-sm text-amber-700">No regions configured. Run regions bootstrap on the backend.</p>
+              <p className="mt-3 text-sm text-amber-700">
+                No supported ship-to regions configured. Run logistics regions bootstrap on the backend.
+              </p>
             )}
-            {!supportedRegionIds.length ? (
+            {salesRegionMode === "selected" && !salesRegionIds.length ? (
               <p className="mt-3 text-sm text-amber-700">Select at least one region before saving.</p>
             ) : null}
           </div>

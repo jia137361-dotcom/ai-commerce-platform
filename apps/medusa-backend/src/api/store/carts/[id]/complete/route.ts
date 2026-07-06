@@ -24,6 +24,8 @@ import { isS2bdiyEnabled } from "../../../../../modules/suppliers/s2bdiy/config"
 import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
 import { resolvePaymentMethodLabelFromClientSecret } from "../../../../../lib/stripe-payment-method-label"
 import { applyPlatformCheckoutMetadata } from "../../../../../lib/marketplace/platform-checkout"
+import { validateCartSalesRegionAvailability } from "../../../../../lib/cart-sales-region-availability"
+import { ErrorCodes } from "../../../../../lib/errors"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
@@ -53,9 +55,15 @@ type AuthenticatedRequest = MedusaRequest & {
 
 type CompleteCart = CartWithPaymentCollection & {
   customer_id?: string | null
-  shipping_address?: unknown | null
+  shipping_address?: { country_code?: string | null } | null
   shipping_methods?: unknown[] | null
-  items?: Array<{ requires_shipping?: boolean | null }> | null
+  items?: Array<{
+    id?: string | null
+    title?: string | null
+    product_id?: string | null
+    requires_shipping?: boolean | null
+    metadata?: Record<string, unknown> | null
+  }> | null
 }
 
 type CompleteOrder = {
@@ -152,6 +160,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         error: {
           code: "CART_SHIPPING_METHOD_REQUIRED",
           message: "Shipping method is required before complete.",
+        },
+      })
+    }
+
+    const unavailableRegionItems = await validateCartSalesRegionAvailability(req.scope, {
+      countryCode: cart.shipping_address?.country_code,
+      items: cart.items?.filter((item) => item.requires_shipping !== false),
+    })
+    if (unavailableRegionItems.length) {
+      return res.status(400).json({
+        error: {
+          code: ErrorCodes.PRODUCT_REGION_UNAVAILABLE,
+          message: "One or more items do not ship to the selected region.",
+          items: unavailableRegionItems,
         },
       })
     }

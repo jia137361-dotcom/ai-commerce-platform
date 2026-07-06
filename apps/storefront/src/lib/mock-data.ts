@@ -24,6 +24,9 @@ export type StoreProduct = {
   supportedRegionIds?: string[]
   supportedRegions?: ProductRegionSummary[]
   supportedRegionsLabel?: string
+  metadata?: Record<string, unknown>
+  salesRegionMode?: "all_supported" | "selected"
+  salesRegionIds?: string[]
   supplierId?: string
   supplierProductId?: string
   supplierVariantId?: string
@@ -301,7 +304,7 @@ export const orders: Order[] = [
     id: "CG-20260602-1008",
     date: "Jun 2, 2026",
     placedAt: "June 2, 2026 10:42 AM",
-    storeName: "Citigoo Official Store",
+    storeName: "Demo Seller Store",
     status: "shipped",
     paidStatus: "Buyer Paid",
     action: "Confirm delivery",
@@ -343,7 +346,7 @@ export const orders: Order[] = [
     id: "CG-20260516-0831",
     date: "May 16, 2026",
     placedAt: "May 16, 2026 3:18 PM",
-    storeName: "Citigoo Official Store",
+    storeName: "Demo Seller Store",
     status: "delivered",
     paidStatus: "Buyer Paid",
     action: "Follow-up Review",

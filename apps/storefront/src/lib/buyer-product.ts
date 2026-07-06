@@ -112,9 +112,16 @@ const formatSupportedRegions = (
   return regions.map((region) => region.name).join(", ")
 }
 
+const readStringArray = (value: unknown) =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+
+const readSalesRegionMode = (metadata?: Record<string, unknown> | null) =>
+  metadata?.sales_region_mode === "selected" ? "selected" : "all_supported"
+
 export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0): StoreProduct => {
   const numericPrice = normalizeBuyerProductPrice(product)
   const variants = normalizeBuyerProductVariants(product)
+  const metadata = product.metadata ?? {}
 
   return {
     id: product.product_id ?? product.id ?? `backend-product-${index}`,
@@ -127,7 +134,7 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     mockupImageUrl: product.mockup_image_url ?? undefined,
     designImageUrl: product.design_image_url ?? undefined,
     printFileUrl: product.print_file_url ?? undefined,
-    badge: typeof product.metadata?.badge === "string" ? product.metadata.badge : undefined,
+    badge: typeof metadata.badge === "string" ? metadata.badge : undefined,
     description: product.description ?? undefined,
     medusaProductId: product.medusa_product_id ?? undefined,
     medusaVariantId: product.medusa_variant_id ?? undefined,
@@ -135,6 +142,9 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     supportedRegionIds: product.supported_region_ids,
     supportedRegions: product.supported_regions,
     supportedRegionsLabel: formatSupportedRegions(product.supported_regions),
+    metadata,
+    salesRegionMode: readSalesRegionMode(metadata),
+    salesRegionIds: readStringArray(metadata.sales_region_ids),
     supplierId: product.supplier_id ?? undefined,
     supplierProductId: product.supplier_product_id ?? undefined,
     supplierVariantId: product.supplier_variant_id ?? undefined,

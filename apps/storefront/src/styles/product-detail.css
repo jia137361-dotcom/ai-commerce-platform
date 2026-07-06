@@ -923,6 +923,55 @@
   font-weight: 700;
 }
 
+.buyer-product-region-availability {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.buyer-product-region-availability > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.buyer-product-region-availability strong,
+.buyer-product-region-availability small {
+  display: block;
+}
+
+.buyer-product-region-availability small {
+  margin-top: 2px;
+  color: #64748b;
+}
+
+.buyer-product-region-availability.available {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.buyer-product-region-availability.available > span:first-child {
+  background: #d1fae5;
+}
+
+.buyer-product-region-availability.unavailable {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.buyer-product-region-availability.unavailable > span:first-child {
+  background: #ffedd5;
+}
+
 .buyer-product-add-notice {
   display: flex;
   justify-content: space-between;

@@ -1,5 +1,6 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
+import { STORE_CORE_MODULE } from "../modules/store-core"
 
 const mockCompleteRun = jest.fn()
 const mockEnsureCartPaymentReady = jest.fn()
@@ -76,6 +77,8 @@ const createReq = ({
   shippingAddress = null,
   shippingMethods = [],
   paymentProviderId,
+  storeCoreProducts = [],
+  shipToRegions = [{ id: "str_cn", country_code: "cn", enabled: true, blocked: false }],
 }: {
   authCustomerId?: string | null
   cartCustomerId?: string | null
@@ -85,6 +88,8 @@ const createReq = ({
   shippingAddress?: Record<string, unknown> | null
   shippingMethods?: Array<Record<string, unknown>>
   paymentProviderId?: string
+  storeCoreProducts?: Array<Record<string, unknown>>
+  shipToRegions?: Array<Record<string, unknown>>
 } = {}) => {
   let order = {
     id: "order_1",
@@ -127,6 +132,12 @@ const createReq = ({
       data: [{ payment_collection: { id: "paycol_1" } }],
     })),
   }
+  const storeCoreService = {
+    listShipToRegions: jest.fn(async () => shipToRegions),
+    listProducts: jest.fn(async (filters: Record<string, unknown>) =>
+      storeCoreProducts.filter((product) => product.id === filters.id)
+    ),
+  }
   const req = {
     params: { id: "cart_1" },
     body: paymentProviderId ? { payment_provider_id: paymentProviderId } : {},
@@ -140,12 +151,13 @@ const createReq = ({
         if (key === Modules.CART) return cartModule
         if (key === Modules.ORDER) return orderModule
         if (key === ContainerRegistrationKeys.QUERY) return query
+        if (key === STORE_CORE_MODULE) return storeCoreService
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
   } as unknown as MedusaRequest
 
-  return { req, cartModule, orderModule, query }
+  return { req, cartModule, orderModule, query, storeCoreService }
 }
 
 describe("POST /store/carts/:id/complete authenticated ownership", () => {
@@ -266,6 +278,52 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
 
     expect(mockCompleteRun).toHaveBeenCalledTimes(1)
     expect(res.status).toHaveBeenCalledWith(200)
+  })
+
+  it("rejects carts containing products unavailable in the selected ship-to region", async () => {
+    const { req } = createReq({
+      items: [
+        {
+          id: "line_1",
+          title: "Region locked shirt",
+          quantity: 1,
+          requires_shipping: true,
+          metadata: { mc_product_id: "prod_us_only" },
+        },
+      ],
+      shippingAddress: { id: "addr_1", country_code: "cn" },
+      shippingMethods: [{ id: "sm_1", shipping_option_id: "so_1" }],
+      shipToRegions: [{ id: "str_cn", country_code: "cn", enabled: true, blocked: false }],
+      storeCoreProducts: [
+        {
+          id: "prod_us_only",
+          title: "Region locked shirt",
+          metadata: {
+            sales_region_mode: "selected",
+            sales_region_ids: ["str_us"],
+          },
+        },
+      ],
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.body).toMatchObject({
+      error: {
+        code: "PRODUCT_REGION_UNAVAILABLE",
+        message: "One or more items do not ship to the selected region.",
+        items: [
+          {
+            product_id: "prod_us_only",
+            title: "Region locked shirt",
+            country_code: "cn",
+          },
+        ],
+      },
+    })
+    expect(mockCompleteRun).not.toHaveBeenCalled()
   })
 
   it("rejects Stripe completion without a frontend-initialized client secret", async () => {

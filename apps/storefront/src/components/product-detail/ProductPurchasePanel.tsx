@@ -20,13 +20,21 @@ type ProductPurchasePanelProps = {
   adding: boolean
   authLoading?: boolean
   requiresSignIn?: boolean
+  regionAvailability?: {
+    available: boolean
+    regionName: string
+    message: string
+    tone: "available" | "unavailable"
+  }
   addNotice?: { tone: "success" | "error"; message: string }
   onAddToCart: () => void
   share?: BuyerShareInfo | null
 }
 
-export function ProductPurchasePanel({ product, variants, selectedVariantId, onVariantChange, purchaseState, quantity, setQuantity, adding, authLoading = false, requiresSignIn = false, addNotice, onAddToCart, share }: ProductPurchasePanelProps) {
+export function ProductPurchasePanel({ product, variants, selectedVariantId, onVariantChange, purchaseState, quantity, setQuantity, adding, authLoading = false, requiresSignIn = false, regionAvailability, addNotice, onAddToCart, share }: ProductPurchasePanelProps) {
   const reviewCount = product.reviewCount ?? 0
+  const regionUnavailable = regionAvailability?.available === false
+  const canAddToCart = purchaseState.canAdd && !regionUnavailable
   return (
     <Card as="aside" className="buyer-product-purchase">
       <div className="buyer-product-purchase-heading">
@@ -60,9 +68,22 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
       </div>
 
       {!purchaseState.canAdd && purchaseState.reason ? <p className="buyer-product-disabled-reason">{purchaseState.reason}</p> : null}
+      {regionAvailability ? (
+        <p className={`buyer-product-region-availability ${regionAvailability.tone}`}>
+          <span aria-hidden="true">{regionAvailability.available ? "✓" : "!"}</span>
+          <span>
+            <strong>{regionAvailability.message}</strong>
+            <small>
+              {regionAvailability.available
+                ? regionAvailability.regionName
+                : `${regionAvailability.regionName} · Set preferred shipping regions to continue.`}
+            </small>
+          </span>
+        </p>
+      ) : null}
       {addNotice ? <p className={`buyer-product-add-notice ${addNotice.tone}`} role={addNotice.tone === "error" ? "alert" : "status"}>{addNotice.message}{addNotice.tone === "success" ? <a href="/cart">View cart</a> : null}</p> : null}
 
-      <Button className="buyer-product-add-button" loading={adding || authLoading} disabled={!purchaseState.canAdd || adding || authLoading} onClick={onAddToCart}>
+      <Button className="buyer-product-add-button" loading={adding || authLoading} disabled={!canAddToCart || adding || authLoading} onClick={onAddToCart}>
         {authLoading ? "Checking account..." : adding ? "Adding..." : requiresSignIn ? "Sign in to add to cart" : "Add to cart"}
       </Button>
       {product.hasDesigner && product.id ? (
