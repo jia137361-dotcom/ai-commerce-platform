@@ -1,7 +1,27 @@
 import type { MedusaNextFunction, MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { assertSellerUserActive, resolveAdminUserId } from "../platform-admin/require-platform-operator"
-import { resolveCurrentStore } from "../store-context"
-import { assertStoreActiveForRequest } from "../store-context/assert-store-active"
+import { assertSellerStoreMemberForRequest } from "../store-context/assert-seller-store-member"
+
+const SELLER_ADMIN_PREFIXES = [
+  "/admin/ai",
+  "/admin/fulfillment-orders",
+  "/admin/logistics",
+  "/admin/market-regions",
+  "/admin/messages",
+  "/admin/notifications",
+  "/admin/orders",
+  "/admin/platform-products",
+  "/admin/product-categories",
+  "/admin/products",
+  "/admin/store-products",
+  "/admin/store-settings",
+  "/admin/stripe-connect",
+  "/admin/supplier-orders",
+  "/admin/supplier-products",
+]
+
+const isSellerAdminPath = (path: string) =>
+  SELLER_ADMIN_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`))
 
 export async function sellerAdminGuardMiddleware(
   req: MedusaRequest,
@@ -12,6 +32,9 @@ export async function sellerAdminGuardMiddleware(
   if (path.includes("/admin/platform")) {
     return next()
   }
+  if (!isSellerAdminPath(path)) {
+    return next()
+  }
 
   const userId = resolveAdminUserId(req)
   if (userId) {
@@ -19,9 +42,8 @@ export async function sellerAdminGuardMiddleware(
     if (!activeUserId) return
   }
 
-  const { store_id: storeId } = resolveCurrentStore(req)
-  const ok = await assertStoreActiveForRequest(req, res, storeId)
-  if (!ok) return
+  const member = await assertSellerStoreMemberForRequest(req, res)
+  if (!member) return
 
   return next()
 }

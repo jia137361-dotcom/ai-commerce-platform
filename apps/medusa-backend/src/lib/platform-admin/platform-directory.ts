@@ -27,12 +27,6 @@ export async function listPlatformSellers(container: MedusaContainer, options: {
     { take: 10000, order: { created_at: "DESC" }, select: ["id", "email", "first_name", "last_name", "created_at", "metadata"] }
   )
 
-  const q = options.q?.trim().toLowerCase()
-  const filtered = q
-    ? users.filter((user) => (user.email ?? "").toLowerCase().includes(q) || user.id.toLowerCase().includes(q))
-    : users
-
-  const page = filtered.slice(options.offset, options.offset + options.limit)
   const members = await storeCore.listStoreMembers({}, { take: 10000 })
   const stores = await storeCore.listStores({}, { take: 1000 })
   const storeById = new Map(stores.map((store) => [store.id, store]))
@@ -43,6 +37,14 @@ export async function listPlatformSellers(container: MedusaContainer, options: {
     list.push({ store_id: member.store_id, role: member.role })
     membersByUser.set(member.user_id, list)
   }
+
+  const sellerUsers = users.filter((user) => (membersByUser.get(user.id) ?? []).length > 0)
+  const q = options.q?.trim().toLowerCase()
+  const filtered = q
+    ? sellerUsers.filter((user) => (user.email ?? "").toLowerCase().includes(q) || user.id.toLowerCase().includes(q))
+    : sellerUsers
+
+  const page = filtered.slice(options.offset, options.offset + options.limit)
 
   return {
     count: filtered.length,

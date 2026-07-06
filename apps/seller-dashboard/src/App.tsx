@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { Navigate, Route, Routes } from "react-router-dom"
 import { Layout } from "./components/Layout"
 import { LoginPage } from "./pages/Login"
@@ -11,10 +12,40 @@ import { CreateProductPage } from "./pages/AiStudio/CreateProduct"
 import { GenerationProgressPage } from "./pages/AiStudio/GenerationProgress"
 import { GenerationCompletePage } from "./pages/AiStudio/GenerationComplete"
 import { ProductReviewsPage, StoreMessagesPage as SellerStoreMessagesPage } from "./pages/Reviews/ProductReviews"
+import { fetchSellerSession, setToken } from "./lib/api-client"
+import { clearSellerStoreId } from "./lib/seller-store-id"
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem("seller_admin_token")
-  if (!token) return <Navigate to="/login" replace />
+  const [status, setStatus] = useState<"checking" | "valid" | "invalid">(
+    localStorage.getItem("seller_admin_token") ? "checking" : "invalid"
+  )
+
+  useEffect(() => {
+    if (!localStorage.getItem("seller_admin_token")) {
+      setStatus("invalid")
+      return
+    }
+
+    let active = true
+    fetchSellerSession()
+      .then(() => {
+        if (active) setStatus("valid")
+      })
+      .catch(() => {
+        setToken(null)
+        clearSellerStoreId()
+        if (active) setStatus("invalid")
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (status === "checking") {
+    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">Checking seller session…</div>
+  }
+  if (status === "invalid") return <Navigate to="/login" replace />
   return <>{children}</>
 }
 

@@ -1,4 +1,4 @@
-import { getSellerStoreId, setSellerStoreId } from "./seller-store-id"
+import { clearSellerStoreId, getSellerStoreId, setSellerStoreId } from "./seller-store-id"
 
 const MEDUSA_URL = import.meta.env.VITE_MEDUSA_URL ?? "http://127.0.0.1:9000"
 export const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL ?? "http://127.0.0.1:5174"
@@ -54,6 +54,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (response.status === 401) {
     setToken(null)
+    clearSellerStoreId()
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.assign("/login")
     }
@@ -107,7 +108,19 @@ export async function login(email: string, password: string) {
   }
   const token = body.token as string
   setToken(token)
-  await fetchSellerSession().catch(() => undefined)
+  try {
+    await fetchSellerSession()
+  } catch (error: unknown) {
+    setToken(null)
+    clearSellerStoreId()
+    if (
+      error instanceof ApiError &&
+      (error.status === 401 || error.status === 403 || error.status === 404 || error.code === "STORE_NOT_FOUND")
+    ) {
+      throw new ApiError(error.status, "SELLER_STORE_NOT_LINKED", "This account is not linked to a seller store.")
+    }
+    throw error
+  }
   return token
 }
 

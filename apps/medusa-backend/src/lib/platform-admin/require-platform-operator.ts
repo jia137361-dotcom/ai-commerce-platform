@@ -82,6 +82,12 @@ export async function requirePlatformOperator(
     return null
   }
 
+  const sellerMemberships = await storeCore.listStoreMembers({ user_id: userId })
+  if (sellerMemberships.length) {
+    sendError(res, 403, "FORBIDDEN", "Platform operator accounts must be separate from seller store accounts")
+    return null
+  }
+
   return {
     user_id: operator.user_id,
     operator_id: operator.id,

@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactNode } from "react"
 import { Navigate, Route, Routes } from "react-router-dom"
 import { Layout } from "./components/Layout"
 import { LoginPage } from "./pages/Login"
@@ -8,10 +9,38 @@ import { StoresPage, StoreDetailPage } from "./pages/Stores"
 import { OrdersPage, OrderDetailPage } from "./pages/Orders"
 import { ActivityPage } from "./pages/Activity"
 import { LogisticsPage } from "./pages/Logistics"
-import { getToken } from "./lib/api-client"
+import { clearPlatformSession, fetchPlatformSession, getToken } from "./lib/api-client"
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  if (!getToken()) return <Navigate to="/login" replace />
+function RequireAuth({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<"checking" | "valid" | "invalid">(
+    getToken() ? "checking" : "invalid"
+  )
+
+  useEffect(() => {
+    if (!getToken()) {
+      setStatus("invalid")
+      return
+    }
+
+    let active = true
+    fetchPlatformSession()
+      .then(() => {
+        if (active) setStatus("valid")
+      })
+      .catch(() => {
+        clearPlatformSession()
+        if (active) setStatus("invalid")
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (status === "checking") {
+    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">Checking platform session…</div>
+  }
+  if (status === "invalid") return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
