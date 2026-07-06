@@ -54,6 +54,7 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
   const email = auth.customer ? undefined : guestEmail
   const displayId = params.get("display_id") ?? undefined
+  const storeId = params.get("store")?.trim() || undefined
 
   useEffect(() => {
     let active = true
@@ -69,8 +70,8 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
       }
       try {
         const [result, detail] = await Promise.all([
-          getOrderTracking(orderId, email),
-          auth.customer ? getAuthenticatedOrderDetail(orderId) : getOrderDetail(orderId, email),
+          getOrderTracking(orderId, email, { storeId }),
+          auth.customer ? getAuthenticatedOrderDetail(orderId, { storeId }) : getOrderDetail(orderId, email, { storeId }),
         ])
         if (!active) return
         setTracking(result)
@@ -87,13 +88,13 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
     return () => {
       active = false
     }
-  }, [auth.customer, auth.isLoading, email, orderId])
+  }, [auth.customer, auth.isLoading, email, orderId, storeId])
 
   const firstShipment = tracking?.shipments[0]
   const detailHref = auth.customer
-    ? `/account/orders/${encodeURIComponent(orderId)}`
+    ? `/account/orders/${encodeURIComponent(orderId)}${storeId ? `?${new URLSearchParams({ store: storeId }).toString()}` : ""}`
     : guestEmail
-      ? `/account/orders/${encodeURIComponent(orderId)}?${new URLSearchParams({ email: guestEmail }).toString()}`
+      ? `/account/orders/${encodeURIComponent(orderId)}?${new URLSearchParams({ email: guestEmail, ...(storeId ? { store: storeId } : {}) }).toString()}`
       : "/orders/lookup"
   const backHref = auth.customer ? "/account/orders" : detailHref
   const backLabel = auth.customer ? "Back to orders" : "Back to order details"

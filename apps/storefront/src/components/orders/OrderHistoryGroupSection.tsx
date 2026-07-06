@@ -7,7 +7,7 @@ type OrderHistoryGroupSectionProps = {
   group: OrderHistoryGroup
   customerEmail?: string | null
   customerName?: string | null
-  onConfirmReceipt?: (orderId: string) => Promise<void>
+  onConfirmReceipt?: (orderId: string, storeId?: string) => Promise<void>
   onReviewSubmitted?: () => void
   onRefundSubmitted?: () => void
 }

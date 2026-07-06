@@ -144,7 +144,7 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
   return (
     <PageShell className="buyer-designer-page" contentClassName="designer-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
       <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
-        <a href="/store">Store</a><span>/</span>
+        <a href="/">Stores</a><span>/</span>
         <a href={`/products/${productId}`}>Product</a><span>/</span>
         <span>Designer</span>
       </nav>

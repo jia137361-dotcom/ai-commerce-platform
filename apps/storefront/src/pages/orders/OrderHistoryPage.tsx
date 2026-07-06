@@ -91,8 +91,8 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
                   group={group}
                   customerEmail={auth.customer?.email}
                   customerName={[auth.customer?.firstName, auth.customer?.lastName].filter(Boolean).join(" ") || undefined}
-                  onConfirmReceipt={async (orderId) => {
-                    await confirmOrderReceived(orderId)
+                  onConfirmReceipt={async (orderId, storeId) => {
+                    await confirmOrderReceived(orderId, { storeId })
                   }}
                   onReviewSubmitted={() => window.location.reload()}
                   onRefundSubmitted={() => window.location.reload()}

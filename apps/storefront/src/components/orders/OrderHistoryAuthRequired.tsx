@@ -9,7 +9,7 @@ export function OrderHistoryAuthRequired() {
       <div>
         <a className="primary" href="/account/sign-in?returnTo=/account/orders">Sign in</a>
         <a href="/orders/lookup">Find an order</a>
-        <a href="/store">Back to store</a>
+        <a href="/">Back to stores</a>
       </div>
     </section>
   )

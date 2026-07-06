@@ -20,7 +20,7 @@ export function OrderTrackingEmptyState({
       <p>{message}</p>
       <div className="buyer-order-empty-actions">
         <Button href={actionHref}>{actionLabel}</Button>
-        <Button variant="secondary" href="/store">Back to store</Button>
+        <Button variant="secondary" href="/">Back to stores</Button>
       </div>
     </Card>
   )

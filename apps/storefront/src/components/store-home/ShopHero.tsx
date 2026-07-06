@@ -1,6 +1,13 @@
-type ShopHeroProps = { brandName: string; imageUrl?: string; isFallback?: boolean; announcement?: string; description?: string }
+type ShopHeroProps = {
+  brandName: string
+  imageUrl?: string
+  isFallback?: boolean
+  announcement?: string
+  description?: string
+  collectionHref?: string
+}
 
-export function ShopHero({ brandName, imageUrl, isFallback = false, announcement, description }: ShopHeroProps) {
+export function ShopHero({ brandName, imageUrl, isFallback = false, announcement, description, collectionHref = "#products" }: ShopHeroProps) {
   const backgroundImage = imageUrl
     ? `linear-gradient(90deg, rgba(20, 14, 10, .78), rgba(20, 14, 10, .08)), url("${imageUrl.replace(/["\\]/g, "")}")`
     : undefined
@@ -11,7 +18,7 @@ export function ShopHero({ brandName, imageUrl, isFallback = false, announcement
         <p>{announcement ?? "Store collection"}</p>
         <h2>{brandName}</h2>
         <span>{description ?? `Explore a considered collection from ${brandName}.`}</span>
-        <a className="buyer-ui-button buyer-ui-button--primary" href="/store#products">Explore collection</a>
+        <a className="buyer-ui-button buyer-ui-button--primary" href={collectionHref}>Explore collection</a>
       </div>
     </section>
   )

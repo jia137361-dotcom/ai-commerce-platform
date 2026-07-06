@@ -160,35 +160,21 @@ function SupportedShippingRegions() {
 export function StaticPageNavigation() {
   return (
     <nav className="buyer-info-actions" aria-label="Buyer shortcuts">
-      <Button href="/store">Back to store</Button>
-      <Button href="/account" variant="secondary">Buyer account</Button>
-      <Button href="/account/orders" variant="secondary">View orders</Button>
+      <Button href="/help" variant="secondary">Back to Help Center</Button>
     </nav>
-  )
-}
-
-export function DraftLegalNotice() {
-  return (
-    <Card as="aside" variant="muted" className="buyer-info-draft-notice">
-      <strong>Internal demo notice</strong>
-      <p>Draft for internal demo; final legal copy required before production.</p>
-    </Card>
   )
 }
 
 export function HelpContent() {
   return (
     <div className="buyer-help-landing">
-      <p className="buyer-help-intro">
-        Find practical guidance for accounts, orders, product design, shipping, payments, after-sales support, AI tools, and platform policies.
-      </p>
-      <div className="buyer-help-category-grid">
-        {HELP_CATEGORIES.map((category) => (
-          <section className="buyer-help-category" key={category.title}>
-            <header>
-              <h2>{category.title}</h2>
-              <p>{category.description}</p>
-            </header>
+      <div className="buyer-help-accordion" aria-label="Help Center categories">
+        {HELP_CATEGORIES.map((category, index) => (
+          <details className="buyer-help-category" key={category.title} open={index === 0}>
+            <summary>
+              <span>{category.title}</span>
+              <span className="buyer-help-chevron" aria-hidden="true" />
+            </summary>
             <div className="buyer-help-article-list">
               {category.articles.map((entry) => (
                 <a className="buyer-help-article-link" href={`/help/${entry.slug}`} key={entry.slug}>
@@ -196,9 +182,13 @@ export function HelpContent() {
                 </a>
               ))}
             </div>
-          </section>
+          </details>
         ))}
       </div>
+      <section className="buyer-help-contact-card" aria-label="Contact support">
+        <h2>Still can't solve the problem?</h2>
+        <Button href="/help/contact-us" variant="secondary">Contact us</Button>
+      </section>
     </div>
   )
 }
@@ -212,9 +202,6 @@ export function HelpArticleContent({ article }: { article: HelpArticleWithCatego
         title: section.heading,
         body: <p>{section.body}</p>,
       }))} />
-      <div className="buyer-help-backlink">
-        <a href="/help">Back to Help Center</a>
-      </div>
     </div>
   )
 }

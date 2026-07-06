@@ -5,7 +5,6 @@ import {
   buyerOrderDisplayStatusLabel,
   canConfirmReceipt,
   canRequestRefund,
-  canTrackOrder,
   canViewReview,
   resolveBuyerOrderDisplayStatus,
 } from "../../pages/orders/order-history-display"
@@ -19,9 +18,16 @@ type OrderHistoryCardProps = {
   order: BuyerOrderSummary
   customerEmail?: string | null
   customerName?: string | null
-  onConfirmReceipt?: (orderId: string) => Promise<void>
+  onConfirmReceipt?: (orderId: string, storeId?: string) => Promise<void>
   onReviewSubmitted?: () => void
   onRefundSubmitted?: () => void
+}
+
+const orderHref = (order: BuyerOrderSummary, suffix = "") => {
+  const params = new URLSearchParams()
+  if (order.storeId) params.set("store", order.storeId)
+  const query = params.toString()
+  return `/account/orders/${encodeURIComponent(order.orderId)}${suffix}${query ? `?${query}` : ""}`
 }
 
 export function OrderHistoryCard({
@@ -46,7 +52,7 @@ export function OrderHistoryCard({
     setConfirmationError(undefined)
     try {
       if (!onConfirmReceipt) return
-      await onConfirmReceipt(order.orderId)
+      await onConfirmReceipt(order.orderId, order.storeId ?? undefined)
       window.location.reload()
     } catch (error) {
       setConfirmationError(error instanceof Error ? error.message : "Unable to confirm receipt")
@@ -99,11 +105,9 @@ export function OrderHistoryCard({
         <footer>
           <span>{order.itemCount} item{order.itemCount === 1 ? "" : "s"}</span>
           <nav aria-label={`Order ${order.displayId ?? order.orderId} actions`}>
-            {canTrackOrder(order) ? (
-              <Button variant="secondary" href={`/account/orders/${encodeURIComponent(order.orderId)}/tracking`}>
-                Track order
-              </Button>
-            ) : null}
+            <Button variant="secondary" href={orderHref(order)}>
+              View details
+            </Button>
             {canConfirmReceipt(order) && onConfirmReceipt ? (
               <Button onClick={() => void confirmReceipt()} disabled={confirming}>
                 {confirming ? "Confirming…" : "Confirm delivery"}

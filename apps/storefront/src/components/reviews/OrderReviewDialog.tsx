@@ -17,7 +17,7 @@ export type OrderReviewTarget = {
 
 type OrderReviewDialogProps = {
   open: boolean
-  order: Pick<BuyerOrderSummary, "displayId" | "orderId" | "previewItems">
+  order: Pick<BuyerOrderSummary, "displayId" | "orderId" | "previewItems" | "storeId">
   customerEmail?: string | null
   customerName?: string | null
   onClose: () => void
@@ -99,6 +99,7 @@ export function OrderReviewDialog({
     try {
       await submitProductReview({
         productId: previewItem.productId!,
+        storeId: order.storeId,
         email: customerEmail,
         orderNumber: order.displayId ?? order.orderId,
         rating: productRating,
@@ -241,6 +242,7 @@ export function OrderReviewFormPanel({
         setFormMessage(undefined)
         void submitProductReview({
           productId: target.productId,
+          storeId: undefined,
           email: target.email,
           orderNumber: target.orderNumber,
           rating: productRating,

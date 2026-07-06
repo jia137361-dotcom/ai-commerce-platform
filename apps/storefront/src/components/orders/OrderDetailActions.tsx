@@ -75,7 +75,7 @@ export function OrderDetailActions({
       {cancelError ? <p className="buyer-order-error">{cancelError}</p> : null}
       {refundSuccess ? <p className="buyer-order-action-success">{refundSuccess}</p> : null}
       {refundError ? <p className="buyer-order-error">{refundError}</p> : null}
-      <Button variant="secondary" href="/store">Back to store</Button>
+      <Button variant="secondary" href="/">Back to stores</Button>
       {actionState.showSearchAnotherOrder ? (
         <Button variant="ghost" href="/orders/lookup">Search another order</Button>
       ) : (

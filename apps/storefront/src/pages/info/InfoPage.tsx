@@ -9,7 +9,6 @@ import {
   ContactUsContent,
   CookiePolicyContent,
   CopyrightPolicyContent,
-  DraftLegalNotice,
   HelpArticleContent,
   HelpContent,
   OrderStatusContent,
@@ -43,13 +42,12 @@ export function InfoPage({ cartCount, title, children }: InfoPageProps) {
     >
       <Card as="article" className="buyer-info-card">
         <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
-          <a href="/store">Store</a>
+          <a href="/">Stores</a>
           <span>/</span>
           <span>{title}</span>
         </nav>
         <SectionHeader eyebrow="Buyer information" title={title} level={1} />
         <div className="buyer-info-body">{children}</div>
-        <DraftLegalNotice />
         <StaticPageNavigation />
       </Card>
     </PageShell>

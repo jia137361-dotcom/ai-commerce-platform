@@ -10,7 +10,7 @@ export function OrderDetailEmptyState({ title, message }: OrderDetailEmptyStateP
       <p>{message}</p>
       <div className="buyer-order-empty-actions">
         <a href="/orders/lookup">Search order</a>
-        <a href="/store">Back to store</a>
+        <a href="/">Back to stores</a>
       </div>
     </section>
   )

@@ -20,24 +20,23 @@ import {
   type BuyerStoreSettings,
   type DataSource,
 } from "../../lib/buyer-api"
-import { enterLegacyDefaultStoreContext, getLegacyDefaultStoreId } from "../../lib/buyer-store-context"
 import type { StoreProduct } from "../../lib/mock-data"
 
 type StoreHomePageProps = { cartCount: number; storeSlug?: string }
 type Notice = { key: string; message: string }
 
-const fallbackSettings: BuyerStoreSettings = {
-  storeId: getLegacyDefaultStoreId(),
-  brandName: "Citigoo Official Store",
+const buildPendingStoreSettings = (storeSlug?: string): BuyerStoreSettings => ({
+  storeId: "",
+  brandName: storeSlug ? "Loading store" : "Store",
   galleryUrls: [],
   metadata: {},
-}
+})
 
-function StoreFooter() {
+function StoreFooter({ productsHref = "#products" }: { productsHref?: string }) {
   return (
     <footer className="buyer-store-footer">
       <section><h2>Citigoo</h2><p>Curated products, protected checkout, and reliable order support.</p></section>
-      <section><h2>Shopping</h2><a href="/store">All products</a><a href="/cart">Cart</a></section>
+      <section><h2>Shopping</h2><a href={productsHref}>All products</a><a href="/cart">Cart</a></section>
       <section><h2>Customer service</h2><a href="/orders/lookup">Find an order</a><a href="/account/orders">Order history</a></section>
       <section><h2>Help</h2><a href="/help">Help Center</a><a href="/help">Contact us</a></section>
       <div className="buyer-store-legal"><span>© 2026 Citigoo Limited</span><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div>
@@ -46,7 +45,7 @@ function StoreFooter() {
 }
 
 export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
-  const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
+  const [settings, setSettings] = useState<BuyerStoreSettings>(() => buildPendingStoreSettings(storeSlug))
   const [categories, setCategories] = useState<BuyerCategory[]>([{ id: "all", name: "All items" }])
   const [products, setProducts] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,13 +59,13 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   const [storeReviews, setStoreReviews] = useState<BuyerReviewsSummary | null>(null)
   const [storeReviewsError, setStoreReviewsError] = useState<string>()
 
-  const loadStore = useCallback(async (isActive: () => boolean) => {
+  const loadStore = useCallback(async (isActive: () => boolean, storeId: string) => {
     setLoading(true)
     const [settingsResult, categoriesResult, productsResult, reviewsResult] = await Promise.all([
-      fetchStoreSettings(),
-      fetchProductCategories(),
-      fetchProducts(),
-      fetchStoreReviews(),
+      fetchStoreSettings({ storeId }),
+      fetchProductCategories({ storeId }),
+      fetchProducts({ storeId }),
+      fetchStoreReviews({ storeId }),
     ])
 
     if (!isActive()) return
@@ -92,19 +91,28 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     let active = true
     const boot = async () => {
       setLoading(true)
-      if (storeSlug) {
-        const storeResult = await fetchMarketplaceStoreBySlug(storeSlug)
-        if (!active) return
-        if (!storeResult.data) {
-          setLoading(false)
-          setNotices([{ key: "store-missing", message: storeResult.error ?? "Store not found" }])
-          return
-        }
-        setActiveBuyerStoreId(storeResult.data.storeId)
-      } else {
-        enterLegacyDefaultStoreContext()
+      setSettings(buildPendingStoreSettings(storeSlug))
+      setCategories([{ id: "all", name: "All items" }])
+      setProducts([])
+      setStoreReviews(null)
+      setStoreReviewsError(undefined)
+      setNotices([])
+      if (!storeSlug) {
+        setLoading(false)
+        setNotices([{ key: "store-route-missing", message: "Choose a store from the marketplace." }])
+        return
       }
-      await loadStore(() => active)
+
+      const storeResult = await fetchMarketplaceStoreBySlug(storeSlug)
+      if (!active) return
+      if (!storeResult.data) {
+        setLoading(false)
+        setNotices([{ key: "store-missing", message: storeResult.error ?? "Store not found" }])
+        return
+      }
+      const storeId = storeResult.data.storeId
+      setActiveBuyerStoreId(storeId)
+      await loadStore(() => active, storeId)
     }
     void boot()
     return () => {
@@ -161,9 +169,9 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
       className="buyer-store-page"
       contentClassName="buyer-shop-shell-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
-      footer={<StoreFooter />}
+      footer={<StoreFooter productsHref="#products" />}
     >
-      <ShopHero brandName={settings.brandName} imageUrl={heroImage} isFallback={!settings.bannerUrl} announcement={settings.announcement} description={settings.description} />
+      <ShopHero brandName={settings.brandName} imageUrl={heroImage} isFallback={!settings.bannerUrl} announcement={settings.announcement} description={settings.description} collectionHref="#products" />
       <StoreIdentity settings={settings} />
       <ShopBrowseControls
         categories={visibleCategories}

@@ -38,12 +38,16 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const categories = product.category_ids?.length
     ? await storeCoreService.listProductCategories({ id: product.category_ids, store_id: storeId })
     : []
+  const stores = await storeCoreService.listStores({ id: storeId })
+  const store = stores[0] as { name?: string | null; slug?: string | null } | undefined
 
   return res.json({
     product: {
       ...normalizeProductWithReviewSummary(productWithRegions, summaries.get(product.id)),
       supported_regions: productWithRegions.supported_regions,
       category_name: categories[0]?.name ?? null,
+      store_name: store?.name ?? storeId,
+      store_slug: store?.slug ?? "",
     },
   })
 }

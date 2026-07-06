@@ -230,7 +230,7 @@ function App() {
   }
 
   if (path.startsWith("/store")) {
-    return <StoreHomePage cartCount={cartCount} />
+    return <MarketplaceHomePage cartCount={cartCount} />
   }
 
   if (path === "/" || path.startsWith("/?")) {

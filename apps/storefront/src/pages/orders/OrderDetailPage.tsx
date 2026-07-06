@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import { OrderDetailAddress } from "../../components/orders/OrderDetailAddress"
 import { OrderDetailActions } from "../../components/orders/OrderDetailActions"
 import { OrderDetailEmptyState } from "../../components/orders/OrderDetailEmptyState"
 import { OrderDetailHeader } from "../../components/orders/OrderDetailHeader"
@@ -20,10 +19,13 @@ import {
   getBuyerStoreId,
   getAuthenticatedOrderDetail,
   getOrderDetail,
+  getOrderTracking,
   type BuyerOrderDetail,
+  type BuyerOrderTracking,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { resolveOrderDetailActions } from "./order-detail-state"
+import { humanizeOrderStatus, paymentStatusPresentation } from "./order-status"
 
 type OrderDetailPageProps = {
   orderId: string
@@ -45,10 +47,108 @@ const readSessionEmail = (orderId: string, storeId?: string) => {
   return undefined
 }
 
+const formatDate = (value?: string | null) => {
+  if (!value) return "Not available"
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+const readAddress = (address: Record<string, unknown> | null | undefined, key: string) => {
+  const value = address?.[key]
+  return typeof value === "string" && value.trim() ? value : undefined
+}
+
+const addressLines = (order: BuyerOrderDetail) => [
+  [readAddress(order.shippingAddress, "first_name"), readAddress(order.shippingAddress, "last_name")].filter(Boolean).join(" "),
+  readAddress(order.shippingAddress, "address_1"),
+  readAddress(order.shippingAddress, "address_2"),
+  [readAddress(order.shippingAddress, "city"), readAddress(order.shippingAddress, "province"), readAddress(order.shippingAddress, "postal_code")].filter(Boolean).join(", "),
+  readAddress(order.shippingAddress, "country_code")?.toUpperCase(),
+  readAddress(order.shippingAddress, "phone"),
+].filter(Boolean)
+
+function OrderProgressRail({ order, tracking }: { order: BuyerOrderDetail; tracking: BuyerOrderTracking | null }) {
+  const shippedAt = tracking?.shipments[0]?.shippedAt ?? tracking?.events.find((event) => /ship|transit|dispatch/i.test(event.label))?.date
+  const deliveredAt = tracking?.shipments[0]?.deliveredAt
+  const paid = ["authorized", "captured", "paid", "completed"].includes((order.paymentStatus ?? "").toLowerCase())
+  const shipped = Boolean(shippedAt || ["shipped", "partially_shipped", "fulfilled"].includes((order.fulfillmentStatus ?? "").toLowerCase()))
+  const delivered = Boolean(deliveredAt || ["delivered"].includes((order.fulfillmentStatus ?? "").toLowerCase()))
+  const steps = [
+    { label: "Order placed", date: order.createdAt, done: true, icon: "✓" },
+    { label: "Payment confirmed", date: paid ? order.createdAt : undefined, done: paid, icon: "✓" },
+    { label: "Shipped", date: shippedAt, done: shipped, icon: "↗" },
+    { label: "Delivered", date: deliveredAt, done: delivered, icon: "□" },
+  ]
+  return <section className="buyer-order-progress-rail" aria-label="Order progress">
+    {steps.map((step, index) => <article key={step.label} className={step.done ? "done" : ""}>
+      <span>{step.icon}</span>
+      <strong>{step.label}</strong>
+      <small>{step.date ? formatDate(step.date) : index === steps.length - 1 ? "Estimated after shipment" : "Pending"}</small>
+    </article>)}
+  </section>
+}
+
+function OrderLogisticsOverview({ order, tracking, trackingHref }: { order: BuyerOrderDetail; tracking: BuyerOrderTracking | null; trackingHref: string }) {
+  const latestEvent = tracking?.events[0]
+  const latestSupplier = tracking?.supplierOrders.find((entry) => entry.logisticsStatusText || entry.logisticsStatus || entry.trackingNumber)
+  const lines = addressLines(order)
+  return <section className="buyer-order-logistics-card">
+    <div>
+      <span className="buyer-order-logistics-badge">{tracking?.shipments.length || tracking?.events.length ? "In transit" : "Waiting"}</span>
+      <h2>{tracking?.shipments.length || tracking?.events.length ? "Shipping in progress" : "Preparing shipment"}</h2>
+      <p>{latestEvent?.date ? `Latest update ${formatDate(latestEvent.date)}` : "Tracking will appear after the seller or supplier dispatches the package."}</p>
+    </div>
+    <nav>
+      <Button variant="secondary" href={trackingHref}>Track logistics</Button>
+      <Button href="/account/orders">Back to orders</Button>
+    </nav>
+    <section>
+      <div>
+        <p className="buyer-order-kicker">Delivery address</p>
+        {lines.length ? lines.map((line) => <p key={line}>{line}</p>) : <p>Not provided</p>}
+        {order.email ? <p>{order.email}</p> : null}
+      </div>
+      <div>
+        <p className="buyer-order-kicker">Latest milestone</p>
+        <strong>{latestEvent?.label ?? latestSupplier?.logisticsStatusText ?? latestSupplier?.logisticsStatus ?? "No carrier milestone yet"}</strong>
+        <p>{latestSupplier?.trackingNumber ? `Tracking number ${latestSupplier.trackingNumber}` : latestEvent?.status ?? "Waiting for logistics sync."}</p>
+        {latestEvent?.date ? <small>{formatDate(latestEvent.date)}</small> : null}
+      </div>
+    </section>
+  </section>
+}
+
+function OrderInfoPanel({ order, tracking }: { order: BuyerOrderDetail; tracking: BuyerOrderTracking | null }) {
+  const payment = paymentStatusPresentation(order.paymentStatus)
+  const shippedAt = tracking?.shipments[0]?.shippedAt ?? tracking?.events.find((event) => /ship|transit|dispatch/i.test(event.label))?.date
+  return <section className="buyer-order-info-card buyer-order-card">
+    <p className="buyer-order-kicker">Order information</p>
+    <dl>
+      <div><dt>Payment method</dt><dd>{payment.label}</dd></div>
+      <div><dt>Order time</dt><dd>{formatDate(order.createdAt)}</dd></div>
+      <div><dt>Payment status</dt><dd>{humanizeOrderStatus(order.paymentStatus)}</dd></div>
+      <div><dt>Shipping time</dt><dd>{formatDate(shippedAt)}</dd></div>
+    </dl>
+  </section>
+}
+
+function OrderQuickActions({ trackingHref, orderId }: { trackingHref: string; orderId: string }) {
+  return <section className="buyer-order-quick-actions buyer-order-card">
+    <p className="buyer-order-kicker">Quick actions</p>
+    <div>
+      <a href="/help/contact-us">Support</a>
+      <a href={trackingHref}>Logistics</a>
+      <a href={`/account/messages?orderId=${encodeURIComponent(orderId)}`}>Message</a>
+      <a href="/account/orders">Orders</a>
+    </div>
+  </section>
+}
+
 export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const auth = useBuyerAuth()
   const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
+  const [tracking, setTracking] = useState<BuyerOrderTracking | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
   const [cancelOpen, setCancelOpen] = useState(false)
@@ -65,6 +165,7 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
 
   const params = new URLSearchParams(window.location.search)
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
+  const storeId = params.get("store")?.trim() || undefined
   const email = auth.customer ? undefined : guestEmail
 
   useEffect(() => {
@@ -80,14 +181,18 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
         return
       }
       try {
-        const result = auth.customer
-          ? await getAuthenticatedOrderDetail(orderId)
-          : await getOrderDetail(orderId, email)
+        const [detailResult, trackingResult] = await Promise.allSettled([
+          auth.customer ? getAuthenticatedOrderDetail(orderId, { storeId }) : getOrderDetail(orderId, email, { storeId }),
+          getOrderTracking(orderId, email, { storeId }),
+        ])
         if (!active) return
-        setOrder(result)
+        if (detailResult.status === "rejected") throw detailResult.reason
+        setOrder(detailResult.value)
+        setTracking(trackingResult.status === "fulfilled" ? trackingResult.value : null)
       } catch (detailError) {
         if (!active) return
         setOrder(null)
+        setTracking(null)
         setError(detailError instanceof Error ? detailError.message : "Unable to load order detail.")
       } finally {
         if (active) setLoading(false)
@@ -97,11 +202,12 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
     return () => {
       active = false
     }
-  }, [auth.customer, auth.isLoading, email, orderId])
+  }, [auth.customer, auth.isLoading, email, orderId, storeId])
 
   const trackingParams = new URLSearchParams()
   if (guestEmail && !auth.customer) trackingParams.set("email", guestEmail)
   if (order?.displayId) trackingParams.set("display_id", order.displayId)
+  if (storeId || order?.storeId) trackingParams.set("store", storeId ?? order?.storeId ?? "")
   const trackingQuery = trackingParams.toString()
   const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
   const actionState = resolveOrderDetailActions({
@@ -197,13 +303,16 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
         ) : (
           <>
             <OrderDetailHeader order={order} />
-            <section className="buyer-order-detail-grid">
+            <OrderProgressRail order={order} tracking={tracking} />
+            <section className="buyer-order-detail-grid buyer-order-detail-redesign">
               <div className="buyer-order-detail-main">
+                <OrderLogisticsOverview order={order} tracking={tracking} trackingHref={trackingHref} />
                 <OrderDetailItems order={order} />
-                <OrderDetailAddress address={order.shippingAddress} email={order.email} />
               </div>
               <aside className="buyer-order-detail-side">
                 <OrderDetailSummary order={order} />
+                <OrderInfoPanel order={order} tracking={tracking} />
+                <OrderQuickActions trackingHref={trackingHref} orderId={order.orderId} />
                 <OrderDetailActions
                   order={order}
                   isAuthenticated={Boolean(auth.customer)}

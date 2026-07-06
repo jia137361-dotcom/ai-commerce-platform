@@ -15,6 +15,7 @@ describe("buyer static information pages", () => {
     expect(html).toContain("Order Management")
     expect(html).toContain("Payments &amp; Billing")
     expect(html).toContain("Copyright &amp; Legal")
+    expect(html).toContain("<details")
     expect(html).toContain('href="/help/create-account"')
     expect(html).toContain('href="/help/refund-policy"')
     expect(html).toContain('href="/help/cookie-policy"')
@@ -23,8 +24,8 @@ describe("buyer static information pages", () => {
   it("does not claim captured or refunded payment in the terms", () => {
     const html = renderToStaticMarkup(createElement(TermsContent))
 
-    expect(html).toContain("Payment authorization")
-    expect(html).toContain("pending review")
+    expect(html).toContain("Payments")
+    expect(html).toContain("does not guarantee approval")
     expect(html).not.toContain("Payment captured")
     expect(html).not.toContain("Money paid")
     expect(html).not.toContain("Refunded")
@@ -32,21 +33,20 @@ describe("buyer static information pages", () => {
     expect(html).not.toContain("Guaranteed refund")
   })
 
-  it("renders account, cart, order, guest lookup, and data-separation privacy sections", () => {
+  it("renders account, cart, order, guest lookup, and support privacy sections", () => {
     const html = renderToStaticMarkup(createElement(PrivacyContent))
 
     expect(html).toContain("Account data")
     expect(html).toContain("Cart data")
     expect(html).toContain("Order data")
     expect(html).toContain("Guest lookup data")
-    expect(html).toContain("Seller and admin data separation")
+    expect(html).toContain("Support and safety")
   })
 
-  it("includes store, account, and order navigation actions", () => {
+  it("includes help center navigation action", () => {
     const html = renderToStaticMarkup(createElement(StaticPageNavigation))
 
-    expect(html).toContain('href="/store"')
-    expect(html).toContain('href="/account"')
-    expect(html).toContain('href="/account/orders"')
+    expect(html).toContain('href="/help"')
+    expect(html).toContain("Back to Help Center")
   })
 })

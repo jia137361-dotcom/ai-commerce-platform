@@ -59,38 +59,83 @@
 .buyer-help-landing,
 .buyer-help-article {
   display: grid;
-  gap: var(--buyer-space-5);
+  gap: 0;
 }
 
 .buyer-help-intro,
 .buyer-help-article-intro {
   margin: 0;
-  max-width: 760px;
+  max-width: 860px;
   color: var(--buyer-text-muted);
   font-size: 16px;
   line-height: 1.65;
 }
 
-.buyer-help-category-grid {
+.buyer-help-accordion {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--buyer-space-4);
+  width: min(100%, 980px);
+  justify-self: center;
+  overflow: hidden;
+  border: 1px solid var(--buyer-border);
+  border-radius: 8px;
+  background: var(--buyer-surface);
+  box-shadow: none;
 }
 
 .buyer-help-category {
-  display: grid;
-  align-content: start;
-  gap: var(--buyer-space-4);
-  border: 1px solid var(--buyer-border);
-  border-radius: var(--buyer-radius-card);
-  background: var(--buyer-surface);
-  padding: var(--buyer-space-5);
+  border-bottom: 1px solid var(--buyer-border);
 }
 
-.buyer-help-category h2 {
-  margin: 0 0 var(--buyer-space-2);
+.buyer-help-category:last-child {
+  border-bottom: 0;
+}
+
+.buyer-help-category summary {
+  display: grid;
+  grid-template-columns: 1fr 76px;
+  align-items: center;
+  min-height: 68px;
+  cursor: pointer;
+  list-style: none;
   color: var(--buyer-text);
-  font-size: 18px;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  transition: background 160ms ease;
+}
+
+.buyer-help-category summary:hover {
+  background: var(--buyer-surface-muted);
+}
+
+.buyer-help-category summary::-webkit-details-marker {
+  display: none;
+}
+
+.buyer-help-category summary span:first-child {
+  padding: 20px 24px;
+}
+
+.buyer-help-chevron {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  border-left: 1px solid var(--buyer-border);
+}
+
+.buyer-help-chevron::before {
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--buyer-text-muted);
+  border-bottom: 2px solid var(--buyer-text-muted);
+  content: "";
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.buyer-help-category[open] .buyer-help-chevron::before {
+  transform: rotate(225deg);
 }
 
 .buyer-help-category p {
@@ -101,24 +146,59 @@
 
 .buyer-help-article-list {
   display: grid;
-  gap: var(--buyer-space-2);
+  border-top: 1px solid var(--buyer-border);
+  background: var(--buyer-surface);
 }
 
-.buyer-help-article-link,
-.buyer-help-backlink a {
-  color: var(--buyer-focus);
-  font-weight: 800;
+.buyer-help-article-link {
+  color: var(--buyer-text);
+  font-weight: 500;
   text-decoration: none;
 }
 
 .buyer-help-article-link {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
   border-top: 1px solid var(--buyer-border);
-  padding-top: var(--buyer-space-2);
+  padding: 16px 24px;
+  font-size: 15px;
+  line-height: 1.35;
+  transition: background 160ms ease, color 160ms ease;
 }
 
-.buyer-help-article-link:hover,
-.buyer-help-backlink a:hover {
+.buyer-help-article-list p + .buyer-help-article-link {
+  border-top: 0;
+}
+
+.buyer-help-article-link:hover {
+  background: var(--buyer-surface-muted);
   text-decoration: underline;
+}
+
+.buyer-help-contact-card {
+  display: grid;
+  width: min(100%, 980px);
+  justify-items: center;
+  justify-self: center;
+  gap: 28px;
+  border-top: 10px solid var(--buyer-surface-muted);
+  padding: 46px 24px 64px;
+  text-align: center;
+}
+
+.buyer-help-contact-card h2 {
+  margin: 0;
+  color: var(--buyer-text);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.buyer-help-contact-card .buyer-ui-button {
+  width: min(360px, 100%);
+  min-height: 48px;
+  justify-content: center;
+  color: var(--buyer-text);
 }
 
 .buyer-help-category-label {
@@ -133,11 +213,6 @@
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.buyer-help-backlink {
-  border-top: 1px solid var(--buyer-border);
-  padding-top: var(--buyer-space-4);
 }
 
 .buyer-policy-index {
@@ -264,6 +339,16 @@
 
   .buyer-info-section {
     padding: var(--buyer-space-4);
+  }
+
+  .buyer-help-category summary {
+    grid-template-columns: 1fr 56px;
+  }
+
+  .buyer-help-category summary span:first-child,
+  .buyer-help-article-link {
+    padding-left: var(--buyer-space-4);
+    padding-right: var(--buyer-space-4);
   }
 
   .buyer-shipping-regions {

@@ -29,6 +29,19 @@ type OrderLineItem = {
   metadata?: Record<string, unknown> | null
 }
 
+const readProductIdFromLineItem = (item: OrderLineItem) => {
+  const metadata = item.metadata ?? {}
+  const candidates = [
+    metadata.mc_product_id,
+    metadata.product_id,
+    metadata.store_product_id,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim()
+  }
+  return null
+}
+
 type CustomerOrder = {
   id?: string
   display_id?: string | number | null
@@ -195,7 +208,8 @@ const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<
       title: item.title ?? "Untitled item",
       thumbnail: resolveOrderLineItemThumbnail(item),
       quantity: readNumber(item.quantity) ?? 0,
-      product_id: typeof item.metadata?.mc_product_id === "string" ? item.metadata.mc_product_id : null,
+      product_id: readProductIdFromLineItem(item),
+      metadata: item.metadata ?? null,
     })),
   }
 }

@@ -16,7 +16,7 @@ jest.mock("./OrderPreviewImage", () => ({
 import { OrderHistoryCard } from "./OrderHistoryCard"
 
 describe("OrderHistoryCard design-system integration", () => {
-  it("shows buyer status badge and tracking link for shipped orders", () => {
+  it("shows buyer status badge and detail link for shipped orders", () => {
     const html = renderToStaticMarkup(createElement(OrderHistoryCard, {
       order: {
         orderId: "order_123",
@@ -31,15 +31,16 @@ describe("OrderHistoryCard design-system integration", () => {
         itemCount: 1,
         previewItems: [{ title: "Smoke item", quantity: 1, thumbnail: null }],
         receiptConfirmationRequired: true,
+        storeId: "store_123",
       },
     }))
 
-    expect(html).toContain('href="/account/orders/order_123/tracking"')
+    expect(html).toContain('href="/account/orders/order_123?store=store_123"')
     expect(html).toContain("#75")
     expect(html).toContain("To receive")
-    expect(html).toContain("Track order")
+    expect(html).not.toContain("Track order")
     expect(html).toContain("buyer-ui-card")
-    expect(html).not.toContain("View order")
+    expect(html).toContain("View details")
   })
 
   it("shows receipt confirmation, review, and refund actions from real order eligibility", () => {
