@@ -24,6 +24,7 @@ export type ProductVariantRow = {
   supplier_color_id?: string
   color: string
   size: string
+  image_url?: string | null
   price: number
   stock: number
 }
@@ -55,7 +56,9 @@ export type NormalizedProduct = {
   cost?: number | null
   tags?: string[]
   category_ids?: string[]
+  supplier_id?: string | null
   platform_product_id?: string | null
+  basic_product_id?: string | null
   supplier_product_id?: string | null
   supplier_variant_id?: string | null
   medusa_variant_id?: string | null

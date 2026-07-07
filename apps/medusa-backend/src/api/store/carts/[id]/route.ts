@@ -5,7 +5,9 @@ import {
   readCartStoreId,
 } from "../../../../lib/assert-cart-store"
 import { CartStoreAccessError } from "../../../../lib/cart-store-error"
+import { enrichOrderLineItemsWithImages } from "../../../../lib/order-line-item-display"
 import { syncCartLineItemShippingRequirements } from "../../../../lib/sync-cart-line-item-shipping"
+import { getStoreCoreService } from "../../../_helpers/store-core"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
@@ -25,10 +27,16 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     const store_id = readCartStoreId(cart)
+    const storeCore = getStoreCoreService(req)
+    const items = cart.items?.length
+      ? await enrichOrderLineItemsWithImages(storeCore, cart.items)
+      : cart.items
+
     res.status(200).json({
       cart_id: cart.id,
       store_id,
       ...cart,
+      items,
     })
   } catch (error: unknown) {
     if (error instanceof CartStoreAccessError) {

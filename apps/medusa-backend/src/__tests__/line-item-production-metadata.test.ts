@@ -27,6 +27,7 @@ describe("buildLineItemProductionMetadata", () => {
       supplier_color_id: "2",
       print_file_url: "https://example.com/print.png",
       mockup_image_url: "https://example.com/mockup.png",
+      image_url: "https://example.com/product.png",
     })
 
     expect(meta.mc_product_id).toBe("prod_test_1")
@@ -38,6 +39,7 @@ describe("buildLineItemProductionMetadata", () => {
     expect(meta.supplier_variant_id).toBe("spv_tshirt_black_m")
     expect(meta.print_file_url).toBe("https://example.com/print.png")
     expect(meta.mockup_image_url).toBe("https://example.com/mockup.png")
+    expect(meta.image_url).toBe("https://example.com/product.png")
     expect(meta.color).toBe("black")
     expect(meta.size).toBe("M")
     expect(meta.print_position).toBe("front")
@@ -87,11 +89,12 @@ describe("buildLineItemProductionMetadata", () => {
     const meta = await buildLineItemProductionMetadata(storeCoreService as any, {
       id: "prod_shirt",
       supplier_variant_id: "mug_default",
-      variants: [{ supplier_variant_id: "shirt_black_l", medusa_variant_id: "variant_black_l", supplier_color_id: "5", supplier_size_id: "22", color: "Black", size: "L", price: 79, stock: 10 }],
+      variants: [{ supplier_variant_id: "shirt_black_l", medusa_variant_id: "variant_black_l", supplier_color_id: "5", supplier_size_id: "22", color: "Black", size: "L", image_url: "https://example.com/black-shirt.png", price: 79, stock: 10 }],
     }, "variant_black_l")
     expect(meta.supplier_variant_id).toBe("shirt_black_l")
     expect(meta.supplier_color_id).toBe("5")
     expect(meta.supplier_size_id).toBe("22")
+    expect(meta.image_url).toBe("https://example.com/black-shirt.png")
     expect(meta.color).toBe("Black")
     expect(meta.size).toBe("L")
   })

@@ -35,4 +35,29 @@ describe("order-line-item-display", () => {
 
     expect(items[0]?.thumbnail).toBe("https://example.com/catalog.png")
   })
+
+  it("prefers selected variant image over product image", async () => {
+    const items = await enrichOrderLineItemsWithImages(
+      {
+        listProducts: async () => [
+          {
+            id: "prod_1",
+            mockup_image_url: "https://example.com/white.png",
+            variants: [
+              {
+                medusa_variant_id: "variant_black_3xl",
+                image_url: "https://example.com/black-3xl.png",
+              },
+            ],
+          },
+        ],
+      },
+      [{
+        variant_id: "variant_black_3xl",
+        metadata: { mc_product_id: "prod_1" },
+      }]
+    )
+
+    expect(items[0]?.thumbnail).toBe("https://example.com/black-3xl.png")
+  })
 })

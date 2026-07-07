@@ -18,6 +18,7 @@ export type LineItemProductionMetadata = {
   supplier_color_id: string | null
   print_file_url: string | null
   mockup_image_url: string | null
+  image_url: string | null
   print_position: string | null
   color: string | null
   size: string | null
@@ -104,6 +105,9 @@ export async function buildLineItemProductionMetadata(
       typeof linkedProduct.mockup_image_url === "string"
         ? linkedProduct.mockup_image_url
         : null,
+    image_url:
+      selectedRow?.image_url ??
+      (typeof linkedProduct.image_url === "string" ? linkedProduct.image_url : null),
     print_position: printPosition ?? "front",
     color: selectedRow?.color ?? color,
     size: selectedRow?.size ?? size,
