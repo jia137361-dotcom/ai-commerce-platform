@@ -1,6 +1,8 @@
 import type { S2bdiyClient } from "./s2bdiy-client"
 import { S2bdiyApiError } from "./s2bdiy-client"
 import { getAccessToken } from "./s2bdiy-auth"
+import fs from "node:fs/promises"
+import path from "node:path"
 
 export type UploadMaterialResult = { id: number | string; name?: string; image_url?: string }
 export interface S2bMaterialResponse { id: number; name: string; image_url: string }
@@ -28,12 +30,52 @@ export async function uploadMaterialClient(
   return { id, name: (data as UploadMaterialResult).name, image_url: (data as UploadMaterialResult).image_url }
 }
 export async function fetchPrintFileBuffer(printFileUrl: string): Promise<{ buffer: Buffer; filename: string }> {
-  const res = await fetch(printFileUrl)
+  const parsed = new URL(printFileUrl)
+  const filename = path.basename(parsed.pathname) || "print.png"
+  const localBuffer = await readLocalAiWorkerStaticFile(parsed, filename)
+  if (localBuffer) return { buffer: localBuffer, filename }
+
+  let res: Response
+  try {
+    res = await fetch(printFileUrl)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      `Failed to fetch print file from ${printFileUrl}: ${detail}. If this is a local AI worker URL, start the real AI worker on port 8001 or keep the generated file under apps/ai-worker/var/uploads.`
+    )
+  }
   if (!res.ok) throw new Error(`Failed to fetch print file: HTTP ${res.status} ${printFileUrl}`)
   const arrayBuffer = await res.arrayBuffer()
-  const urlPath = new URL(printFileUrl).pathname
-  const filename = urlPath.split("/").pop() || "print.png"
   return { buffer: Buffer.from(arrayBuffer), filename }
+}
+
+async function readLocalAiWorkerStaticFile(parsed: URL, filename: string): Promise<Buffer | null> {
+  if (!["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)) return null
+  if (!parsed.pathname.startsWith("/static/")) return null
+
+  const uploadDir = process.env.AI_WORKER_UPLOAD_DIR
+  const candidates = [
+    ...(uploadDir
+      ? [
+          path.isAbsolute(uploadDir)
+            ? uploadDir
+            : path.resolve(process.cwd(), "../ai-worker", uploadDir),
+          path.resolve(process.cwd(), "apps/ai-worker", uploadDir),
+        ]
+      : []),
+    path.resolve(process.cwd(), "../ai-worker/var/uploads"),
+    path.resolve(process.cwd(), "apps/ai-worker/var/uploads"),
+  ]
+
+  for (const dir of candidates) {
+    try {
+      return await fs.readFile(path.join(dir, filename))
+    } catch {
+      // Try the next common local workspace layout.
+    }
+  }
+
+  return null
 }
 
 // ---- Standalone (backward compat) ----

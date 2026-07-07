@@ -143,11 +143,6 @@ export function CreateProductPage() {
   }
 
   const createManualDraft = async () => {
-    if (!supplierProductId || !supplierVariantId || !selectedSupplier) {
-      setError("White T-shirt fulfillment base is not ready.")
-      return
-    }
-
     setManualLoading(true)
     setError(null)
     try {
@@ -157,16 +152,20 @@ export function CreateProductPage() {
           title: "Untitled Product",
           description: "",
           price: 24.99,
-          cost: selectedSupplier.base_cost ?? 8.5,
+          cost: 0,
           source: "manual",
-          platform_product_id: selectedSupplier.platform_product_id ?? "pp_tshirt",
-          supplier_product_id: supplierProductId,
-          supplier_variant_id: supplierVariantId,
+          variants: [
+            {
+              supplier_variant_id: `manual_${Date.now()}`,
+              color: "Default",
+              size: "Default",
+              price: 24.99,
+              stock: 50,
+            },
+          ],
           metadata: {
-            marketplace_category: MARKETPLACE_CATEGORY.id,
-            marketplace_category_label: MARKETPLACE_CATEGORY.label,
-            style_preset: selectedStyle.id,
-            style_preset_label: selectedStyle.label,
+            manual_fulfillment: true,
+            requires_shipping: true,
           },
         }),
       })
@@ -338,16 +337,24 @@ export function CreateProductPage() {
             id="manual-draft"
             className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center scroll-mt-24"
           >
-            <p className="text-sm text-slate-600">Skip AI and build the listing manually?</p>
+            <p className="text-sm font-medium text-slate-700">Create a blank seller-owned product?</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Upload your own product photos, edit variants, tags, description, and price. AI is optional.
+            </p>
             <Button
               type="button"
               variant="outline"
               className="mt-3"
-              disabled={loading || manualLoading || !supplierProducts.length}
+              disabled={loading || manualLoading}
               onClick={() => void createManualDraft()}
             >
               {manualLoading ? "Creating…" : "Create blank draft"}
             </Button>
+            <Link to="/ai-studio/create" className="ml-3 inline-flex">
+              <Button type="button" variant="ghost" disabled={loading || manualLoading}>
+                Use AI instead
+              </Button>
+            </Link>
           </div>
         </div>
 

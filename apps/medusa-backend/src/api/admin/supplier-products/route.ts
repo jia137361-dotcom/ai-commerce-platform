@@ -6,6 +6,7 @@ import {
   normalizeSupplierProduct,
   normalizeSupplierProductVariant
 } from "../../_helpers/store-core"
+import { buildSupplierProductColorImageMap } from "../../../lib/s2bdiy/supplier-product-gallery"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const platformProductId =
@@ -48,7 +49,17 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       ...normalizeSupplierProduct(product),
       variants: variants
         .filter((variant: any) => variant.supplier_product_id === product.id)
-        .map(normalizeSupplierProductVariant),
+        .map((variant: any) => {
+          const colorImages = buildSupplierProductColorImageMap(product.raw_json)
+          const normalized = normalizeSupplierProductVariant(variant)
+          return {
+            ...normalized,
+            image_url:
+              colorImages.get(String(variant.supplier_color_id ?? "")) ??
+              product.product_show_master_image ??
+              null,
+          }
+        }),
       print_specs: printSpecs
         .filter((spec: any) => spec.supplier_product_id === product.id)
         .map(normalizeSupplierPrintSpec),

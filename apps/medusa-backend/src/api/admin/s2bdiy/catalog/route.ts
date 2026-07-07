@@ -2,8 +2,12 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { getS2bdiyConfig } from "../../../../modules/suppliers/s2bdiy/config"
 import { getS2bdiyAccessToken } from "../../../../modules/suppliers/s2bdiy/s2bdiy-auth"
 import { sendError } from "../../../_helpers/store-core"
+import { requirePlatformOperator } from "../../../../lib/platform-admin/require-platform-operator"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
+  const operator = await requirePlatformOperator(req, res)
+  if (!operator) return
+
   const config = getS2bdiyConfig()
   if (!config) {
     return sendError(res, 400, "VALIDATION_ERROR", "S2BDIY not configured")

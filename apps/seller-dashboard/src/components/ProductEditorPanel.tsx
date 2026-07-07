@@ -28,6 +28,12 @@ type SyncS2bDesignResponse = {
   gallery: ProductGalleryItem[]
 }
 
+type ProvisionS2bResponse = {
+  provisioned: boolean
+  supplier_product_id?: string | null
+  s2b_provision_error?: string | null
+}
+
 const S2BDIY_ORIGINS = ["https://opensdk.s2bdiy.com", "https://opensdktest.s2bdiy.com"]
 
 const CREDENTIAL_ERROR_CODES = new Set([
@@ -44,11 +50,6 @@ const buildDesignerUrl = (config: DesignConfigResponse) => {
     params.set("productId", config.s2b_product_id)
   } else {
     params.set("basicProductId", config.basic_product_id)
-    if (config.size_id) params.set("sizeId", config.size_id)
-    if (config.color_id) params.set("colorId", config.color_id)
-    if (config.view_id) params.set("viewId", config.view_id)
-    if (config.material_id) params.set("materialId", config.material_id)
-    if (config.design_type) params.set("designType", String(config.design_type))
   }
   return `${base}/singleDesign?${params.toString()}`
 }
@@ -105,11 +106,13 @@ function MockupPreviewStrip({
   title = "商品预览",
   badge,
   compact = false,
+  onRemoveMockup,
 }: {
   mockups: ProductGalleryItem[]
   title?: string
   badge?: string
   compact?: boolean
+  onRemoveMockup?: (item: ProductGalleryItem) => void
 }) {
   const [activeId, setActiveId] = useState(mockups[0]?.id ?? "mockup_front")
   const activeMockup = mockups.find((item) => item.id === activeId) ?? mockups[0]
@@ -154,6 +157,27 @@ function MockupPreviewStrip({
               <img src={item.url} alt={item.label} className="h-full w-full object-cover" />
             </div>
             <p className="mt-1 text-[11px] text-slate-500">{item.label}</p>
+            {onRemoveMockup ? (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={`Remove ${item.label}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onRemoveMockup(item)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onRemoveMockup(item)
+                  }
+                }}
+                className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-red-200 bg-white text-xs font-semibold text-red-500 shadow-sm hover:bg-red-50"
+              >
+                ×
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -177,19 +201,44 @@ function MockupPreviewStrip({
   )
 }
 
+function ArtworkPreviewStrip({ items }: { items: ProductGalleryItem[] }) {
+  if (!items.length) return null
+  return (
+    <div className="border-t border-slate-200 bg-white">
+      <div className="border-b border-slate-200 px-4 py-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">AI 生成图片</p>
+      </div>
+      <div className="flex flex-wrap gap-3 px-4 py-3">
+        {items.map((item) => (
+          <div key={`${item.id}:${item.url}`} className="w-24">
+            <div className="h-20 w-20 overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <img src={item.url} alt={item.label} className="h-full w-full object-contain" />
+            </div>
+            <p className="mt-1 truncate text-[11px] text-slate-500">{item.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function EditorToolbar({
   isFullscreen,
   syncingPreview,
   editorMode,
+  productIdValue,
   onToggleFullscreen,
   onSyncPreview,
+  onProductIdChange,
   canSync,
 }: {
   isFullscreen: boolean
   syncingPreview: boolean
   editorMode?: "new" | "redesign"
+  productIdValue: string
   onToggleFullscreen: () => void
   onSyncPreview: () => void
+  onProductIdChange: (value: string) => void
   canSync: boolean
 }) {
   return (
@@ -201,6 +250,15 @@ function EditorToolbar({
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1 text-[11px] text-slate-500">
+          <span>S2BDIY product ID</span>
+          <input
+            value={productIdValue}
+            onChange={(event) => onProductIdChange(event.target.value)}
+            placeholder="after save"
+            className="h-8 w-32 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+          />
+        </label>
         <button
           type="button"
           disabled={!canSync || syncingPreview}
@@ -428,6 +486,7 @@ type ProductEditorPanelProps = {
   aiMockModeReason?: string | null
   className?: string
   onDesignSaved?: () => void
+  onRemoveMockup?: (item: ProductGalleryItem) => void
 }
 
 export function ProductEditorPanel({
@@ -438,6 +497,7 @@ export function ProductEditorPanel({
   aiMockModeReason,
   className,
   onDesignSaved,
+  onRemoveMockup,
 }: ProductEditorPanelProps) {
   const shellRef = useRef<HTMLDivElement>(null)
   const [config, setConfig] = useState<DesignConfigResponse | null>(null)
@@ -451,6 +511,7 @@ export function ProductEditorPanel({
   const [syncError, setSyncError] = useState<string | null>(null)
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [lastS2bProductId, setLastS2bProductId] = useState<string | null>(null)
+  const [manualS2bProductId, setManualS2bProductId] = useState("")
 
   useEffect(() => {
     setLiveMockups(toMockupItems(mockups))
@@ -489,6 +550,7 @@ export function ProductEditorPanel({
         }
         if (payload.s2b_product_id) {
           setLastS2bProductId(String(payload.s2b_product_id))
+          setManualS2bProductId(String(payload.s2b_product_id))
         }
       })
       .catch((err: unknown) => {
@@ -514,12 +576,14 @@ export function ProductEditorPanel({
       setLastSyncedAt(new Date().toISOString())
       if (result.supplier_product_id) {
         setLastS2bProductId(result.supplier_product_id)
+        setManualS2bProductId(result.supplier_product_id)
         setConfig((current) =>
           current
             ? {
                 ...current,
                 s2b_product_id: result.supplier_product_id,
-                redesign_mode: true,
+                editor_mode: "new",
+                redesign_mode: false,
               }
             : current
         )
@@ -528,6 +592,32 @@ export function ProductEditorPanel({
     },
     [onDesignSaved]
   )
+
+  const ensureS2bProductId = useCallback(async () => {
+    const knownId = manualS2bProductId.trim() || lastS2bProductId || config?.s2b_product_id
+    if (knownId) return String(knownId)
+
+    const provision = await apiFetch<ProvisionS2bResponse>(`/admin/products/${productId}/provision-s2b`, {
+      method: "POST",
+    })
+    if (!provision.provisioned || !provision.supplier_product_id) {
+      throw new Error(
+        provision.s2b_provision_error ??
+          "S2BDIY did not return a product ID. Save in the editor, then retry sync."
+      )
+    }
+    setLastS2bProductId(String(provision.supplier_product_id))
+    setManualS2bProductId(String(provision.supplier_product_id))
+    setConfig((current) =>
+      current
+        ? {
+            ...current,
+            s2b_product_id: String(provision.supplier_product_id),
+          }
+        : current
+    )
+    return String(provision.supplier_product_id)
+  }, [config?.s2b_product_id, lastS2bProductId, manualS2bProductId, productId])
 
   const syncDesignPreview = useCallback(
     async (payload: {
@@ -543,12 +633,15 @@ export function ProductEditorPanel({
       ].filter((url, index, all) => Boolean(url) && all.indexOf(url) === index)
 
       try {
+        const resolvedS2bProductId = mockupUrls.length
+          ? payload.s2bProductId ?? lastS2bProductId ?? config?.s2b_product_id
+          : payload.s2bProductId ?? await ensureS2bProductId()
         const result = await apiFetch<SyncS2bDesignResponse>(
           `${storeProductPath(productId)}/sync-s2b-design`,
           {
             method: "POST",
             body: JSON.stringify({
-              s2b_product_id: payload.s2bProductId ?? lastS2bProductId ?? config?.s2b_product_id,
+              s2b_product_id: resolvedS2bProductId,
               mockup_url: mockupUrls[0],
               mockup_urls: mockupUrls.length ? mockupUrls : undefined,
             }),
@@ -574,12 +667,13 @@ export function ProductEditorPanel({
         setSyncingPreview(false)
       }
     },
-    [applyPreviewResult, config?.s2b_product_id, lastS2bProductId, productId]
+    [applyPreviewResult, config?.s2b_product_id, ensureS2bProductId, lastS2bProductId, productId]
   )
 
   const handleManualSync = () => {
+    const manualProductId = manualS2bProductId.trim()
     void syncDesignPreview({
-      s2bProductId: lastS2bProductId ?? config?.s2b_product_id ?? undefined,
+      s2bProductId: manualProductId || lastS2bProductId || config?.s2b_product_id || undefined,
     }).catch(() => undefined)
   }
 
@@ -664,11 +758,13 @@ export function ProductEditorPanel({
           isFullscreen={isFullscreen}
           syncingPreview={syncingPreview}
           editorMode={config.editor_mode}
+          productIdValue={manualS2bProductId}
           onToggleFullscreen={toggleFullscreen}
           onSyncPreview={handleManualSync}
-          canSync={Boolean(lastS2bProductId ?? config.s2b_product_id ?? liveMockups.length)}
+          onProductIdChange={setManualS2bProductId}
+          canSync
         />
-        <div className="relative min-h-0 flex-1 overflow-x-auto">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
           {!iframeReady ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50">
               <p className="text-sm text-slate-500">Opening S2BDIY editor…</p>
@@ -679,19 +775,25 @@ export function ProductEditorPanel({
             src={designerUrl}
             title="S2BDIY Product Designer"
             className={cn(
-              "border-0",
-              isFullscreen ? "h-[calc(100vh-280px)] min-h-[520px] w-full" : "h-[min(72vh,860px)] min-h-[680px] w-full"
+              "block w-full border-0",
+              isFullscreen
+                ? "h-[calc(100vh-240px)] min-h-[520px]"
+                : "h-[min(72vh,860px)] min-h-[640px]"
             )}
-            style={{ minWidth: isFullscreen ? undefined : 1280 }}
             allow="clipboard-read; clipboard-write"
             onLoad={() => setIframeReady(true)}
           />
         </div>
+        <ArtworkPreviewStrip items={diyAssets} />
         <MockupPreviewStrip
           mockups={liveMockups}
           title="商品预览"
           badge={previewBadge}
           compact={isFullscreen}
+          onRemoveMockup={(item) => {
+            setLiveMockups((current) => current.filter((mockup) => mockup.id !== item.id))
+            onRemoveMockup?.(item)
+          }}
         />
         {syncError ? (
           <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
@@ -700,7 +802,7 @@ export function ProductEditorPanel({
         ) : null}
         {!liveMockups.length ? (
           <div className="border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
-            在 S2BDIY 编辑器中保存设计后，mockup 会自动同步到下方商品预览，并写入商品主图。也可点「同步预览」手动刷新。
+            在 S2BDIY 编辑器中保存设计后，mockup 会自动同步到下方商品预览，并写入商品主图。若未返回 product ID，点「同步预览」会先创建 S2BDIY 产品再刷新预览。
           </div>
         ) : null}
       </div>

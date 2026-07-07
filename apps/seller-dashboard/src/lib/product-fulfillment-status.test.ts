@@ -58,4 +58,19 @@ describe("product fulfillment status", () => {
       })
     ).toBe(true)
   })
+
+  it("does not require print-file provisioning for supplier catalog products", () => {
+    const product = {
+      source: "manual",
+      supplier_id: "sup_s2bdiy",
+      supplier_product_id: "sp_catalog_1",
+      metadata: {
+        synced_from_supplier: true,
+        s2b_provision_error: "Product has no print file — cannot provision S2BDIY fulfillment",
+      },
+    }
+
+    expect(resolveProductFulfillmentStatus(product).state).toBe("ready")
+    expect(needsS2bProvisionBeforePublish(product)).toBe(false)
+  })
 })

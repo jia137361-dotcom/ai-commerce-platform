@@ -14,6 +14,10 @@ import {
   provisionS2bProductForMcProduct,
   resolveS2bIdsFromEnvOrVariant,
 } from "../s2bdiy/provision-s2b-product"
+import {
+  buildSupplierProductColorImageMap,
+  buildSupplierProductGallery,
+} from "../s2bdiy/supplier-product-gallery"
 
 export type AiGenerationPayload = {
   prompt: string
@@ -154,6 +158,11 @@ export async function generateAndCreateDraft(
   const catalogVariants = await storeCoreService.listSupplierProductVariants({
     supplier_product_id: supplierProductId,
   })
+  const supplierGallery = buildSupplierProductGallery(
+    supplierProduct.raw_json,
+    supplierProduct.product_show_master_image
+  )
+  const supplierColorImages = buildSupplierProductColorImageMap(supplierProduct.raw_json)
   const variantRows = (catalogVariants as Array<Record<string, unknown>>).map((row) => ({
     supplier_variant_id: String(row.id),
     supplier_size_id: row.supplier_size_id != null ? String(row.supplier_size_id) : undefined,
@@ -162,7 +171,12 @@ export async function generateAndCreateDraft(
     size: String(row.size_name ?? row.size ?? "Default"),
     price: price ?? 0,
     stock: 50,
+    image_url:
+      supplierColorImages.get(String(row.supplier_color_id ?? "")) ??
+      supplierGallery[0]?.url ??
+      null,
   }))
+  const generatedGallery = Array.isArray(generated.gallery) ? generated.gallery : []
 
   const product = await createMcProduct(storeCoreService, {
     store_id: storeId,
@@ -203,7 +217,10 @@ export async function generateAndCreateDraft(
       marketplace_category_label: payload.marketplace_category_label ?? null,
       style_preset: payload.style_preset ?? null,
       style_preset_label: payload.style_preset_label ?? null,
-      gallery: Array.isArray(generated.gallery) ? generated.gallery : [],
+      gallery: generatedGallery,
+      catalog_supplier_product_id: supplierProductId,
+      supplier_template_gallery: supplierGallery,
+      supplier_color_images: Object.fromEntries(supplierColorImages),
       requires_shipping: true,
     },
   })

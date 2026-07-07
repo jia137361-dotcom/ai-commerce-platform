@@ -4,7 +4,7 @@ import {
 } from "../lib/s2bdiy/product-design-config"
 
 describe("S2BDIY designer URL", () => {
-  it("preloads AI material in new mode when no real S2B product exists yet", () => {
+  it("opens documented new-design mode when no real S2B product exists yet", () => {
     const product = {
       supplier_product_id: "sp_tshirt",
       supplier_material_id: "57655",
@@ -22,37 +22,37 @@ describe("S2BDIY designer URL", () => {
       sdkBaseUrl: "https://opensdktest.s2bdiy.com",
       token: "abc123",
       basicProductId: "1672",
-      sizeId: "20",
-      colorId: "6",
-      viewId: "1",
-      materialId: "57655",
-      designType: 1,
       editorMode: "new",
     })
 
     expect(url).toContain("basicProductId=1672")
-    expect(url).toContain("materialId=57655")
     expect(url).not.toContain("productId=")
+    expect(url).not.toContain("materialId=")
+    expect(url).not.toContain("sizeId=")
+    expect(url).not.toContain("colorId=")
+    expect(url).not.toContain("viewId=")
+    expect(url).not.toContain("designType=")
   })
 
-  it("opens redesign mode for real API quickCreate products", () => {
+  it("keeps seller drafts on basicProductId editor mode even after a real S2B product exists", () => {
     const product = {
       supplier_product_id: "174951",
       supplier_material_id: "57655",
-      metadata: {},
+      basic_product_id: "1672",
+      metadata: { s2b_sdk_saved: true },
     }
 
-    expect(resolveS2bEditorMode(product, "174951")).toBe("redesign")
+    expect(resolveS2bEditorMode(product, "174951")).toBe("new")
 
     const url = buildS2bdiyDesignerUrl({
       sdkBaseUrl: "https://opensdktest.s2bdiy.com",
       token: "abc123",
-      s2bProductId: "174951",
-      editorMode: "redesign",
+      basicProductId: "1672",
+      editorMode: "new",
     })
 
-    expect(url).toContain("productId=174951")
-    expect(url).not.toContain("basicProductId=")
+    expect(url).toContain("basicProductId=1672")
+    expect(url).not.toContain("productId=")
   })
 
   it("treats stale mock material as new mode until refreshed", () => {

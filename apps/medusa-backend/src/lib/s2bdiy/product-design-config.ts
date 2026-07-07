@@ -65,23 +65,12 @@ export function resolveS2bEditorMode(
   product: Record<string, unknown>,
   s2bProductId: string | null
 ): S2bEditorMode {
-  if (!s2bProductId || isMockS2bProvision(product)) {
-    return "new"
-  }
-
-  const metadata = (product.metadata ?? {}) as Record<string, unknown>
-  if (metadata.s2b_sdk_saved === true) {
-    return "redesign"
-  }
-
-  // Real quickCreate/API products already contain the uploaded print design.
-  if (
-    product.supplier_material_id &&
-    !String(product.supplier_material_id).startsWith("mock_")
-  ) {
-    return "redesign"
-  }
-
+  void product
+  void s2bProductId
+  // The documented, consistently working seller editor entry is the
+  // basicProductId flow used by Supplier Catalog "Sync to Store" drafts.
+  // Keep saved product IDs for preview/fulfillment sync, but do not use them
+  // to launch redesign mode because it can render a blank canvas for seller drafts.
   return "new"
 }
 
@@ -90,11 +79,6 @@ export function buildS2bdiyDesignerUrl(config: {
   token: string
   basicProductId?: string | null
   s2bProductId?: string | number | null
-  sizeId?: string | number | null
-  colorId?: string | number | null
-  viewId?: string | number | null
-  materialId?: string | number | null
-  designType?: number | null
   editorMode?: S2bEditorMode
 }): string {
   const base = config.sdkBaseUrl.replace(/\/$/, "")
@@ -105,21 +89,6 @@ export function buildS2bdiyDesignerUrl(config: {
     params.set("productId", String(config.s2bProductId))
   } else {
     if (config.basicProductId) params.set("basicProductId", String(config.basicProductId))
-    if (config.sizeId != null && String(config.sizeId).trim()) {
-      params.set("sizeId", String(config.sizeId))
-    }
-    if (config.colorId != null && String(config.colorId).trim()) {
-      params.set("colorId", String(config.colorId))
-    }
-    if (config.viewId != null && String(config.viewId).trim()) {
-      params.set("viewId", String(config.viewId))
-    }
-    if (config.materialId != null && String(config.materialId).trim()) {
-      params.set("materialId", String(config.materialId))
-    }
-    if (config.designType != null && Number.isFinite(Number(config.designType))) {
-      params.set("designType", String(config.designType))
-    }
   }
 
   return `${base}/singleDesign?${params.toString()}`
@@ -191,12 +160,6 @@ export async function buildProductDesignConfig(
     token,
     basicProductId,
     s2bProductId,
-    sizeId,
-    colorId,
-    viewId,
-    materialId:
-      editorMode === "new" && materialId && !materialId.startsWith("mock_") ? materialId : null,
-    designType,
     editorMode,
   })
 
@@ -204,7 +167,7 @@ export async function buildProductDesignConfig(
     sdk_base_url: sdkBaseUrl,
     token,
     basic_product_id: basicProductId,
-    s2b_product_id: editorMode === "redesign" ? s2bProductId : null,
+    s2b_product_id: s2bProductId,
     size_id: sizeId,
     color_id: colorId,
     view_id: viewId,

@@ -7,6 +7,7 @@ const ProductCategory = model.define("mc_product_category", {
   slug: model.text(),
   description: model.text().nullable(),
   parent_id: model.text().nullable(),
+  supplier_category_id: model.text().nullable(),
   sort_order: model.number().default(0)
 })
 

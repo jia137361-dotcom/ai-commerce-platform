@@ -1,9 +1,9 @@
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch, ApiError, STOREFRONT_URL } from "../../lib/api-client"
 import { storeProductPath, storeProductPermanentDeletePath } from "../../lib/store-product-api"
-import { buildProductGallery } from "../../lib/product-gallery"
+import { buildProductGallery, type ProductGalleryItem } from "../../lib/product-gallery"
 import {
   needsS2bProvisionBeforePublish,
   resolveProductFulfillmentStatus,
@@ -26,6 +26,7 @@ type SupplierVariant = {
   size?: string | null
   color_name?: string | null
   size_name?: string | null
+  image_url?: string | null
 }
 
 type EditLocationState = {
@@ -99,6 +100,7 @@ const toVariantRows = (
         supplier_color_id: typeof v.supplier_color_id === "string" ? v.supplier_color_id : undefined,
         color: String(v.color ?? "Default"),
         size: String(v.size ?? "Default"),
+        image_url: typeof v.image_url === "string" ? v.image_url : undefined,
         price: Number(v.price ?? fallbackPrice) || fallbackPrice,
         stock: Number(v.stock ?? 50) || 0,
       }]
@@ -115,9 +117,47 @@ const buildVariantsFromSupplier = (
     supplier_color_id: variant.supplier_color_id ?? undefined,
     color: variant.color_name ?? variant.color ?? "Default",
     size: variant.size_name ?? variant.size ?? "Default",
+    image_url: variant.image_url ?? undefined,
     price: fallbackPrice,
     stock: 50,
   }))
+
+const uniqueSorted = (values: Array<string | undefined | null>) =>
+  Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))).sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  )
+
+const normalizeToken = (value: unknown) =>
+  typeof value === "string" ? value.trim().toLowerCase() : ""
+
+const galleryItemMatchesRemovedColor = (item: ProductGalleryItem, retainedColors: Set<string>, allColors: Set<string>) => {
+  const label = normalizeToken(item.label)
+  const id = normalizeToken(item.id)
+  const url = normalizeToken(item.url)
+  const haystack = `${label} ${id} ${url}`
+  for (const color of allColors) {
+    if (!color || !haystack.includes(color)) continue
+    return !retainedColors.has(color)
+  }
+  return false
+}
+
+const filterGalleryForVariants = (gallery: unknown, variants: ProductVariantRow[]) => {
+  if (!Array.isArray(gallery)) return gallery
+  const retainedColors = new Set(variants.map((variant) => normalizeToken(variant.color)).filter(Boolean))
+  if (!retainedColors.size) return gallery
+  const allColors = new Set(gallery.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const label = normalizeToken((item as Record<string, unknown>).label)
+    return label ? [label.split(/\s+/)[0]] : []
+  }))
+  for (const variant of variants) allColors.add(normalizeToken(variant.color))
+  return gallery.filter((item) => {
+    if (!item || typeof item !== "object") return false
+    const row = item as ProductGalleryItem
+    return !galleryItemMatchesRemovedColor(row, retainedColors, allColors)
+  })
+}
 
 export function EditDraftPage() {
   const { id } = useParams<{ id: string }>()
@@ -128,6 +168,7 @@ export function EditDraftPage() {
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmPermanentDelete, setConfirmPermanentDelete] = useState(false)
   const [variantsInitialized, setVariantsInitialized] = useState(false)
+  const productImageInputRef = useRef<HTMLInputElement>(null)
 
   const stateProduct = (location.state as EditLocationState | null)?.product
   const stateGeneration = (location.state as EditLocationState | null)?.generation
@@ -147,6 +188,9 @@ export function EditDraftPage() {
   })
 
   const product = data?.product ?? stateProduct
+  const hasS2bEditor =
+    Boolean(product?.basic_product_id) &&
+    Boolean(product?.supplier_id || product?.supplier_product_id)
 
   const { data: categoryData } = useQuery({
     queryKey: ["product-categories"],
@@ -165,16 +209,21 @@ export function EditDraftPage() {
   })
 
   const { data: supplierData } = useQuery({
-    queryKey: ["supplier-products", product?.platform_product_id],
-    enabled: Boolean(product?.platform_product_id),
-    queryFn: () =>
-      apiFetch<{
+    queryKey: ["supplier-products", product?.platform_product_id, product?.supplier_product_id],
+    enabled: Boolean(product),
+    queryFn: () => {
+      const query = product?.platform_product_id
+        ? `?platform_product_id=${encodeURIComponent(product.platform_product_id)}`
+        : ""
+      return apiFetch<{
         supplier_products: Array<{
           supplier_product_id: string
           name: string
+          basic_product_id?: string | null
           variants: SupplierVariant[]
         }>
-      }>(`/admin/supplier-products?platform_product_id=${product?.platform_product_id}`),
+      }>(`/admin/supplier-products${query}`)
+    },
   })
 
   const [title, setTitle] = useState("")
@@ -189,6 +238,11 @@ export function EditDraftPage() {
   const [salesRegionIds, setSalesRegionIds] = useState<string[]>([])
   const [salesRegionSearch, setSalesRegionSearch] = useState("")
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
+  const [variantColorFilter, setVariantColorFilter] = useState("")
+  const [variantSizeFilter, setVariantSizeFilter] = useState("")
+  const [variantAddColor, setVariantAddColor] = useState("")
+  const [variantAddSize, setVariantAddSize] = useState("")
+  const [variantBulkPrice, setVariantBulkPrice] = useState("")
 
   const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
 
@@ -237,7 +291,16 @@ export function EditDraftPage() {
     const supplierProduct =
       supplierData.supplier_products.find(
         (row) => row.supplier_product_id === product.supplier_product_id
-      ) ?? supplierData.supplier_products[0]
+      ) ??
+      supplierData.supplier_products.find(
+        (row) =>
+          typeof product.metadata?.catalog_supplier_product_id === "string" &&
+          row.supplier_product_id === product.metadata.catalog_supplier_product_id
+      ) ??
+      supplierData.supplier_products.find(
+        (row) => row.basic_product_id && row.basic_product_id === product.basic_product_id
+      ) ??
+      supplierData.supplier_products[0]
 
     if (!supplierProduct?.variants?.length) return
 
@@ -250,7 +313,120 @@ export function EditDraftPage() {
     cacheKey: resolvedJobId,
     preferProduct: Boolean(product?.metadata?.gallery),
   })
-  const previewOptions = mockups
+  const hasSyncedS2bDesign = product?.metadata?.s2b_sdk_saved === true
+  const isAiDraftPreviewFlow =
+    product?.status === "draft" &&
+    (aiReview ||
+      product.source === "ai" ||
+      Boolean(product.ai_job_id) ||
+      Boolean(product.platform_product_id))
+  const rawPreviewOptions =
+    isAiDraftPreviewFlow && hasS2bEditor && !hasSyncedS2bDesign
+      ? []
+      : mockups
+  const previewOptions = useMemo(
+    () => filterGalleryForVariants(rawPreviewOptions, variants) as ProductGalleryItem[],
+    [rawPreviewOptions, variants]
+  )
+
+  const activeSupplierProduct = useMemo(() => {
+    const products = supplierData?.supplier_products ?? []
+    const catalogSupplierProductId =
+      typeof product?.metadata?.catalog_supplier_product_id === "string"
+        ? product.metadata.catalog_supplier_product_id
+        : null
+    return (
+      products.find((row) => catalogSupplierProductId && row.supplier_product_id === catalogSupplierProductId) ??
+      products.find((row) => row.supplier_product_id === product?.supplier_product_id) ??
+      products.find((row) => row.basic_product_id && row.basic_product_id === product?.basic_product_id) ??
+      (products.length === 1 ? products[0] : undefined)
+    )
+  }, [product?.basic_product_id, product?.metadata, product?.supplier_product_id, supplierData])
+
+  const usedSupplierVariantIds = useMemo(
+    () => new Set(variants.map((variant) => variant.supplier_variant_id)),
+    [variants]
+  )
+  const addableSupplierVariants = useMemo(
+    () =>
+      (activeSupplierProduct?.variants ?? []).filter(
+        (variant) => !usedSupplierVariantIds.has(variant.supplier_variant_id)
+      ),
+    [activeSupplierProduct?.variants, usedSupplierVariantIds]
+  )
+
+  const variantColors = useMemo(() => uniqueSorted(variants.map((variant) => variant.color)), [variants])
+  const variantSizes = useMemo(() => uniqueSorted(variants.map((variant) => variant.size)), [variants])
+  const filteredVariantEntries = useMemo(
+    () =>
+      variants
+        .map((variant, index) => ({ variant, index }))
+        .filter(({ variant }) =>
+          (!variantColorFilter || variant.color === variantColorFilter) &&
+          (!variantSizeFilter || variant.size === variantSizeFilter)
+        ),
+    [variantColorFilter, variantSizeFilter, variants]
+  )
+  const addableColors = useMemo(
+    () => uniqueSorted(addableSupplierVariants.map((variant) => variant.color_name ?? variant.color)),
+    [addableSupplierVariants]
+  )
+  const addableSizes = useMemo(
+    () =>
+      uniqueSorted(
+        addableSupplierVariants
+          .filter((variant) => !variantAddColor || (variant.color_name ?? variant.color) === variantAddColor)
+          .map((variant) => variant.size_name ?? variant.size)
+      ),
+    [addableSupplierVariants, variantAddColor]
+  )
+  const selectedAddableVariants = useMemo(
+    () =>
+      addableSupplierVariants.filter(
+        (variant) =>
+          (!variantAddColor || (variant.color_name ?? variant.color) === variantAddColor) &&
+          (!variantAddSize || variantAddSize === "__all_sizes__" || (variant.size_name ?? variant.size) === variantAddSize)
+      ),
+    [addableSupplierVariants, variantAddColor, variantAddSize]
+  )
+
+  useEffect(() => {
+    if (variantColorFilter && !variantColors.includes(variantColorFilter)) {
+      setVariantColorFilter("")
+    }
+    if (variantSizeFilter && !variantSizes.includes(variantSizeFilter)) {
+      setVariantSizeFilter("")
+    }
+  }, [variantColorFilter, variantColors, variantSizeFilter, variantSizes])
+
+  useEffect(() => {
+    if (variants.length && !filteredVariantEntries.length && (variantColorFilter || variantSizeFilter)) {
+      setVariantColorFilter("")
+      setVariantSizeFilter("")
+    }
+  }, [filteredVariantEntries.length, variantColorFilter, variantSizeFilter, variants.length])
+
+  useEffect(() => {
+    if (!addableSupplierVariants.length) {
+      setVariantAddColor("")
+      setVariantAddSize("")
+      return
+    }
+    if (!variantAddColor || !addableColors.includes(variantAddColor)) {
+      setVariantAddColor(addableColors[0] ?? "")
+    }
+  }, [addableColors, addableSupplierVariants.length, variantAddColor])
+
+  useEffect(() => {
+    if (!addableSizes.length) {
+      setVariantAddSize("")
+      return
+    }
+    if (variantAddSize === "__all_sizes__") return
+    if (!variantAddSize || !addableSizes.includes(variantAddSize)) {
+      setVariantAddSize(addableSizes.length > 1 ? "__all_sizes__" : addableSizes[0] ?? "")
+    }
+  }, [addableSizes, variantAddSize])
 
   const s2bProvisionError =
     (typeof product?.metadata?.s2b_provision_error === "string"
@@ -321,21 +497,25 @@ export function EditDraftPage() {
   const effectiveSalesRegionIds =
     salesRegionMode === "selected" ? salesRegionIds : supportedShipToRegions.map((region) => region.id)
 
-  const buildPayload = () => ({
-    title: title.trim(),
-    description,
-    price: parsePrice(),
-    tags,
-    category_ids: categoryIds,
-    variants,
-    requires_shipping: requiresShipping,
-    metadata: {
-      ...(product?.metadata ?? {}),
+  const buildPayload = () => {
+    const metadata = product?.metadata ?? {}
+    return {
+      title: title.trim(),
+      description,
+      price: parsePrice(),
+      tags,
+      category_ids: categoryIds,
+      variants,
       requires_shipping: requiresShipping,
-      sales_region_mode: salesRegionMode,
-      sales_region_ids: salesRegionMode === "selected" ? salesRegionIds : [],
-    },
-  })
+      metadata: {
+        ...metadata,
+        gallery: filterGalleryForVariants(metadata.gallery, variants),
+        requires_shipping: requiresShipping,
+        sales_region_mode: salesRegionMode,
+        sales_region_ids: salesRegionMode === "selected" ? salesRegionIds : [],
+      },
+    }
+  }
 
   const formatError = (err: unknown) => {
     if (err instanceof ApiError) return err.message
@@ -351,6 +531,80 @@ export function EditDraftPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product", id] })
       toast.push("Draft saved", "success")
+    },
+    onError: (err: unknown) => {
+      toast.push(formatError(err), "error")
+    },
+  })
+
+  const removeMockupMutation = useMutation({
+    mutationFn: (item: ProductGalleryItem) => {
+      if (!product) throw new Error("Product not loaded")
+      const metadata = product.metadata ?? {}
+      const rawGallery = Array.isArray(metadata.gallery) ? metadata.gallery : []
+      const nextGallery = rawGallery.filter((entry) => {
+        if (!entry || typeof entry !== "object") return false
+        const row = entry as Record<string, unknown>
+        if (row.kind !== "mockup") return true
+        return row.id !== item.id
+      })
+      const nextMockup = nextGallery.find(
+        (entry): entry is ProductGalleryItem =>
+          Boolean(
+            entry &&
+              typeof entry === "object" &&
+              (entry as Record<string, unknown>).kind === "mockup" &&
+              typeof (entry as Record<string, unknown>).url === "string"
+          )
+      )
+      const fallbackImage =
+        typeof nextMockup?.url === "string"
+          ? nextMockup.url
+          : product.design_image_url ?? product.image_url ?? null
+
+      return apiFetch(storeProductPath(id!), {
+        method: "PUT",
+        body: JSON.stringify({
+          metadata: {
+            ...metadata,
+            gallery: nextGallery,
+          },
+          mockup_image_url: nextMockup?.url ?? null,
+          image_url: fallbackImage,
+        }),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product", id] })
+      toast.push("Preview image removed", "success")
+    },
+    onError: (err: unknown) => {
+      toast.push(formatError(err), "error")
+    },
+  })
+
+  const uploadProductImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = typeof reader.result === "string" ? reader.result : ""
+          resolve(result.includes(",") ? result.split(",")[1] : result)
+        }
+        reader.onerror = () => reject(reader.error ?? new Error("Failed to read image"))
+        reader.readAsDataURL(file)
+      })
+      return apiFetch(`${storeProductPath(id!)}/image`, {
+        method: "POST",
+        body: JSON.stringify({
+          file_base64: fileBase64,
+          content_type: file.type,
+        }),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product", id] })
+      toast.push("Product image uploaded", "success")
     },
     onError: (err: unknown) => {
       toast.push(formatError(err), "error")
@@ -519,6 +773,44 @@ export function EditDraftPage() {
     )
   }
 
+  const addVariantFromSupplier = () => {
+    if (!selectedAddableVariants.length) return
+    const fallbackPrice = Number(price) || Number(product?.price) || 0
+    const variantRows = buildVariantsFromSupplier(selectedAddableVariants, fallbackPrice)
+    if (!variantRows.length) return
+    setVariants((current) => [...current, ...variantRows])
+    setVariantsInitialized(true)
+    toast.push(`Added ${variantRows.length} variant${variantRows.length === 1 ? "" : "s"}`, "success")
+  }
+
+  const removeVariant = (index: number) => {
+    setVariants((current) => current.filter((_, currentIndex) => currentIndex !== index))
+    setVariantsInitialized(true)
+  }
+
+  const removeFilteredVariants = () => {
+    if (!filteredVariantEntries.length) return
+    const indexes = new Set(filteredVariantEntries.map((entry) => entry.index))
+    setVariants((current) => current.filter((_, index) => !indexes.has(index)))
+    setVariantsInitialized(true)
+    toast.push(`Removed ${filteredVariantEntries.length} variant${filteredVariantEntries.length === 1 ? "" : "s"}`, "success")
+  }
+
+  const setFilteredVariantPrice = () => {
+    const nextPrice = Number(variantBulkPrice)
+    if (!Number.isFinite(nextPrice) || nextPrice < 0) {
+      toast.push("Enter a valid variant price", "error")
+      return
+    }
+    if (!filteredVariantEntries.length) return
+    const indexes = new Set(filteredVariantEntries.map((entry) => entry.index))
+    setVariants((current) =>
+      current.map((row, index) => (indexes.has(index) ? { ...row, price: nextPrice } : row))
+    )
+    setVariantsInitialized(true)
+    toast.push(`Updated ${filteredVariantEntries.length} variant price${filteredVariantEntries.length === 1 ? "" : "s"}`, "success")
+  }
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!validateBeforeSave()) return
@@ -664,7 +956,7 @@ export function EditDraftPage() {
         className={isDraft ? "flex flex-col gap-6" : "grid gap-8 lg:grid-cols-2"}
       >
         <div className="space-y-4">
-          {isDraft && id ? (
+          {isDraft && id && hasS2bEditor ? (
             <Card className="overflow-hidden p-0">
               <div className="border-b bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Product Editor
@@ -680,7 +972,45 @@ export function EditDraftPage() {
                   void queryClient.invalidateQueries({ queryKey: ["product", id] })
                   toast.push("Design saved in editor", "success")
                 }}
+                onRemoveMockup={(item) => removeMockupMutation.mutate(item)}
               />
+            </Card>
+          ) : null}
+
+          {isDraft && id && !hasS2bEditor ? (
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Product images
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Upload seller-owned product photos for this manual listing.
+                  </p>
+                </div>
+                <input
+                  ref={productImageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) uploadProductImageMutation.mutate(file)
+                    if (productImageInputRef.current) productImageInputRef.current.value = ""
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isArchived || uploadProductImageMutation.isPending}
+                  onClick={() => productImageInputRef.current?.click()}
+                >
+                  {uploadProductImageMutation.isPending ? "Uploading..." : "Upload product image"}
+                </Button>
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                Shipping for seller-owned products is manual for now. Later the order operations page should support entering carrier and tracking number.
+              </p>
             </Card>
           ) : null}
 
@@ -1112,33 +1442,144 @@ export function EditDraftPage() {
           </div>
 
           <div className="rounded-lg border border-slate-200">
-            <div className="border-b px-4 py-2 text-xs font-semibold uppercase text-slate-500">
-              Product Variants
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2">
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500">Product Variants</p>
+                {activeSupplierProduct ? (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Variants are limited to colors and sizes returned by S2BDIY for {activeSupplierProduct.name}.
+                  </p>
+                ) : null}
+              </div>
+              {activeSupplierProduct ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={variantAddColor}
+                    disabled={isArchived || !addableSupplierVariants.length}
+                    onChange={(event) => setVariantAddColor(event.target.value)}
+                    className="h-9 min-w-40 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700"
+                  >
+                    {addableColors.length ? (
+                      addableColors.map((color) => <option key={color} value={color}>{color}</option>)
+                    ) : (
+                      <option value="">All colors added</option>
+                    )}
+                  </select>
+                  <select
+                    value={variantAddSize}
+                    disabled={isArchived || !addableSizes.length}
+                    onChange={(event) => setVariantAddSize(event.target.value)}
+                    className="h-9 min-w-32 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700"
+                  >
+                    {addableSizes.length ? (
+                      <>
+                        {addableSizes.length > 1 ? <option value="__all_sizes__">All sizes</option> : null}
+                        {addableSizes.map((size) => <option key={size} value={size}>{size}</option>)}
+                      </>
+                    ) : (
+                      <option value="">All sizes added</option>
+                    )}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isArchived || !selectedAddableVariants.length}
+                    onClick={addVariantFromSupplier}
+                  >
+                    {variantAddSize === "__all_sizes__" ? "Add variants" : "Add variant"}
+                  </Button>
+                </div>
+              ) : null}
             </div>
             {variants.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-400">
-                    <th className="px-4 py-2">Color</th>
-                    <th className="px-4 py-2">Size</th>
-                    <th className="px-4 py-2">Stock</th>
-                    <th className="px-4 py-2">Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {variants.map((variant, index) => (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={variantColorFilter}
+                      disabled={isArchived}
+                      onChange={(event) => setVariantColorFilter(event.target.value)}
+                      className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700"
+                    >
+                      <option value="">All colors</option>
+                      {variantColors.map((color) => <option key={color} value={color}>{color}</option>)}
+                    </select>
+                    <select
+                      value={variantSizeFilter}
+                      disabled={isArchived}
+                      onChange={(event) => setVariantSizeFilter(event.target.value)}
+                      className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700"
+                    >
+                      <option value="">All sizes</option>
+                      {variantSizes.map((size) => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                  <span className="text-xs text-slate-500">
+                    Showing {filteredVariantEntries.length} of {variants.length}
+                  </span>
+                </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      className="h-9 w-28"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={variantBulkPrice}
+                      disabled={isArchived}
+                      placeholder="Price"
+                      onChange={(event) => setVariantBulkPrice(event.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isArchived || !filteredVariantEntries.length || !variantBulkPrice.trim()}
+                      onClick={setFilteredVariantPrice}
+                    >
+                      Set price
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isArchived || !filteredVariantEntries.length || (!variantColorFilter && !variantSizeFilter)}
+                      onClick={removeFilteredVariants}
+                    >
+                      Delete filtered
+                    </Button>
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-400">
+                      <th className="px-4 py-2">Image</th>
+                      <th className="px-4 py-2">Color</th>
+                      <th className="px-4 py-2">Size</th>
+                      <th className="px-4 py-2">Stock</th>
+                      <th className="px-4 py-2">Price</th>
+                      <th className="px-4 py-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  {filteredVariantEntries.map(({ variant, index }) => (
                     <tr key={variant.supplier_variant_id} className="border-t">
+                      <td className="px-4 py-2">
+                        {variant.image_url ? (
+                          <img src={variant.image_url} alt={`${variant.color} ${variant.size}`} className="h-12 w-12 rounded-md border border-slate-200 object-cover" />
+                        ) : (
+                          <span className="inline-flex h-12 w-12 items-center justify-center rounded-md border border-dashed border-slate-200 text-[10px] text-slate-400">
+                            No image
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-2">
                         <Input
                           value={variant.color}
-                          disabled={isArchived}
+                          disabled={isArchived || Boolean(activeSupplierProduct)}
                           onChange={(e) => updateVariant(index, "color", e.target.value)}
                         />
                       </td>
                       <td className="px-4 py-2">
                         <Input
                           value={variant.size}
-                          disabled={isArchived}
+                          disabled={isArchived || Boolean(activeSupplierProduct)}
                           onChange={(e) => updateVariant(index, "size", e.target.value)}
                         />
                       </td>
@@ -1161,10 +1602,24 @@ export function EditDraftPage() {
                           onChange={(e) => updateVariant(index, "price", e.target.value)}
                         />
                       </td>
+                      <td className="px-4 py-2 text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isArchived}
+                          onClick={() => removeVariant(index)}
+                        >
+                          Delete
+                        </Button>
+                      </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+                {!filteredVariantEntries.length ? (
+                  <p className="border-t px-4 py-6 text-sm text-slate-500">No variants match the selected filters.</p>
+                ) : null}
+              </>
             ) : (
               <p className="px-4 py-6 text-sm text-slate-500">Loading variants…</p>
             )}

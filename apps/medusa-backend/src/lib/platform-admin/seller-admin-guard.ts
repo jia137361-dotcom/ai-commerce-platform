@@ -16,8 +16,10 @@ const SELLER_ADMIN_PREFIXES = [
   "/admin/store-products",
   "/admin/store-settings",
   "/admin/stripe-connect",
+  "/admin/supplier-catalog",
   "/admin/supplier-orders",
   "/admin/supplier-products",
+  "/admin/suppliers",
 ]
 
 const isSellerAdminPath = (path: string) =>

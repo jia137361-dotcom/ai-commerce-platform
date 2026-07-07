@@ -2,6 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { getS2bdiyConfig } from "../../../../modules/suppliers/s2bdiy/config"
 import { getS2bdiyAccessToken } from "../../../../modules/suppliers/s2bdiy/s2bdiy-auth"
 import { sendError } from "../../../_helpers/store-core"
+import { requirePlatformOperator } from "../../../../lib/platform-admin/require-platform-operator"
 
 // Common S2BDIY categories (top-level and sub-level)
 const S2B_CATEGORIES = [
@@ -23,6 +24,9 @@ const S2B_CATEGORIES = [
 ]
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
+  const operator = await requirePlatformOperator(req, res)
+  if (!operator) return
+
   const config = getS2bdiyConfig()
   if (!config) {
     return sendError(res, 400, "VALIDATION_ERROR", "S2BDIY not configured")
@@ -32,7 +36,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const token = await getS2bdiyAccessToken(config)
     const baseUrl = config.apiBaseUrl.replace(/\/$/, "")
-    const resp = await fetch(`${baseUrl}/open/v1/category`, {
+    const resp = await fetch(`${baseUrl}/open/v1/basicProduct/categorys`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 

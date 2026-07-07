@@ -7,6 +7,7 @@ export type StoreCoreVariantRow = {
   supplier_color_id?: string
   color: string
   size: string
+  image_url?: string
   price: number
   stock: number
 }
@@ -34,6 +35,7 @@ export function readStoreCoreVariantRows(
       supplier_color_id: readString(row.supplier_color_id) ?? undefined,
       color: readString(row.color) ?? "Default",
       size: readString(row.size) ?? "Default",
+      image_url: readString(row.image_url) ?? undefined,
       price: Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : fallbackPrice,
       stock: Number.isFinite(rawStock) && rawStock >= 0 ? rawStock : 0,
     }]

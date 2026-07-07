@@ -6,6 +6,11 @@ import {
   requireText,
 } from "../../../_helpers/store-core"
 import { resolveCurrentStore } from "../../../../lib/store-context"
+import { calculateS2bdiyRecommendedUsdPrice } from "../../../../lib/s2bdiy/pricing"
+import {
+  buildSupplierProductColorImageMap,
+  buildSupplierProductGallery,
+} from "../../../../lib/s2bdiy/supplier-product-gallery"
 
 type CreateDraftBody = {
   supplier_product_id: string
@@ -42,6 +47,15 @@ export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaRespo
       supplier_product_id: supplierProductId,
     })
 
+    const purchaseCostCny = Number(sp.purchase_price ?? sp.base_cost ?? 0)
+    const pricing = calculateS2bdiyRecommendedUsdPrice({
+      costCny: Number.isFinite(purchaseCostCny) ? purchaseCostCny : 0,
+    })
+
+    const gallery = buildSupplierProductGallery(sp.raw_json, sp.product_show_master_image)
+    const colorImages = buildSupplierProductColorImageMap(sp.raw_json)
+    const fallbackImage = gallery[0]?.url ?? sp.product_show_master_image
+
     // Build variant rows for mc_product
     const variantRows = (variants as any[]).map((v: any) => ({
       supplier_variant_id: v.id,
@@ -49,8 +63,12 @@ export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaRespo
       supplier_color_id: v.supplier_color_id,
       color: v.color_name ?? v.color ?? "Default",
       size: v.size_name ?? v.size ?? "Default",
-      price: Number(sp.purchase_price) || 29.99,
+      price: pricing.recommendedPriceUsd || 29.99,
       stock: 50,
+      image_url:
+        colorImages.get(String(v.supplier_color_id ?? "")) ??
+        fallbackImage ??
+        null,
     }))
 
     // Create mc_product draft
@@ -60,19 +78,32 @@ export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaRespo
       description: "",
       status: "draft",
       source: "manual",
-      price: Number(sp.purchase_price) || 29.99,
+      price: pricing.recommendedPriceUsd || 29.99,
+      cost: pricing.costUsd,
       tags: [],
       category_ids: body.category_ids ?? [],
       supplier_id: sp.supplier_id,
       basic_product_id: basicProductId,
       platform_product_id: String(sp.supplier_product_id ?? ""),
       supplier_product_id: String(sp.id),
-      image_url: sp.product_show_master_image,
-      mockup_image_url: sp.product_show_master_image,
+      image_url: fallbackImage,
+      mockup_image_url: fallbackImage,
       variants: variantRows,
       metadata: {
         synced_from_supplier: true,
+        catalog_supplier_product_id: String(sp.id),
         supplier_name: sp.name,
+        gallery,
+        supplier_color_images: Object.fromEntries(colorImages),
+        pricing_source: "s2bdiy_purchase_price",
+        s2bdiy_pricing: {
+          purchase_cost_cny: purchaseCostCny,
+          cost_usd: pricing.costUsd,
+          shipping_usd: pricing.shippingUsd,
+          multiplier: pricing.multiplier,
+          exchange_rate: pricing.exchangeRate,
+          recommended_price_usd: pricing.recommendedPriceUsd,
+        },
       },
     })
 

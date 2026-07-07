@@ -20,6 +20,14 @@ export function isS2bProvisioned(product: FulfillmentProduct): boolean {
   return Boolean(product.supplier_material_id) || /^\d+$/.test(supplierProductId)
 }
 
+function isCatalogOnlySupplierProduct(product: FulfillmentProduct): boolean {
+  return (
+    product.metadata?.synced_from_supplier === true &&
+    !product.print_file_url &&
+    typeof product.metadata?.print_file_url !== "string"
+  )
+}
+
 export type ProductFulfillmentStatus =
   | { state: "not_applicable"; label: string; detail: string }
   | { state: "ready"; label: string; detail: string; s2bProductId?: string }
@@ -60,6 +68,15 @@ export function resolveProductFulfillmentStatus(
       state: "not_applicable",
       label: "Fulfillment",
       detail: "No print-on-demand supplier linked",
+    }
+  }
+
+  if (isCatalogOnlySupplierProduct(product)) {
+    return {
+      state: "ready",
+      label: "Supplier catalog product",
+      detail: "This product is synced from the supplier catalog and does not require a custom print file before publishing.",
+      s2bProductId: product.supplier_product_id ?? undefined,
     }
   }
 

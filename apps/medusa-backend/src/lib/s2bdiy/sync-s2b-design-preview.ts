@@ -94,8 +94,15 @@ export async function syncS2bDesignPreviewForMcProduct(
     metadata: {
       ...metadata,
       gallery,
+      catalog_supplier_product_id:
+        metadata.catalog_supplier_product_id ??
+        (typeof product.supplier_product_id === "string" &&
+        isCatalogSupplierProductId(product.supplier_product_id)
+          ? product.supplier_product_id
+          : null),
       s2b_design_synced_at: new Date().toISOString(),
       s2b_sdk_saved: true,
+      s2b_provision_error: null,
     },
   }
 
@@ -105,7 +112,7 @@ export async function syncS2bDesignPreviewForMcProduct(
   }
 
   await storeCore.updateProducts({
-    selector: { id: input.productId },
+    selector: { id: input.productId, store_id: input.storeId },
     data: updateData,
   })
 

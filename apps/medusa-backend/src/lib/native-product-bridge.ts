@@ -151,6 +151,9 @@ async function createNativeBridgeProduct(
             const variantMetadata = {
               ...metadata,
               supplier_variant_id: row.supplier_variant_id,
+              image_url: row.image_url,
+              color: row.color,
+              size: row.size,
             }
             return {
               title: [row.color, row.size].filter((value) => value !== "Default").join(" / ") || "Default",
