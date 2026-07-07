@@ -1,14 +1,31 @@
 import type { StoreCart } from "../../lib/mock-data"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
-import { MoneyText } from "../ui/MoneyText"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 import { CheckoutItemList } from "./CheckoutItemList"
 
-type CheckoutSummaryCardProps = { cart: StoreCart; canPlaceOrder: boolean; disabledReason: string; onPlaceOrder: () => void; placing: boolean; shippingAmount?: number }
+type CheckoutSummaryCardProps = {
+  cart: StoreCart
+  canPlaceOrder: boolean
+  onPlaceOrder: () => void
+  placing: boolean
+  shippingAmount?: number
+  showPlaceOrder?: boolean
+}
 
-export function CheckoutSummaryCard({ cart, canPlaceOrder, disabledReason, onPlaceOrder, placing, shippingAmount }: CheckoutSummaryCardProps) {
+export function CheckoutSummaryCard({
+  cart,
+  canPlaceOrder,
+  onPlaceOrder,
+  placing,
+  shippingAmount,
+  showPlaceOrder = true,
+}: CheckoutSummaryCardProps) {
   const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0)
   const address = cart.shippingAddress
+  const itemSubtotal = cart.items.reduce((sum, item) => sum + (item.hasTotal === false ? 0 : item.total), 0)
+  const subtotal = cart.items.length ? itemSubtotal : cart.subtotal
+  const total = shippingAmount == null ? subtotal : subtotal + shippingAmount
   return (
     <Card as="aside" className="buyer-checkout-summary-card">
       <header><p>Order summary</p><h2>{itemCount} item{itemCount === 1 ? "" : "s"}</h2></header>
@@ -21,16 +38,12 @@ export function CheckoutSummaryCard({ cart, canPlaceOrder, disabledReason, onPla
         </section>
       ) : null}
       <dl>
-        <div><dt>Subtotal</dt><dd><MoneyText amount={cart.hasSubtotal === false ? undefined : cart.subtotal} currencyCode={cart.currencyCode} /></dd></div>
-        <div><dt>Shipping</dt><dd>{shippingAmount == null ? "Pending" : <MoneyText amount={shippingAmount} currencyCode={cart.currencyCode} />}</dd></div>
-        <div className="total"><dt>Total</dt><dd><MoneyText amount={cart.hasTotal === false ? undefined : cart.total} currencyCode={cart.currencyCode} /></dd></div>
+        <div><dt>Subtotal</dt><dd><DisplayMoneyText amount={cart.hasSubtotal === false ? undefined : subtotal} sourceCurrencyCode={cart.currencyCode} /></dd></div>
+        <div><dt>Shipping</dt><dd>{shippingAmount == null ? "Pending" : <DisplayMoneyText amount={shippingAmount} sourceCurrencyCode={cart.currencyCode} />}</dd></div>
+        <div className="total"><dt>Total</dt><dd><DisplayMoneyText amount={cart.hasTotal === false ? undefined : total} sourceCurrencyCode={cart.currencyCode} /></dd></div>
       </dl>
-      <Button loading={placing} disabled={!canPlaceOrder || placing} onClick={onPlaceOrder}>{placing ? "Placing order..." : "Place order"}</Button>
-      <p>{canPlaceOrder ? "Guest checkout is available with a valid contact email. Order creation will authorize payment using the configured local provider." : disabledReason}</p>
-      {!canPlaceOrder ? (
-        <a className="buyer-checkout-sign-in-link" href="/account/sign-in?returnTo=/checkout">
-          Sign in for saved order history
-        </a>
+      {showPlaceOrder ? (
+        <Button loading={placing} disabled={!canPlaceOrder || placing} onClick={onPlaceOrder}>{placing ? "Placing order..." : "Place order"}</Button>
       ) : null}
       <Button variant="ghost" href="/cart">Back to cart</Button>
     </Card>

@@ -1,6 +1,6 @@
 import type { StoreProduct } from "../../lib/mock-data"
 import { Card } from "../ui/Card"
-import { MoneyText } from "../ui/MoneyText"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 import { StatusBadge } from "../ui/StatusBadge"
 
 type ProductCardProps = {
@@ -35,7 +35,7 @@ export function ProductCard({ product }: ProductCardProps) {
           </span>
           {rating ? <small>{product.reviewCount ?? 0} reviews</small> : null}
         </div>
-        <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" />
+        <DisplayMoneyText amount={product.numericPrice} unavailableLabel="Price unavailable" />
       </div>
     </Card>
   )

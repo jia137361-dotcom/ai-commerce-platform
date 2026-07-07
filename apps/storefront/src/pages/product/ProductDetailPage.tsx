@@ -36,6 +36,7 @@ import { resolveProductPurchaseState, resolveSelectedProductVariant } from "./pr
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { buildProductSignInHref } from "./product-auth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import { useBuyerDisplayRegion } from "../../lib/buyer-region-display"
 import { resolveProductRegionAvailability, type ProductRegionAvailability } from "./product-sales-region-availability"
 
 type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
@@ -45,6 +46,7 @@ const fallbackSettings: BuyerStoreSettings = { storeId: "", brandName: "Store", 
 
 export function ProductDetailPage({ productId, cartCount, onCartUpdated }: ProductDetailPageProps) {
   const auth = useBuyerAuth()
+  const displayRegion = useBuyerDisplayRegion()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [product, setProduct] = useState<StoreProduct | null>(null)
   const [reviews, setReviews] = useState<BuyerReviewsSummary | null>(null)
@@ -143,12 +145,22 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     }
   }, [loadProduct, loadVersion])
 
-  const galleryImages = useMemo(() => product ? [product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[] : [], [product])
   const variants = product?.variants ?? []
   const selectedVariant = product ? resolveSelectedProductVariant(product, selectedVariantId) : undefined
+  const galleryImages = useMemo(() => {
+    if (!product) return []
+    const images = [
+      selectedVariant?.imageUrl,
+      ...(product.galleryUrls ?? []),
+      product.mockupImageUrl,
+      product.imageUrl,
+      product.designImageUrl,
+    ].filter(Boolean) as string[]
+    return [...new Set(images)]
+  }, [product, selectedVariant?.imageUrl])
   const purchaseState = product ? resolveProductPurchaseState(product, selectedVariant) : { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" as const }
   const buyerPreferences = readBuyerPreferences(auth.customer)
-  const buyerCountryCodes = buyerPreferences.countryCodes
+  const buyerCountryCodes = [displayRegion.countryCode || buyerPreferences.defaultCountryCode || buyerPreferences.countryCodes[0] || "us"]
   const storeHref = product?.storeSlug
     ? `/shops/${encodeURIComponent(product.storeSlug)}`
     : productStore?.slug

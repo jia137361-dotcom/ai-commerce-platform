@@ -51,18 +51,30 @@
 }
 
 .buyer-store-ship {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
   min-width: 112px;
   padding-right: 30px;
   border-right: 1px solid #d6dbe4;
   color: #111827;
 }
 
-.buyer-store-ship > span {
+.buyer-store-ship-button {
+  gap: 8px;
+  text-align: left;
+}
+
+.buyer-store-ship-button > span:first-child {
   font-size: 19px;
   color: #1f2937;
+}
+
+.buyer-store-ship-button i {
+  margin-left: 4px;
+  color: #667085;
+  font-style: normal;
+  font-size: 12px;
 }
 
 .buyer-store-ship small,
@@ -78,6 +90,96 @@
   display: block;
   font-size: 14px;
   line-height: 1.05;
+}
+
+.buyer-store-ship-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid #dbe2ec;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.14);
+  z-index: 80;
+}
+
+.buyer-store-ship-menu label {
+  display: grid;
+  gap: 8px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.buyer-store-ship-menu input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #d6dbe4;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #111827;
+  font: inherit;
+  font-weight: 650;
+  outline: 0;
+}
+
+.buyer-store-ship-menu input:focus {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.12);
+}
+
+.buyer-store-ship-list {
+  max-height: 360px;
+  margin-top: 12px;
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.buyer-store-ship-list button {
+  width: 100%;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.buyer-store-ship-list button:hover,
+.buyer-store-ship-list button.active {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.buyer-store-ship-list button span {
+  min-width: 0;
+}
+
+.buyer-store-ship-list button strong,
+.buyer-store-ship-list button small {
+  display: block;
+}
+
+.buyer-store-ship-list button small {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.buyer-store-ship-list button em {
+  color: #ea580c;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.buyer-store-ship-list p {
+  margin: 10px 0 4px;
+  color: #667085;
+  font-size: 13px;
 }
 
 .buyer-store-mainnav {

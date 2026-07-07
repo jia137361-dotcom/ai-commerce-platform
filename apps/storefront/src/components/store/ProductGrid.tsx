@@ -1,4 +1,5 @@
 import type { StoreProduct } from "../../lib/mock-data"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 
 type ProductGridProps = {
   products: StoreProduct[]
@@ -34,7 +35,7 @@ export function ProductGrid({ products, source, error, onAddToCart }: ProductGri
               <h3><a href={`/products/${encodeURIComponent(product.id)}`}>{product.title}</a></h3>
               <p>{product.description}</p>
               <div className="product-card-meta">
-                <strong>{product.price}</strong>
+                <strong><DisplayMoneyText amount={product.numericPrice} unavailableLabel="Price unavailable" /></strong>
                 <small>{product.averageRating ? `${product.averageRating.toFixed(1)} (${product.reviewCount ?? 0})` : "New"}</small>
               </div>
               <div className="product-card-actions">

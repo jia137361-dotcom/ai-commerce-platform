@@ -13,6 +13,7 @@ export type StoreProduct = {
   price: string
   numericPrice?: number
   imageUrl: string
+  galleryUrls?: string[]
   mockupImageUrl?: string
   designImageUrl?: string
   printFileUrl?: string
@@ -47,6 +48,10 @@ export type StoreProduct = {
 export type BuyerProductVariant = {
   id: string
   title: string
+  color?: string
+  size?: string
+  price?: number
+  imageUrl?: string
   inventoryQuantity?: number
   manageInventory?: boolean
   allowBackorder?: boolean

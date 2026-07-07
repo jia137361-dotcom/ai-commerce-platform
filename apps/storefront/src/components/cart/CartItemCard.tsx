@@ -1,7 +1,7 @@
 import type { BuyerCartItemView } from "../../lib/buyer-cart"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
-import { MoneyText } from "../ui/MoneyText"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 import { StatusBadge } from "../ui/StatusBadge"
 import { QuantityStepper } from "./QuantityStepper"
 
@@ -26,11 +26,11 @@ export function CartItemCard({ item, currencyCode, updating, error, onQuantityCh
       <div className="buyer-cart-item-content">
         <div className="buyer-cart-item-heading">
           <div><h2><a href={item.productHref}>{item.title}</a></h2>{item.variantLabel ? <p>{item.variantLabel}</p> : <p>Variant unavailable</p>}</div>
-          <MoneyText amount={item.lineTotal} currencyCode={currencyCode} unavailableLabel="Price unavailable" />
+          <DisplayMoneyText amount={item.lineTotal} sourceCurrencyCode={currencyCode} unavailableLabel="Price unavailable" />
         </div>
         <div className="buyer-cart-item-status">
           <StatusBadge tone={item.isAvailable ? "success" : "warning"}>{item.isAvailable ? "Available" : "Unavailable"}</StatusBadge>
-          {item.unitPrice != null ? <span><MoneyText amount={item.unitPrice} currencyCode={currencyCode} /> each</span> : <span>Unit price unavailable</span>}
+          {item.unitPrice != null ? <span><DisplayMoneyText amount={item.unitPrice} sourceCurrencyCode={currencyCode} /> each</span> : <span>Unit price unavailable</span>}
         </div>
         {!item.isAvailable && item.unavailableReason ? <p className="buyer-cart-item-warning">{item.unavailableReason}</p> : null}
         {error ? <p className="buyer-cart-item-error" role="alert">{error}</p> : null}

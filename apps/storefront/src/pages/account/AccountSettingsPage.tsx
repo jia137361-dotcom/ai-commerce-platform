@@ -27,18 +27,7 @@ import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { CHECKOUT_COUNTRIES } from "../checkout/checkout-countries"
 import { customerAddressToInput } from "./account-settings-state"
 
-export type AccountSettingsSlug = "addresses" | "payment-methods" | "country-region" | "currency" | "coupons" | "following"
-
-const currencies = [
-  { code: "usd", label: "USD", symbol: "$" },
-  { code: "eur", label: "EUR", symbol: "€" },
-  { code: "gbp", label: "GBP", symbol: "£" },
-  { code: "cny", label: "CNY", symbol: "¥" },
-  { code: "cad", label: "CAD", symbol: "C$" },
-  { code: "aud", label: "AUD", symbol: "A$" },
-  { code: "jpy", label: "JPY", symbol: "¥" },
-  { code: "sgd", label: "SGD", symbol: "S$" },
-]
+export type AccountSettingsSlug = "addresses" | "payment-methods" | "country-region" | "coupons" | "following"
 
 type RegionOption = Pick<BuyerShipToRegion, "id" | "zone" | "country_region_en" | "country_region_zh" | "country_code" | "abbreviation">
 
@@ -241,6 +230,11 @@ function CountryRegionPreferences() {
     setSelectedCodes([])
   }
 
+  const removeSelectedRegion = (countryCode: string) => {
+    setMessage(undefined)
+    setSelectedCodes((currentCodes) => currentCodes.filter((code) => code !== countryCode))
+  }
+
   const save = async () => {
     const nextSelected = selectedCodes
     const nextSelectedRegionIds = regions.filter((region) => nextSelected.includes(region.country_code)).map((region) => region.id)
@@ -277,7 +271,16 @@ function CountryRegionPreferences() {
         {selectedRegions.length ? (
           <div>
             {selectedRegions.map((region) => (
-              <span key={region.id}>{regionLabel(region)} <small>{region.country_code.toUpperCase()}</small></span>
+              <span key={region.id}>
+                {regionLabel(region)} <small>{region.country_code.toUpperCase()}</small>
+                <button
+                  type="button"
+                  aria-label={`Remove ${regionLabel(region)}`}
+                  onClick={() => removeSelectedRegion(region.country_code)}
+                >
+                  ×
+                </button>
+              </span>
             ))}
           </div>
         ) : (
@@ -319,37 +322,6 @@ function CountryRegionPreferences() {
   </SettingsFrame>
 }
 
-function CurrencyPreferenceList() {
-  const auth = useBuyerAuth()
-  const current = readBuyerPreferences(auth.customer)
-  const [selected, setSelected] = useState(current.currencyCode)
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string>()
-
-  const save = async (code: string) => {
-    setSelected(code); setSaving(true); setMessage(undefined)
-    try {
-      await updateBuyerPreferences({ currencyCode: code })
-      await auth.refreshCustomer()
-      setMessage("Preference saved to your buyer account.")
-    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Unable to save preference.") }
-    finally { setSaving(false) }
-  }
-
-  return <SettingsFrame title="Currency">
-    <div className="buyer-region-preferences">
-      <p className="buyer-account-setting-note">Choose a display currency preference. Product checkout still uses the currency supplied by the store region.</p>
-      <div className="buyer-region-summary">
-        <div><span>Display currency</span><strong>{selected.toUpperCase()}</strong></div>
-        <div><span>Checkout rule</span><strong>Store currency</strong></div>
-      </div>
-      <div className="buyer-preference-list compact" aria-busy={saving}>{currencies.map((option) => <button key={option.code} type="button" className={selected === option.code ? "selected" : ""} onClick={() => void save(option.code)}><span>{option.label}</span><small>{option.symbol}</small>{selected === option.code ? <strong aria-label="Selected">✓</strong> : null}</button>)}</div>
-      <p className="buyer-account-setting-note">No exchange rate is invented here. Store browsing currency conversion can be added later once the platform has a trusted rate source.</p>
-      {message ? <p className={message.startsWith("Preference saved") ? "buyer-account-success" : "buyer-account-error"} role="status">{message}</p> : null}
-    </div>
-  </SettingsFrame>
-}
-
 function PaymentMethodsPanel() {
   return <SettingsFrame title="Payment methods"><AccountPaymentMethods /></SettingsFrame>
 }
@@ -369,7 +341,6 @@ export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; sl
     if (slug === "addresses") return <AddressBook />
     if (slug === "payment-methods") return <PaymentMethodsPanel />
     if (slug === "country-region") return <CountryRegionPreferences />
-    if (slug === "currency") return <CurrencyPreferenceList />
     if (slug === "following") return <FollowingList settings={settings} />
     return <AccountCouponsEmpty />
   }, [settings, slug])

@@ -1,4 +1,5 @@
 import type { StoreProduct } from "../../lib/mock-data"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 
 type StoreProductCardProps = {
   product: StoreProduct
@@ -24,7 +25,7 @@ export function StoreProductCard({ product }: StoreProductCardProps) {
           <span aria-hidden="true">★★★★★</span>
           <em>{rating ? `${rating} · ${product.reviewCount ?? 0}` : "New"}</em>
         </div>
-        <strong>{product.price}</strong>
+        <strong><DisplayMoneyText amount={product.numericPrice} unavailableLabel="Price unavailable" /></strong>
       </div>
     </article>
   )

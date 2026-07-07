@@ -44,6 +44,7 @@ import type { StoreCart } from "../../lib/mock-data"
 import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
 import { resolveCheckoutState } from "./checkout-state"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import { unregisterStoreCart } from "../../lib/buyer-platform-cart"
 import {
   markPlatformCheckoutOrderComplete,
   nextPendingPlatformCheckoutGroup,
@@ -174,7 +175,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     paymentSessionReady,
     placingOrder,
   })
-  const { canPlaceOrder, disabledReason: placeOrderDisabledReason } = checkoutState
+  const { canPlaceOrder } = checkoutState
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
   const checkoutSearchParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const checkoutStoreId = checkoutSearchParams.get("store")?.trim() || getScopedBuyerStoreId()
@@ -601,6 +602,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         window.sessionStorage.removeItem(splitKey)
       } else {
         window.localStorage.removeItem(cartStorageKey)
+        unregisterStoreCart(window.localStorage, cartIdentity, storeId)
       }
       window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
       if (platformCheckoutActive) {
@@ -687,10 +689,10 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
             <CheckoutSummaryCard
               cart={cart}
               canPlaceOrder={canPlaceOrder && !stripeSelected}
-              disabledReason={stripeSelected && canPlaceOrder ? "Confirm payment in the Stripe Payment Element." : placeOrderDisabledReason}
               onPlaceOrder={() => void handlePlaceOrder()}
               placing={placingOrder}
               shippingAmount={shippingMethodSaved ? selectedShippingOption?.amount ?? 0 : undefined}
+              showPlaceOrder={!stripeSelected}
             />
           </section>
       ) : null}

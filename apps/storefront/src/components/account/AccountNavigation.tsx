@@ -29,7 +29,6 @@ export function AccountNavigation({
         <a href="/account/addresses">Delivery addresses</a>
         <a href="/account/payment-methods">Payment methods</a>
         <a href="/account/country-region">Country &amp; region</a>
-        <a href="/account/currency">Currency</a>
         <a href="/account/coupons">Coupons</a>
         <a href="/account/following">Following</a>
         <Button variant="ghost" onClick={onSwitchAccount}>Switch account</Button>

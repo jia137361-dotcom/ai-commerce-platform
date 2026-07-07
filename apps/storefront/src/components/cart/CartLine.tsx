@@ -1,5 +1,5 @@
-import { formatBuyerMoney } from "../../lib/buyer-api"
 import type { CartLineItem, StoreCart } from "../../lib/mock-data"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 import { QuantityStepper } from "./QuantityStepper"
 
 type CartLineProps = {
@@ -47,8 +47,8 @@ export function CartLine({ item, currencyCode, updating, onQuantityChange, onDel
         </div>
       </div>
       <div className="buyer-cart-line-price">
-        <strong>{formatBuyerMoney(item.total || item.unitPrice, currencyCode)}</strong>
-        <span>{formatBuyerMoney(item.unitPrice, currencyCode)} each</span>
+        <strong><DisplayMoneyText amount={item.total || item.unitPrice} sourceCurrencyCode={currencyCode} /></strong>
+        <span><DisplayMoneyText amount={item.unitPrice} sourceCurrencyCode={currencyCode} /> each</span>
       </div>
     </article>
   )

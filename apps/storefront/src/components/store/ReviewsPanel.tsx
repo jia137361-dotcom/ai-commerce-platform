@@ -1,4 +1,5 @@
 import { reviews } from "../../lib/mock-data"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 
 const bars = [
   ["5 stars", 72],
@@ -36,7 +37,7 @@ export function ReviewsPanel() {
               <img src={review.product.imageUrl} alt={review.product.title} />
               <div>
                 <strong>{review.product.title}</strong>
-                <span>{review.product.price}</span>
+                <DisplayMoneyText amount={review.product.numericPrice} unavailableLabel="Price unavailable" />
               </div>
               <button type="button">Find Similar</button>
             </div>

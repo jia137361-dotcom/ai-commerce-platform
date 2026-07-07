@@ -55,7 +55,12 @@ export function StripePaymentForm({
       />
       <StripeTestModeHint stripePublishableKey={stripePublishableKey} />
       {error ? <p className="buyer-checkout-inline-error" role="alert">{error}</p> : null}
-      <Button loading={confirming || placing} disabled={!stripe || !elements || !elementReady || !canSubmit || confirming || placing} onClick={() => void submit()}>
+      <Button
+        className="buyer-checkout-stripe-submit"
+        loading={confirming || placing}
+        disabled={!stripe || !elements || !elementReady || !canSubmit || confirming || placing}
+        onClick={() => void submit()}
+      >
         {placing ? "Creating order..." : confirming ? "Confirming payment..." : "Pay with Stripe and place order"}
       </Button>
     </div>

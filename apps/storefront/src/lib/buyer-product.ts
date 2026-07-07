@@ -7,11 +7,15 @@ export type BuyerProductApiVariant = {
   supplier_variant_id?: string
   color?: string | null
   size?: string | null
+  image_url?: string | null
+  mockup_image_url?: string | null
+  thumbnail?: string | null
   title?: string | null
   inventory_quantity?: number | null
   stock?: number | null
   manage_inventory?: boolean | null
   allow_backorder?: boolean | null
+  price?: number | string | null
   prices?: Array<{ amount?: number }>
 }
 
@@ -71,6 +75,13 @@ export const normalizeBuyerProductPrice = (product: BuyerProductApiInput) => {
   return numeric > 999 ? numeric / 100 : numeric
 }
 
+const normalizeBuyerVariantPrice = (variant: BuyerProductApiVariant) => {
+  const value = variant.price ?? variant.prices?.[0]?.amount
+  const numeric = typeof value === "number" ? value : Number(value)
+  if (!Number.isFinite(numeric)) return undefined
+  return numeric > 999 ? numeric / 100 : numeric
+}
+
 export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): BuyerProductVariant[] => {
   const variants = (product.variants ?? []).flatMap((variant, index) => {
     const id = variant.medusa_variant_id ?? variant.variant_id ?? variant.id
@@ -82,6 +93,10 @@ export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): Bu
     return [{
       id,
       title: variant.title?.trim() || [variant.color, variant.size].filter(Boolean).join(" / ") || `Option ${index + 1}`,
+      color: variant.color?.trim() || undefined,
+      size: variant.size?.trim() || undefined,
+      price: normalizeBuyerVariantPrice(variant),
+      imageUrl: variant.image_url?.trim() || variant.mockup_image_url?.trim() || variant.thumbnail?.trim() || undefined,
       inventoryQuantity,
       manageInventory,
       allowBackorder,
@@ -115,6 +130,20 @@ const formatSupportedRegions = (
 const readStringArray = (value: unknown) =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 
+const readGalleryUrls = (metadata?: Record<string, unknown> | null) => {
+  const gallery = metadata?.gallery
+  if (!Array.isArray(gallery)) return []
+  const seen = new Set<string>()
+  return gallery.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const row = item as Record<string, unknown>
+    const url = typeof row.url === "string" ? row.url.trim() : ""
+    if (!url || seen.has(url)) return []
+    seen.add(url)
+    return [url]
+  })
+}
+
 const readSalesRegionMode = (metadata?: Record<string, unknown> | null) =>
   metadata?.sales_region_mode === "selected" ? "selected" : "all_supported"
 
@@ -131,6 +160,7 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     price: formatPrice(numericPrice),
     numericPrice,
     imageUrl: normalizeBuyerProductImage(product),
+    galleryUrls: readGalleryUrls(metadata),
     mockupImageUrl: product.mockup_image_url ?? undefined,
     designImageUrl: product.design_image_url ?? undefined,
     printFileUrl: product.print_file_url ?? undefined,

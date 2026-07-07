@@ -5,7 +5,7 @@ const groups = [
   },
   {
     title: "Settings",
-    items: ["Profile", "Addresses", "Language", "Country/Region & Currency"],
+    items: ["Profile", "Addresses", "Language", "Country/Region"],
   },
   {
     title: "Customer Service",

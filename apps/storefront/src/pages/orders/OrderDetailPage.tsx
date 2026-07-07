@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import { OrderDetailActions } from "../../components/orders/OrderDetailActions"
 import { OrderDetailEmptyState } from "../../components/orders/OrderDetailEmptyState"
 import { OrderDetailHeader } from "../../components/orders/OrderDetailHeader"
 import { OrderDetailItems } from "../../components/orders/OrderDetailItems"
@@ -8,14 +7,9 @@ import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import { Button } from "../../components/ui/Button"
-import { Modal } from "../../components/ui/Modal"
-import { SelectField } from "../../components/ui/SelectField"
-import { TextArea } from "../../components/ui/TextArea"
 import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
-  cancelAuthenticatedOrder,
-  createRefundRequest,
   getBuyerStoreId,
   getAuthenticatedOrderDetail,
   getOrderDetail,
@@ -24,7 +18,6 @@ import {
   type BuyerOrderTracking,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
-import { resolveOrderDetailActions } from "./order-detail-state"
 import { humanizeOrderStatus, paymentStatusPresentation } from "./order-status"
 
 type OrderDetailPageProps = {
@@ -88,7 +81,7 @@ function OrderProgressRail({ order, tracking }: { order: BuyerOrderDetail; track
   </section>
 }
 
-function OrderLogisticsOverview({ order, tracking, trackingHref }: { order: BuyerOrderDetail; tracking: BuyerOrderTracking | null; trackingHref: string }) {
+function OrderLogisticsOverview({ order, tracking }: { order: BuyerOrderDetail; tracking: BuyerOrderTracking | null }) {
   const latestEvent = tracking?.events[0]
   const latestSupplier = tracking?.supplierOrders.find((entry) => entry.logisticsStatusText || entry.logisticsStatus || entry.trackingNumber)
   const lines = addressLines(order)
@@ -99,7 +92,6 @@ function OrderLogisticsOverview({ order, tracking, trackingHref }: { order: Buye
       <p>{latestEvent?.date ? `Latest update ${formatDate(latestEvent.date)}` : "Tracking will appear after the seller or supplier dispatches the package."}</p>
     </div>
     <nav>
-      <Button variant="secondary" href={trackingHref}>Track logistics</Button>
       <Button href="/account/orders">Back to orders</Button>
     </nav>
     <section>
@@ -132,12 +124,11 @@ function OrderInfoPanel({ order, tracking }: { order: BuyerOrderDetail; tracking
   </section>
 }
 
-function OrderQuickActions({ trackingHref, orderId }: { trackingHref: string; orderId: string }) {
+function OrderQuickActions({ orderId }: { orderId: string }) {
   return <section className="buyer-order-quick-actions buyer-order-card">
     <p className="buyer-order-kicker">Quick actions</p>
     <div>
       <a href="/help/contact-us">Support</a>
-      <a href={trackingHref}>Logistics</a>
       <a href={`/account/messages?orderId=${encodeURIComponent(orderId)}`}>Message</a>
       <a href="/account/orders">Orders</a>
     </div>
@@ -151,17 +142,6 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const [tracking, setTracking] = useState<BuyerOrderTracking | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
-  const [cancelOpen, setCancelOpen] = useState(false)
-  const [cancelReason, setCancelReason] = useState("")
-  const [cancelSubmitting, setCancelSubmitting] = useState(false)
-  const [cancelError, setCancelError] = useState<string | undefined>()
-  const [cancelSuccess, setCancelSuccess] = useState<string | undefined>()
-  const [refundOpen, setRefundOpen] = useState(false)
-  const [refundReason, setRefundReason] = useState("")
-  const [refundNote, setRefundNote] = useState("")
-  const [refundSubmitting, setRefundSubmitting] = useState(false)
-  const [refundError, setRefundError] = useState<string | undefined>()
-  const [refundSuccess, setRefundSuccess] = useState<string | undefined>()
 
   const params = new URLSearchParams(window.location.search)
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
@@ -204,88 +184,6 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
     }
   }, [auth.customer, auth.isLoading, email, orderId, storeId])
 
-  const trackingParams = new URLSearchParams()
-  if (guestEmail && !auth.customer) trackingParams.set("email", guestEmail)
-  if (order?.displayId) trackingParams.set("display_id", order.displayId)
-  if (storeId || order?.storeId) trackingParams.set("store", storeId ?? order?.storeId ?? "")
-  const trackingQuery = trackingParams.toString()
-  const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
-  const actionState = resolveOrderDetailActions({
-    isAuthenticated: Boolean(auth.customer),
-    orderStatus: order?.status,
-    cancellation: order?.cancellation,
-    refundRequest: order?.refundRequest,
-  })
-  const canCancel = actionState.showCancel
-  const canRequestRefund = actionState.showRequestRefund
-
-  const submitCancel = async () => {
-    if (!order || !canCancel || cancelSubmitting) return
-    setCancelSubmitting(true)
-    setCancelError(undefined)
-    setCancelSuccess(undefined)
-    try {
-      const result = await cancelAuthenticatedOrder(order.orderId, cancelReason)
-      setOrder((current) => current ? {
-        ...current,
-        status: result.order.status ?? "cancelled",
-        paymentStatus: result.order.paymentStatus ?? current.paymentStatus,
-        fulfillmentStatus: result.order.fulfillmentStatus ?? current.fulfillmentStatus,
-        cancellation: result.cancellation ?? {
-          allowed: false,
-          code: "ORDER_ALREADY_CANCELLED",
-          message: "This order has already been cancelled.",
-        },
-      } : current)
-      setCancelSuccess(result.alreadyCancelled ? "Order was already cancelled." : "Order cancelled.")
-      setCancelOpen(false)
-      setCancelReason("")
-    } catch (cancelFailure) {
-      const message = cancelFailure instanceof Error ? cancelFailure.message : "Unable to cancel this order."
-      setCancelError(message)
-    } finally {
-      setCancelSubmitting(false)
-    }
-  }
-
-  const submitRefundRequest = async () => {
-    if (!order || !canRequestRefund || refundSubmitting) return
-    if (!refundReason) {
-      setRefundError("Select a reason for the refund request.")
-      return
-    }
-    setRefundSubmitting(true)
-    setRefundError(undefined)
-    setRefundSuccess(undefined)
-    try {
-      const request = await createRefundRequest(order.orderId, {
-        reason: refundReason,
-        note: refundNote,
-      })
-      setOrder((current) => current ? {
-        ...current,
-        refundRequest: {
-          allowed: false,
-          code: "ORDER_REFUND_REQUEST_EXISTS",
-          message: "A refund request is already pending for this order.",
-          openRequest: request,
-        },
-      } : current)
-      setRefundSuccess("Refund request submitted. Status: Pending review.")
-      setRefundOpen(false)
-      setRefundReason("")
-      setRefundNote("")
-    } catch (refundFailure) {
-      setRefundError(
-        refundFailure instanceof Error
-          ? refundFailure.message
-          : "Unable to submit refund request."
-      )
-    } finally {
-      setRefundSubmitting(false)
-    }
-  }
-
   return (
     <PageShell
       className="buyer-orders-page"
@@ -306,109 +204,17 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
             <OrderProgressRail order={order} tracking={tracking} />
             <section className="buyer-order-detail-grid buyer-order-detail-redesign">
               <div className="buyer-order-detail-main">
-                <OrderLogisticsOverview order={order} tracking={tracking} trackingHref={trackingHref} />
+                <OrderLogisticsOverview order={order} tracking={tracking} />
                 <OrderDetailItems order={order} />
               </div>
               <aside className="buyer-order-detail-side">
                 <OrderDetailSummary order={order} />
                 <OrderInfoPanel order={order} tracking={tracking} />
-                <OrderQuickActions trackingHref={trackingHref} orderId={order.orderId} />
-                <OrderDetailActions
-                  order={order}
-                  isAuthenticated={Boolean(auth.customer)}
-                  trackingHref={trackingHref}
-                  onCancel={() => {
-                    setCancelOpen(true)
-                    setCancelError(undefined)
-                    setCancelSuccess(undefined)
-                  }}
-                  onRequestRefund={() => {
-                    setRefundOpen(true)
-                    setRefundError(undefined)
-                    setRefundSuccess(undefined)
-                  }}
-                  cancelSuccess={cancelSuccess}
-                  cancelError={!cancelOpen ? cancelError : undefined}
-                  refundSuccess={refundSuccess}
-                  refundError={!refundOpen ? refundError : undefined}
-                />
+                <OrderQuickActions orderId={order.orderId} />
               </aside>
             </section>
           </>
         )}
-      {order ? (
-        <Modal
-          open={cancelOpen}
-          eyebrow="Order action"
-          title="Cancel order?"
-          description="This action can only be completed for unpaid and unfulfilled orders."
-          onClose={() => setCancelOpen(false)}
-          footer={(
-            <>
-              <Button variant="secondary" disabled={cancelSubmitting} onClick={() => setCancelOpen(false)}>
-                Keep order
-              </Button>
-              <Button variant="danger" loading={cancelSubmitting} onClick={() => void submitCancel()}>
-                {cancelSubmitting ? "Cancelling..." : "Cancel order"}
-              </Button>
-            </>
-          )}
-        >
-            {cancelError ? <p className="buyer-order-error">{cancelError}</p> : null}
-            <TextArea
-              label="Reason optional"
-              value={cancelReason}
-              maxLength={500}
-              onChange={(event) => setCancelReason(event.target.value)}
-              placeholder="Ordered by mistake"
-            />
-        </Modal>
-      ) : null}
-      {order ? (
-        <Modal
-          open={refundOpen}
-          eyebrow="Order support"
-          title="Request refund"
-          description="This submits a request for review. It does not immediately return money."
-          onClose={() => setRefundOpen(false)}
-          footer={(
-            <>
-              <Button variant="secondary" disabled={refundSubmitting} onClick={() => setRefundOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                loading={refundSubmitting}
-                disabled={!refundReason}
-                onClick={() => void submitRefundRequest()}
-              >
-                {refundSubmitting ? "Submitting..." : "Submit request"}
-              </Button>
-            </>
-          )}
-        >
-            {refundError ? <p className="buyer-order-error">{refundError}</p> : null}
-            <SelectField
-              label="Reason"
-              value={refundReason}
-              onChange={(event) => setRefundReason(event.target.value)}
-            >
-                <option value="">Select a reason</option>
-                <option value="Ordered by mistake">Ordered by mistake</option>
-                <option value="Wrong item">Wrong item</option>
-                <option value="Item damaged">Item damaged</option>
-                <option value="Item not received">Item not received</option>
-                <option value="Other">Other</option>
-            </SelectField>
-            <TextArea
-              label="Additional note optional"
-              value={refundNote}
-              maxLength={1000}
-              onChange={(event) => setRefundNote(event.target.value)}
-              placeholder="Add details for the review team"
-            />
-        </Modal>
-      ) : null}
     </PageShell>
   )
 }

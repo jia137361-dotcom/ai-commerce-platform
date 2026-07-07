@@ -128,10 +128,14 @@ function App() {
     return <RegisterPage cartCount={cartCount} />
   }
 
-  const realAccountSetting = (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[])
+  const realAccountSetting = (["addresses", "payment-methods", "country-region", "coupons", "following"] as AccountSettingsSlug[])
     .find((slug) => path === `/account/${slug}`)
   if (realAccountSetting) {
     return <AccountSettingsPage cartCount={cartCount} slug={realAccountSetting} />
+  }
+
+  if (path === "/account/currency") {
+    return <AccountSettingsPage cartCount={cartCount} slug="country-region" />
   }
 
   const accountSettingPlaceholder = findAccountSettingPlaceholder(path)

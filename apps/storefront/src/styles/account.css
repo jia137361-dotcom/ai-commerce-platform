@@ -639,10 +639,31 @@
   color: var(--buyer-text);
   font-size: 13px;
   font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .buyer-region-selected-panel small {
   color: var(--buyer-text-muted);
+}
+
+.buyer-region-selected-panel span > button {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #e9eef6;
+  color: var(--buyer-text-muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.buyer-region-selected-panel span > button:hover {
+  background: #ffedd5;
+  color: var(--buyer-primary);
 }
 
 .buyer-region-list {

@@ -5,7 +5,7 @@ import type { BuyerShareInfo } from "../../lib/buyer-api"
 import { ProductSharePanel } from "./ProductSharePanel"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
-import { MoneyText } from "../ui/MoneyText"
+import { DisplayMoneyText } from "../ui/DisplayMoneyText"
 import { SelectField } from "../ui/SelectField"
 import { StatusBadge } from "../ui/StatusBadge"
 
@@ -35,6 +35,8 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
   const reviewCount = product.reviewCount ?? 0
   const regionUnavailable = regionAvailability?.available === false
   const canAddToCart = purchaseState.canAdd && !regionUnavailable
+  const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? variants[0]
+  const displayPrice = selectedVariant?.price ?? product.numericPrice
   return (
     <Card as="aside" className="buyer-product-purchase">
       <div className="buyer-product-purchase-heading">
@@ -46,7 +48,7 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
         {product.averageRating != null ? <><span aria-hidden="true">★</span><strong>{product.averageRating.toFixed(1)}</strong><a href="#reviews">{reviewCount} reviews</a></> : <a href="#reviews">No reviews yet</a>}
       </div>
 
-      <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" className="buyer-product-price" />
+      <DisplayMoneyText amount={displayPrice} unavailableLabel="Price unavailable" className="buyer-product-price" />
 
       {variants.length > 1 ? (
         <SelectField label="Option" value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>

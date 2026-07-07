@@ -925,7 +925,12 @@ export const formatBuyerMoney = (value: number | undefined, currency = "USD") =>
 const readNumber = (value: number | string | null | undefined) => {
   if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
+  return Number.isFinite(numeric) ? numeric : undefined
+}
+
+const readMoneyAmount = (value: number | string | null | undefined) => {
+  const numeric = readNumber(value)
+  return numeric == null ? undefined : numeric / 100
 }
 
 const readString = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined)
@@ -1168,14 +1173,18 @@ const normalizeShare = (payload: ApiShare, product: StoreProduct): BuyerShareInf
 
 const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
   const quantity = Math.max(1, Math.floor(item.quantity ?? 1))
-  const rawUnitPrice = readNumber(item.unit_price)
-  const rawTotal = readNumber(item.total)
+  const rawUnitPrice = readMoneyAmount(item.unit_price)
+  const rawTotal = readMoneyAmount(item.total)
   const unitPrice = rawUnitPrice ?? (rawTotal != null ? rawTotal / quantity : 0)
   const total = rawTotal ?? (rawUnitPrice != null ? rawUnitPrice * quantity : 0)
   return {
     id: item.id ?? item.variant_id ?? `line-${Math.random().toString(36).slice(2)}`,
     title: item.title ?? readString(item.metadata?.mc_product_title) ?? "Cart item",
-    imageUrl: item.thumbnail ?? readString(item.metadata?.mockup_image_url),
+    imageUrl:
+      readString(item.metadata?.image_url) ??
+      readString(item.metadata?.mockup_image_url) ??
+      item.thumbnail ??
+      undefined,
     quantity,
     unitPrice,
     total,
@@ -1205,11 +1214,15 @@ const normalizeCartShippingAddress = (address?: ApiCartAddress | null) => {
 
 const normalizeCart = (cart: ApiCart): StoreCart => {
   const items = (cart.items ?? []).map(normalizeCartLineItem)
-  const rawSubtotal = readNumber(cart.subtotal)
-  const rawTotal = readNumber(cart.total)
+  const rawSubtotal = readMoneyAmount(cart.subtotal)
+  const rawTotal = readMoneyAmount(cart.total)
   const derivedSubtotalAvailable = items.length > 0 && items.every((item) => item.hasTotal)
-  const subtotal = rawSubtotal ?? (derivedSubtotalAvailable ? items.reduce((sum, item) => sum + item.total, 0) : 0)
-  const total = rawTotal ?? subtotal
+  const derivedSubtotal = derivedSubtotalAvailable ? items.reduce((sum, item) => sum + item.total, 0) : undefined
+  const subtotal = derivedSubtotal ?? rawSubtotal ?? 0
+  const total =
+    rawTotal != null && (!derivedSubtotalAvailable || rawTotal >= subtotal)
+      ? rawTotal
+      : subtotal
   return {
     id: cart.cart_id ?? cart.id ?? "",
     regionId: cart.region_id,
@@ -1637,10 +1650,10 @@ export const getCartShippingOptions = async (cartId: string) => {
     .map<CartShippingOption>((option) => ({
       id: option.id,
       name: option.name,
-      amount: readNumber(option.amount),
+      amount: readMoneyAmount(option.amount),
       currencyCode: option.currency_code ?? "usd",
-      available: readNumber(option.amount) != null,
-      unavailableReason: readNumber(option.amount) == null ? "Price is unavailable for this cart/address." : undefined,
+      available: readMoneyAmount(option.amount) != null,
+      unavailableReason: readMoneyAmount(option.amount) == null ? "Price is unavailable for this cart/address." : undefined,
     }))
 
   return {
@@ -1800,7 +1813,7 @@ export const completeCart = async (
     orderId: payload.order_id ?? order?.id ?? "",
     displayId: order?.display_id ? String(order.display_id) : undefined,
     email: order?.email ?? null,
-    total: readNumber(order?.total),
+    total: readMoneyAmount(order?.total),
     currencyCode: order?.currency_code,
     storeId: payload.store_id ?? getBuyerStoreId(),
     paymentProviderId: payload.payment_provider_id,
