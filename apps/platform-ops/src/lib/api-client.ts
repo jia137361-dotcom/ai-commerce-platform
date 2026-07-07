@@ -9,6 +9,18 @@ export type PlatformSession = {
   email: string | null
 }
 
+export type PlatformOperatorRow = {
+  id: string
+  user_id: string
+  email: string | null
+  name: string | null
+  role: "admin" | "viewer"
+  status: "active" | "disabled"
+  has_store_membership: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
 export class ApiError extends Error {
   code: string
   status: number
@@ -91,6 +103,27 @@ export async function login(email: string, password: string) {
     }
     throw error
   }
+}
+
+export async function listPlatformOperators() {
+  return apiFetch<{ count: number; operators: PlatformOperatorRow[] }>("/admin/platform/operators")
+}
+
+export async function addPlatformOperator(input: { email: string; role: "admin" | "viewer" }) {
+  return apiFetch<{ operator: PlatformOperatorRow }>("/admin/platform/operators", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updatePlatformOperator(
+  id: string,
+  input: Partial<Pick<PlatformOperatorRow, "role" | "status">>
+) {
+  return apiFetch<{ operator: PlatformOperatorRow }>(`/admin/platform/operators/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
 }
 
 export { MEDUSA_URL }

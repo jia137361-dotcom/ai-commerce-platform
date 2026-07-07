@@ -37,6 +37,9 @@ apps/*/.env.local
 
 # generated ai-worker files
 apps/ai-worker/var/
+apps/ai-worker/citigooapi/
+apps/ai-worker/.venv/
+apps/ai-worker/.venv-smoke/
 
 # generated review/static uploads
 apps/medusa-backend/static/reviews/

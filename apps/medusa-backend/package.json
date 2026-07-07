@@ -9,6 +9,7 @@
     "db:generate": "medusa db:generate store_core",
     "db:migrate": "medusa db:migrate",
     "seed": "medusa exec ./src/scripts/seed.ts",
+    "root:admin:bootstrap": "medusa exec ./src/scripts/bootstrap-root-admin.ts",
     "platform:ops:bootstrap": "medusa exec ./src/scripts/platform-ops-bootstrap.ts",
     "dev:accounts:bootstrap": "medusa exec ./src/scripts/dev-accounts-bootstrap.ts",
     "dev:accounts:verify": "node ./src/scripts/dev-accounts-verify.mjs",

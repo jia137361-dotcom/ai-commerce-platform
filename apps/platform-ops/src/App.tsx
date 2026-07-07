@@ -5,6 +5,7 @@ import { LoginPage } from "./pages/Login"
 import { DashboardPage } from "./pages/Dashboard"
 import { SellersPage, SellerDetailPage } from "./pages/Sellers"
 import { BuyersPage, BuyerDetailPage } from "./pages/Buyers"
+import { OperatorsPage } from "./pages/Operators"
 import { StoresPage, StoreDetailPage } from "./pages/Stores"
 import { OrdersPage, OrderDetailPage } from "./pages/Orders"
 import { ActivityPage } from "./pages/Activity"
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="sellers/:id" element={<SellerDetailPage />} />
         <Route path="buyers" element={<BuyersPage />} />
         <Route path="buyers/:id" element={<BuyerDetailPage />} />
+        <Route path="operators" element={<OperatorsPage />} />
         <Route path="stores" element={<StoresPage />} />
         <Route path="stores/:id" element={<StoreDetailPage />} />
         <Route path="orders" element={<OrdersPage />} />
