@@ -15,6 +15,13 @@ import {
   ORDER_META_PAYMENT_STATUS,
   readOrderFulfillmentStatusMeta,
 } from "../../../../../../../lib/order-custom-metadata"
+import { FULFILLMENT_ORDERS_MODULE } from "../../../../../../../modules/fulfillment-orders"
+import type FulfillmentOrdersModuleService from "../../../../../../../modules/fulfillment-orders/service"
+import { STORE_CORE_MODULE } from "../../../../../../../modules/store-core"
+import type StoreCoreModuleService from "../../../../../../../modules/store-core/service"
+import { getS2bdiyConfig, isS2bdiyEnabled } from "../../../../../../../modules/suppliers/s2bdiy/config"
+import { S2bdiyClient } from "../../../../../../../modules/suppliers/s2bdiy/s2bdiy-client"
+import { deleteS2bOrder } from "../../../../../../../modules/suppliers/s2bdiy/s2bdiy-order"
 
 type AuthenticatedRequest = MedusaRequest & {
   auth_context?: {
@@ -164,6 +171,26 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         }),
         cancel_workflow_result: "cancelled",
       })
+    }
+
+    if (isS2bdiyEnabled()) {
+      try {
+        const storeCore = req.scope.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+        const supplierOrders = await storeCore.listSupplierOrders({ order_id: [orderId] })
+        const supplierOrder = supplierOrders.find(
+          (r) => r.supplier_order_id && r.supplier_pay_status !== "paid"
+        )
+        if (supplierOrder?.supplier_order_id) {
+          const config = getS2bdiyConfig()
+          if (config) {
+            const client = new S2bdiyClient(config)
+            await deleteS2bOrder(client, supplierOrder.supplier_order_id)
+            console.info("[order-cancel] S2BDIY order cancelled:", supplierOrder.supplier_order_id)
+          }
+        }
+      } catch (error) {
+        console.error("[order-cancel] S2BDIY cancel failed (non-blocking):", error)
+      }
     }
 
     return res.status(200).json({

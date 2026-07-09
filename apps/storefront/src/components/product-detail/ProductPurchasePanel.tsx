@@ -23,15 +23,31 @@ type ProductPurchasePanelProps = {
   addNotice?: { tone: "success" | "error"; message: string }
   onAddToCart: () => void
   share?: BuyerShareInfo | null
+  isFavorited?: boolean
+  onToggleFavorite?: () => void
+  favoriteLoading?: boolean
 }
 
-export function ProductPurchasePanel({ product, variants, selectedVariantId, onVariantChange, purchaseState, quantity, setQuantity, adding, authLoading = false, requiresSignIn = false, addNotice, onAddToCart, share }: ProductPurchasePanelProps) {
+export function ProductPurchasePanel({ product, variants, selectedVariantId, onVariantChange, purchaseState, quantity, setQuantity, adding, authLoading = false, requiresSignIn = false, addNotice, onAddToCart, share, isFavorited = false, onToggleFavorite, favoriteLoading = false }: ProductPurchasePanelProps) {
   const reviewCount = product.reviewCount ?? 0
   return (
     <Card as="aside" className="buyer-product-purchase">
       <div className="buyer-product-purchase-heading">
         <p>{product.category || "Uncategorized"}</p>
-        <StatusBadge tone={purchaseState.availabilityTone}>{purchaseState.availabilityLabel}</StatusBadge>
+        <div className="buyer-product-heading-actions">
+          <StatusBadge tone={purchaseState.availabilityTone}>{purchaseState.availabilityLabel}</StatusBadge>
+          {onToggleFavorite ? (
+            <button
+              type="button"
+              className={`buyer-favorite-button ${isFavorited ? "favorited" : ""}`}
+              onClick={onToggleFavorite}
+              disabled={favoriteLoading}
+              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+            >
+              {favoriteLoading ? "..." : isFavorited ? "♥" : "♡"}
+            </button>
+          ) : null}
+        </div>
       </div>
       <h1>{product.title}</h1>
       <div className="buyer-product-score">
@@ -70,6 +86,27 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
           Customize This Product
         </a>
       ) : null}
+
+      <div className="buyer-product-action-buttons">
+        {product.id ? (
+          <>
+            <a href={`/design/${encodeURIComponent(product.id)}`} className="buyer-action-button buyer-action-editor">
+              <span className="buyer-action-icon">🎨</span>
+              <span className="buyer-action-text">
+                <strong>Image Editor</strong>
+                <small>Customize design with S2BDIY</small>
+              </span>
+            </a>
+            <a href={`/ai-studio/${encodeURIComponent(product.id)}`} className="buyer-action-button buyer-action-ai">
+              <span className="buyer-action-icon">✨</span>
+              <span className="buyer-action-text">
+                <strong>AI Design Studio</strong>
+                <small>Generate unique designs with AI</small>
+              </span>
+            </a>
+          </>
+        ) : null}
+      </div>
       {requiresSignIn ? <p className="buyer-product-checkout-note">Browsing is open to everyone. Sign in before adding this option to your cart.</p> : null}
       <p className="buyer-product-checkout-note">
         Available for purchase in: <strong>{formatProductRegionNames(product.supportedRegions)}</strong>.

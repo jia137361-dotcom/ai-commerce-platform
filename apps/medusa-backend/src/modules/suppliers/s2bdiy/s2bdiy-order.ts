@@ -48,7 +48,30 @@ export function buildThirdOrderId(orderId: string, retryCount = 0): string {
   return retryCount <= 0 ? orderId : `${orderId}-retry-${retryCount}`
 }
 
+// ---- Delete order ----
+export async function deleteS2bOrder(client: S2bdiyClient, orderId: number | string): Promise<void> {
+  await client.request(`/open/v1/order/${orderId}`, { method: "DELETE" })
+}
+
 // ---- Standalone (backward compat) ----
 export async function createOrder(params: S2bCreateOrderRequest): Promise<S2bCreateOrderResponse> { return s2bPost("/open/v1/order", params) }
 export async function getOrder(id: number): Promise<S2bOrderDetailResponse> { return s2bGet(`/open/v1/order/${id}`) }
 export async function payOrder(ids: number[]): Promise<unknown> { return s2bPost("/open/v1/orderPay", { ids }) }
+export async function deleteOrder(id: number | string): Promise<void> {
+  const authModule = await import("./s2bdiy-auth.js")
+  const token = await authModule.getS2bdiyAccessToken({
+    apiBaseUrl: (process.env.S2BDIY_BASE_URL || process.env.S2BDIY_API_BASE_URL)!.replace(/\/$/, ""),
+    appKey: process.env.S2BDIY_APP_KEY!,
+    appSecret: process.env.S2BDIY_APP_SECRET!,
+    platformId: Number(process.env.S2BDIY_PLATFORM_ID || "99"),
+  })
+  const baseUrl = (process.env.S2BDIY_BASE_URL || process.env.S2BDIY_API_BASE_URL)!.replace(/\/$/, "")
+  const res = await fetch(`${baseUrl}/open/v1/order/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`S2BDIY DELETE /open/v1/order/${id} failed: ${res.status} ${text}`)
+  }
+}

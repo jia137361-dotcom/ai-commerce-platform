@@ -2,6 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import { appendNewsletterSubscriber, pickStoreSettingsRow } from "../../../../lib/store-engagement"
 import { getStoreCoreService, sendError } from "../../../_helpers/store-core"
+import { sendNewsletterWelcome } from "../../../../lib/email"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
@@ -28,6 +29,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         store_id: storeId,
         metadata: result.metadata,
       })
+    }
+
+    if (result.created) {
+      await sendNewsletterWelcome({ to: result.email }).catch((err) =>
+        console.error("[newsletter] Failed to send welcome email:", err)
+      )
     }
 
     return res.status(200).json({

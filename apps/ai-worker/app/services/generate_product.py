@@ -86,7 +86,7 @@ async def generate_product_assets(
             "supplier_product": {
                 "supplier_id": "sup_citigoo_mock",
                 "name": "T-shirt",
-                "base_cost": base_cost or 8.5,
+                "base_cost": base_cost or 25,
             },
             "variant": {"color": "black", "size": "M"},
             "print_spec": {
@@ -115,7 +115,7 @@ async def generate_product_assets(
         if base_cost is not None
         else variant.get("cost")
         or supplier_product.get("base_cost")
-        or 8.5
+        or 25
     )
 
     image_size = json.dumps(

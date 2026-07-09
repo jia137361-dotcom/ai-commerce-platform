@@ -14,6 +14,7 @@ import {
   provisionS2bProductForMcProduct,
   resolveS2bIdsFromEnvOrVariant,
 } from "../s2bdiy/provision-s2b-product"
+import { convertCnyToUsd } from "../pricing"
 
 export type AiGenerationPayload = {
   prompt: string
@@ -119,10 +120,11 @@ export async function generateAndCreateDraft(
     throw new Error("supplier_variant_id must belong to supplier_product_id")
   }
 
-  const cost =
+  const costCny =
     parseOptionalNumber(supplierProduct.base_cost) ??
     parseOptionalNumber(generated.price_suggestion) ??
     price
+  const cost = costCny != null ? convertCnyToUsd(costCny) : null
 
   const basicProductId =
     supplierProduct.basic_product_id != null

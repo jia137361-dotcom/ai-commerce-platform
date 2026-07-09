@@ -12,6 +12,7 @@ import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 import { readOrderStoreId } from "../lib/order-store-context"
 import { notifyFulfillmentFailed, notifyOrderPaid } from "../lib/notifications"
+import { sendOrderConfirmation } from "../lib/email"
 
 async function resolveOrderIdFromPayment(
   container: MedusaContainer,
@@ -62,6 +63,25 @@ export default async function paymentCapturedSyncHandler({
         orderId,
         displayId: typeof order.display_id === "number" ? order.display_id : null,
         email: typeof order.email === "string" ? order.email : null,
+      })
+    }
+
+    if (typeof order.email === "string" && order.email.includes("@")) {
+      const items = (order.items ?? []).map((item) => {
+        const i = item as unknown as Record<string, unknown>
+        return {
+          title: String(i.title ?? "Item"),
+          quantity: Number(i.quantity ?? 1),
+          price: Number(i.unit_price ?? i.total ?? 0),
+        }
+      })
+      await sendOrderConfirmation({
+        to: order.email,
+        orderId,
+        displayId: typeof order.display_id === "number" ? order.display_id : null,
+        items,
+        total: Number(order.total ?? 0),
+        currency: typeof order.currency_code === "string" ? order.currency_code : "usd",
       })
     }
   } catch (error) {

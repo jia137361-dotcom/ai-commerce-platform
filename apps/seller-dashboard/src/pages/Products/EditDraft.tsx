@@ -54,7 +54,6 @@ const toVariantRows = (
         color: String(v.color ?? "Default"),
         size: String(v.size ?? "Default"),
         price: Number(v.price ?? fallbackPrice) || fallbackPrice,
-        stock: Number(v.stock ?? 50) || 0,
       }]
     })
 }
@@ -70,7 +69,6 @@ const buildVariantsFromSupplier = (
     color: variant.color_name ?? variant.color ?? "Default",
     size: variant.size_name ?? variant.size ?? "Default",
     price: fallbackPrice,
-    stock: 50,
   }))
 
 export function EditDraftPage() {
@@ -460,7 +458,7 @@ export function EditDraftPage() {
     setVariants((prev) =>
       prev.map((row, i) => {
         if (i !== index) return row
-        if (field === "price" || field === "stock") {
+        if (field === "price") {
           return { ...row, [field]: Number(value) || 0 }
         }
         return { ...row, [field]: value }
@@ -953,7 +951,6 @@ export function EditDraftPage() {
                   <tr className="text-left text-xs text-slate-400">
                     <th className="px-4 py-2">Color</th>
                     <th className="px-4 py-2">Size</th>
-                    <th className="px-4 py-2">Stock</th>
                     <th className="px-4 py-2">Price</th>
                   </tr>
                 </thead>
@@ -972,15 +969,6 @@ export function EditDraftPage() {
                           value={variant.size}
                           disabled={isArchived}
                           onChange={(e) => updateVariant(index, "size", e.target.value)}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          value={variant.stock}
-                          disabled={isArchived}
-                          onChange={(e) => updateVariant(index, "stock", e.target.value)}
                         />
                       </td>
                       <td className="px-4 py-2">

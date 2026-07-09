@@ -18,6 +18,7 @@ import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { DesignerPage } from "./pages/design/DesignerPage"
+import { BuyerAiStudioPage } from "./pages/ai-studio/BuyerAiStudioPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
 import { HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
@@ -70,6 +71,15 @@ function App() {
         productId={decodeURIComponent(path.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}
+      />
+    )
+  }
+
+  if (path.startsWith("/ai-studio/")) {
+    return (
+      <BuyerAiStudioPage
+        productId={decodeURIComponent(path.split("/").pop() ?? "")}
+        cartCount={cartCount}
       />
     )
   }

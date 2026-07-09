@@ -20,9 +20,27 @@ def _strip_json_fences(raw: str) -> str:
     return text
 
 
+def _calculate_tiered_markup(
+    cny_price: float, rate: float, markup_min: float, markup_max: float
+) -> float:
+    """阶梯倍率：低价高倍率(3x)，高价低倍率(2.3x)，中间线性插值"""
+    usd_base = cny_price / rate
+    threshold_low = 20.0 / rate
+    threshold_high = 40.0 / rate
+    if usd_base <= threshold_low:
+        return markup_max
+    if usd_base >= threshold_high:
+        return markup_min
+    t = (usd_base - threshold_low) / (threshold_high - threshold_low)
+    return round(markup_max - t * (markup_max - markup_min), 2)
+
+
 def _mock_copy(prompt: str, product_name: str, base_cost: float) -> dict[str, Any]:
     settings = get_settings()
-    price = round(max(base_cost * settings.price_markup_multiplier, base_cost + 5), 2)
+    markup = _calculate_tiered_markup(
+        base_cost, settings.usd_cny_rate, settings.price_markup_min, settings.price_markup_max
+    )
+    price = round((base_cost / settings.usd_cny_rate) * markup, 2)
     title = f"Custom Design — {prompt[:60]}".strip()
     description = (
         f"Custom {product_name} featuring your design: {prompt}. "
@@ -72,14 +90,16 @@ Generate ecommerce product copy for a print-on-demand item.
 Product: {product_name}
 Customer design prompt: {prompt}
 Variant: {variant_line}
-Supplier base cost (USD): {base_cost}
+Supplier base cost (CNY): {base_cost}
+Exchange rate: 1 USD = {settings.usd_cny_rate} CNY
+Retail price formula: (CNY price / exchange rate) × tiered markup (2.3x-3x based on price level)
 
 Output exactly one JSON object with keys:
 - title (string, max 120 chars)
 - description (string, 200-600 chars, buyer-facing)
 - tags (array of 3-8 short strings)
 - seo (object with title and description strings)
-- price_suggestion (number, USD retail price, typically 2-3x base cost)
+- price_suggestion (number, USD retail price, apply tiered markup to converted USD base cost)
 
 Rules:
 - English only.
@@ -121,7 +141,10 @@ Rules:
     try:
         price_suggestion = float(price_raw)
     except (TypeError, ValueError):
-        price_suggestion = round(base_cost * settings.price_markup_multiplier, 2)
+        markup = _calculate_tiered_markup(
+            base_cost, settings.usd_cny_rate, settings.price_markup_min, settings.price_markup_max
+        )
+        price_suggestion = round((base_cost / settings.usd_cny_rate) * markup, 2)
 
     if not title or not description:
         return _mock_copy(prompt, product_name, base_cost)
@@ -134,5 +157,5 @@ Rules:
             "title": str(seo.get("title") or title)[:120],
             "description": str(seo.get("description") or description)[:320],
         },
-        "price_suggestion": max(price_suggestion, base_cost),
+        "price_suggestion": max(price_suggestion, round(base_cost / settings.usd_cny_rate, 2)),
     }

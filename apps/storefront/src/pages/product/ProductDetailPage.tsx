@@ -21,6 +21,8 @@ import {
   getScopedBuyerStoreId,
   readBuyerPreferences,
   setActiveBuyerStoreId,
+  checkProductFavorite,
+  toggleProductFavorite,
   type BuyerReviewsSummary,
   type BuyerShareInfo,
   type BuyerStoreSettings,
@@ -55,6 +57,8 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const [adding, setAdding] = useState(false)
   const [addNotice, setAddNotice] = useState<{ tone: "success" | "error"; message: string } | undefined>()
   const [loadVersion, setLoadVersion] = useState(0)
+  const [isFavorited, setIsFavorited] = useState(false)
+  const [favoriteLoading, setFavoriteLoading] = useState(false)
   const reviewOrderNumber = new URLSearchParams(window.location.search).get("reviewOrder")
   const viewReviewOrderNumber = new URLSearchParams(window.location.search).get("viewReviewOrder")
   const storeFromQuery = new URLSearchParams(window.location.search).get("store")
@@ -100,6 +104,14 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     if (!isActive()) return
     setProduct(realProduct)
     setSelectedVariantId(realProduct.variants?.[0]?.id ?? realProduct.medusaVariantId)
+
+    if (auth.customer) {
+      const favResult = await checkProductFavorite(productId)
+      if (isActive()) {
+        setIsFavorited(favResult.is_favorited)
+      }
+    }
+
     setRecommendations(
       productsResult.data.filter((item) => item.id !== realProduct.id).slice(0, 4)
     )
@@ -172,6 +184,23 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     }
   }
 
+  const toggleFavorite = async () => {
+    if (!auth.customer) {
+      const returnTo = `${window.location.pathname}${window.location.search}`
+      window.location.assign(buildProductSignInHref(returnTo))
+      return
+    }
+    setFavoriteLoading(true)
+    try {
+      const result = await toggleProductFavorite(productId, isFavorited)
+      setIsFavorited(result.is_favorited)
+    } catch {
+      // Silently fail
+    } finally {
+      setFavoriteLoading(false)
+    }
+  }
+
   return (
     <PageShell className="buyer-product-page" contentClassName="buyer-product-shell-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
       <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb"><a href="/store">Store</a><span>/</span><span>{product?.title ?? "Product"}</span></nav>
@@ -196,6 +225,9 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
             addNotice={addNotice}
             onAddToCart={() => void addToCart()}
             share={share}
+            isFavorited={isFavorited}
+            onToggleFavorite={() => void toggleFavorite()}
+            favoriteLoading={favoriteLoading}
           />
         </section>
         <ProductStoreCard settings={settings} />

@@ -49,7 +49,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return body as T
 }
 
-export async function login(email: string, password: string) {
+export type OperatorInfo = {
+  is_operator: boolean
+  role: "admin" | "viewer"
+  user_id: string
+  operator_id: string
+}
+
+export async function login(email: string, password: string): Promise<OperatorInfo> {
+  // Step 1: Authenticate
   const response = await fetch(`${MEDUSA_URL}/auth/user/emailpass`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -59,8 +67,21 @@ export async function login(email: string, password: string) {
   if (!response.ok) {
     throw new ApiError(response.status, "AUTH_FAILED", body?.message ?? "Login failed")
   }
-  setToken(body.token as string)
+  const token = body.token as string
+
+  // Step 2: Verify platform operator status
+  const meResponse = await fetch(`${MEDUSA_URL}/admin/platform/me`, {
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+  })
+  const meBody = await meResponse.json().catch(() => ({}))
+  if (!meResponse.ok || !meBody.is_operator) {
+    throw new ApiError(403, "NOT_OPERATOR", "此账号无平台运营权限")
+  }
+
+  // Step 3: Store token and email
+  setToken(token)
   setOpsEmail(email)
+  return meBody as OperatorInfo
 }
 
 export { MEDUSA_URL }

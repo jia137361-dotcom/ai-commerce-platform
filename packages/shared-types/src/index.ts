@@ -25,7 +25,6 @@ export type ProductVariantRow = {
   color: string
   size: string
   price: number
-  stock: number
 }
 
 export type ProductRegionSummary = {

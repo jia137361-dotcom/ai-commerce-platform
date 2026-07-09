@@ -20,6 +20,7 @@ import StoreNotification from "./models/store-notification"
 import StoreMessage from "./models/store-message"
 import PlatformOperator from "./models/platform-operator"
 import PlatformAuditEvent from "./models/platform-audit-event"
+import ProductFavorite from "./models/product-favorite"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -43,6 +44,7 @@ class StoreCoreModuleService extends MedusaService({
   StoreMessage,
   PlatformOperator,
   PlatformAuditEvent,
+  ProductFavorite,
 }) {}
 
 export default StoreCoreModuleService

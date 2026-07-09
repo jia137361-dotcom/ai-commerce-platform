@@ -6,6 +6,7 @@ import {
   requireText,
 } from "../../../_helpers/store-core"
 import { resolveCurrentStore } from "../../../../lib/store-context"
+import { calculateRetailPriceUsd } from "../../../../lib/pricing"
 
 type CreateDraftBody = {
   supplier_product_id: string
@@ -42,6 +43,10 @@ export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaRespo
       supplier_product_id: supplierProductId,
     })
 
+    // Calculate retail price from CNY purchase price
+    const purchasePriceCny = Number(sp.purchase_price) || 0
+    const retailPriceUsd = purchasePriceCny > 0 ? calculateRetailPriceUsd(purchasePriceCny) : 29.99
+
     // Build variant rows for mc_product
     const variantRows = (variants as any[]).map((v: any) => ({
       supplier_variant_id: v.id,
@@ -49,7 +54,7 @@ export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaRespo
       supplier_color_id: v.supplier_color_id,
       color: v.color_name ?? v.color ?? "Default",
       size: v.size_name ?? v.size ?? "Default",
-      price: Number(sp.purchase_price) || 29.99,
+      price: retailPriceUsd,
       stock: 50,
     }))
 
@@ -60,7 +65,8 @@ export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaRespo
       description: "",
       status: "draft",
       source: "manual",
-      price: Number(sp.purchase_price) || 29.99,
+      price: retailPriceUsd,
+      cost: purchasePriceCny,
       tags: [],
       category_ids: body.category_ids ?? [],
       supplier_id: sp.supplier_id,
@@ -73,6 +79,8 @@ export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaRespo
       metadata: {
         synced_from_supplier: true,
         supplier_name: sp.name,
+        purchase_price_cny: purchasePriceCny,
+        retail_price_usd: retailPriceUsd,
       },
     })
 

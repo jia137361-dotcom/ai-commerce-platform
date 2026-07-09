@@ -78,9 +78,17 @@ class Settings(BaseSettings):
     deepseek_max_retries: int = Field(default=2, validation_alias="DEEPSEEK_MAX_RETRIES")
 
     mock_generation: bool = Field(default=False, validation_alias="AI_WORKER_MOCK_GENERATION")
-    price_markup_multiplier: float = Field(
-        default=2.5,
-        validation_alias="AI_WORKER_PRICE_MARKUP",
+    usd_cny_rate: float = Field(
+        default=6.77,
+        validation_alias="AI_WORKER_USD_CNY_RATE",
+    )
+    price_markup_min: float = Field(
+        default=2.3,
+        validation_alias="AI_WORKER_PRICE_MARKUP_MIN",
+    )
+    price_markup_max: float = Field(
+        default=3.0,
+        validation_alias="AI_WORKER_PRICE_MARKUP_MAX",
     )
 
     model_config = SettingsConfigDict(

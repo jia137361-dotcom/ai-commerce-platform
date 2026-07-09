@@ -2399,3 +2399,53 @@ export const completeDesignSession = async (input: DesignCompleteInput): Promise
     price: payload.price,
   }
 }
+
+// ─── Product Favorites ─────────────────────────────────────────────────────────
+
+type FavoriteCheckResult = {
+  is_favorited: boolean
+}
+
+type FavoriteToggleResult = {
+  is_favorited: boolean
+  message?: string
+}
+
+type FavoriteListResult = {
+  favorites: Array<{
+    id: string
+    title: string
+    price?: number
+    image_url?: string
+    status?: string
+    created_at?: string
+  }>
+  count: number
+}
+
+export const checkProductFavorite = async (productId: string): Promise<FavoriteCheckResult> => {
+  try {
+    return await apiFetch<FavoriteCheckResult>(`/store/products/${encodeURIComponent(productId)}/favorite`)
+  } catch {
+    return { is_favorited: false }
+  }
+}
+
+export const toggleProductFavorite = async (productId: string, isCurrentlyFavorited: boolean): Promise<FavoriteToggleResult> => {
+  if (isCurrentlyFavorited) {
+    return apiFetch<FavoriteToggleResult>(`/store/products/${encodeURIComponent(productId)}/favorite`, {
+      method: "DELETE",
+    })
+  }
+  return apiFetch<FavoriteToggleResult>(`/store/products/${encodeURIComponent(productId)}/favorite`, {
+    method: "POST",
+  })
+}
+
+export const fetchFavoriteProducts = async (): Promise<FavoriteListResult> => {
+  try {
+    return await apiFetch<FavoriteListResult>("/store/favorites")
+  } catch {
+    return { favorites: [], count: 0 }
+  }
+}

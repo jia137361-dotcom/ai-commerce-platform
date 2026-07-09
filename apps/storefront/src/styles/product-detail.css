@@ -1201,3 +1201,334 @@
     justify-items: start;
   }
 }
+
+/* Favorite Button */
+.buyer-product-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.buyer-favorite-button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--buyer-border);
+  border-radius: 50%;
+  background: var(--buyer-surface);
+  color: var(--buyer-text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.buyer-favorite-button:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.buyer-favorite-button.favorited {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.buyer-favorite-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Action Buttons (Image Editor & AI Studio) */
+.buyer-product-action-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.buyer-action-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-button);
+  background: var(--buyer-surface);
+  color: var(--buyer-text);
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.buyer-action-button:hover {
+  border-color: var(--buyer-primary);
+  background: color-mix(in srgb, var(--buyer-primary) 5%, var(--buyer-surface));
+}
+
+.buyer-action-icon {
+  font-size: 24px;
+}
+
+.buyer-action-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.buyer-action-text strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.buyer-action-text small {
+  font-size: 11px;
+  color: var(--buyer-text-muted);
+}
+
+.buyer-action-editor:hover {
+  border-color: #8b5cf6;
+}
+
+.buyer-action-ai:hover {
+  border-color: #f59e0b;
+}
+
+@media (max-width: 640px) {
+  .buyer-product-action-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* AI Studio Page */
+.buyer-ai-studio-page {
+  min-height: 100vh;
+  background: var(--buyer-bg);
+}
+
+.buyer-ai-studio-content {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.buyer-ai-studio-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.buyer-ai-studio-header h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+  color: var(--buyer-text);
+}
+
+.buyer-ai-studio-header p {
+  margin: 0;
+  color: var(--buyer-text-muted);
+  font-size: 16px;
+}
+
+.buyer-ai-studio-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 32px;
+  align-items: start;
+}
+
+.buyer-ai-studio-card {
+  padding: 32px;
+}
+
+.buyer-ai-studio-card h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: var(--buyer-text);
+}
+
+.buyer-ai-studio-hint {
+  margin: 0 0 20px;
+  color: var(--buyer-text-muted);
+  font-size: 14px;
+}
+
+.buyer-ai-studio-prompt-area {
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.buyer-ai-studio-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-button);
+  background: var(--buyer-surface);
+  color: var(--buyer-text);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.buyer-ai-studio-textarea:focus {
+  outline: none;
+  border-color: var(--buyer-primary);
+}
+
+.buyer-ai-studio-char-count {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  color: var(--buyer-text-muted);
+  font-size: 12px;
+}
+
+.buyer-ai-studio-card h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--buyer-text);
+}
+
+.buyer-ai-studio-styles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.buyer-ai-style-button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-button);
+  background: var(--buyer-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.buyer-ai-style-button:hover {
+  border-color: var(--buyer-primary);
+}
+
+.buyer-ai-style-button.selected {
+  border-color: var(--buyer-primary);
+  background: color-mix(in srgb, var(--buyer-primary) 10%, var(--buyer-surface));
+}
+
+.buyer-ai-style-button strong {
+  font-size: 14px;
+  color: var(--buyer-text);
+}
+
+.buyer-ai-style-button span {
+  font-size: 12px;
+  color: var(--buyer-text-muted);
+}
+
+.buyer-ai-studio-preview {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-button);
+  background: var(--buyer-surface);
+}
+
+.buyer-ai-studio-preview h3 {
+  margin: 0 0 8px;
+}
+
+.buyer-ai-studio-preview-text {
+  margin: 0;
+  color: var(--buyer-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.buyer-ai-studio-generate-button {
+  width: 100%;
+  min-height: 48px;
+}
+
+.buyer-ai-studio-error {
+  margin: 16px 0 0;
+  padding: 12px;
+  border-radius: var(--buyer-radius-button);
+  background: #fff5f5;
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.buyer-ai-studio-success {
+  margin: 16px 0 0;
+  padding: 12px;
+  border-radius: var(--buyer-radius-button);
+  background: #f0fdf4;
+  color: #16a34a;
+  font-size: 13px;
+}
+
+.buyer-ai-studio-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.buyer-ai-studio-info-card,
+.buyer-ai-studio-tips-card {
+  padding: 24px;
+}
+
+.buyer-ai-studio-info-card h3,
+.buyer-ai-studio-tips-card h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  color: var(--buyer-text);
+}
+
+.buyer-ai-studio-info-card ol,
+.buyer-ai-studio-tips-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.buyer-ai-studio-info-card li,
+.buyer-ai-studio-tips-card li {
+  margin-bottom: 8px;
+  color: var(--buyer-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.buyer-ai-studio-back-link {
+  display: block;
+  padding: 16px;
+  text-align: center;
+  color: var(--buyer-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-button);
+}
+
+.buyer-ai-studio-back-link:hover {
+  background: var(--buyer-surface);
+}
+
+@media (max-width: 900px) {
+  .buyer-ai-studio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-ai-studio-sidebar {
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-ai-studio-styles {
+    grid-template-columns: 1fr;
+  }
+}
