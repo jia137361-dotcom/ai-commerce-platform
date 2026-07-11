@@ -69,7 +69,7 @@ export function HelpContent() {
       },
       {
         title: "Support and contact",
-        body: <p>This is an internal support placeholder. For demo assistance, use <a href="mailto:support@citigoo.example">support@citigoo.example</a>; replace it with an approved support channel before production.</p>,
+        body: <p>This is an internal support placeholder. For demo assistance, use <a href="mailto:support@ciiverse.example">support@ciiverse.example</a>; replace it with an approved support channel before production.</p>,
       },
     ]} />
   )

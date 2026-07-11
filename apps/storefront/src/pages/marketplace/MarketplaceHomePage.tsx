@@ -64,7 +64,7 @@ export function MarketplaceHomePage({ cartCount }: MarketplaceHomePageProps) {
       footer={<StoreFooter />}
     >
       <section className="buyer-marketplace-hero">
-        <p className="buyer-marketplace-eyebrow">Citigoo Marketplace</p>
+        <p className="buyer-marketplace-eyebrow">CiiVerse Marketplace</p>
         <h1>发现独立设计师店铺</h1>
         <p>浏览平台上的全部活跃店铺，或搜索跨店商品。</p>
       </section>

@@ -63,7 +63,7 @@ type CheckoutPageProps = {
 
 const fallbackSettings: BuyerStoreSettings = {
   storeId: "default_store",
-  brandName: "Citigoo",
+  brandName: "CiiVerse",
   metadata: {},
 }
 

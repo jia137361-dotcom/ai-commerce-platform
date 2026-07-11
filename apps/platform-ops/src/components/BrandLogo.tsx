@@ -13,8 +13,8 @@ export function BrandLogo({
   return (
     <Link to={to} className={cn("inline-block", className)}>
       <span className="text-2xl font-bold tracking-tight">
-        <span className="text-brand">Citi</span>
-        <span className="text-slate-900">goo</span>
+        <span className="text-brand">Cii</span>
+        <span className="text-slate-900">Verse</span>
       </span>
       {subtitle ? <p className="mt-0.5 text-xs font-medium text-slate-500">{subtitle}</p> : null}
     </Link>

@@ -1,5 +1,6 @@
 import { getScopedBuyerCartStorageKey } from "./buyer-cart-storage"
 import type { StoreCart } from "./mock-data"
+import type { MarketplaceStore } from "./buyer-api"
 
 export type StoreCartRegistryEntry = {
   cartId: string
@@ -127,7 +128,6 @@ export async function fetchPlatformCart(
   identity: string
 ): Promise<PlatformCart> {
   const { fetchCart, fetchMarketplaceStores } = await import("./buyer-api")
-  type MarketplaceStore = Awaited<ReturnType<typeof fetchMarketplaceStores>>["data"][number]
   const registry = discoverStoreCartRegistry(storage, identity)
   const storeIds = Object.keys(registry)
   if (!storeIds.length) {

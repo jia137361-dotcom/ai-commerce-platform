@@ -31,8 +31,8 @@ export function LoginPage() {
       <Card className="w-full max-w-md">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold">
-            <span className="text-brand">Citi</span>
-            <span className="text-slate-900">goo</span>
+            <span className="text-brand">Cii</span>
+            <span className="text-slate-900">Verse</span>
           </h1>
           <p className="mt-2 text-sm text-slate-500">Platform Ops · 平台运营</p>
           <p className="mt-1 text-xs text-slate-400">需 platform_operator 权限的管理员账号</p>

@@ -8,6 +8,7 @@ import type { StoreNotification } from "@ai-commerce/shared-types"
 
 const NAV = [
   { to: "/products", label: "Products" },
+  { to: "/categories", label: "Categories" },
   { to: "/suppliers", label: "Suppliers" },
   { to: "/orders", label: "Orders" },
   { to: "/reviews", label: "Reviews" },
@@ -110,6 +111,7 @@ export function Navbar() {
 
   const isActive = (to: string) => {
     if (to === "/products") return location.pathname.startsWith("/products")
+    if (to === "/categories") return location.pathname.startsWith("/categories")
     if (to === "/suppliers") return location.pathname.startsWith("/suppliers")
     if (to === "/orders") return location.pathname.startsWith("/orders")
     if (to === "/reviews") return location.pathname.startsWith("/reviews")
@@ -122,8 +124,8 @@ export function Navbar() {
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         <Link to="/products" className="text-2xl font-bold tracking-tight">
-          <span className="text-brand">Citi</span>
-          <span className="text-slate-900">goo</span>
+          <span className="text-brand">Cii</span>
+          <span className="text-slate-900">Verse</span>
         </Link>
         <nav className="hidden items-center gap-8 md:flex">
           {NAV.map((item) => (
@@ -193,7 +195,7 @@ export function Navbar() {
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
-      <p className="font-medium text-slate-700">Citigoo x Nespresso</p>
+      <p className="font-medium text-slate-700">CiiVerse x Nespresso</p>
       <div className="mt-2 flex flex-wrap justify-center gap-4">
         <a href={`${STOREFRONT_URL}/privacy`} target="_blank" rel="noreferrer">
           Privacy Policy
@@ -208,7 +210,7 @@ export function Footer() {
           Buyer Storefront
         </a>
       </div>
-      <p className="mt-2">© 2026 Citigoo. All Rights Reserved.</p>
+      <p className="mt-2">© 2026 CiiVerse. All Rights Reserved.</p>
     </footer>
   )
 }

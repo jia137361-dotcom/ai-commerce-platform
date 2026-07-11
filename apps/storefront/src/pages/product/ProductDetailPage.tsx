@@ -38,7 +38,7 @@ import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
 type Notice = { label: string; message: string }
 
-const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Citigoo Official Store", metadata: {} }
+const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "CiiVerse Official Store", metadata: {} }
 
 export function ProductDetailPage({ productId, cartCount, onCartUpdated }: ProductDetailPageProps) {
   const auth = useBuyerAuth()

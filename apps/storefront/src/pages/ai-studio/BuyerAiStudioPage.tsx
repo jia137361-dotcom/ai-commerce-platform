@@ -5,6 +5,7 @@ import { StoreFooter } from "../../components/layout/StoreFooter"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type BuyerAiStudioPageProps = {
   productId: string
@@ -47,6 +48,7 @@ const DESIGN_STYLES: DesignStyle[] = [
 
 export function BuyerAiStudioPage({ productId, cartCount }: BuyerAiStudioPageProps) {
   const auth = useBuyerAuth()
+  const { settings } = useBuyerPageSettings({ marketplace: true })
   const [prompt, setPrompt] = useState("")
   const [selectedStyle, setSelectedStyle] = useState<string>("kawaii")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -101,7 +103,7 @@ export function BuyerAiStudioPage({ productId, cartCount }: BuyerAiStudioPagePro
     <PageShell
       className="buyer-ai-studio-page"
       contentClassName="buyer-ai-studio-content"
-      header={<StoreTopBar cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StoreFooter />}
     >
       <div className="buyer-ai-studio-container">

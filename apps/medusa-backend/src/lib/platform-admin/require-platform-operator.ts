@@ -30,7 +30,10 @@ export function decodeBearerToken(req: MedusaRequest): string | null {
 
 export function verifyMedusaUserJwt(token: string): { actor_id?: string; actor_type?: string } | null {
   const parts = token.split(".")
-  if (parts.length !== 3) return null
+  if (parts.length !== 3) {
+    console.log("[DEBUG] verifyMedusaUserJwt - invalid token format, parts:", parts.length)
+    return null
+  }
   const [header, payload, signature] = parts
   try {
     const expected = createHmac("sha256", JWT_SECRET)
@@ -39,27 +42,40 @@ export function verifyMedusaUserJwt(token: string): { actor_id?: string; actor_t
     const sigBuf = Buffer.from(signature)
     const expBuf = Buffer.from(expected)
     if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+      console.log("[DEBUG] verifyMedusaUserJwt - signature mismatch")
       return null
     }
     const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
       actor_id?: string
       actor_type?: string
     }
-    if (decoded.actor_type && decoded.actor_type !== "user") return null
+    console.log("[DEBUG] verifyMedusaUserJwt - decoded payload:", JSON.stringify({ actor_id: decoded.actor_id, actor_type: decoded.actor_type }))
+    if (decoded.actor_type && decoded.actor_type !== "user") {
+      console.log("[DEBUG] verifyMedusaUserJwt - rejecting non-user actor_type:", decoded.actor_type)
+      return null
+    }
     return decoded
-  } catch {
+  } catch (e) {
+    console.log("[DEBUG] verifyMedusaUserJwt - decode error:", e)
     return null
   }
 }
 
 export function resolveAdminUserId(req: MedusaRequest): string | null {
+  console.log("[DEBUG] resolveAdminUserId - auth_context:", JSON.stringify((req as AuthenticatedUserRequest).auth_context))
   const fromContext = (req as AuthenticatedUserRequest).auth_context?.actor_id
   if (typeof fromContext === "string" && fromContext.length > 0) {
+    console.log("[DEBUG] resolveAdminUserId - using auth_context.actor_id:", fromContext)
     return fromContext
   }
   const token = decodeBearerToken(req)
-  if (!token) return null
+  if (!token) {
+    console.log("[DEBUG] resolveAdminUserId - no bearer token found")
+    return null
+  }
+  console.log("[DEBUG] resolveAdminUserId - token found, verifying...")
   const decoded = verifyMedusaUserJwt(token)
+  console.log("[DEBUG] resolveAdminUserId - decoded:", JSON.stringify(decoded))
   return typeof decoded?.actor_id === "string" ? decoded.actor_id : null
 }
 
@@ -74,7 +90,9 @@ export async function requirePlatformOperator(
   }
 
   const storeCore = req.scope.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+  console.log("[DEBUG] requirePlatformOperator userId:", userId)
   const operators = await storeCore.listPlatformOperators({ user_id: userId, status: "active" })
+  console.log("[DEBUG] operators found:", operators.length, JSON.stringify(operators))
   const operator = operators[0] as { id: string; user_id: string; role: "admin" | "viewer" } | undefined
 
   if (!operator) {

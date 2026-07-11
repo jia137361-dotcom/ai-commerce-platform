@@ -16,6 +16,8 @@ import { Input, Label, Textarea } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { Skeleton } from "../../components/ui/EmptyState"
 import { ProductEditorPanel } from "../../components/ProductEditorPanel"
+import { CategoryTreePicker } from "../../components/CategoryTreePicker"
+import { TranslateButton } from "../../components/TranslateButton"
 import type { NormalizedProduct, ProductRegionSummary, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type SupplierVariant = {
@@ -100,11 +102,6 @@ export function EditDraftPage() {
 
   const product = data?.product ?? stateProduct
 
-  const { data: categoryData } = useQuery({
-    queryKey: ["product-categories"],
-    queryFn: () => apiFetch<{ categories: Array<{ category_id: string; name: string }> }>("/admin/product-categories"),
-  })
-
   const {
     data: regionData,
     isLoading: regionsLoading,
@@ -134,7 +131,6 @@ export function EditDraftPage() {
   const [price, setPrice] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [categoryIds, setCategoryIds] = useState<string[]>([])
-  const [newCategoryName, setNewCategoryName] = useState("")
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
   const [requiresShipping, setRequiresShipping] = useState(true)
   const [supportedRegionIds, setSupportedRegionIds] = useState<string[]>([])
@@ -436,20 +432,6 @@ export function EditDraftPage() {
     },
   })
 
-  const createCategoryMutation = useMutation({
-    mutationFn: () => apiFetch<{ category_id: string }>("/admin/product-categories", {
-      method: "POST",
-      body: JSON.stringify({ name: newCategoryName.trim() }),
-    }),
-    onSuccess: (created) => {
-      setCategoryIds([created.category_id])
-      setNewCategoryName("")
-      queryClient.invalidateQueries({ queryKey: ["product-categories"] })
-      toast.push("Category created for this store", "success")
-    },
-    onError: (err: unknown) => toast.push(formatError(err), "error"),
-  })
-
   const updateVariant = (
     index: number,
     field: keyof ProductVariantRow,
@@ -729,7 +711,16 @@ export function EditDraftPage() {
 
         <Card className="space-y-5">
           <div>
-            <Label>Product Title</Label>
+            <div className="flex items-center gap-2">
+              <Label>Product Title</Label>
+              {!isArchived && (
+                <TranslateButton
+                  text={title}
+                  onTranslated={setTitle}
+                  disabled={isArchived}
+                />
+              )}
+            </div>
             <Input
               className="mt-1 text-lg font-semibold"
               value={title}
@@ -738,7 +729,16 @@ export function EditDraftPage() {
             />
           </div>
           <div>
-            <Label>Description</Label>
+            <div className="flex items-center gap-2">
+              <Label>Description</Label>
+              {!isArchived && (
+                <TranslateButton
+                  text={description}
+                  onTranslated={setDescription}
+                  disabled={isArchived}
+                />
+              )}
+            </div>
             <Textarea
               className="mt-1"
               rows={5}
@@ -796,34 +796,14 @@ export function EditDraftPage() {
           </div>
 
           <div>
-            <Label>Category</Label>
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={categoryIds[0] ?? ""}
-              disabled={isArchived}
-              onChange={(event) => setCategoryIds(event.target.value ? [event.target.value] : [])}
-            >
-              <option value="">No category</option>
-              {(categoryData?.categories ?? []).map((category) => <option key={category.category_id} value={category.category_id}>{category.name}</option>)}
-            </select>
-            <p className="mt-1 text-xs text-slate-500">Only real categories created for this store are shown.</p>
-            {!isArchived ? (
-              <div className="mt-3 flex gap-2">
-                <Input
-                  value={newCategoryName}
-                  placeholder="New category name"
-                  onChange={(event) => setNewCategoryName(event.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
-                  onClick={() => createCategoryMutation.mutate()}
-                >
-                  Add category
-                </Button>
-              </div>
-            ) : null}
+            <Label>Categories</Label>
+            <div className="mt-1">
+              <CategoryTreePicker
+                selectedIds={categoryIds}
+                onChange={setCategoryIds}
+                disabled={isArchived}
+              />
+            </div>
           </div>
 
           {fulfillmentStatus.state !== "not_applicable" ? (

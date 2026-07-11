@@ -9,7 +9,7 @@ type ProductCartActionInput = {
   variantId: string
   quantity: number
   storageKey: string
-  storage: Pick<Storage, "getItem" | "setItem">
+  storage: Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">
   createCart: () => Promise<StoreCart>
   addLineItem: (cartId: string, variantId: string, quantity: number) => Promise<StoreCart>
 }

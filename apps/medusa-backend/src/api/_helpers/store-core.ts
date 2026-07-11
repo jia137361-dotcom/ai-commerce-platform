@@ -113,6 +113,8 @@ export const normalizeCategory = (category: any) => ({
   description: category.description,
   parent_id: category.parent_id,
   sort_order: category.sort_order,
+  supplier_category_id: category.supplier_category_id ?? null,
+  level: category.level ?? 1,
   created_at: category.created_at,
   updated_at: category.updated_at
 })

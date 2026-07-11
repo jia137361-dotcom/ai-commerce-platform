@@ -13,6 +13,7 @@ import { GenerationCompletePage } from "./pages/AiStudio/GenerationComplete"
 import { ProductReviewsPage, StoreMessagesPage as SellerStoreMessagesPage } from "./pages/Reviews/ProductReviews"
 import { SupplierCatalogPage } from "./pages/Supplier/SupplierCatalog"
 import { SupplierListPage } from "./pages/Suppliers/SupplierList"
+import { CategoryManagerPage } from "./pages/Categories/CategoryManager"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="reviews" element={<ProductReviewsPage />} />
         <Route path="messages" element={<SellerStoreMessagesPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="categories" element={<CategoryManagerPage />} />
         <Route path="suppliers" element={<SupplierListPage />} />
         <Route path="suppliers/:supplierId/catalog" element={<ErrorBoundary><SupplierCatalogPage /></ErrorBoundary>} />
         <Route path="supplier-catalog" element={<Navigate to="/suppliers" replace />} />

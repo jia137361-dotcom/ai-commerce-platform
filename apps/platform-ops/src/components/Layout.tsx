@@ -122,7 +122,7 @@ function Navbar() {
 function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
-      <p className="font-medium text-slate-700">Citigoo Platform Operations</p>
+      <p className="font-medium text-slate-700">CiiVerse Platform Operations</p>
       <div className="mt-2 flex flex-wrap justify-center gap-4">
         <a href={`${STOREFRONT_URL}/privacy`} target="_blank" rel="noreferrer">
           隐私政策
@@ -134,7 +134,7 @@ function Footer() {
           帮助中心
         </a>
       </div>
-      <p className="mt-2">© 2026 Citigoo. All Rights Reserved.</p>
+      <p className="mt-2">© 2026 CiiVerse. All Rights Reserved.</p>
     </footer>
   )
 }

@@ -10,7 +10,7 @@ import { useMemo, useState } from "react"
 export function StoreIdentity({ settings }: { settings: BuyerStoreSettings }) {
   const { t } = useBuyerLocale()
   const auth = useBuyerAuth()
-  const name = settings.brandName || "Citigoo Official Store"
+  const name = settings.brandName || "CiiVerse Official Store"
   const { following, followerCount, pending, toggleFollow } = useStoreFollow(
     settings.storeId,
     settings.followerCount ?? 0

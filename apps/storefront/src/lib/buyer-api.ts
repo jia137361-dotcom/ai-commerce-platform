@@ -779,13 +779,13 @@ export type BuyerOrdersQuery = {
 
 export const marketplaceBuyerSettings: BuyerStoreSettings = {
   storeId: MARKETPLACE_STORE_ID,
-  brandName: "Citigoo Marketplace",
+  brandName: "CiiVerse Marketplace",
   metadata: {},
 }
 
 const fallbackSettings: BuyerStoreSettings = {
   storeId: getLegacyDefaultStoreId(),
-  brandName: "Citigoo",
+  brandName: "CiiVerse",
   metadata: {},
   galleryUrls: [],
 }
@@ -842,16 +842,14 @@ const storeScopedFetch = async <T>(
   options?: StoreScopedRequestOptions
 ) => {
   const backendUrl = config.backendUrl.replace(/\/+$/, "")
-  if (!backendUrl) {
-    throw new Error("VITE_MEDUSA_BASE_URL is missing")
-  }
   if (isPlaceholderValue(config.publishableKey)) {
     throw new Error("VITE_PUBLISHABLE_API_KEY is missing or still a placeholder")
   }
 
   const scopedStoreId = getScopedBuyerStoreId(options?.storeId)
+  const url = backendUrl ? `${backendUrl}${path}` : path
 
-  const response = await fetch(`${backendUrl}${path}`, {
+  const response = await fetch(url, {
     ...init,
     credentials: init.credentials ?? "include",
     headers: {
@@ -927,14 +925,12 @@ const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => 
 
 const apiFetchWithStatus = async <T>(path: string, init: RequestInit = {}): Promise<{ status: number; payload: T }> => {
   const backendUrl = config.backendUrl.replace(/\/+$/, "")
-  if (!backendUrl) {
-    throw new Error("VITE_MEDUSA_BASE_URL is missing")
-  }
   if (isPlaceholderValue(config.publishableKey)) {
     throw new Error("VITE_PUBLISHABLE_API_KEY is missing or still a placeholder")
   }
 
-  const response = await fetch(`${backendUrl}${path}`, {
+  const url = backendUrl ? `${backendUrl}${path}` : path
+  const response = await fetch(url, {
     ...init,
     credentials: init.credentials ?? "include",
     headers: {

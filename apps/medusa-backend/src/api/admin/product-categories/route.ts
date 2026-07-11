@@ -95,3 +95,55 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     categories: categories.map(normalizeCategory)
   })
 }
+
+export const DELETE = async (req: MedusaRequest, res: MedusaResponse) => {
+  const categoryId = req.query.category_id as string | undefined
+
+  if (!categoryId) {
+    return sendError(res, 400, "VALIDATION_ERROR", "category_id is required")
+  }
+
+  const { store_id: storeId } = resolveCurrentStore(req)
+  const storeCoreService = getStoreCoreService(req)
+
+  const categories = await storeCoreService.listProductCategories({
+    id: categoryId,
+    store_id: storeId,
+  })
+
+  if (!categories.length) {
+    return sendError(res, 404, "NOT_FOUND", "Category not found")
+  }
+
+  const products = await storeCoreService.listProducts({ store_id: storeId })
+  const productsUsingCategory = products.filter(
+    (p: any) => Array.isArray(p.category_ids) && p.category_ids.includes(categoryId)
+  )
+
+  if (productsUsingCategory.length > 0) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      `Cannot delete category: ${productsUsingCategory.length} product(s) still reference it`
+    )
+  }
+
+  const children = await storeCoreService.listProductCategories({
+    parent_id: categoryId,
+    store_id: storeId,
+  })
+
+  if (children.length > 0) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      `Cannot delete category: ${children.length} subcategory(ies) exist under it`
+    )
+  }
+
+  await storeCoreService.deleteProductCategories(categoryId)
+
+  return res.json({ deleted: true, category_id: categoryId })
+}

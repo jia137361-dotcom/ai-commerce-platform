@@ -28,7 +28,7 @@ type Notice = { key: string; message: string }
 
 const fallbackSettings: BuyerStoreSettings = {
   storeId: getLegacyDefaultStoreId(),
-  brandName: "Citigoo Official Store",
+  brandName: "CiiVerse Official Store",
   galleryUrls: [],
   metadata: {},
 }
@@ -36,11 +36,11 @@ const fallbackSettings: BuyerStoreSettings = {
 function StoreFooter() {
   return (
     <footer className="buyer-store-footer">
-      <section><h2>Citigoo</h2><p>Curated products, protected checkout, and reliable order support.</p></section>
+      <section><h2>CiiVerse</h2><p>Curated products, protected checkout, and reliable order support.</p></section>
       <section><h2>Shopping</h2><a href="/store">All products</a><a href="/cart">Cart</a></section>
       <section><h2>Customer service</h2><a href="/orders/lookup">Find an order</a><a href="/account/orders">Order history</a></section>
       <section><h2>Help</h2><a href="/help">Help Center</a><a href="/help">Contact us</a></section>
-      <div className="buyer-store-legal"><span>© 2026 Citigoo Limited</span><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div>
+      <div className="buyer-store-legal"><span>© 2026 CiiVerse Limited</span><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div>
     </footer>
   )
 }

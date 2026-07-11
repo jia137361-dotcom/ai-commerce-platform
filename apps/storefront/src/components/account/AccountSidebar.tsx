@@ -24,7 +24,7 @@ export function AccountSidebar() {
         <div className="avatar">lu</div>
         <div>
           <strong>lulu</strong>
-          <span>Citigoo member</span>
+          <span>CiiVerse member</span>
         </div>
       </div>
       {groups.map((group) => (

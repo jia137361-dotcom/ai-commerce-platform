@@ -17,8 +17,8 @@ export function StoreTopBar({ settings, cartCount, marketplaceMode = false }: St
 
   return (
     <header className="buyer-store-topbar">
-      <a className="buyer-store-logo" href="/" aria-label="Citigoo home">
-        <span>Citi</span>goo
+      <a className="buyer-store-logo" href="/" aria-label="CiiVerse home">
+        <span>Cii</span>Verse
       </a>
       <div className="buyer-store-ship">
         <span aria-hidden="true">⌖</span>

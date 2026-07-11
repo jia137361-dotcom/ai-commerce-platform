@@ -28,7 +28,7 @@ export function StoreFooter() {
   return (
     <footer className="store-footer">
       <div>
-        <strong>Citigoo</strong>
+        <strong>CiiVerse</strong>
         <p>Defining modern commerce through curated products, reliable fulfillment, and protected checkout.</p>
       </div>
       <nav aria-label="Store footer">

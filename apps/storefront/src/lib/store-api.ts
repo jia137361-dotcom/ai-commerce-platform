@@ -201,16 +201,14 @@ const describeApiError = (error: unknown, path: string) => {
 
 const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
   const backendUrl = storefrontConfig.backendUrl.replace(/\/+$/, "")
-  if (!backendUrl) {
-    throw new Error("Backend URL is missing. Set VITE_MEDUSA_BASE_URL=http://127.0.0.1:9000 and restart Vite.")
-  }
   if (isPlaceholderValue(storefrontConfig.publishableKey)) {
     throw new Error("Publishable API key is missing or still a placeholder. Set VITE_PUBLISHABLE_API_KEY in apps/storefront/.env.local and restart Vite.")
   }
 
+  const url = backendUrl ? `${backendUrl}${path}` : path
   let response: Response
   try {
-    response = await fetch(`${backendUrl}${path}`, {
+    response = await fetch(url, {
       ...init,
       headers: {
         ...apiHeaders(Boolean(init.body)),
@@ -220,9 +218,9 @@ const apiFetch = async <T>(path: string, init: RequestInit = {}): Promise<T> => 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (message === "Failed to fetch" || error instanceof TypeError) {
-      throw new Error(`Backend unreachable or CORS/network error while requesting ${backendUrl}${path}. Confirm Medusa is running, VITE_MEDUSA_BASE_URL is correct, and the backend allows the storefront origin.`)
+      throw new Error(`Backend unreachable or CORS/network error while requesting ${url}. Confirm Medusa is running and the backend allows the storefront origin.`)
     }
-    throw new Error(`Network error while requesting ${backendUrl}${path}: ${message}`)
+    throw new Error(`Network error while requesting ${url}: ${message}`)
   }
 
   if (!response.ok) {
