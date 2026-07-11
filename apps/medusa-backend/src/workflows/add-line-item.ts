@@ -1,4 +1,4 @@
-import type { MedusaContainer } from "@medusajs/framework/types"
+import type { MedusaContainer } from "@medusajs/framework/types/container"
 import {
   createStep,
   createWorkflow,
@@ -249,7 +249,7 @@ const addLineItemStep = createStep(
     })
 
     const items = cartAfter.items ?? []
-    const matching = items.filter((i) => i.variant_id === input.variant_id)
+    const matching = items.filter((i: any) => i.variant_id === input.variant_id)
     const lineItem = matching[matching.length - 1]
 
     if (lineItem?.id) {
@@ -263,7 +263,7 @@ const addLineItemStep = createStep(
       relations: ["items"],
     })
     const finalItems = cartFinal.items ?? []
-    const finalMatching = finalItems.filter((i) => i.variant_id === input.variant_id)
+    const finalMatching = finalItems.filter((i: any) => i.variant_id === input.variant_id)
     const finalLineItem = finalMatching[finalMatching.length - 1]
 
     return new StepResponse({ lineItem: finalLineItem ?? lineItem, cart: cartFinal })
