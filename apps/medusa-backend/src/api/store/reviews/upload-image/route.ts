@@ -23,7 +23,7 @@ export const POST = async (req: MedusaRequest<UploadReviewImageBody>, res: Medus
 
   const validation = validateStoreImageUpload("review", fileBase64, contentType)
   if (!validation.ok) {
-    return sendError(res, 400, "VALIDATION_ERROR", validation.message)
+    return sendError(res, 400, "VALIDATION_ERROR", (validation as any).message ?? "Invalid image")
   }
 
   const { store_id: storeId } = resolveCurrentStore(req)
