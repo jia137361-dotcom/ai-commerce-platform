@@ -41,7 +41,7 @@ export async function quickCreateProduct(client: S2bdiyClient, input: QuickCreat
   const designType = input.design_type ?? 1
   const body = { size_id: input.size_id, color_id: input.color_id, product_design: { basic_product_id: input.basic_product_id, name: input.name, views: [{ view_id: input.view_id, objects: [{ type: "image", material_id: Number(input.material_id), design_type: designType }] }] } }
   const data = await client.request<QuickCreateResult>("/open/v1/product/quickCreate", { method: "POST", body })
-  const productId = data.product_id ?? (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).product_id
+  const productId = (data.product_id ?? (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).product_id) as string | number
   if (productId === undefined || productId === null) throw new Error(`quickCreate missing product_id: ${JSON.stringify(data)}`)
   return { product_id: productId, product_name: data.product_name, product_code: data.product_code }
 }
