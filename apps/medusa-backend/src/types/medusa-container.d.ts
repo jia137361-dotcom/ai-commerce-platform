@@ -4,13 +4,20 @@ declare module "@medusajs/framework/types" {
 
 declare module "@medusajs/core-flows" {
   export const cancelOrderWorkflow: any
+  export const capturePaymentWorkflow: any
+  export const createLocationFulfillmentSetWorkflow: any
+  export const createServiceZonesWorkflow: any
+  export const createShippingOptionsWorkflow: any
+  export const createShippingProfilesWorkflow: any
+  export const createStockLocationsWorkflow: any
+  export const linkSalesChannelsToStockLocationWorkflow: any
+  export const updateShippingOptionsWorkflow: any
   export const createOrderFulfillmentWorkflow: any
   export const createShipmentWorkflow: any
   export const createPaymentCaptureWorkflow: any
   export const createPaymentSessionsWorkflow: any
   export const refreshPaymentSessionsWorkflow: any
   export const authorizePaymentSessionWorkflow: any
-  export const capturePaymentWorkflow: any
   export const refundPaymentWorkflow: any
   export const createFulfillmentWorkflow: any
   export const cancelFulfillmentWorkflow: any
@@ -94,12 +101,6 @@ declare module "@medusajs/core-flows" {
   export const createTaxRegionWorkflow: any
   export const updateTaxRegionWorkflow: any
   export const deleteTaxRegionWorkflow: any
-  export const createShippingProfileWorkflow: any
-  export const updateShippingProfileWorkflow: any
-  export const deleteShippingProfileWorkflow: any
-  export const createShippingOptionWorkflow: any
-  export const updateShippingOptionWorkflow: any
-  export const deleteShippingOptionWorkflow: any
   export const createFulfillmentSetWorkflow: any
   export const updateFulfillmentSetWorkflow: any
   export const deleteFulfillmentSetWorkflow: any
