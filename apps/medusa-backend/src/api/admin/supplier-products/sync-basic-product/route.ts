@@ -8,8 +8,8 @@ type SyncBasicProductBody = {
   supplier_id: string
 }
 
-export const POST = async (req: MedusaRequest<SyncBasicProductBody>, res: MedusaResponse) => {
-  const body = req.body ?? {}
+export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
+  const body = (req.body ?? {}) as SyncBasicProductBody
   const basicProductId = body.basic_product_id
 
   if (!basicProductId || !Number.isFinite(Number(basicProductId))) {

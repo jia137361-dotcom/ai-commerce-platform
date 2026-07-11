@@ -14,8 +14,8 @@ type CreateDraftBody = {
   category_ids?: string[]
 }
 
-export const POST = async (req: MedusaRequest<CreateDraftBody>, res: MedusaResponse) => {
-  const body = req.body ?? {}
+export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
+  const body = (req.body ?? {}) as CreateDraftBody
   const supplierProductId = requireText(body.supplier_product_id)
   const basicProductId = requireText(body.basic_product_id)
 
