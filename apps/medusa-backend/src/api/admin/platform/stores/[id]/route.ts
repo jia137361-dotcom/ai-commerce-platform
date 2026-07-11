@@ -43,7 +43,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     return sendError(res, 404, "VALIDATION_ERROR", "Store not found")
   }
 
-  await (storeCore as { updateStores: (input: Record<string, unknown>) => Promise<unknown> }).updateStores({
+  await (storeCore as any).updateStores({
     selector: { id: storeId },
     data: { status },
   })

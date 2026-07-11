@@ -63,7 +63,7 @@ async function ensureLocalFixture(storeCore: StoreCoreModuleService) {
   }
 
   if (existing.length) {
-    await (storeCore as { updateSupplierProducts: (input: Record<string, unknown>) => Promise<unknown> }).updateSupplierProducts({
+    await (storeCore as any).updateSupplierProducts({
       selector: { id: PRODUCT_ROW_ID },
       data: productData,
     })
@@ -90,7 +90,7 @@ async function ensureLocalFixture(storeCore: StoreCoreModuleService) {
       raw_json: { source: "local_fixture" },
     }
     if (match) {
-      await (storeCore as { updateSupplierProductVariants: (input: Record<string, unknown>) => Promise<unknown> }).updateSupplierProductVariants({
+      await (storeCore as any).updateSupplierProductVariants({
         selector: { id: variant.id },
         data: variantData,
       })
@@ -118,7 +118,7 @@ async function ensureLocalFixture(storeCore: StoreCoreModuleService) {
     status: "active" as const,
   }
   if (existingSpecs.length) {
-    await (storeCore as { updateSupplierPrintSpecs: (input: Record<string, unknown>) => Promise<unknown> }).updateSupplierPrintSpecs({
+    await (storeCore as any).updateSupplierPrintSpecs({
       selector: { id: existingSpecs[0].id },
       data: specData,
     })
