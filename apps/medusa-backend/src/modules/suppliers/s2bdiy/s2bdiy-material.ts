@@ -23,9 +23,10 @@ export async function uploadMaterialClient(
   form.append("image", blob, input.filename)
   if (input.name) form.append("name", input.name)
   const data = await client.request<UploadMaterialResult>("/open/v1/material/uploadMaterial", { method: "POST", formData: form })
-  const id = (data as UploadMaterialResult).id ?? (data as Record<string, unknown>).id
+  const result = data as UploadMaterialResult
+  const id = result.id ?? (data as Record<string, unknown>).id as string | number
   if (id === undefined || id === null) throw new Error(`uploadMaterial missing id: ${JSON.stringify(data)}`)
-  return { id, name: (data as UploadMaterialResult).name, image_url: (data as UploadMaterialResult).image_url }
+  return { id, name: result.name, image_url: result.image_url }
 }
 export async function fetchPrintFileBuffer(printFileUrl: string): Promise<{ buffer: Buffer; filename: string }> {
   const res = await fetch(printFileUrl)
