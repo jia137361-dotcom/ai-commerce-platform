@@ -1,4 +1,3 @@
-import type { MedusaContainer } from "@medusajs/framework/types/container"
 import {
   createStep,
   createWorkflow,
@@ -59,7 +58,7 @@ function readNumber(value: unknown): number | null {
 }
 
 async function calculateVariantUnitPrice(
-  container: MedusaContainer,
+  container: any,
   input: {
     priceSetId: string
     cart: Record<string, unknown>
@@ -124,7 +123,7 @@ async function calculateVariantUnitPrice(
 
 const addLineItemStep = createStep(
   "add-line-item-step",
-  async (input: AddLineItemWorkflowInput, { container }: { container: MedusaContainer }) => {
+  async (input: AddLineItemWorkflowInput, { container }: { container: any }) => {
     await ensureDefaultSalesChannelStockLocation(container)
     const cartModule = container.resolve(Modules.CART)
     const productModule = container.resolve(Modules.PRODUCT)
