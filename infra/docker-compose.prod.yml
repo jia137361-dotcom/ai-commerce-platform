@@ -49,6 +49,7 @@ services:
     build:
       context: ..
       dockerfile: apps/medusa-backend/Dockerfile.prod
+      provenance: false
     container_name: citigoo-medusa
     restart: unless-stopped
     ports:
@@ -89,6 +90,7 @@ services:
     build:
       context: ../apps/ai-worker
       dockerfile: Dockerfile.prod
+      provenance: false
     container_name: citigoo-ai-worker
     restart: unless-stopped
     ports:
@@ -118,6 +120,7 @@ services:
     build:
       context: ..
       dockerfile: apps/storefront/Dockerfile.prod
+      provenance: false
     container_name: citigoo-storefront
     restart: unless-stopped
     ports:
@@ -132,6 +135,7 @@ services:
     build:
       context: ..
       dockerfile: apps/seller-dashboard/Dockerfile.prod
+      provenance: false
     container_name: citigoo-seller
     restart: unless-stopped
     ports:
