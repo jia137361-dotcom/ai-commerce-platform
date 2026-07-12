@@ -1,5 +1,6 @@
 # =============================================================================
 # MedusaJS Backend 生产环境 Dockerfile
+# 不需要 TypeScript 编译，medusa start 直接运行 TypeScript
 # =============================================================================
 
 FROM node:20-slim AS base
@@ -29,10 +30,6 @@ RUN npm ci
 # 复制后端源代码
 COPY apps/medusa-backend/ ./apps/medusa-backend/
 
-# 构建后端 (跳过脚本和测试文件的类型检查)
-WORKDIR /app/apps/medusa-backend
-RUN npx tsc -p tsconfig.build.json --noEmit false --outDir .medusa/server
-
 # 生产镜像
 FROM node:20-slim
 
@@ -44,7 +41,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 复制构建产物和依赖
+# 复制应用和依赖
 COPY --from=base /app/apps/medusa-backend ./apps/medusa-backend
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/packages ./packages
@@ -59,5 +56,5 @@ EXPOSE 9000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:9000/health || exit 1
 
-# 启动
-CMD ["npm", "start"]
+# 直接运行，不需要预编译
+CMD ["npx", "medusa", "start"]
