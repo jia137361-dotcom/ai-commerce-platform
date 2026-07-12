@@ -1,0 +1,37 @@
+# =============================================================================
+# MedusaJS Backend 生产环境 Dockerfile
+# =============================================================================
+
+FROM node:20-slim AS base
+
+# 安装依赖
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 复制 package 文件
+COPY apps/medusa-backend/package*.json ./
+COPY package*.json ./
+
+# 安装依赖
+RUN npm ci --only=production
+
+# 复制源代码
+COPY apps/medusa-backend/ ./
+
+# 构建
+RUN npm run build
+
+# 暴露端口
+EXPOSE 9000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:9000/health || exit 1
+
+# 启动
+CMD ["npm", "start"]

@@ -1,0 +1,163 @@
+# =============================================================================
+# CitiGoo 生产环境 Docker Compose
+# 用法: docker compose -f docker-compose.prod.yml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 数据库
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    container_name: citigoo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-citigoo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请设置POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-citigoo_prod}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - citigoo-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-citigoo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis 缓存
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: citigoo-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - citigoo-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # MedusaJS 后端
+  # ---------------------------------------------------------------------------
+  medusa-backend:
+    build:
+      context: ..
+      dockerfile: apps/medusa-backend/Dockerfile.prod
+    container_name: citigoo-medusa
+    restart: unless-stopped
+    ports:
+      - "${MEDUSA_PORT:-9000}:9000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-citigoo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-citigoo_prod}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:?请设置JWT_SECRET}
+      - COOKIE_SECRET=${COOKIE_SECRET:?请设置COOKIE_SECRET}
+      - STORE_CORS=${STORE_CORS:-https://citigoo.app,https://www.citigoo.app}
+      - ADMIN_CORS=${ADMIN_CORS:-https://admin.citigoo.app}
+      - AUTH_CORS=${AUTH_CORS:-https://citigoo.app,https://admin.citigoo.app}
+      - MEDUSA_BACKEND_URL=${MEDUSA_BACKEND_URL:-http://localhost:9000}
+      - DEFAULT_STORE_ID=${DEFAULT_STORE_ID:-default_store}
+      - PUBLISHABLE_API_KEY=${PUBLISHABLE_API_KEY}
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - AI_WORKER_BASE_URL=http://ai-worker:8001
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-CitiGoo <noreply@citigoo.app>}
+      - S2BDIY_MOCK_MODE=${S2BDIY_MOCK_MODE:-false}
+      - S2BDIY_API_BASE_URL=${S2BDIY_API_BASE_URL:-https://opentest.s2bdiy.com}
+      - S2BDIY_APP_KEY=${S2BDIY_APP_KEY:-}
+      - S2BDIY_APP_SECRET=${S2BDIY_APP_SECRET:-}
+      - S2BDIY_PLATFORM_ID=${S2BDIY_PLATFORM_ID:-99}
+      - S2BDIY_STORE_ID=${S2BDIY_STORE_ID:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # AI Worker (Python FastAPI)
+  # ---------------------------------------------------------------------------
+  ai-worker:
+    build:
+      context: ../apps/ai-worker
+      dockerfile: Dockerfile.prod
+    container_name: citigoo-ai-worker
+    restart: unless-stopped
+    ports:
+      - "${AI_WORKER_PORT:-8001}:8001"
+    environment:
+      - AI_WORKER_HOST=0.0.0.0
+      - AI_WORKER_PORT=8001
+      - AI_WORKER_MOCK_GENERATION=${AI_WORKER_MOCK_GENERATION:-false}
+      - MEDUSA_BASE_URL=http://medusa-backend:9000
+      - AI_WORKER_UPLOAD_DIR=/app/uploads
+      - AI_WORKER_PUBLIC_BASE_URL=${AI_WORKER_PUBLIC_BASE_URL:-https://api.citigoo.app/ai-worker/static}
+      - IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER:-dashscope}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com}
+      - DASHSCOPE_IMAGE_MODEL=${DASHSCOPE_IMAGE_MODEL:-wan2.7-image-pro}
+      - FAL_KEY=${FAL_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+    volumes:
+      - citigoo-ai-uploads:/app/uploads
+
+  # ---------------------------------------------------------------------------
+  # Storefront (买家店面)
+  # ---------------------------------------------------------------------------
+  storefront:
+    build:
+      context: ..
+      dockerfile: apps/storefront/Dockerfile.prod
+    container_name: citigoo-storefront
+    restart: unless-stopped
+    ports:
+      - "${STOREFRONT_PORT:-3000}:80"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-https://api.citigoo.app}
+
+  # ---------------------------------------------------------------------------
+  # Seller Dashboard (卖家仪表盘)
+  # ---------------------------------------------------------------------------
+  seller-dashboard:
+    build:
+      context: ..
+      dockerfile: apps/seller-dashboard/Dockerfile.prod
+    container_name: citigoo-seller
+    restart: unless-stopped
+    ports:
+      - "${SELLER_PORT:-5173}:80"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-https://api.citigoo.app}
+
+  # ---------------------------------------------------------------------------
+  # Nginx 反向代理 (可选，用于统一入口)
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: citigoo-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - medusa-backend
+      - storefront
+      - seller-dashboard
+
+volumes:
+  citigoo-postgres:
+  citigoo-redis:
+  citigoo-ai-uploads:

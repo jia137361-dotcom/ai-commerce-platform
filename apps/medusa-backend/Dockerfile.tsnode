@@ -1,0 +1,7 @@
+FROM node:20-slim
+WORKDIR /app
+COPY apps/medusa-backend/package*.json ./
+RUN npm ci
+COPY apps/medusa-backend/ ./
+EXPOSE 9000
+CMD ["npx", "ts-node", "--esm", "src/main.ts"]
