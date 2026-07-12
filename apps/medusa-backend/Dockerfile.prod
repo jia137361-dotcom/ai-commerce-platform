@@ -4,27 +4,51 @@
 
 FROM node:20-slim AS base
 
-# 安装依赖
+# 安装系统依赖
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 复制 package 文件
-COPY apps/medusa-backend/package*.json ./
+# 复制根 package 文件
 COPY package*.json ./
+COPY packages/ ./packages/
 
-# 安装依赖
-RUN npm ci --only=production
+# 复制后端 package 文件
+COPY apps/medusa-backend/package*.json ./apps/medusa-backend/
 
-# 复制源代码
-COPY apps/medusa-backend/ ./
+# 安装所有依赖 (包括 devDependencies 用于构建)
+RUN npm ci
 
-# 构建
+# 复制后端源代码
+COPY apps/medusa-backend/ ./apps/medusa-backend/
+
+# 构建后端
+WORKDIR /app/apps/medusa-backend
 RUN npm run build
+
+# 生产镜像
+FROM node:20-slim
+
+# 安装运行时依赖
+RUN apt-get update && apt-get install -y \
+    python3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 复制构建产物和依赖
+COPY --from=base /app/apps/medusa-backend ./apps/medusa-backend
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/packages ./packages
+COPY --from=base /app/package.json ./
+
+WORKDIR /app/apps/medusa-backend
 
 # 暴露端口
 EXPOSE 9000

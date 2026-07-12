@@ -323,7 +323,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       return res.status(401).json({ error: "Customer session is required" })
     }
 
-    const { assertActiveCustomer } = await import("../../../../../lib/customer-session")
+    const { assertActiveCustomer } = await import("../../../../../lib/customer-session.js")
     if (!(await assertActiveCustomer(req, res, customerId))) return
 
     const limit = readPositiveInt(req.query?.limit, 20, 100)

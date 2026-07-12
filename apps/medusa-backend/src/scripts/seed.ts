@@ -416,8 +416,8 @@ export default async function seedStoreCore({ container }: ExecArgs) {
   const existingPlatformProducts = await storeCoreService.listPlatformProducts({
     id: platformProducts.map((product) => product.id)
   })
-  const existingPlatformProductIds = new Set(
-    existingPlatformProducts.map((product) => product.id)
+  const existingPlatformProductIds = new Set<string>(
+    existingPlatformProducts.map((product) => product.id as string)
   )
   await createMissing(existingPlatformProductIds, platformProducts, (items) =>
     storeCoreService.createPlatformProducts(items)

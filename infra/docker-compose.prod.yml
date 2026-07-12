@@ -59,9 +59,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET:?请设置JWT_SECRET}
       - COOKIE_SECRET=${COOKIE_SECRET:?请设置COOKIE_SECRET}
-      - STORE_CORS=${STORE_CORS:-https://citigoo.app,https://www.citigoo.app}
-      - ADMIN_CORS=${ADMIN_CORS:-https://admin.citigoo.app}
-      - AUTH_CORS=${AUTH_CORS:-https://citigoo.app,https://admin.citigoo.app}
+      - STORE_CORS=${STORE_CORS:-http://localhost:3000,http://localhost:5173}
+      - ADMIN_CORS=${ADMIN_CORS:-http://localhost:5173}
+      - AUTH_CORS=${AUTH_CORS:-http://localhost:3000,http://localhost:5173}
       - MEDUSA_BACKEND_URL=${MEDUSA_BACKEND_URL:-http://localhost:9000}
       - DEFAULT_STORE_ID=${DEFAULT_STORE_ID:-default_store}
       - PUBLISHABLE_API_KEY=${PUBLISHABLE_API_KEY}
@@ -99,7 +99,7 @@ services:
       - AI_WORKER_MOCK_GENERATION=${AI_WORKER_MOCK_GENERATION:-false}
       - MEDUSA_BASE_URL=http://medusa-backend:9000
       - AI_WORKER_UPLOAD_DIR=/app/uploads
-      - AI_WORKER_PUBLIC_BASE_URL=${AI_WORKER_PUBLIC_BASE_URL:-https://api.citigoo.app/ai-worker/static}
+      - AI_WORKER_PUBLIC_BASE_URL=${AI_WORKER_PUBLIC_BASE_URL:-http://localhost:8001/static}
       - IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER:-dashscope}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com}
@@ -123,7 +123,7 @@ services:
     ports:
       - "${STOREFRONT_PORT:-3000}:80"
     environment:
-      - VITE_API_URL=${VITE_API_URL:-https://api.citigoo.app}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:9000}
 
   # ---------------------------------------------------------------------------
   # Seller Dashboard (卖家仪表盘)
@@ -137,25 +137,7 @@ services:
     ports:
       - "${SELLER_PORT:-5173}:80"
     environment:
-      - VITE_API_URL=${VITE_API_URL:-https://api.citigoo.app}
-
-  # ---------------------------------------------------------------------------
-  # Nginx 反向代理 (可选，用于统一入口)
-  # ---------------------------------------------------------------------------
-  nginx:
-    image: nginx:alpine
-    container_name: citigoo-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - medusa-backend
-      - storefront
-      - seller-dashboard
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:9000}
 
 volumes:
   citigoo-postgres:

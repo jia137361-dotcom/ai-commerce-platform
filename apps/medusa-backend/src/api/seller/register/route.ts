@@ -3,8 +3,8 @@ import { MedusaError } from "@medusajs/framework/utils"
 import { registerSellerAccount, type SellerRegisterInput } from "../../../lib/seller-register"
 import { sendError } from "../../_helpers/store-core"
 
-export const POST = async (req: MedusaRequest<SellerRegisterInput>, res: MedusaResponse) => {
-  const body = req.body ?? {}
+export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
+  const body = (req.body ?? {}) as SellerRegisterInput
   try {
     const result = await registerSellerAccount(req.scope, {
       email: body.email ?? "",
