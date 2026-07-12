@@ -19,6 +19,7 @@ const stripePaymentProviders =
     : []
 
 export default defineConfig({
+  admin: { disable: true },
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
     redisUrl: process.env.REDIS_URL,
