@@ -1,4 +1,4 @@
-import { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "../types/medusa"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import StoreCoreModuleService from "../modules/store-core/service"
 import { DEFAULT_STORE_ID } from "../lib/store-context"
