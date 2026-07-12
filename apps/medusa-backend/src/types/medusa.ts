@@ -1,8 +1,8 @@
 // Local type definitions for MedusaJS v2 compatibility
 // ExecArgs type used by medusa exec scripts
 
-import type { MedusaContainer } from "@medusajs/framework/types"
-
 export type ExecArgs = {
-  container: MedusaContainer
+  container: {
+    resolve: <T = unknown>(registrationName: string) => T
+  }
 }
