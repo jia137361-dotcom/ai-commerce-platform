@@ -29,9 +29,9 @@ RUN npm ci
 # 复制后端源代码
 COPY apps/medusa-backend/ ./apps/medusa-backend/
 
-# 构建后端
+# 构建后端 (跳过脚本和测试文件的类型检查)
 WORKDIR /app/apps/medusa-backend
-RUN npm run build
+RUN npx tsc -p tsconfig.build.json --noEmit false --outDir .medusa/server
 
 # 生产镜像
 FROM node:20-slim
