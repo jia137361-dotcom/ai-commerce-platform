@@ -5,15 +5,22 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# 复制 package 文件
+# 复制根 package 文件和 workspaces 配置
 COPY package*.json ./
+
+# 复制共享包
+COPY packages/shared-types/ ./packages/shared-types/
+
+# 复制 seller-dashboard package 文件
 COPY apps/seller-dashboard/package*.json ./apps/seller-dashboard/
-COPY packages/ ./packages/
+COPY apps/seller-dashboard/tsconfig*.json ./apps/seller-dashboard/
+COPY apps/seller-dashboard/postcss.config.js ./apps/seller-dashboard/
+COPY apps/seller-dashboard/tailwind.config.js ./apps/seller-dashboard/
 
 # 安装依赖
 RUN npm ci
 
-# 复制源代码
+# 复制 seller-dashboard 源代码
 COPY apps/seller-dashboard/ ./apps/seller-dashboard/
 
 # 构建
