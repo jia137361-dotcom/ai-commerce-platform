@@ -65,7 +65,11 @@
 - 店铺: `default_store`
 - 供应商: `sup_s2bdiy`
 - 分类: 11个一级 + 55个二级分类
-- 产品: 413个示例产品（需要替换为真实产品）
+- 产品: **413个示例产品（需要删除并替换为真实产品）**
+
+**⚠️ 重要**: 当前数据库中的 413 个产品是我手动创建的示例数据，不是 S2BDIY 真实产品。新会话需要：
+1. 删除这些示例产品
+2. 从 S2BDIY API 同步 1513 个真实产品
 
 ---
 
@@ -163,31 +167,61 @@
 
 ## 三、接下来要做的事情
 
-### 任务 1: 从 S2BDIY API 同步真实产品
+### 任务 1: 删除示例产品并从 S2BDIY API 同步真实产品
 
-**目标**: 将 1513 个真实产品导入数据库
+**目标**: 删除 413 个示例产品，导入 1513 个真实 S2BDIY 产品
 
-**步骤**:
+#### 步骤 1: 删除示例产品
 
 ```bash
-# 1. 删除示例产品
-psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
-  -c "DELETE FROM mc_product WHERE id LIKE 'prod_%';"
+# 连接数据库
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo"
 
-# 2. 创建产品同步脚本
-# 需要编写 Node.js 脚本调用 S2BDIY API
+# 查看当前产品数量
+SELECT count(*) FROM mc_product;
 
-# 3. 运行同步脚本
+# 删除所有示例产品（保留分类和供应商）
+DELETE FROM mc_product;
+
+# 验证删除完成
+SELECT count(*) FROM mc_product;
+-- 应该返回 0
+```
+
+#### 步骤 2: 从 S2BDIY API 同步真实产品
+
+```bash
+# 创建同步脚本（参考第五章的脚本模板）
+# 或使用以下命令直接同步
+
+cd /opt/ai-commerce-platform
+
+# 安装依赖
+npm install axios pg
+
+# 运行同步脚本
 node scripts/sync-s2bdiy-products.js
 ```
 
-**S2BDIY API 配置** (从 .env 文件):
+**S2BDIY API 配置**:
 ```
 S2BDIY_API_BASE_URL=https://opentest.s2bdiy.com
 S2BDIY_APP_KEY=wm001
 S2BDIY_APP_SECRET=7b55d8cf04caf3db9232c98eadeb9cc2
 S2BDIY_PLATFORM_ID=99
 S2BDIY_STORE_ID=4390
+```
+
+#### 步骤 3: 验证导入
+
+```bash
+# 检查产品数量（应该接近 1513）
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
+  -c "SELECT count(*) FROM mc_product;"
+
+# 查看产品示例
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
+  -c "SELECT id, title, price FROM mc_product LIMIT 10;"
 ```
 
 ### 任务 2: 验证 Medusa Backend 启动
@@ -237,15 +271,30 @@ psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/c
   -c "SELECT count(*) FROM mc_product;"
 ```
 
-### 步骤 3: 执行产品同步
+### 步骤 3: 删除示例产品
 
-**方案 A: 从 S2BDIY API 同步真实产品**
+```bash
+# 连接数据库并删除示例产品
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
+  -c "DELETE FROM mc_product;"
 
-需要编写同步脚本，调用 S2BDIY API 获取产品数据。
+# 验证删除完成
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
+  -c "SELECT count(*) FROM mc_product;"
+-- 应该返回 0
+```
 
-**方案 B: 使用本地数据文件**
+### 步骤 4: 从 S2BDIY API 同步真实产品
 
-如果有产品数据的 CSV/JSON 文件，可以直接导入。
+```bash
+cd /opt/ai-commerce-platform
+
+# 安装依赖
+npm install axios pg
+
+# 运行同步脚本（参考第五章）
+node scripts/sync-s2bdiy-products.js
+```
 
 ### 步骤 4: 验证部署
 
