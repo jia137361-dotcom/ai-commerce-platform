@@ -42,7 +42,7 @@
 
 **服务器信息**:
 - IP: `162.0.214.180`
-- 数据库名: `citigoo`
+- **数据库名: `citigoo`** (注意：不是 `citigoo_prod`)
 - 用户名: `citigoo`
 - 密码: `89fd0c304c45bbe483b2698e07ce5109`
 - 连接字符串: `postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo`
