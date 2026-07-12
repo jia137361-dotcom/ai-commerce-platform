@@ -76,16 +76,20 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 PROJECT_DIR="/opt/ai-commerce-platform"
 
+BRANCH="feat/platform-marketplace-20260705"
+
 if [ -d "$PROJECT_DIR" ]; then
     info "项目目录已存在，拉取最新代码"
     cd "$PROJECT_DIR"
-    git pull
+    git fetch --all
+    git checkout "$BRANCH"
+    git pull origin "$BRANCH"
 else
     warn "克隆代码..."
-    git clone https://github.com/jia137361-dotcom/ai-commerce-platform.git "$PROJECT_DIR"
+    git clone -b "$BRANCH" https://github.com/jia137361-dotcom/ai-commerce-platform.git "$PROJECT_DIR"
     cd "$PROJECT_DIR"
 fi
-info "代码已就绪"
+info "代码已就绪 (分支: $BRANCH)"
 
 # =============================================================================
 # 步骤 4: 配置环境变量
