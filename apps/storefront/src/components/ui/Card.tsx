@@ -10,6 +10,7 @@ type CardProps = {
   ariaModal?: boolean
   ariaLabelledBy?: string
   ariaDescribedBy?: string
+  key?: string | number
 }
 
 export function Card({

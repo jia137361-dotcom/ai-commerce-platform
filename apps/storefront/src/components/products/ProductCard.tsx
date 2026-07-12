@@ -5,6 +5,7 @@ import { StatusBadge } from "../ui/StatusBadge"
 
 type ProductCardProps = {
   product: StoreProduct
+  key?: string | number
 }
 
 export function ProductCard({ product }: ProductCardProps) {

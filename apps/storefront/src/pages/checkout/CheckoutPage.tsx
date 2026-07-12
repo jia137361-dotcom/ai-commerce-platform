@@ -550,11 +550,12 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       const splitKey = `citigoo:${storeId}:split_checkout`
       const splitRaw = window.sessionStorage.getItem(splitKey)
       const split = splitRaw ? JSON.parse(splitRaw) as { sourceCartId?: string; checkoutCartId?: string; selectedLineIds?: string[] } : null
-      if (split?.checkoutCartId === cart.id && split.sourceCartId) {
+      if (split && split.checkoutCartId === cart.id && split.sourceCartId) {
+        const sourceCartId = split.sourceCartId
         for (const lineId of split.selectedLineIds ?? []) {
-          try { await deleteCartLineItem(split.sourceCartId, lineId) } catch (cleanupError) { console.warn("[checkout] unable to remove purchased source line", { line_id: lineId, cleanupError }) }
+          try { await deleteCartLineItem(sourceCartId, lineId) } catch (cleanupError) { console.warn("[checkout] unable to remove purchased source line", { line_id: lineId, cleanupError }) }
         }
-        window.localStorage.setItem(cartStorageKey, split.sourceCartId)
+        window.localStorage.setItem(cartStorageKey, sourceCartId)
         window.sessionStorage.removeItem(splitKey)
       } else {
         window.localStorage.removeItem(cartStorageKey)
