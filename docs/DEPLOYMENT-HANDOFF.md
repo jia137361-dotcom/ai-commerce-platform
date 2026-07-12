@@ -259,29 +259,211 @@ curl http://localhost:9000/store/products | head -c 500
 
 ---
 
-## 五、S2BDIY API 信息
+## 五、S2BDIY API 真实产品导入
 
-### 5.1 API 端点
+### 5.1 导入目标
 
-| 端点 | 说明 |
-|------|------|
-| `POST /api/product/list` | 获取产品列表 |
-| `POST /api/product/detail` | 获取产品详情 |
-| `POST /api/product/category` | 获取分类列表 |
+将 **1513 个真实产品** 从 S2BDIY API 导入到数据库，替换当前的 413 个示例产品。
 
-### 5.2 认证信息
+### 5.2 API 认证信息
 
 ```
 App Key: wm001
 App Secret: 7b55d8cf04caf3db9232c98eadeb9cc2
 Platform ID: 99
 Store ID: 4390
+API Base URL: https://opentest.s2bdiy.com
 ```
 
-### 5.3 API 基础 URL
+### 5.3 API 端点
 
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/product/list` | POST | 获取产品列表（分页） |
+| `/api/product/detail` | POST | 获取单个产品详情 |
+| `/api/product/category` | POST | 获取分类列表 |
+| `/api/product/variant` | POST | 获取产品变体 |
+| `/api/product/image` | POST | 获取产品图片 |
+
+### 5.4 API 调用示例
+
+**获取产品列表**:
+```bash
+curl -X POST https://opentest.s2bdiy.com/api/product/list \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_key": "wm001",
+    "app_secret": "7b55d8cf04caf3db9232c98eadeb9cc2",
+    "platform_id": 99,
+    "store_id": 4390,
+    "page": 1,
+    "page_size": 100
+  }'
 ```
-https://opentest.s2bdiy.com
+
+**获取产品详情**:
+```bash
+curl -X POST https://opentest.s2bdiy.com/api/product/detail \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_key": "wm001",
+    "app_secret": "7b55d8cf04caf3db9232c98eadeb9cc2",
+    "platform_id": 99,
+    "product_id": "产品ID"
+  }'
+```
+
+### 5.5 产品数据结构
+
+从 API 返回的产品数据包含：
+- `product_id` - 产品唯一ID
+- `product_name` - 产品名称（英文）
+- `product_name_cn` - 产品名称（中文）
+- `category_id` - 分类ID
+- `category_name` - 分类名称
+- `price` - 批发价格
+- `retail_price` - 零售建议价格
+- `sku` - SKU编码
+- `images` - 产品图片URL数组
+- `variants` - 产品变体（颜色、尺码等）
+- `description` - 产品描述
+- `stock` - 库存数量
+
+### 5.6 导入脚本编写指南
+
+需要编写 Node.js 脚本完成以下步骤：
+
+1. **获取所有分类** - 调用 `/api/product/category`
+2. **分页获取产品** - 调用 `/api/product/list`，每页100条
+3. **获取产品详情** - 调用 `/api/product/detail` 获取完整信息
+4. **插入数据库** - 将产品数据插入 `mc_product` 表
+5. **插入变体** - 将产品变体插入 `mc_supplier_product_variant` 表
+
+**脚本模板**:
+```javascript
+// scripts/sync-s2bdiy-products.js
+const { Client } = require('pg');
+const axios = require('axios');
+
+const API_BASE = 'https://opentest.s2bdiy.com';
+const APP_KEY = 'wm001';
+const APP_SECRET = '7b55d8cf04caf3db9232c98eadeb9cc2';
+const PLATFORM_ID = 99;
+const STORE_ID = 4390;
+
+const db = new Client({
+  connectionString: 'postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo'
+});
+
+async function syncProducts() {
+  await db.connect();
+  
+  // 1. 获取分类
+  const categories = await fetchCategories();
+  
+  // 2. 分页获取产品
+  let page = 1;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const products = await fetchProducts(page, 100);
+    
+    for (const product of products) {
+      await insertProduct(product);
+    }
+    
+    hasMore = products.length === 100;
+    page++;
+  }
+  
+  await db.end();
+  console.log('Sync complete!');
+}
+
+async function fetchCategories() {
+  const response = await axios.post(`${API_BASE}/api/product/category`, {
+    app_key: APP_KEY,
+    app_secret: APP_SECRET,
+    platform_id: PLATFORM_ID,
+    store_id: STORE_ID
+  });
+  return response.data.data;
+}
+
+async function fetchProducts(page, pageSize) {
+  const response = await axios.post(`${API_BASE}/api/product/list`, {
+    app_key: APP_KEY,
+    app_secret: APP_SECRET,
+    platform_id: PLATFORM_ID,
+    store_id: STORE_ID,
+    page,
+    page_size: pageSize
+  });
+  return response.data.data || [];
+}
+
+async function insertProduct(product) {
+  // 将 S2BDIY 产品转换为 mc_product 格式
+  const sql = `
+    INSERT INTO mc_product (
+      id, store_id, title, description, status, price, cost,
+      tags, category_ids, metadata
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    ) ON CONFLICT (id) DO UPDATE SET
+      title = EXCLUDED.title,
+      description = EXCLUDED.description,
+      price = EXCLUDED.price,
+      updated_at = NOW()
+  `;
+  
+  await db.query(sql, [
+    `prod_s2bdiy_${product.product_id}`,
+    'default_store',
+    product.product_name,
+    product.description || '',
+    'draft',
+    product.retail_price || product.price,
+    product.price,
+    JSON.stringify([product.category_name]),
+    JSON.stringify([`cat_${product.category_id}`]),
+    JSON.stringify({
+      sku: product.sku,
+      images: product.images,
+      variants: product.variants,
+      stock: product.stock
+    })
+  ]);
+}
+
+syncProducts().catch(console.error);
+```
+
+### 5.7 执行导入
+
+```bash
+# 安装依赖
+cd /opt/ai-commerce-platform
+npm install axios pg
+
+# 运行同步脚本
+node scripts/sync-s2bdiy-products.js
+
+# 验证导入结果
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
+  -c "SELECT count(*) as total_products FROM mc_product;"
+```
+
+### 5.8 导入后验证
+
+```bash
+# 查看产品示例
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
+  -c "SELECT id, title, price FROM mc_product LIMIT 10;"
+
+# 查看分类关联
+psql "postgresql://citigoo:89fd0c304c45bbe483b2698e07ce5109@162.0.214.180:5432/citigoo" \
+  -c "SELECT category_ids, count(*) FROM mc_product GROUP BY category_ids LIMIT 10;"
 ```
 
 ---
