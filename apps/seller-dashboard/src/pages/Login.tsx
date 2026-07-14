@@ -23,7 +23,7 @@ export function LoginPage() {
     try {
       await login(email, password)
       setEmail(email)
-      navigate("/products")
+      navigate("/")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {

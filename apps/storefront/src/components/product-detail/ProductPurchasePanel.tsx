@@ -88,20 +88,23 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
       ) : null}
 
       <div className="buyer-product-action-buttons">
-        {product.id ? (
+        {product.id && product.hasDesigner ? (
           <>
             <a href={`/design/${encodeURIComponent(product.id)}`} className="buyer-action-button buyer-action-editor">
               <span className="buyer-action-icon">🎨</span>
               <span className="buyer-action-text">
-                <strong>Image Editor</strong>
-                <small>Customize design with S2BDIY</small>
+                <strong>Studio</strong>
+                <small>Place artwork on this blank</small>
               </span>
             </a>
-            <a href={`/ai-studio/${encodeURIComponent(product.id)}`} className="buyer-action-button buyer-action-ai">
+            <a
+              href={`/ai-design?productId=${encodeURIComponent(product.id)}&returnTo=${encodeURIComponent(`/design/${product.id}`)}`}
+              className="buyer-action-button buyer-action-ai"
+            >
               <span className="buyer-action-icon">✨</span>
               <span className="buyer-action-text">
-                <strong>AI Design Studio</strong>
-                <small>Generate unique designs with AI</small>
+                <strong>AI Design</strong>
+                <small>Generate artwork materials</small>
               </span>
             </a>
           </>

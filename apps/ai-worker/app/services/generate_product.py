@@ -8,7 +8,7 @@ from uuid import uuid4
 from PIL import Image, ImageDraw
 
 from app.config import get_effective_settings, get_settings, resolve_image_generation_mode
-from app.services.copy_generator import generate_product_copy
+from app.services.copy_generator import build_template_copy, generate_product_copy
 from app.services.image_processing import export_product_gallery, normalize_master_artwork
 from app.services.medusa_client import MedusaClient, MedusaClientError
 from app.services.storage import persist_local_file, persist_remote_image
@@ -47,6 +47,7 @@ async def generate_product_assets(
     print_position: str = "front",
     base_cost: float | None = None,
     generation_request_id: str | None = None,
+    skip_copy: bool = False,
 ) -> dict:
     settings = get_effective_settings()
     use_mock, mock_reason = resolve_image_generation_mode(settings)
@@ -170,13 +171,21 @@ async def generate_product_assets(
     print_file_url = next((item["url"] for item in gallery if item["id"] == "print_file"), "")
     mockup_image_url = next((item["url"] for item in gallery if item["id"] == "mockup_front"), "")
 
-    copy = await generate_product_copy(
-        prompt=prompt,
-        product_name=str(supplier_product.get("name") or "Product"),
-        base_cost=product_base_cost,
-        color=variant.get("color"),
-        size=variant.get("size"),
-    )
+    if skip_copy:
+        # Buyer AI Design / image-only: never call DeepSeek / DashScope chat.
+        copy = build_template_copy(
+            prompt,
+            str(supplier_product.get("name") or "Product"),
+            product_base_cost,
+        )
+    else:
+        copy = await generate_product_copy(
+            prompt=prompt,
+            product_name=str(supplier_product.get("name") or "Product"),
+            base_cost=product_base_cost,
+            color=variant.get("color"),
+            size=variant.get("size"),
+        )
 
     return {
         "ai_job_id": ai_job_id,

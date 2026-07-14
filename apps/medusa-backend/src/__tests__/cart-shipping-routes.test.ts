@@ -70,6 +70,9 @@ const createReq = ({
       .mockResolvedValueOnce(cartAfter)
       .mockResolvedValue(cartAfter),
     updateLineItems: jest.fn().mockResolvedValue(undefined),
+    updateCarts: jest.fn().mockResolvedValue(undefined),
+    updateShippingMethods: jest.fn().mockResolvedValue(undefined),
+    softDeleteShippingMethods: jest.fn().mockResolvedValue(undefined),
   }
   const req = {
     params: { id: "cart_1" },
@@ -154,11 +157,18 @@ describe("POST /store/carts/:cart_id/shipping-methods", () => {
   })
 
   it("selects a valid shipping option through the Medusa workflow", async () => {
-    const { req } = createReq({ body: { option_id: "so_1" } })
+    const { req, cartModule } = createReq({
+      body: { option_id: "so_1" },
+      cart: {
+        ...baseCart,
+        shipping_methods: [{ id: "casm_old", shipping_option_id: "so_old" }],
+      },
+    })
     const res = createRes()
 
     await selectShippingMethod(req, res)
 
+    expect(cartModule.softDeleteShippingMethods).toHaveBeenCalledWith(["casm_old"])
     expect(mockAddShippingMethodRun).toHaveBeenCalledWith({
       input: {
         cart_id: "cart_1",

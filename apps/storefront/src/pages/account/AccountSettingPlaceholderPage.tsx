@@ -10,7 +10,7 @@ import type { AccountSettingPlaceholder } from "./account-setting-placeholders"
 
 export function AccountSettingPlaceholderPage({ cartCount, setting }: { cartCount: number; setting: AccountSettingPlaceholder }) {
   const auth = useBuyerAuth()
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
 
   return (
     <AccountAuthLayout settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode}>

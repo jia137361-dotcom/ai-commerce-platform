@@ -185,31 +185,14 @@ export function ProductListPage() {
     },
   })
 
-  const retryMutation = useMutation({
-    mutationFn: (jobId: string) => apiFetch(`/admin/ai/jobs/${jobId}/retry`, { method: "POST" }),
-    onSuccess: (_res, jobId) => {
-      toast.push("Retrying AI generation…", "info")
-      navigate(`/ai-studio/progress/${jobId}`)
-    },
-    onError: (err: unknown) => {
-      toast.push(err instanceof Error ? err.message : "Retry failed", "error")
-    },
-  })
-
   return (
     <div>
       <PageHeader
         title="Products"
         action={
           <div className="flex flex-wrap gap-2">
-            <Link to="/supplier-catalog">
-              <Button variant="outline">Browse Supplier Catalog</Button>
-            </Link>
-            <Link to="/ai-studio/create#manual-draft">
-              <Button variant="outline">Create blank draft</Button>
-            </Link>
-            <Link to="/ai-studio/create">
-              <Button>+ New with AI</Button>
+            <Link to="/suppliers">
+              <Button>+ Add from supplier catalog</Button>
             </Link>
           </div>
         }
@@ -273,15 +256,15 @@ export function ProductListPage() {
           }
           description={
             status === "all"
-              ? "Create your first AI-powered product draft."
+              ? "Browse the supplier catalog and publish products your buyers can customize in Studio."
                 : status === "failed"
-                ? "Failed products are AI drafts with generation or S2B provisioning errors."
+                ? "Failed products need supplier re-provisioning or a new catalog draft."
                 : status === "archived"
                   ? "Archived products are hidden from your storefront. Restore to draft to edit again."
                   : `Switch to All to see every product, or create a new ${status}.`
           }
-          actionLabel={status === "all" ? "New with AI" : undefined}
-          onAction={status === "all" ? () => navigate("/ai-studio/create") : undefined}
+          actionLabel={status === "all" ? "Browse suppliers" : undefined}
+          onAction={status === "all" ? () => navigate("/suppliers") : undefined}
         />
       ) : (
         <div className="overflow-hidden rounded-card border border-slate-200 bg-white shadow-card">
@@ -305,11 +288,6 @@ export function ProductListPage() {
             <tbody>
               {products.map((product) => {
                 const displayStatus = isFailedProduct(product) ? "Failed" : product.status
-                const failedJobId =
-                  product.ai_job_id ??
-                  (typeof product.metadata?.ai_job_id === "string"
-                    ? product.metadata.ai_job_id
-                    : undefined)
                 const thumb =
                   product.mockup_image_url ||
                   product.design_image_url ||
@@ -387,15 +365,6 @@ export function ProductListPage() {
                                     ]
                                   : []),
                               ]),
-                          ...(isFailedProduct(product) && failedJobId
-                            ? [
-                                {
-                                  label: "Retry AI",
-                                  variant: "primary" as const,
-                                  onClick: () => retryMutation.mutate(failedJobId),
-                                },
-                              ]
-                            : []),
                           ...(product.status === "draft" && !isFailedProduct(product)
                             ? [
                                 {

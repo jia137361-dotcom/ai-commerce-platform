@@ -6,6 +6,7 @@ import { CartStoreAccessError, CartStoreMismatchError } from "../../../../../lib
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import { getStoreCoreService } from "../../../../_helpers/store-core"
 import { resolveLinkedProductForVariant } from "../../../../../lib/resolve-linked-product"
+import { isProductCartEligible } from "../../../../../lib/product-cart-eligible"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
@@ -57,11 +58,11 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       })
     }
 
-    if (linkedProduct.status !== "published") {
+    if (!isProductCartEligible(linkedProduct as Record<string, unknown>)) {
       return res.status(400).json({
         error: {
           code: "VALIDATION_ERROR",
-          message: "Product must be published",
+          message: "Product is not available for purchase",
         },
       })
     }

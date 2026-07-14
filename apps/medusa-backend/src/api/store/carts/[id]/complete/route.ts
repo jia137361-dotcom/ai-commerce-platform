@@ -24,6 +24,7 @@ import { isS2bdiyEnabled } from "../../../../../modules/suppliers/s2bdiy/config"
 import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
 import { resolvePaymentMethodLabelFromClientSecret } from "../../../../../lib/stripe-payment-method-label"
 import { applyPlatformCheckoutMetadata } from "../../../../../lib/marketplace/platform-checkout"
+import { publishBuyerDesignsFromOrder } from "../../../../../lib/publish-buyer-designs-from-order"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
@@ -218,6 +219,11 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
     await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
+    try {
+      await publishBuyerDesignsFromOrder(req.scope, { orderId, storeId })
+    } catch (error) {
+      console.warn("[checkout-complete] unable to publish buyer designs", error)
+    }
     if (
       body.platform_checkout_id &&
       typeof body.platform_checkout_index === "number" &&

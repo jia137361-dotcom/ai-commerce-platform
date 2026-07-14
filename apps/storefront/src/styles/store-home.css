@@ -27,7 +27,7 @@
 .buyer-store-topbar {
   height: 58px;
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 28px;
   padding: 0 40px;
@@ -663,9 +663,14 @@
     padding: 0 16px;
   }
 
-  .buyer-store-ship,
-  .buyer-store-mainnav {
+  .buyer-store-ship {
     display: none;
+  }
+
+  .buyer-store-mainnav {
+    gap: 10px;
+    font-size: 12px;
+    overflow-x: auto;
   }
 
   .buyer-store-actions {
@@ -832,6 +837,191 @@
   font-size: clamp(36px, 5vw, 64px);
   line-height: 1.02;
   letter-spacing: 0;
+}
+
+.buyer-store-page .buyer-store-hero-copy h1 {
+  max-width: 560px;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+
+.buyer-store-page .buyer-store-hero-kicker {
+  margin: 0 0 16px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.buyer-store-page .buyer-store-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.buyer-store-page .buyer-store-hero-copy .buyer-store-hero-actions .buyer-ui-button {
+  margin-top: 0;
+}
+
+.buyer-store-logo--indie {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.buyer-store-logo--indie .buyer-store-logo-text {
+  color: inherit;
+}
+
+.buyer-store-logo-img {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+}
+
+.buyer-studio-landing-page {
+  background: var(--buyer-bg);
+  color: var(--buyer-text);
+}
+
+.buyer-studio-landing-content {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 32px 0 64px;
+}
+
+.buyer-studio-landing-hero {
+  max-width: 720px;
+}
+
+.buyer-studio-landing-kicker {
+  margin: 0 0 10px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.buyer-studio-landing-hero h1 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.buyer-studio-landing-hero p {
+  margin: 14px 0 0;
+  max-width: 540px;
+  color: #667085;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.buyer-studio-landing-status,
+.buyer-studio-landing-error {
+  margin: 0;
+  color: #667085;
+}
+
+.buyer-studio-landing-error {
+  color: #b42318;
+}
+
+.buyer-studio-landing-empty {
+  display: grid;
+  gap: 12px;
+  padding: 28px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 12px;
+}
+
+.buyer-studio-landing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.buyer-studio-landing-card {
+  overflow: hidden;
+  border: 1px solid var(--buyer-border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.buyer-studio-landing-thumb {
+  display: block;
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  background: #f2f4f7;
+}
+
+.buyer-studio-landing-thumb--empty {
+  background: linear-gradient(135deg, #f8fafc, #eef2f6);
+}
+
+.buyer-studio-landing-card-body {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.buyer-studio-landing-card-body h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.buyer-studio-landing-card-body > p {
+  margin: 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.buyer-studio-landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.buyer-studio-pending-material {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-card);
+  background: var(--buyer-surface-muted, #f6f6f6);
+}
+
+.buyer-studio-pending-material img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.buyer-studio-pending-material p {
+  margin: 0 0 4px;
+  font-weight: 650;
+}
+
+.buyer-studio-pending-material small {
+  color: var(--buyer-text-muted);
 }
 
 .buyer-store-page .buyer-store-hero-copy > span:not(.buyer-store-hero-fallback) {
@@ -1718,4 +1908,144 @@
 
 .buyer-marketplace-error {
   color: #b91c1c;
+}
+
+.buyer-store-me {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #111827;
+  text-decoration: none;
+}
+
+.buyer-store-me strong {
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.buyer-store-hero-title-suffix {
+  display: inline;
+  font-weight: 650;
+  opacity: 0.88;
+}
+
+.buyer-how-it-works {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin: 8px 0 12px;
+  padding: 28px 0 8px;
+  border-bottom: 1px solid var(--buyer-border);
+}
+
+.buyer-how-it-works-header {
+  max-width: 640px;
+}
+
+.buyer-how-it-works-eyebrow {
+  margin: 0 0 8px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.buyer-how-it-works-header h2 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: -0.02em;
+}
+
+.buyer-how-it-works-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.buyer-how-it-works-steps li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.buyer-how-it-works-step-num {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.buyer-how-it-works-steps h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.buyer-how-it-works-steps p {
+  margin: 0;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.buyer-how-it-works .buyer-ui-button {
+  align-self: flex-start;
+}
+
+.buyer-shop-product-customize {
+  display: inline-block;
+  margin-top: 10px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+button.buyer-shop-product-media,
+button.buyer-shop-product-customize,
+.buyer-shop-product-body h3 button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.buyer-shop-product-media {
+  width: 100%;
+}
+
+button.buyer-shop-product-media:disabled,
+button.buyer-shop-product-customize:disabled,
+.buyer-shop-product-body h3 button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.buyer-shop-catalog-more {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0 8px;
+}
+
+.buyer-shop-product-diy-badge {
+  z-index: 1;
+}
+
+@media (max-width: 860px) {
+  .buyer-how-it-works-steps {
+    grid-template-columns: 1fr;
+  }
 }

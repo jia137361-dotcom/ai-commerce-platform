@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch, ApiError } from "../lib/api-client"
+import { useToast } from "./ToastProvider"
 import { Button } from "./ui/Button"
 import { Input } from "./ui/Input"
+import { Modal } from "./ui/Modal"
 
 type CategoryNode = {
   category_id: string
@@ -177,6 +179,9 @@ export function CategoryTreePicker({ selectedIds, onChange, disabled }: Props) {
     onChange(selectedIds.filter((i) => i !== id))
   }
 
+  const toast = useToast()
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
+
   const createMutation = useMutation({
     mutationFn: () =>
       apiFetch<{ category_id: string }>("/admin/product-categories", {
@@ -192,7 +197,7 @@ export function CategoryTreePicker({ selectedIds, onChange, disabled }: Props) {
     },
     onError: (err: unknown) => {
       const msg = err instanceof ApiError ? err.message : "Failed to create category"
-      alert(msg)
+      toast.push(msg, "error")
     },
   })
 
@@ -201,16 +206,17 @@ export function CategoryTreePicker({ selectedIds, onChange, disabled }: Props) {
       apiFetch(`/admin/product-categories/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-categories"] })
+      setPendingDelete(null)
+      toast.push("Category deleted", "success")
     },
     onError: (err: unknown) => {
       const msg = err instanceof ApiError ? err.message : "Failed to delete category"
-      alert(msg)
+      toast.push(msg, "error")
     },
   })
 
   const handleDelete = (id: string, name: string) => {
-    if (!confirm(`Delete category "${name}"?`)) return
-    deleteMutation.mutate(id)
+    setPendingDelete({ id, name })
   }
 
   const expandAll = () => {
@@ -341,6 +347,34 @@ export function CategoryTreePicker({ selectedIds, onChange, disabled }: Props) {
       <p className="text-xs text-slate-500">
         {selectedIds.length} selected. Checkboxes allow multi-select.
       </p>
+
+      <Modal
+        open={Boolean(pendingDelete)}
+        title="Delete category?"
+        onClose={() => setPendingDelete(null)}
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={deleteMutation.isPending || !pendingDelete}
+              onClick={() => {
+                if (!pendingDelete) return
+                deleteMutation.mutate(pendingDelete.id)
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Delete category <strong>{pendingDelete?.name}</strong>? This cannot be undone.
+        </p>
+      </Modal>
     </div>
   )
 }

@@ -1469,6 +1469,44 @@
   font-size: 13px;
 }
 
+.buyer-ai-studio-result {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.buyer-ai-studio-result h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.buyer-ai-studio-result-image {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #f8fafc;
+  margin-bottom: 16px;
+}
+
+.buyer-ai-studio-editor-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--buyer-radius-button);
+  background: var(--buyer-text);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.buyer-ai-studio-editor-link:hover {
+  opacity: 0.9;
+}
+
 .buyer-ai-studio-sidebar {
   display: flex;
   flex-direction: column;
@@ -1531,4 +1569,82 @@
   .buyer-ai-studio-styles {
     grid-template-columns: 1fr;
   }
+}
+
+.buyer-ai-studio-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--buyer-border);
+  border-radius: var(--buyer-radius-card);
+  background: var(--buyer-surface-muted, #f6f6f6);
+}
+
+.buyer-ai-studio-handoff p {
+  margin: 0;
+}
+
+.buyer-ai-design-library {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-ai-design-library li {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.buyer-ai-design-library img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #f3f4f6;
+}
+
+.buyer-ai-design-library-empty-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #f3f4f6, #e5e7eb);
+  border: 1px dashed #d1d5db;
+}
+
+.buyer-ai-design-mock-badge {
+  display: inline-block;
+  margin: 0 0 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.buyer-ai-design-library strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.buyer-ai-design-library button,
+button.buyer-ai-studio-editor-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  font-weight: 650;
 }

@@ -47,7 +47,7 @@ const readSessionEmail = (orderId: string, storeId?: string) => {
 
 export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const auth = useBuyerAuth()
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()

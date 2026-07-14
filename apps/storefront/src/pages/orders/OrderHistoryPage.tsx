@@ -18,7 +18,7 @@ type OrderHistoryPageProps = {
 }
 
 export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const [ordersPage, setOrdersPage] = useState<BuyerOrdersPage | null>(null)
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState<string | undefined>()

@@ -19,5 +19,8 @@ export const shippingUnavailableMessage = (error?: unknown) => {
   if (/shipping options?.*do not have a price|shipping option.*price/i.test(message)) {
     return "Shipping method unavailable for this cart/address. Choose another country or contact the store."
   }
+  if (/ShippingMethod with id .+ not found/i.test(message)) {
+    return "Shipping selection was interrupted. Save the address again or re-select a delivery method."
+  }
   return message || "Shipping method unavailable for this cart/address. Choose another country or contact the store."
 }

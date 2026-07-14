@@ -8,6 +8,7 @@ import {
 import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
+import { quoteS2bShippingForCart } from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
 
 type ShippingOptionResult = {
   id?: string
@@ -85,15 +86,50 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     })
 
     const currency_code = cart.currency_code
+    const s2bQuote = await quoteS2bShippingForCart(req.scope, cart_id)
+
+    if (s2bQuote) {
+      const existingMeta =
+        cart.metadata && typeof cart.metadata === "object"
+          ? (cart.metadata as Record<string, unknown>)
+          : {}
+      await cartModule.updateCarts(cart_id, {
+        metadata: {
+          ...existingMeta,
+          s2b_shipping_quote: {
+            amount_minor: s2bQuote.amountMinor,
+            amount_usd: s2bQuote.amountUsd,
+            amount_cny: s2bQuote.amountCny,
+            logistics_platform_id: s2bQuote.logisticsPlatformId,
+            logistics_name: s2bQuote.logisticsName,
+            basic_product_id: s2bQuote.basicProductId,
+            source: s2bQuote.source,
+            quoted_at: new Date().toISOString(),
+          },
+        },
+      })
+    }
+
     const shipping_options = (result as ShippingOptionResult[]).map((option) => ({
       id: option.id,
       name: option.name,
-      amount: option.amount ?? option.calculated_price?.calculated_amount ?? null,
+      amount: s2bQuote
+        ? s2bQuote.amountMinor
+        : option.amount ?? option.calculated_price?.calculated_amount ?? null,
       currency_code,
       provider_id: option.provider_id ?? null,
       service_zone_id: option.service_zone_id ?? null,
       shipping_profile_id: option.shipping_profile_id ?? null,
-      data: option.data ?? null,
+      data: {
+        ...(option.data ?? {}),
+        ...(s2bQuote
+          ? {
+              pricing_source: s2bQuote.source,
+              s2b_amount_cny: s2bQuote.amountCny,
+              s2b_logistics_name: s2bQuote.logisticsName,
+            }
+          : {}),
+      },
     }))
 
     if (process.env.NODE_ENV !== "production") {
@@ -102,6 +138,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
         requires_shipping: requiresShipping,
         option_count: shipping_options.length,
         returned_option_ids: shipping_options.map((option) => option.id).filter(Boolean),
+        s2b_quote_amount_minor: s2bQuote?.amountMinor ?? null,
       })
     }
 
@@ -110,6 +147,15 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       store_id: readCartStoreId(cart),
       shipping_options,
       requires_shipping_method: requiresShipping,
+      s2b_shipping_quote: s2bQuote
+        ? {
+            amount: s2bQuote.amountMinor,
+            amount_usd: s2bQuote.amountUsd,
+            amount_cny: s2bQuote.amountCny,
+            logistics_name: s2bQuote.logisticsName,
+            source: s2bQuote.source,
+          }
+        : null,
     })
   } catch (error: unknown) {
     if (error instanceof CartStoreAccessError) {

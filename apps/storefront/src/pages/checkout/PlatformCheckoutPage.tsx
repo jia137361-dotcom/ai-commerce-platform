@@ -29,7 +29,7 @@ const buildStoreCheckoutHref = (group: PlatformCheckoutSession["groups"][number]
 }
 
 export function PlatformCheckoutPage({ cartCount }: PlatformCheckoutPageProps) {
-  const { settings } = useBuyerPageSettings({ marketplace: true })
+  const { settings } = useBuyerPageSettings()
   const [session] = useState(() => readPlatformCheckoutSession())
 
   const pendingGroup = useMemo(() => nextPendingPlatformCheckoutGroup(session), [session])

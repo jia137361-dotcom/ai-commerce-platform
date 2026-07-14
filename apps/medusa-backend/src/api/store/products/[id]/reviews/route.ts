@@ -19,6 +19,7 @@ import {
   getStoreCoreService,
   sendError,
 } from "../../../../_helpers/store-core"
+import { isStorefrontProductVisible } from "../../../../../lib/storefront-product-visibility"
 
 type CreateReviewBody = {
   email?: string
@@ -88,11 +89,10 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const products = await storeCoreService.listProducts({
     id: productId,
     store_id: storeId,
-    status: "published",
   })
   const product = products[0]
 
-  if (!product) {
+  if (!product || !isStorefrontProductVisible(product as Record<string, unknown>)) {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
   }
 
@@ -130,10 +130,10 @@ export const POST = async (
   const storeCoreService = getStoreCoreService(req)
   const body = req.body ?? {}
 
+  // Allow draft/custom-design products: buyers review purchased items, not only catalog listings.
   const products = await storeCoreService.listProducts({
     id: productId,
     store_id: storeId,
-    status: "published",
   })
   const product = products[0]
 

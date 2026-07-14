@@ -44,7 +44,7 @@ const readSessionEmail = (orderId: string, storeId?: string) => {
 
 export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps) {
   const auth = useBuyerAuth()
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const [tracking, setTracking] = useState<BuyerOrderTracking | null>(null)
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)

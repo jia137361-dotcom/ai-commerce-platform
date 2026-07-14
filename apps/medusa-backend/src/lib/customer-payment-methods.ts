@@ -177,6 +177,7 @@ export async function createCustomerPaymentMethodSetupIntent(
     params: {
       customer: stripeCustomerId,
       "automatic_payment_methods[enabled]": true,
+      "automatic_payment_methods[allow_redirects]": "never",
       usage: "off_session",
     },
   })

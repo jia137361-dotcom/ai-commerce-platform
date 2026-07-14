@@ -113,7 +113,7 @@ export function EditDraftPage() {
       apiFetch<{ regions: ProductRegionSummary[] }>("/admin/market-regions?ensure=true"),
   })
 
-  const { data: supplierData } = useQuery({
+  const { data: supplierData, isLoading: supplierLoading, isError: supplierError, error: supplierFetchError } = useQuery({
     queryKey: ["supplier-products", product?.platform_product_id],
     enabled: Boolean(product?.platform_product_id),
     queryFn: () =>
@@ -189,7 +189,10 @@ export function EditDraftPage() {
         (row) => row.supplier_product_id === product.supplier_product_id
       ) ?? supplierData.supplier_products[0]
 
-    if (!supplierProduct?.variants?.length) return
+    if (!supplierProduct?.variants?.length) {
+      setVariantsInitialized(true)
+      return
+    }
 
     const fallbackPrice = Number(price) || Number(product.price) || 0
     setVariants(buildVariantsFromSupplier(supplierProduct.variants, fallbackPrice))
@@ -761,7 +764,7 @@ export function EditDraftPage() {
             </div>
             <div>
               <Label>Default Stock</Label>
-              <Input className="mt-1" value="50 units per variant" readOnly />
+              <Input className="mt-1" value="Managed by supplier on order" readOnly />
             </div>
           </div>
           <div>
@@ -965,8 +968,18 @@ export function EditDraftPage() {
                   ))}
                 </tbody>
               </table>
-            ) : (
+            ) : supplierLoading || (Boolean(product?.platform_product_id) && !variantsInitialized && !supplierError) ? (
               <p className="px-4 py-6 text-sm text-slate-500">Loading variants…</p>
+            ) : supplierError ? (
+              <p className="px-4 py-6 text-sm text-red-600">
+                {supplierFetchError instanceof Error
+                  ? supplierFetchError.message
+                  : "Unable to load supplier variants."}
+              </p>
+            ) : (
+              <p className="px-4 py-6 text-sm text-slate-500">
+                No variants available for this product yet.
+              </p>
             )}
           </div>
 

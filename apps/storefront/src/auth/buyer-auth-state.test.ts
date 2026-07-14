@@ -2,6 +2,12 @@ import { clearBuyerAuthClientState } from "./buyer-auth-state"
 
 const storage = (values: Record<string, string>) => ({
   values,
+  getItem(key: string) {
+    return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : null
+  },
+  setItem(key: string, value: string) {
+    this.values[key] = value
+  },
   removeItem(key: string) {
     delete this.values[key]
   },
@@ -14,6 +20,9 @@ describe("buyer sign out state cleanup", () => {
       buyer_customer: "stale-customer",
       "citigoo:buyer_auth_token": "namespaced-token",
       "citigoo:default_store:cart:buyer%3Acus_1": "cart_1",
+      "citigoo:buyer-my-designs": JSON.stringify([{ mcProductId: "prod_shared" }]),
+      "citigoo:buyer-design-guest-key": "guest_shared",
+      "citigoo:my-designs:guest%3Aguest_shared": JSON.stringify([{ mcProductId: "prod_guest" }]),
       seller_admin_token: "seller-token",
     })
     const session = storage({ "citigoo:buyer_customer": "stale-session-customer" })
@@ -41,5 +50,14 @@ describe("buyer sign out state cleanup", () => {
     const { local, session } = setup()
     clearBuyerAuthClientState(local, session)
     expect(local.values.seller_admin_token).toBe("seller-token")
+  })
+
+  it("clears shared design drafts and rotates the guest key", () => {
+    const { local, session } = setup()
+    clearBuyerAuthClientState(local, session)
+    expect(local.values["citigoo:buyer-my-designs"]).toBeUndefined()
+    expect(local.values["citigoo:my-designs:guest%3Aguest_shared"]).toBeUndefined()
+    expect(local.values["citigoo:buyer-design-guest-key"]).toBeTruthy()
+    expect(local.values["citigoo:buyer-design-guest-key"]).not.toBe("guest_shared")
   })
 })

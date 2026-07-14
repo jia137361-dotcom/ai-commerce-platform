@@ -1,69 +1,67 @@
+/**
+ * Complete a buyer Studio design session → My Design draft + cartable variants.
+ *
+ * POST /store/design-sessions/complete
+ */
+
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../../lib/store-context"
-import {
-  getStoreCoreService,
-  sendError,
-  createMcProduct
-} from "../../../_helpers/store-core"
-import { getS2bdiyConfig } from "../../../../modules/suppliers/s2bdiy/config"
-import { getProductDetail, extractMockupImageUrl } from "../../../../modules/suppliers/s2bdiy/s2bdiy-product"
-import { S2bdiyClient } from "../../../../modules/suppliers/s2bdiy/s2bdiy-client"
+import { sendError } from "../../../_helpers/store-core"
+import { completeBuyerDesignSession } from "../../../../lib/s2bdiy/complete-buyer-design"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: storeId } = resolveCurrentStore(req)
 
-  const body = req.body as {
+  const body = (req.body ?? {}) as {
     s2b_product_id?: number | string
     basic_product_id?: number | string
-    quantity?: number
+    size_id?: number | string
+    color_id?: number | string
+    price?: number
+    save_as?: "draft" | "ready"
+    blank_product_id?: string
+    guest_key?: string
+    mockup_url?: string
   }
 
   if (!body.s2b_product_id || !body.basic_product_id) {
     return sendError(res, 400, "MISSING_FIELDS", "s2b_product_id and basic_product_id are required")
   }
 
-  const s2bConfig = getS2bdiyConfig()
-  if (!s2bConfig) {
-    return sendError(res, 503, "SUPPLIER_UNAVAILABLE", "Design service is not configured")
-  }
+  const auth = req as MedusaRequest & { auth_context?: { actor_id?: string } }
+  const customerId =
+    typeof auth.auth_context?.actor_id === "string" ? auth.auth_context.actor_id : null
+  const guestKey =
+    typeof body.guest_key === "string" && body.guest_key.trim() ? body.guest_key.trim() : null
+  const blankProductId =
+    typeof body.blank_product_id === "string" && body.blank_product_id.trim()
+      ? body.blank_product_id.trim()
+      : null
 
   try {
-    const client = new S2bdiyClient(s2bConfig)
-
-    const productDetail = await getProductDetail(client, body.s2b_product_id)
-    const mockupUrl = extractMockupImageUrl(productDetail)
-    const productName = (productDetail as Record<string, unknown>).product_name as string ?? "Custom Design"
-
-    const storeCoreService = getStoreCoreService(req)
-
-    const mcProduct = await createMcProduct(storeCoreService, {
-      store_id: storeId,
-      title: productName,
-      description: `Custom design created with designer SDK`,
-      status: "draft",
-      source: "manual",
-      basic_product_id: String(body.basic_product_id),
-      mockup_image_url: mockupUrl ?? undefined,
-      price: 0,
-      cost: 0,
-      tags: ["custom-design"],
-      variants: [],
-      category_ids: [],
-      metadata: {
-        s2b_product_id: body.s2b_product_id,
-        design_source: "buyer_sdk",
-      },
+    const result = await completeBuyerDesignSession(req.scope, {
+      storeId,
+      s2bProductId: body.s2b_product_id,
+      basicProductId: body.basic_product_id,
+      sizeId: body.size_id,
+      colorId: body.color_id,
+      price: body.price,
+      mockupUrl: body.mockup_url,
+      saveAs: body.save_as === "ready" ? "ready" : "draft",
+      blankProductId,
+      guestKey,
+      customerId,
     })
-
-    return res.json({
-      mc_product_id: mcProduct.id,
-      title: mcProduct.title,
-      mockup_url: mockupUrl ?? null,
-      price: mcProduct.price,
-    })
-  } catch (error) {
+    return res.status(201).json(result)
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error("[design-sessions/complete] failed:", message)
-    return sendError(res, 500, "DESIGN_COMPLETE_FAILED", "Unable to complete design session")
+    if (message.includes("not configured")) {
+      return sendError(res, 503, "EXTERNAL_SERVICE_ERROR", "Design service is not configured")
+    }
+    if (message.includes("Unable to resolve size/color")) {
+      return sendError(res, 400, "VALIDATION_ERROR", message)
+    }
+    return sendError(res, 500, "EXTERNAL_SERVICE_ERROR", `Unable to complete design session: ${message}`)
   }
 }

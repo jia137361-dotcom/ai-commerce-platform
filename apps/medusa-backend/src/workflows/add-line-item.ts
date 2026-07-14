@@ -14,6 +14,7 @@ import { findStoreCoreVariantRow } from "../lib/native-product-variants"
 import { resolveProductRequiresShipping } from "../lib/product-shipping"
 import { isProductAvailableInRegion } from "../lib/product-regions"
 import { resolveLinkedProductForVariant } from "../lib/resolve-linked-product"
+import { isProductCartEligible } from "../lib/product-cart-eligible"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 
@@ -37,11 +38,6 @@ function readProductStoreId(product: Record<string, unknown> | null | undefined)
   if (typeof top === "string" && top.length > 0) return top
   const meta = product.metadata as Record<string, unknown> | null | undefined
   return readStoreIdFromMetadata(meta)
-}
-
-function readProductStatus(product: Record<string, unknown> | null | undefined): string | undefined {
-  const status = product?.status
-  return typeof status === "string" ? status : undefined
 }
 
 function readNumber(value: unknown): number | null {
@@ -173,8 +169,8 @@ const addLineItemStep = createStep(
       throw new CartStoreMismatchError()
     }
 
-    if (readProductStatus(linkedProduct) !== "published") {
-      throw new Error("Product must be published")
+    if (!isProductCartEligible(linkedProduct as Record<string, unknown>)) {
+      throw new Error("Product is not available for purchase")
     }
 
     const cartRegionId =

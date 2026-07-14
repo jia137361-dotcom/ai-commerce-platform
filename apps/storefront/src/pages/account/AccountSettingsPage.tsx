@@ -158,7 +158,7 @@ function FollowingList({ settings }: { settings: BuyerStoreSettings }) {
 
 export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; slug: AccountSettingsSlug }) {
   const auth = useBuyerAuth()
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const content = useMemo(() => {
     if (slug === "addresses") return <AddressBook />
     if (slug === "payment-methods") return <PaymentMethodsPanel />

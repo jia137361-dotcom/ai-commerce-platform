@@ -23,6 +23,7 @@ async def generate_product(body: GenerateProductRequest) -> GenerateProductRespo
             print_position=body.print_position,
             base_cost=body.base_cost,
             generation_request_id=body.generation_request_id,
+            skip_copy=body.skip_copy,
         )
     except Exception as exc:
         logger.exception("generate-product failed")

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "../../lib/api-client"
@@ -44,17 +44,11 @@ type CatalogResponse = {
   last_page: number
 }
 
-const CATEGORIES = [
-  { id: 182, label: "Clothing" },
-  { id: 353, label: "Long sleeve" },
-  { id: 247, label: "Short sleeve" },
-  { id: 356, label: "Hoodie" },
-  { id: 255, label: "Bags" },
-  { id: 174, label: "Household" },
-  { id: 296, label: "Mug" },
-  { id: 202, label: "Digital" },
-  { id: 184, label: "Pet" },
-]
+type StoreCategory = {
+  category_id: string
+  name: string
+  supplier_category_id: string | null
+}
 
 export function SupplierCatalogPage() {
   const navigate = useNavigate()
@@ -65,6 +59,25 @@ export function SupplierCatalogPage() {
   const [selId, setSelId] = useState<number | null>(null)
   const [catId, setCatId] = useState<number | null>(null)
   const pp = 12
+
+  const { data: categoryData } = useQuery({
+    queryKey: ["product-categories"],
+    queryFn: () =>
+      apiFetch<{ categories: StoreCategory[] }>("/admin/product-categories"),
+  })
+
+  const catalogCategories = useMemo(() => {
+    const seen = new Map<number, string>()
+    for (const category of categoryData?.categories ?? []) {
+      if (!category.supplier_category_id) continue
+      const id = Number(category.supplier_category_id)
+      if (!Number.isFinite(id) || id <= 0) continue
+      if (!seen.has(id)) seen.set(id, category.name)
+    }
+    return [...seen.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [categoryData])
 
   const { data: listData, isLoading } = useQuery({
     queryKey: ["s2b", supplierId, page, catId],
@@ -128,7 +141,19 @@ export function SupplierCatalogPage() {
         <div className="lg:col-span-1">
           <Card className="p-3">
             <div className="mb-3 flex flex-wrap gap-1">
-              {CATEGORIES.map((c) => (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={() => { setCatId(null); setPage(1); setSelId(null) }}
+                onKeyDown={(e) => { if (e.key === "Enter") { setCatId(null); setPage(1); setSelId(null) } }}
+                className={
+                  "cursor-pointer rounded-full px-2 py-0.5 text-xs " +
+                  (catId == null ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+                }
+              >
+                All
+              </span>
+              {catalogCategories.map((c) => (
                 <span
                   key={c.id}
                   role="button"
@@ -144,6 +169,11 @@ export function SupplierCatalogPage() {
                 </span>
               ))}
             </div>
+            {!catalogCategories.length ? (
+              <p className="mb-3 text-xs text-slate-500">
+                No supplier-linked categories yet. Sync a catalog item or import S2B categories first.
+              </p>
+            ) : null}
 
             <div className="mb-2 text-xs text-gray-500">
               {total != null ? total + " products" : "Loading..."}

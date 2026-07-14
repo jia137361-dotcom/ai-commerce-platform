@@ -90,11 +90,11 @@ type OrderDetail = OrderRow & {
 
 const formatMoney = (value: number | null | undefined, currency = "USD") => {
   if (value == null || !Number.isFinite(value)) return "—"
-  const amount = value > 999 ? value / 100 : value
+  // Platform order totals are already normalized to major currency units by the API.
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
-  }).format(amount)
+  }).format(value)
 }
 
 const formatDateTime = (value: string | null | undefined) =>

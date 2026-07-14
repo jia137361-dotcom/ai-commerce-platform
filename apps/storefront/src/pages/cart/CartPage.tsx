@@ -16,7 +16,6 @@ import {
   deleteCartLineItem,
   fetchMarketplaceProducts,
   getBuyerCartStorageKey,
-  marketplaceBuyerSettings,
   preparePlatformCheckout,
   readBuyerPreferences,
   setActiveBuyerStoreId,
@@ -33,11 +32,13 @@ import { writePlatformCheckoutSession } from "../../lib/platform-checkout-sessio
 import { removeCartItem, updateCartItemQuantity } from "./cart-actions"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type CartPageProps = { onCartUpdated: (cart: StoreCart | null) => void }
 
 export function CartPage({ onCartUpdated }: CartPageProps) {
   const auth = useBuyerAuth()
+  const { settings } = useBuyerPageSettings()
   const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
   const [groups, setGroups] = useState<PlatformCartGroup[]>([])
   const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
@@ -272,7 +273,7 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     <PageShell
       className="buyer-cart-page"
       contentClassName="buyer-cart-shell-content"
-      header={<StoreTopBar settings={marketplaceBuyerSettings} cartCount={itemCount} marketplaceMode />}
+      header={<StoreTopBar settings={settings} cartCount={itemCount} />}
       footer={<StoreFooter />}
     >
       <header className="buyer-cart-page-header">

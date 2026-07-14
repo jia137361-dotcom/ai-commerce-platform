@@ -48,6 +48,31 @@ export async function quickCreateProduct(client: S2bdiyClient, input: QuickCreat
 export async function getProductDetail(client: S2bdiyClient, productId: number | string): Promise<Record<string, unknown>> {
   return client.request<Record<string, unknown>>(`/open/v1/product/${productId}`, { method: "GET" })
 }
+
+/** List designed supplier products (newest first when API returns chronological page 1). */
+export async function listDesignedProducts(
+  client: S2bdiyClient,
+  query?: { page?: number; perPage?: number; name?: string }
+): Promise<Array<Record<string, unknown>>> {
+  const data = await client.request<unknown>("/open/v1/product", {
+    method: "GET",
+    query: {
+      page: query?.page ?? 1,
+      per_page: query?.perPage ?? 40,
+      name: query?.name,
+    },
+  })
+  if (data && typeof data === "object") {
+    const root = data as Record<string, unknown>
+    if (Array.isArray(root.data)) return root.data as Array<Record<string, unknown>>
+    const nested = root.data
+    if (nested && typeof nested === "object" && Array.isArray((nested as Record<string, unknown>).data)) {
+      return (nested as Record<string, unknown>).data as Array<Record<string, unknown>>
+    }
+  }
+  return unwrapList<Record<string, unknown>>(data)
+}
+
 export function extractMockupImageUrl(productDetail: Record<string, unknown>): string | null {
   const gallery = extractProductMockupGalleryFromS2bDetail(productDetail)
   return gallery[0]?.url ?? null

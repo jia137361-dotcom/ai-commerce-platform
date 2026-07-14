@@ -59,6 +59,9 @@ export function OrderFulfillmentPage() {
       queryClient.invalidateQueries({ queryKey: ["order-fulfillment", orderId] })
       toast.push("Fulfillment pushed", "success")
     },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Push fulfillment failed", "error")
+    },
   })
 
   const shipMutation = useMutation({
@@ -67,6 +70,9 @@ export function OrderFulfillmentPage() {
       queryClient.invalidateQueries({ queryKey: ["order", orderId] })
       queryClient.invalidateQueries({ queryKey: ["order-fulfillment", orderId] })
       toast.push("Mock shipment created", "success")
+    },
+    onError: (err: unknown) => {
+      toast.push(err instanceof Error ? err.message : "Mock shipment failed", "error")
     },
   })
 

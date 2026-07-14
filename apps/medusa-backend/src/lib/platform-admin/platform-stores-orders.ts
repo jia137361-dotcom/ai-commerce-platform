@@ -6,6 +6,7 @@ import { readOrderStoreId } from "../order-store-context"
 import {
   buildFulfillmentTimeline,
   loadAdminOrderRecord,
+  normalizeMoney,
   normalizeOrderLineItem,
   serializeAdminOrderSummary,
   summarizeAdminOrderRow,
@@ -219,7 +220,9 @@ export async function getPlatformOrder(container: MedusaContainer, orderId: stri
             order_id: String(related.id ?? ""),
             display_id: related.display_id ?? null,
             store_id: readOrderStoreId(related as { metadata?: Record<string, unknown> }),
-            total: related.total ?? null,
+            total: normalizeMoney(
+              typeof related.total === "number" ? related.total : Number(related.total ?? NaN)
+            ),
             currency_code: related.currency_code ?? null,
           }))
       : []
@@ -232,9 +235,20 @@ export async function getPlatformOrder(container: MedusaContainer, orderId: stri
       currency_code: order.currency_code ?? null,
       items_count,
       total,
-      items: (Array.isArray(order.items) ? order.items : []).map((item) =>
-        normalizeOrderLineItem(item as unknown as Record<string, unknown>)
-      ),
+      items: (Array.isArray(order.items) ? order.items : []).map((item) => {
+        const normalized = normalizeOrderLineItem(item as unknown as Record<string, unknown>)
+        const unit =
+          typeof normalized.unit_price === "number"
+            ? normalized.unit_price
+            : Number(normalized.unit_price ?? NaN)
+        const lineTotal =
+          typeof normalized.total === "number" ? normalized.total : Number(normalized.total ?? NaN)
+        return {
+          ...normalized,
+          unit_price: normalizeMoney(Number.isFinite(unit) ? unit : null),
+          total: normalizeMoney(Number.isFinite(lineTotal) ? lineTotal : null),
+        }
+      }),
       fulfillment_order: fulfillmentOrder
         ? {
             id: fulfillmentOrder.id ?? null,

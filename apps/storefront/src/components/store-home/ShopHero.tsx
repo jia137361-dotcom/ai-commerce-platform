@@ -1,17 +1,49 @@
-type ShopHeroProps = { brandName: string; imageUrl?: string; isFallback?: boolean; announcement?: string; description?: string }
+import { useBuyerLocale } from "../../lib/locale"
 
-export function ShopHero({ brandName, imageUrl, isFallback = false, announcement, description }: ShopHeroProps) {
+type ShopHeroProps = {
+  brandName: string
+  imageUrl?: string
+  isFallback?: boolean
+  announcement?: string
+  description?: string
+  studioHref?: string
+}
+
+export function ShopHero({
+  brandName,
+  imageUrl,
+  isFallback = false,
+  announcement,
+  description,
+  studioHref = "/studio",
+}: ShopHeroProps) {
+  const { t } = useBuyerLocale()
   const backgroundImage = imageUrl
-    ? `linear-gradient(90deg, rgba(20, 14, 10, .78), rgba(20, 14, 10, .08)), url("${imageUrl.replace(/["\\]/g, "")}")`
+    ? `linear-gradient(105deg, rgba(12, 12, 12, .72) 0%, rgba(12, 12, 12, .28) 55%, rgba(12, 12, 12, .08) 100%), url("${imageUrl.replace(/["\\]/g, "")}")`
     : undefined
+
   return (
-    <section className={["buyer-store-hero", imageUrl ? "has-image" : ""].filter(Boolean).join(" ")} aria-label={`${brandName} promotion`} style={{ backgroundImage }}>
+    <section
+      className={["buyer-store-hero", "buyer-store-hero--indie", imageUrl ? "has-image" : ""].filter(Boolean).join(" ")}
+      aria-label={`${brandName} store`}
+      style={{ backgroundImage }}
+    >
       <div className="buyer-store-hero-copy">
-        {isFallback ? <span className="buyer-store-hero-fallback">Banner fallback</span> : null}
-        <p>{announcement ?? "Store collection"}</p>
-        <h2>{brandName}</h2>
-        <span>{description ?? `Explore a considered collection from ${brandName}.`}</span>
-        <a className="buyer-ui-button buyer-ui-button--primary" href="/store#products">Explore collection</a>
+        {isFallback ? <span className="buyer-store-hero-fallback">Add a store banner in seller settings</span> : null}
+        <p className="buyer-store-hero-kicker">{announcement ?? t("heroKicker")}</p>
+        <h1>
+          {brandName}
+          <span className="buyer-store-hero-title-suffix"> {t("heroTitleSuffix")}</span>
+        </h1>
+        <span>{description ?? t("heroDescription")}</span>
+        <div className="buyer-store-hero-actions">
+          <a className="buyer-ui-button buyer-ui-button--primary" href={studioHref}>
+            {t("heroCtaStudio")}
+          </a>
+          <a className="buyer-ui-button buyer-ui-button--ghost" href="/store#products">
+            {t("heroCtaShop")}
+          </a>
+        </div>
       </div>
     </section>
   )

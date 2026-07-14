@@ -21,6 +21,17 @@ export function resolveLinkedProductForVariant(
   const published = pool.filter((p) => p.status === "published")
   if (published.length) {
     pool = published
+  } else {
+    const buyerDesigns = pool.filter((p) => {
+      const metadata =
+        p.metadata && typeof p.metadata === "object"
+          ? (p.metadata as Record<string, unknown>)
+          : null
+      return metadata?.buyer_design === true || metadata?.design_source === "buyer_sdk"
+    })
+    if (buyerDesigns.length) {
+      pool = buyerDesigns
+    }
   }
 
   const aiProducts = pool.filter((p) => p.source === "ai")

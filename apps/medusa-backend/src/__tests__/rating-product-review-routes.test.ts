@@ -304,12 +304,39 @@ describe("store product review routes", () => {
     expect(storeCore.listProducts).toHaveBeenCalledWith({
       id: "prod_other_store",
       store_id: "default_store",
-      status: "published",
     })
     expect(res.status).toHaveBeenCalledWith(404)
     expect(res.body).toMatchObject({
       error: { code: "PRODUCT_NOT_FOUND" },
     })
+  })
+
+  it("allows reviews for purchased draft/custom-design products", async () => {
+    const draftProduct = { ...product, status: "draft", title: "Custom Design" }
+    const { storeCore, orderModule } = setup({
+      products: [draftProduct],
+      allReviewsAfterCreate: [
+        {
+          id: "prv_1",
+          store_id: "default_store",
+          product_id: draftProduct.id,
+          rating: 5,
+          status: "published",
+          metadata: { logistics_rating: 5, overall_rating: 5, image_urls: [] },
+        },
+      ],
+    })
+    const req = createReq({ body: validBody(5), storeCore, orderModule })
+    const res = createRes()
+
+    await createProductReview(req as any, res)
+
+    expect(storeCore.listProducts).toHaveBeenCalledWith({
+      id: draftProduct.id,
+      store_id: "default_store",
+    })
+    expect(storeCore.createProductReviews).toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(201)
   })
 
   it("rejects reviews when the order belongs to another store", async () => {

@@ -8,7 +8,7 @@ import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { LoadingState } from "../../components/ui/States"
 
 export function AccountProfilePage({ cartCount }: { cartCount: number }) {
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | undefined>()

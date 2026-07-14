@@ -11,7 +11,7 @@ type OrderLookupPageProps = {
 }
 
 export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const [email, setEmail] = useState("")
   const [displayId, setDisplayId] = useState("")
   const [loading, setLoading] = useState(false)
@@ -23,8 +23,8 @@ export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
       setError("Enter the email used at checkout.")
       return
     }
-    if (!displayId.trim() || Number.isNaN(Number(displayId))) {
-      setError("Enter a numeric order display id.")
+    if (!displayId.trim() || !/^\d+$/.test(displayId.trim())) {
+      setError("Enter a positive numeric order display id.")
       return
     }
 
