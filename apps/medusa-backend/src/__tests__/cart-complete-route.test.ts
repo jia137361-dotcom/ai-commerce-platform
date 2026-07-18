@@ -45,6 +45,10 @@ jest.mock("../modules/suppliers/s2bdiy/config", () => ({
   isS2bdiyMockMode: () => false,
 }))
 
+jest.mock("../lib/publish-buyer-designs-from-order", () => ({
+  publishBuyerDesignsFromOrder: jest.fn().mockResolvedValue([]),
+}))
+
 import { POST as completeCart } from "../api/store/carts/[id]/complete/route"
 
 type MockRes = MedusaResponse & {

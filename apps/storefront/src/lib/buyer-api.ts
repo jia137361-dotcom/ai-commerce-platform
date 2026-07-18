@@ -5,6 +5,7 @@ import { buildShipmentTrackingEvents } from "./buyer-tracking-events"
 import { readBuyerPreferencesFromMetadata, type BuyerPreferences } from "./buyer-preferences"
 import { buildShareChannels, buildShareText } from "./share-channels"
 import { resolveStoreAssetUrl } from "./store-media-url"
+import { toEnglishCategoryLabel } from "./supplier-category-label"
 import {
   getBuyerStoreId,
   getDefaultBuyerStoreId,
@@ -1261,6 +1262,198 @@ export const fetchProducts = async (): Promise<LoadResult<StoreProduct[]>> => {
   }
 }
 
+/** S2BDIY / supplier blank listed for the buyer Shop catalog. */
+export type SupplierCatalogItem = {
+  id: number
+  code: string
+  name: string
+  enName?: string
+  purchasePriceCny: number
+  estimatedRetailUsd?: number
+  imageUrl: string
+  blankDesignImageUrl?: string
+  categories: Array<{ id: number; name: string; enName?: string }>
+}
+
+export type SupplierCatalogPage = {
+  items: SupplierCatalogItem[]
+  total: number
+  page: number
+  perPage: number
+  lastPage: number
+  supplierId: string
+}
+
+type ApiSupplierCatalog = {
+  supplier_id?: string
+  data?: Array<{
+    id?: number | string
+    code?: string
+    name?: string
+    en_name?: string
+    purchase_price?: string | number
+    view_image_src?: string
+    blank_design_image?: string
+    categorys?: Array<{ id?: number; name?: string; en_name?: string }>
+  }>
+  total?: number
+  page?: number
+  per_page?: number
+  last_page?: number
+}
+
+const estimateRetailUsdFromCny = (cnyPrice: number): number | undefined => {
+  if (!Number.isFinite(cnyPrice) || cnyPrice <= 0) return undefined
+  const rate = 6.77
+  const usdBase = cnyPrice / rate
+  const low = 20 / rate
+  const high = 40 / rate
+  let markup = 2.3
+  if (usdBase <= low) markup = 3
+  else if (usdBase < high) markup = 3 - ((usdBase - low) / (high - low)) * 0.7
+  return Math.round(cnyPrice / rate * markup * 100) / 100
+}
+
+const normalizeSupplierCatalogItem = (
+  row: NonNullable<ApiSupplierCatalog["data"]>[number]
+): SupplierCatalogItem | null => {
+  const id = Number(row.id)
+  if (!Number.isFinite(id) || id <= 0) return null
+  const purchasePriceCny = Number(row.purchase_price) || 0
+  return {
+    id,
+    code: String(row.code ?? id),
+    name: String(row.en_name || row.name || `Blank ${id}`),
+    enName: row.en_name ? String(row.en_name) : undefined,
+    purchasePriceCny,
+    estimatedRetailUsd: estimateRetailUsdFromCny(purchasePriceCny),
+    imageUrl: String(row.view_image_src || row.blank_design_image || ""),
+    blankDesignImageUrl: row.blank_design_image ? String(row.blank_design_image) : undefined,
+    categories: (row.categorys ?? [])
+      .map((category) => {
+        const categoryId = Number(category.id)
+        if (!Number.isFinite(categoryId) || categoryId <= 0) return null
+        return {
+          id: categoryId,
+          name: String(category.en_name || category.name || `Category ${categoryId}`),
+          enName: category.en_name ? String(category.en_name) : undefined,
+        }
+      })
+      .filter((category): category is NonNullable<typeof category> => Boolean(category)),
+  }
+}
+
+export const fetchSupplierCatalog = async (options?: {
+  page?: number
+  perPage?: number
+  categoryId?: number | null
+  keyword?: string
+  supplierId?: string
+}): Promise<LoadResult<SupplierCatalogPage>> => {
+  const empty: SupplierCatalogPage = {
+    items: [],
+    total: 0,
+    page: 1,
+    perPage: options?.perPage ?? 24,
+    lastPage: 1,
+    supplierId: options?.supplierId ?? "sup_s2bdiy",
+  }
+  try {
+    const params = new URLSearchParams({
+      page: String(options?.page ?? 1),
+      per_page: String(options?.perPage ?? 24),
+    })
+    if (options?.supplierId) params.set("supplier_id", options.supplierId)
+    if (options?.categoryId) params.set("category_id", String(options.categoryId))
+    if (options?.keyword?.trim()) params.set("keyword", options.keyword.trim())
+    const payload = await apiFetch<ApiSupplierCatalog>(`/store/supplier-catalog?${params.toString()}`)
+    const items = (payload.data ?? [])
+      .map(normalizeSupplierCatalogItem)
+      .filter((item): item is SupplierCatalogItem => Boolean(item))
+    return {
+      data: {
+        items,
+        total: payload.total ?? items.length,
+        page: payload.page ?? options?.page ?? 1,
+        perPage: payload.per_page ?? options?.perPage ?? 24,
+        lastPage: payload.last_page ?? 1,
+        supplierId: payload.supplier_id ?? options?.supplierId ?? "sup_s2bdiy",
+      },
+      source: "backend",
+    }
+  } catch (error) {
+    return { data: empty, source: "static", error: warnFallback("supplier catalog", error) }
+  }
+}
+
+export const ensureSupplierCatalogBlank = async (input: {
+  basicProductId: number
+  supplierId?: string
+}): Promise<{ productId: string; created: boolean }> => {
+  const payload = await apiFetch<{
+    product_id?: string
+    created?: boolean
+  }>("/store/supplier-catalog/ensure", {
+    method: "POST",
+    body: JSON.stringify({
+      basic_product_id: input.basicProductId,
+      supplier_id: input.supplierId ?? "sup_s2bdiy",
+    }),
+  })
+  const productId = payload.product_id?.trim()
+  if (!productId) {
+    throw new Error("Unable to open this blank for customization")
+  }
+  return { productId, created: Boolean(payload.created) }
+}
+
+export type SupplierCatalogCategory = {
+  id: number
+  name: string
+  enName?: string
+  parentId: number | null
+}
+
+export const fetchSupplierCatalogCategories = async (options?: {
+  supplierId?: string
+}): Promise<LoadResult<SupplierCatalogCategory[]>> => {
+  try {
+    const params = new URLSearchParams()
+    if (options?.supplierId) params.set("supplier_id", options.supplierId)
+    const query = params.toString()
+    const payload = await apiFetch<{
+      categories?: Array<{
+        id?: number
+        name?: string
+        en_name?: string
+        parent_id?: number | null
+      }>
+    }>(`/store/supplier-catalog/categories${query ? `?${query}` : ""}`)
+    return {
+      data: (payload.categories ?? [])
+        .map((row): SupplierCatalogCategory | null => {
+          const id = Number(row.id)
+          if (!Number.isFinite(id) || id <= 0) return null
+          return {
+            id,
+            name: String(row.en_name || row.name || `Category ${id}`),
+            enName: row.en_name ? String(row.en_name) : undefined,
+            parentId: row.parent_id && Number(row.parent_id) > 0 ? Number(row.parent_id) : null,
+          }
+        })
+        .filter((row): row is SupplierCatalogCategory => row != null)
+        .map((row) => ({
+          ...row,
+          name: toEnglishCategoryLabel(row.name, row.enName, row.id),
+          enName: toEnglishCategoryLabel(row.name, row.enName, row.id),
+        })),
+      source: "backend",
+    }
+  } catch (error) {
+    return { data: [], source: "static", error: warnFallback("supplier catalog categories", error) }
+  }
+}
+
 type ApiMarketplaceStores = {
   stores?: Array<{
     store_id?: string
@@ -1586,21 +1779,27 @@ export const listCartPaymentProviders = async (regionId: string): Promise<BuyerP
 
 export const initializeCartPaymentSession = async (
   cartId: string,
-  providerId: string
+  providerId: string,
+  options?: StoreScopedRequestOptions
 ): Promise<BuyerPaymentSession> => {
-  const collectionPayload = await apiFetch<ApiPaymentCollectionResponse>("/store/payment-collections", {
-    method: "POST",
-    body: JSON.stringify({ cart_id: cartId }),
-  })
+  const collectionPayload = await storeScopedFetch<ApiPaymentCollectionResponse>(
+    "/store/payment-collections",
+    {
+      method: "POST",
+      body: JSON.stringify({ cart_id: cartId }),
+    },
+    options
+  )
   const collectionId = collectionPayload.payment_collection?.id
   if (!collectionId) throw new Error("Medusa did not return a payment collection for this cart.")
 
-  const sessionPayload = await apiFetch<ApiPaymentCollectionResponse>(
+  const sessionPayload = await storeScopedFetch<ApiPaymentCollectionResponse>(
     `/store/payment-collections/${encodeURIComponent(collectionId)}/payment-sessions`,
     {
       method: "POST",
       body: JSON.stringify({ provider_id: providerId }),
-    }
+    },
+    options
   )
   const sessions = sessionPayload.payment_collection?.payment_sessions ?? []
   const session = normalizePaymentSession(sessions.find((candidate) => candidate.provider_id === providerId))
@@ -1661,6 +1860,33 @@ export const getPlatformCheckoutOrders = async (platformCheckoutId: string) =>
       status: string | null
     }>
   }>(`/store/platform/checkout/${encodeURIComponent(platformCheckoutId)}/orders`)
+
+export const payCartWithSavedPaymentMethod = async (
+  cartId: string,
+  paymentMethodId: string,
+  options?: StoreScopedRequestOptions & { providerId?: string; returnUrl?: string }
+) => {
+  return storeScopedFetch<{
+    provider_id?: string
+    payment_intent_id?: string
+    payment_intent_status?: string
+    payment_method_id?: string
+    payment_method_label?: string
+  }>(
+    `/store/carts/${encodeURIComponent(cartId)}/stripe/use-saved-payment-method`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        payment_method_id: paymentMethodId,
+        provider_id: options?.providerId,
+        return_url:
+          options?.returnUrl ||
+          (typeof window !== "undefined" ? `${window.location.origin}/checkout` : undefined),
+      }),
+    },
+    options
+  )
+}
 
 export const completeCart = async (
   cartId: string,
@@ -2319,6 +2545,10 @@ export type DesignConfig = {
   designType?: number
   designerUrl: string
   editorMode?: "new" | "redesign"
+  s2bProductId?: string | null
+  sizeId?: string | null
+  colorId?: string | null
+  savedDesign?: DesignCompleteResult | null
 }
 
 type ApiDesignConfig = {
@@ -2329,11 +2559,82 @@ type ApiDesignConfig = {
   design_type?: number
   designer_url?: string
   editor_mode?: "new" | "redesign"
+  s2b_product_id?: string | null
+  size_id?: string | null
+  color_id?: string | null
+  saved_design?: {
+    mc_product_id?: string
+    medusa_variant_id?: string | null
+    title?: string
+    mockup_url?: string | null
+    price?: number | null
+    supplier_product_id?: string | null
+    basic_product_id?: string | null
+    blank_product_id?: string | null
+    size_id?: string | null
+    color_id?: string | null
+    size_name?: string | null
+    color_name?: string | null
+    editor_path?: string
+  } | null
 }
 
-export const fetchProductDesignConfig = async (productId: string): Promise<DesignConfig> => {
+const mapSavedDesignFromConfig = (
+  saved: NonNullable<ApiDesignConfig["saved_design"]>
+): DesignCompleteResult | null => {
+  if (!saved.mc_product_id || !saved.medusa_variant_id) return null
+  const sizeId = saved.size_id != null ? Number(saved.size_id) : NaN
+  const colorId = saved.color_id != null ? Number(saved.color_id) : NaN
+  const sizes =
+    Number.isFinite(sizeId) && saved.size_name
+      ? [{ id: sizeId, name: saved.size_name }]
+      : []
+  const colors =
+    Number.isFinite(colorId) && saved.color_name
+      ? [{ id: colorId, name: saved.color_name }]
+      : []
+  const variants =
+    Number.isFinite(sizeId) && Number.isFinite(colorId)
+      ? [
+          {
+            sizeId,
+            colorId,
+            sizeName: saved.size_name ?? `Size ${sizeId}`,
+            colorName: saved.color_name ?? `Color ${colorId}`,
+            supplierVariantId: `${saved.supplier_product_id ?? "s2b"}_${sizeId}_${colorId}`,
+            medusaVariantId: saved.medusa_variant_id,
+          },
+        ]
+      : []
+  return {
+    mcProductId: saved.mc_product_id,
+    variantId: saved.medusa_variant_id,
+    title: saved.title ?? "Custom Design",
+    mockupUrl: saved.mockup_url ?? null,
+    price: saved.price ?? undefined,
+    s2bProductId: saved.supplier_product_id ?? null,
+    basicProductId: saved.basic_product_id ?? null,
+    blankProductId: saved.blank_product_id ?? null,
+    status: "draft",
+    saveAs: "draft",
+    editorPath: saved.editor_path ?? `/design/${encodeURIComponent(saved.mc_product_id)}`,
+    sizes,
+    colors,
+    variants,
+    selectedSizeId: Number.isFinite(sizeId) ? sizeId : null,
+    selectedColorId: Number.isFinite(colorId) ? colorId : null,
+  }
+}
+
+export const fetchProductDesignConfig = async (
+  productId: string,
+  options?: { materialId?: string | null }
+): Promise<DesignConfig> => {
+  const params = new URLSearchParams()
+  if (options?.materialId) params.set("materialId", options.materialId)
+  const qs = params.toString()
   const payload = await apiFetch<ApiDesignConfig>(
-    `/store/products/${encodeURIComponent(productId)}/design-config`
+    `/store/products/${encodeURIComponent(productId)}/design-config${qs ? `?${qs}` : ""}`
   )
   if (!payload.token || !payload.basic_product_id || !payload.sdk_base_url) {
     throw new Error("Design config is incomplete")
@@ -2353,6 +2654,10 @@ export const fetchProductDesignConfig = async (productId: string): Promise<Desig
     designType: payload.design_type,
     designerUrl,
     editorMode: payload.editor_mode,
+    s2bProductId: payload.s2b_product_id ?? null,
+    sizeId: payload.size_id ?? null,
+    colorId: payload.color_id ?? null,
+    savedDesign: payload.saved_design ? mapSavedDesignFromConfig(payload.saved_design) : null,
   }
 }
 
@@ -2360,20 +2665,124 @@ export type DesignCompleteInput = {
   s2bProductId: number | string
   basicProductId: number | string
   quantity?: number
+  sizeId?: number | string | null
+  colorId?: number | string | null
+  price?: number | null
+  mockupUrl?: string | null
+  saveAs?: "draft" | "ready"
+  blankProductId?: string | null
+  guestKey?: string | null
+}
+
+export type DesignOption = {
+  id: number
+  name: string
+}
+
+export type DesignVariantOption = {
+  sizeId: number
+  colorId: number
+  sizeName: string
+  colorName: string
+  supplierVariantId: string
+  medusaVariantId: string | null
 }
 
 export type DesignCompleteResult = {
   mcProductId: string
+  variantId: string
   title: string
   mockupUrl?: string | null
   price?: number
+  s2bProductId?: string | null
+  basicProductId?: string | null
+  blankProductId?: string | null
+  status?: string
+  saveAs?: "draft" | "ready"
+  editorPath?: string | null
+  sizes: DesignOption[]
+  colors: DesignOption[]
+  variants: DesignVariantOption[]
+  selectedSizeId: number | null
+  selectedColorId: number | null
 }
 
 type ApiDesignCompleteResult = {
   mc_product_id?: string
+  medusa_variant_id?: string
   title?: string
   mockup_url?: string | null
   price?: number
+  supplier_product_id?: string
+  basic_product_id?: string
+  blank_product_id?: string | null
+  status?: string
+  save_as?: "draft" | "ready"
+  editor_path?: string
+  sizes?: Array<{ id?: number; name?: string }>
+  colors?: Array<{ id?: number; name?: string }>
+  variants?: Array<{
+    size_id?: number
+    color_id?: number
+    size_name?: string
+    color_name?: string
+    supplier_variant_id?: string
+    medusa_variant_id?: string | null
+  }>
+  selected_size_id?: number
+  selected_color_id?: number
+}
+
+const mapDesignCompletePayload = (payload: ApiDesignCompleteResult): DesignCompleteResult => {
+  if (!payload.mc_product_id || !payload.medusa_variant_id) {
+    throw new Error("Design session did not return a sellable product variant")
+  }
+  const variants: DesignVariantOption[] = (payload.variants ?? [])
+    .map((row) => {
+      const sizeId = typeof row.size_id === "number" ? row.size_id : Number(row.size_id)
+      const colorId = typeof row.color_id === "number" ? row.color_id : Number(row.color_id)
+      if (!Number.isFinite(sizeId) || !Number.isFinite(colorId)) return null
+      return {
+        sizeId,
+        colorId,
+        sizeName: row.size_name ?? `Size ${sizeId}`,
+        colorName: row.color_name ?? `Color ${colorId}`,
+        supplierVariantId: row.supplier_variant_id ?? `${sizeId}_${colorId}`,
+        medusaVariantId: row.medusa_variant_id ?? null,
+      }
+    })
+    .filter((row): row is DesignVariantOption => Boolean(row))
+
+  return {
+    mcProductId: payload.mc_product_id,
+    variantId: payload.medusa_variant_id,
+    title: payload.title ?? "Custom Design",
+    mockupUrl: payload.mockup_url ?? null,
+    price: payload.price,
+    s2bProductId: payload.supplier_product_id ?? null,
+    basicProductId: payload.basic_product_id ?? null,
+    blankProductId: payload.blank_product_id ?? null,
+    status: payload.status,
+    saveAs: payload.save_as ?? "draft",
+    editorPath: payload.editor_path ?? null,
+    sizes: (payload.sizes ?? [])
+      .map((row) => ({
+        id: typeof row.id === "number" ? row.id : Number(row.id),
+        name: row.name ?? "",
+      }))
+      .filter((row) => Number.isFinite(row.id) && row.name),
+    colors: (payload.colors ?? [])
+      .map((row) => ({
+        id: typeof row.id === "number" ? row.id : Number(row.id),
+        name: row.name ?? "",
+      }))
+      .filter((row) => Number.isFinite(row.id) && row.name),
+    variants,
+    selectedSizeId:
+      typeof payload.selected_size_id === "number" ? payload.selected_size_id : null,
+    selectedColorId:
+      typeof payload.selected_color_id === "number" ? payload.selected_color_id : null,
+  }
 }
 
 export const completeDesignSession = async (input: DesignCompleteInput): Promise<DesignCompleteResult> => {
@@ -2383,16 +2792,251 @@ export const completeDesignSession = async (input: DesignCompleteInput): Promise
       s2b_product_id: input.s2bProductId,
       basic_product_id: input.basicProductId,
       quantity: input.quantity ?? 1,
+      size_id: input.sizeId ?? undefined,
+      color_id: input.colorId ?? undefined,
+      price: input.price ?? undefined,
+      mockup_url: input.mockupUrl ?? undefined,
+      save_as: input.saveAs ?? "draft",
+      blank_product_id: input.blankProductId ?? undefined,
+      guest_key: input.guestKey ?? undefined,
     }),
   })
-  if (!payload.mc_product_id) {
-    throw new Error("Design session did not return a product ID")
+  return mapDesignCompletePayload(payload)
+}
+
+export type DesignClaimInput = {
+  basicProductId: number | string
+  blankProductId?: string | null
+  guestKey?: string | null
+  excludeS2bIds?: Array<number | string>
+  saveAs?: "draft" | "ready"
+  snapshotOnly?: boolean
+  mockupUrl?: string | null
+}
+
+export type DesignClaimResult =
+  | { claimed: false; knownS2bIds: string[] }
+  | ({ claimed: true; knownS2bIds: string[] } & DesignCompleteResult)
+
+export const claimLatestDesignSession = async (
+  input: DesignClaimInput
+): Promise<DesignClaimResult> => {
+  const payload = await apiFetch<ApiDesignCompleteResult & { claimed?: boolean; known_s2b_ids?: string[] }>(
+    "/store/design-sessions/claim-latest",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        basic_product_id: input.basicProductId,
+        blank_product_id: input.blankProductId ?? undefined,
+        guest_key: input.guestKey ?? undefined,
+        exclude_s2b_ids: input.excludeS2bIds ?? [],
+        save_as: input.saveAs ?? "draft",
+        snapshot_only: Boolean(input.snapshotOnly),
+        mockup_url: input.mockupUrl ?? undefined,
+      }),
+    }
+  )
+  const knownS2bIds = Array.isArray(payload.known_s2b_ids)
+    ? payload.known_s2b_ids.map(String)
+    : []
+  if (!payload.claimed) {
+    return { claimed: false, knownS2bIds }
   }
   return {
-    mcProductId: payload.mc_product_id,
-    title: payload.title ?? "Custom Design",
-    mockupUrl: payload.mockup_url ?? null,
-    price: payload.price,
+    claimed: true,
+    knownS2bIds,
+    ...mapDesignCompletePayload(payload),
+  }
+}
+
+export type BuyerMyDesign = {
+  mcProductId: string
+  variantId?: string | null
+  title: string
+  mockupUrl?: string | null
+  price?: number | null
+  status?: string | null
+  s2bProductId?: string | null
+  basicProductId?: string | null
+  blankProductId?: string | null
+  editorPath: string
+  createdAt?: string | null
+}
+
+export const fetchBuyerMyDesigns = async (guestKey?: string | null): Promise<LoadResult<BuyerMyDesign[]>> => {
+  try {
+    const params = new URLSearchParams()
+    if (guestKey) params.set("guest_key", guestKey)
+    const query = params.toString()
+    const payload = await apiFetch<{
+      designs?: Array<{
+        mc_product_id?: string
+        medusa_variant_id?: string | null
+        title?: string
+        mockup_url?: string | null
+        price?: number | null
+        status?: string
+        s2b_product_id?: string | null
+        basic_product_id?: string | null
+        blank_product_id?: string | null
+        editor_path?: string
+        created_at?: string | null
+      }>
+    }>(`/store/my-designs${query ? `?${query}` : ""}`)
+    return {
+      data: (payload.designs ?? [])
+        .map((row) => ({
+          mcProductId: String(row.mc_product_id ?? ""),
+          variantId: row.medusa_variant_id ?? null,
+          title: row.title ?? "Custom Design",
+          mockupUrl: row.mockup_url ?? null,
+          price: row.price ?? null,
+          status: row.status ?? null,
+          s2bProductId: row.s2b_product_id ?? null,
+          basicProductId: row.basic_product_id ?? null,
+          blankProductId: row.blank_product_id ?? null,
+          editorPath: row.editor_path || `/design/${encodeURIComponent(String(row.mc_product_id ?? ""))}`,
+          createdAt: row.created_at ?? null,
+        }))
+        .filter((item) => item.mcProductId),
+      source: "backend",
+    }
+  } catch (error) {
+    return { data: [], source: "static", error: warnFallback("my designs", error) }
+  }
+}
+
+// ---- Buyer AI Studio ----
+
+export type BuyerAiJobResult = {
+  jobId: string
+  status: string
+  progress: number
+  currentStep?: string | null
+  error?: string | null
+  designImageUrl?: string | null
+  mockupImageUrl?: string | null
+  materialId?: string | null
+  materialUrl?: string | null
+  editorPath?: string | null
+  title?: string | null
+  mockMode?: boolean
+}
+
+type ApiBuyerAiJob = {
+  job_id?: string
+  status?: string
+  progress?: number
+  current_step?: string | null
+  error?: string | null
+  result?: {
+    design_image_url?: string
+    mockup_image_url?: string
+    material_id?: string | null
+    material_url?: string | null
+    editor_path?: string
+    title?: string
+    mock_mode?: boolean
+  } | null
+}
+
+const mapBuyerAiJob = (payload: ApiBuyerAiJob): BuyerAiJobResult => ({
+  jobId: payload.job_id ?? "",
+  status: payload.status ?? "queued",
+  progress: payload.progress ?? 0,
+  currentStep: payload.current_step ?? null,
+  error: payload.error ?? null,
+  designImageUrl: payload.result?.design_image_url ?? null,
+  mockupImageUrl: payload.result?.mockup_image_url ?? null,
+  materialId: payload.result?.material_id ?? null,
+  materialUrl: payload.result?.material_url ?? null,
+  editorPath: payload.result?.editor_path ?? null,
+  title: payload.result?.title ?? null,
+  mockMode: Boolean(payload.result?.mock_mode),
+})
+
+export const startBuyerAiGenerate = async (input: {
+  prompt: string
+  productId?: string | null
+  stylePreset?: string
+}): Promise<BuyerAiJobResult> => {
+  const payload = await apiFetch<ApiBuyerAiJob>("/store/ai/generate", {
+    method: "POST",
+    body: JSON.stringify({
+      product_id: input.productId || undefined,
+      prompt: input.prompt,
+      style_preset: input.stylePreset,
+      print_position: "front",
+    }),
+  })
+  if (!payload.job_id) {
+    throw new Error("AI generate did not return a job id")
+  }
+  return mapBuyerAiJob(payload)
+}
+
+export const fetchBuyerAiJob = async (jobId: string): Promise<BuyerAiJobResult> => {
+  const payload = await apiFetch<ApiBuyerAiJob>(
+    `/store/ai/jobs/${encodeURIComponent(jobId)}`
+  )
+  return mapBuyerAiJob(payload)
+}
+
+export type BuyerAiMaterial = {
+  id: string
+  jobId: string
+  createdAt?: string | null
+  prompt?: string | null
+  title?: string | null
+  designImageUrl?: string | null
+  printFileUrl?: string | null
+  mockupImageUrl?: string | null
+  materialId?: string | null
+  materialUrl?: string | null
+  productId?: string | null
+  editorPath?: string | null
+  mockMode?: boolean
+}
+
+export const fetchBuyerAiMaterials = async (): Promise<LoadResult<BuyerAiMaterial[]>> => {
+  try {
+    const payload = await apiFetch<{
+      materials?: Array<{
+        id?: string
+        job_id?: string
+        created_at?: string | null
+        prompt?: string | null
+        title?: string | null
+        design_image_url?: string | null
+        print_file_url?: string | null
+        mockup_image_url?: string | null
+        material_id?: string | null
+        material_url?: string | null
+        product_id?: string | null
+        editor_path?: string | null
+        mock_mode?: boolean
+      }>
+    }>("/store/ai/materials")
+    return {
+      data: (payload.materials ?? []).map((row) => ({
+        id: String(row.id ?? row.job_id ?? ""),
+        jobId: String(row.job_id ?? row.id ?? ""),
+        createdAt: row.created_at ?? null,
+        prompt: row.prompt ?? null,
+        title: row.title ?? null,
+        designImageUrl: row.design_image_url ?? null,
+        printFileUrl: row.print_file_url ?? null,
+        mockupImageUrl: row.mockup_image_url ?? null,
+        materialId: row.material_id ?? null,
+        materialUrl: row.material_url ?? null,
+        productId: row.product_id ?? null,
+        editorPath: row.editor_path ?? null,
+        mockMode: Boolean(row.mock_mode),
+      })).filter((item) => item.id),
+      source: "backend",
+    }
+  } catch (error) {
+    return { data: [], source: "static", error: warnFallback("buyer ai materials", error) }
   }
 }
 

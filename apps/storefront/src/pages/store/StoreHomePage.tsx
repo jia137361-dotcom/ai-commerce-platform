@@ -4,81 +4,123 @@ import { SectionHeader } from "../../components/layout/SectionHeader"
 import { ShopBrowseControls } from "../../components/store-home/ShopBrowseControls"
 import { StoreAboutPanel } from "../../components/store-home/StoreAboutPanel"
 import { ShopHero } from "../../components/store-home/ShopHero"
+import { HowItWorksSection } from "../../components/store-home/HowItWorksSection"
 import { StoreIdentity } from "../../components/store-home/StoreIdentity"
-import { StoreProductResults } from "../../components/store-home/StoreProductResults"
+import { StoreCatalogResults } from "../../components/store-home/StoreCatalogResults"
 import { StoreReviewsPanel } from "../../components/store-home/StoreReviewsPanel"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import {
-  fetchProductCategories,
-  fetchProducts,
+  ensureSupplierCatalogBlank,
   fetchMarketplaceStoreBySlug,
   fetchStoreSettings,
   fetchStoreReviews,
+  fetchSupplierCatalog,
+  fetchSupplierCatalogCategories,
   setActiveBuyerStoreId,
   type BuyerReviewsSummary,
-  type BuyerCategory,
   type BuyerStoreSettings,
-  type DataSource,
+  type SupplierCatalogCategory,
+  type SupplierCatalogItem,
 } from "../../lib/buyer-api"
 import { enterLegacyDefaultStoreContext, getLegacyDefaultStoreId } from "../../lib/buyer-store-context"
-import type { StoreProduct } from "../../lib/mock-data"
+import {
+  buildStudioEditorHref,
+} from "../../lib/buyer-design-handoff"
+import { navigateBuyer } from "../../lib/buyer-navigate"
+import { useBuyerLocale } from "../../lib/locale"
 
 type StoreHomePageProps = { cartCount: number; storeSlug?: string }
 type Notice = { key: string; message: string }
 
 const fallbackSettings: BuyerStoreSettings = {
   storeId: getLegacyDefaultStoreId(),
-  brandName: "CiiVerse Official Store",
+  brandName: "Store",
   galleryUrls: [],
   metadata: {},
 }
 
-function StoreFooter() {
+const CATALOG_PER_PAGE = 24
+
+function StoreFooter({ brandName }: { brandName: string }) {
+  const { t } = useBuyerLocale()
+  const year = new Date().getFullYear()
   return (
     <footer className="buyer-store-footer">
-      <section><h2>CiiVerse</h2><p>Curated products, protected checkout, and reliable order support.</p></section>
-      <section><h2>Shopping</h2><a href="/store">All products</a><a href="/cart">Cart</a></section>
-      <section><h2>Customer service</h2><a href="/orders/lookup">Find an order</a><a href="/account/orders">Order history</a></section>
-      <section><h2>Help</h2><a href="/help">Help Center</a><a href="/help">Contact us</a></section>
-      <div className="buyer-store-legal"><span>© 2026 CiiVerse Limited</span><a href="/terms">Terms</a><a href="/privacy">Privacy</a></div>
+      <section>
+        <h2>{brandName}</h2>
+        <p>{t("heroDescription")}</p>
+      </section>
+      <section>
+        <h2>{t("navShop")}</h2>
+        <a href="/store">{t("heroCtaShop")}</a>
+        <a href="/ai-design">{t("navAiDesign")}</a>
+        <a href="/studio">{t("navStudio")}</a>
+        <a href="/store#how-it-works">{t("navHowItWorks")}</a>
+        <a href="/cart">{t("navCart")}</a>
+      </section>
+      <section>
+        <h2>{t("navMe")}</h2>
+        <a href="/orders/lookup">Find an order</a>
+        <a href="/account/orders">Order history</a>
+        <a href="/account">{t("navMe")}</a>
+      </section>
+      <section>
+        <h2>Help</h2>
+        <a href="/help">Help Center</a>
+        <a href="/help">Contact us</a>
+      </section>
+      <div className="buyer-store-legal">
+        <span>
+          © {year} {brandName}
+        </span>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+      </div>
     </footer>
   )
 }
 
 export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
+  const { t } = useBuyerLocale()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
-  const [categories, setCategories] = useState<BuyerCategory[]>([{ id: "all", name: "All items" }])
-  const [products, setProducts] = useState<StoreProduct[]>([])
+  const [items, setItems] = useState<SupplierCatalogItem[]>([])
+  const [catalogTotal, setCatalogTotal] = useState(0)
+  const [catalogPage, setCatalogPage] = useState(1)
+  const [catalogLastPage, setCatalogLastPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [catalogError, setCatalogError] = useState<string>()
   const [notices, setNotices] = useState<Notice[]>([])
   const [activeCategoryId, setActiveCategoryId] = useState("all")
+  const [supplierCategories, setSupplierCategories] = useState<SupplierCatalogCategory[]>([])
   const [query, setQuery] = useState("")
+  const [debouncedQuery, setDebouncedQuery] = useState("")
   const [sort, setSort] = useState("recommended")
-  const [productSource, setProductSource] = useState<DataSource>("backend")
   const [loadVersion, setLoadVersion] = useState(0)
-  const [activeSection, setActiveSection] = useState<"items" | "category" | "reviews" | "about">("items")
+  const [activeSection, setActiveSection] = useState<"items" | "reviews" | "about">("items")
   const [storeReviews, setStoreReviews] = useState<BuyerReviewsSummary | null>(null)
   const [storeReviewsError, setStoreReviewsError] = useState<string>()
+  const [openingId, setOpeningId] = useState<number | null>(null)
 
-  const loadStore = useCallback(async (isActive: () => boolean) => {
-    setLoading(true)
-    const [settingsResult, categoriesResult, productsResult, reviewsResult] = await Promise.all([
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  const loadShell = useCallback(async (isActive: () => boolean) => {
+    const [settingsResult, reviewsResult, categoriesResult] = await Promise.all([
       fetchStoreSettings(),
-      fetchProductCategories(),
-      fetchProducts(),
       fetchStoreReviews(),
+      fetchSupplierCatalogCategories(),
     ])
-
     if (!isActive()) return
-
     setSettings(settingsResult.data)
-    setCategories(categoriesResult.data)
-    setProducts(productsResult.data)
-    setProductSource(productsResult.source)
     setStoreReviews(reviewsResult.data)
     setStoreReviewsError(reviewsResult.error)
+    setSupplierCategories(categoriesResult.data)
     setNotices(
-      [settingsResult, categoriesResult, productsResult, reviewsResult]
+      [settingsResult, reviewsResult, categoriesResult]
         .filter((result) => result.error)
         .map((result, index) => ({
           key: `${result.source}-${index}-${result.error}`,
@@ -88,10 +130,43 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     setLoading(false)
   }, [])
 
+  const loadCatalog = useCallback(
+    async (page: number, append: boolean, isActive: () => boolean) => {
+      if (append) setLoadingMore(true)
+      else setCatalogLoading(true)
+
+      const categoryId =
+        activeCategoryId !== "all" && Number.isFinite(Number(activeCategoryId))
+          ? Number(activeCategoryId)
+          : null
+
+      const result = await fetchSupplierCatalog({
+        page,
+        perPage: CATALOG_PER_PAGE,
+        keyword: debouncedQuery || undefined,
+        categoryId,
+      })
+
+      if (!isActive()) return
+
+      setCatalogError(result.error)
+      setCatalogTotal(result.data.total)
+      setCatalogPage(result.data.page)
+      setCatalogLastPage(result.data.lastPage)
+      setItems((current) => (append ? [...current, ...result.data.items] : result.data.items))
+      setCatalogLoading(false)
+      setLoadingMore(false)
+    },
+    [activeCategoryId, debouncedQuery]
+  )
+
+  const [storeReady, setStoreReady] = useState(false)
+
   useEffect(() => {
     let active = true
     const boot = async () => {
       setLoading(true)
+      setStoreReady(false)
       if (storeSlug) {
         const storeResult = await fetchMarketplaceStoreBySlug(storeSlug)
         if (!active) return
@@ -104,71 +179,110 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
       } else {
         enterLegacyDefaultStoreContext()
       }
-      await loadStore(() => active)
+      if (!active) return
+      setStoreReady(true)
+      await loadShell(() => active)
     }
     void boot()
     return () => {
       active = false
     }
-  }, [loadStore, loadVersion, storeSlug])
+  }, [loadShell, loadVersion, storeSlug])
 
+  useEffect(() => {
+    if (!storeReady) return
+    let active = true
+    setItems([])
+    void loadCatalog(1, false, () => active)
+    return () => {
+      active = false
+    }
+  }, [loadCatalog, loadVersion, storeReady])
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab")
     if (!tab) return
     if (tab === "about") setActiveSection("about")
     if (tab === "reviews") setActiveSection("reviews")
-    if (tab === "category") setActiveSection("category")
-    const targetId = tab === "category" ? "products" : tab
+    if (tab === "category" || tab === "items") setActiveSection("items")
+    const targetId = tab === "category" || tab === "items" ? "products" : tab
     window.requestAnimationFrame(() => {
       document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
   }, [loadVersion])
 
-  const visibleCategories = useMemo(() => {
-    const usedIds = new Set(products.flatMap((product) => product.categoryIds ?? []))
-    const all = categories.find((category) => category.id === "all") ?? { id: "all", name: "All items" }
-    const relevant = categories.filter((category) => category.id !== "all" && usedIds.has(category.id))
-    const available = relevant.length ? relevant : categories.filter((category) => category.id !== "all")
-    return [all, ...available.slice(0, 7)]
-  }, [categories, products])
+  useEffect(() => {
+    const scrollToHash = () => {
+      const id = window.location.hash.replace(/^#/, "")
+      if (!id) return
+      window.requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+    }
+    scrollToHash()
+    window.addEventListener("hashchange", scrollToHash)
+    return () => window.removeEventListener("hashchange", scrollToHash)
+  }, [loading, catalogLoading, loadVersion])
 
-  const filteredProducts = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    const selectedCategory = categories.find((category) => category.id === activeCategoryId)
-    const result = products.filter((product) => {
-      const categoryMatch = activeCategoryId === "all" ||
-        product.categoryIds?.includes(activeCategoryId) ||
-        product.category.toLowerCase() === selectedCategory?.name.toLowerCase()
-      const queryMatch = !normalizedQuery ||
-        `${product.title} ${product.description ?? ""} ${product.category}`.toLowerCase().includes(normalizedQuery)
-      return categoryMatch && queryMatch
-    })
+  const activeCategoryName = useMemo(() => {
+    if (activeCategoryId === "all") return t("catalogTitle")
+    return supplierCategories.find((category) => String(category.id) === activeCategoryId)?.name ?? t("catalogTitle")
+  }, [activeCategoryId, supplierCategories, t])
 
-    return [...result].sort((left, right) => {
-      if (sort === "price-asc") return (left.numericPrice ?? Number.POSITIVE_INFINITY) - (right.numericPrice ?? Number.POSITIVE_INFINITY)
-      if (sort === "price-desc") return (right.numericPrice ?? Number.NEGATIVE_INFINITY) - (left.numericPrice ?? Number.NEGATIVE_INFINITY)
-      if (sort === "name") return left.title.localeCompare(right.title)
+  const sortedItems = useMemo(() => {
+    return [...items].sort((left, right) => {
+      if (sort === "price-asc") {
+        return (left.estimatedRetailUsd ?? Number.POSITIVE_INFINITY) - (right.estimatedRetailUsd ?? Number.POSITIVE_INFINITY)
+      }
+      if (sort === "price-desc") {
+        return (right.estimatedRetailUsd ?? Number.NEGATIVE_INFINITY) - (left.estimatedRetailUsd ?? Number.NEGATIVE_INFINITY)
+      }
+      if (sort === "name") return left.name.localeCompare(right.name)
       return 0
     })
-  }, [activeCategoryId, categories, products, query, sort])
+  }, [items, sort])
 
   const heroImage = settings.bannerUrl
-  const hasFilters = activeCategoryId !== "all" || Boolean(query.trim())
-  const productError = productSource === "mock" ? notices.find((notice) => notice.message.startsWith("Mock data"))?.message : undefined
+  const hasFilters = activeCategoryId !== "all" || Boolean(debouncedQuery)
+  const brand = settings.brandName?.trim() || "Store"
+
+  const handleCustomize = useCallback(async (item: SupplierCatalogItem) => {
+    if (openingId != null) return
+    setOpeningId(item.id)
+    setCatalogError(undefined)
+    try {
+      const ensured = await ensureSupplierCatalogBlank({ basicProductId: item.id })
+      navigateBuyer(buildStudioEditorHref(ensured.productId))
+    } catch (error) {
+      setCatalogError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setOpeningId(null)
+    }
+  }, [openingId])
 
   return (
     <PageShell
       className="buyer-store-page"
       contentClassName="buyer-shop-shell-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
-      footer={<StoreFooter />}
+      footer={<StoreFooter brandName={brand} />}
     >
-      <ShopHero brandName={settings.brandName} imageUrl={heroImage} isFallback={!settings.bannerUrl} announcement={settings.announcement} description={settings.description} />
+      <ShopHero
+        brandName={brand}
+        imageUrl={heroImage}
+        isFallback={!settings.bannerUrl}
+        announcement={settings.announcement}
+        description={settings.description}
+        studioHref="/studio"
+      />
       <StoreIdentity settings={settings} />
+      <HowItWorksSection studioHref="/studio" />
       <ShopBrowseControls
-        categories={visibleCategories}
+        categories={supplierCategories}
         activeCategoryId={activeCategoryId}
-        onCategoryChange={setActiveCategoryId}
+        onCategoryChange={(categoryId) => {
+          setActiveCategoryId(categoryId)
+          setActiveSection("items")
+        }}
         query={query}
         onQueryChange={setQuery}
         sort={sort}
@@ -183,20 +297,33 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         </aside>
       ) : null}
 
-      {activeSection === "items" || activeSection === "category" ? <section className="buyer-shop-products" id="products">
-        <SectionHeader
-          eyebrow={activeCategoryId === "all" ? "Store collection" : "Selected category"}
-          title={activeCategoryId === "all" ? "Latest drops" : visibleCategories.find((category) => category.id === activeCategoryId)?.name ?? "Products"}
-          description={`${filteredProducts.length} product${filteredProducts.length === 1 ? "" : "s"}`}
-        />
-        <StoreProductResults
-          loading={loading}
-          error={productError}
-          products={filteredProducts}
-          hasFilters={hasFilters}
-          onRetry={() => setLoadVersion((version) => version + 1)}
-        />
-      </section> : activeSection === "reviews" ? <StoreReviewsPanel summary={storeReviews} error={storeReviewsError} /> : <StoreAboutPanel settings={settings} />}
+      {activeSection === "items" ? (
+        <section className="buyer-shop-products" id="products">
+          <SectionHeader
+            eyebrow={t("catalogEyebrow")}
+            title={activeCategoryName}
+            description={`${catalogTotal || sortedItems.length} ${t("catalogCount")}`}
+          />
+          <StoreCatalogResults
+            loading={loading || catalogLoading}
+            error={catalogError}
+            items={sortedItems}
+            hasFilters={hasFilters}
+            openingId={openingId}
+            onRetry={() => setLoadVersion((version) => version + 1)}
+            onCustomize={handleCustomize}
+            canLoadMore={catalogPage < catalogLastPage}
+            loadingMore={loadingMore}
+            onLoadMore={() => {
+              void loadCatalog(catalogPage + 1, true, () => true)
+            }}
+          />
+        </section>
+      ) : activeSection === "reviews" ? (
+        <StoreReviewsPanel summary={storeReviews} error={storeReviewsError} />
+      ) : (
+        <StoreAboutPanel settings={settings} />
+      )}
     </PageShell>
   )
 }

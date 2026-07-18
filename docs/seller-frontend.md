@@ -4,9 +4,10 @@ Vite + React seller SPA at `http://127.0.0.1:5173` (also works via `http://local
 
 ## Prerequisites
 
-- Medusa backend running on `:9000`
-- AI Worker on `:8001` with `AI_WORKER_MOCK_GENERATION=true` for local AI tests
-- Admin user + `ADMIN_TOKEN` from `POST /auth/user/emailpass`
+- Postgres + Redis (e.g. `docker compose -f infra/docker-compose.yml up -d`)
+- `npm run dev:all` starts Medusa `:9000`, seller `:5173`, storefront, AI worker `:8001`
+- Admin user for seller login (`POST /auth/user/emailpass`)
+- Real AI: keep `AI_WORKER_MOCK_GENERATION=false` in `apps/medusa-backend/.env` and provide DashScope/FAL keys
 
 ## Setup
 
@@ -53,28 +54,25 @@ AI_WORKER_BASE_URL=http://localhost:8001
 
 Start **three** processes for full AI Studio:
 
-1. `npm run dev` (Medusa `:9000`)
-2. `cd apps/ai-worker && uvicorn app.main:app --port 8001`
-3. `npm run dev:seller` (`:5173`)
+1. `npm run dev:all` — Medusa `:9000` + seller `:5173` + storefront + AI worker `:8001`
 
 ## Scripts
 
 - `npm run dev:seller` — seller dashboard only
-- `npm run dev:all` — Medusa + seller dashboard
+- `npm run dev:all` — Medusa + seller + buyer storefront + AI worker
 - `npm run test:seller` — Vitest unit tests
 - `npm run test:e2e:seller` — Playwright E2E (set `ADMIN_EMAIL`, `ADMIN_PASSWORD`)
 - `scripts/seller-admin-smoke.sh` — backend API smoke (requires `ADMIN_TOKEN`)
 
 ## Definition of Done (local)
 
-- [ ] `npm run dev:all` — Medusa `:9000` + seller `:5173` start without errors
-- [ ] Login via `/login` with Medusa admin credentials
-- [ ] AI Studio: `POST /admin/ai/generate` → progress → complete page → edit draft
-- [ ] Products: table list, search, edit/publish/duplicate/archive with action menu
+- [ ] `npm run dev:all` — Medusa `:9000` + seller `:5173` + storefront + AI `:8001` start without errors
+- [ ] Login via `/login` lands on Overview
 - [ ] Orders: expandable rows, fulfillment timeline page, push-fulfillment / mock-shipment
+- [ ] Inbox / Reviews / Settings reachable from top nav
 - [ ] Settings: upload logo (PNG/JPG ≤2MB), save brand, currency/language; errors shown inline + toast
-- [ ] Real AI (optional): `AI_WORKER_MOCK_GENERATION=false` + `FAL_KEY` or `OPENAI_API_KEY` → design images from provider
-- [ ] Notifications bell shows unread count after AI job completes
+- [ ] Real AI (optional): `AI_WORKER_MOCK_GENERATION=false` + DashScope/FAL key → design images from provider
+- [ ] Notifications bell shows unread count / open-to-do links
 - [ ] `npm test` — backend Jest green
 - [ ] `npm run test:seller` — Vitest green
 - [ ] `ADMIN_TOKEN=... ./scripts/seller-admin-smoke.sh` — API smoke green (backend running)

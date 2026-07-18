@@ -20,7 +20,7 @@ type StoreMessagesPageProps = {
 
 export function StoreMessagesPage({ cartCount, orderId }: StoreMessagesPageProps) {
   const auth = useBuyerAuth()
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const [messages, setMessages] = useState<BuyerStoreMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()

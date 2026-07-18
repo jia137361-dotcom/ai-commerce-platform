@@ -14,12 +14,19 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
   }
 
+  const materialIdQuery = typeof req.query?.materialId === "string" ? req.query.materialId.trim() : ""
+  const productForConfig = materialIdQuery
+    ? ({ ...(product as Record<string, unknown>), supplier_material_id: materialIdQuery } as Record<
+        string,
+        unknown
+      >)
+    : (product as Record<string, unknown>)
+
   try {
-    const config = await buildProductDesignConfig(
-      storeCoreService,
-      product as Record<string, unknown>,
-      { productId, storeId }
-    )
+    const config = await buildProductDesignConfig(storeCoreService, productForConfig, {
+      productId,
+      storeId,
+    })
     return res.json(config)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

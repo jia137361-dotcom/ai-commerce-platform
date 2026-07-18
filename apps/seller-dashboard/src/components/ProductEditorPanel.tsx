@@ -302,7 +302,7 @@ function LocalMockupEditor({ mockups, diyAssets, aiMockMode, aiMockModeReason }:
   if (!mockups.length) {
     return (
       <div className="flex h-[min(78vh,920px)] items-center justify-center rounded-lg bg-slate-50 p-8 text-center">
-        <p className="text-sm text-slate-500">No mockup views available yet. Regenerate from AI Studio.</p>
+        <p className="text-sm text-slate-500">No mockup views available yet. Publish a product with mockup assets from the supplier catalog.</p>
       </div>
     )
   }

@@ -4,7 +4,6 @@ import {
   marketplaceBuyerSettings,
   type BuyerStoreSettings,
 } from "../lib/buyer-api"
-import { isMarketplaceStoreId } from "../lib/buyer-store-context"
 
 type UseBuyerPageSettingsOptions = {
   marketplace?: boolean
@@ -13,9 +12,7 @@ type UseBuyerPageSettingsOptions = {
 
 export function useBuyerPageSettings(options?: UseBuyerPageSettingsOptions) {
   const marketplace = options?.marketplace ?? false
-  const [settings, setSettings] = useState<BuyerStoreSettings>(
-    marketplace ? marketplaceBuyerSettings : marketplaceBuyerSettings
-  )
+  const [settings, setSettings] = useState<BuyerStoreSettings>(marketplaceBuyerSettings)
 
   useEffect(() => {
     let active = true
@@ -27,7 +24,8 @@ export function useBuyerPageSettings(options?: UseBuyerPageSettingsOptions) {
     }
   }, [marketplace, options?.storeId])
 
-  const marketplaceMode = marketplace || isMarketplaceStoreId(settings.storeId)
+  // Indie storefront keeps a stable shell; marketplace chrome is opt-in only.
+  const marketplaceMode = marketplace
 
   return { settings, marketplaceMode }
 }

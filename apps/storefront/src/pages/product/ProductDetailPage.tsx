@@ -38,7 +38,7 @@ import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
 type Notice = { label: string; message: string }
 
-const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "CiiVerse Official Store", metadata: {} }
+const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Store", metadata: {} }
 
 export function ProductDetailPage({ productId, cartCount, onCartUpdated }: ProductDetailPageProps) {
   const auth = useBuyerAuth()
@@ -194,8 +194,11 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     try {
       const result = await toggleProductFavorite(productId, isFavorited)
       setIsFavorited(result.is_favorited)
-    } catch {
-      // Silently fail
+    } catch (error) {
+      setAddNotice({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Unable to update favorite.",
+      })
     } finally {
       setFavoriteLoading(false)
     }

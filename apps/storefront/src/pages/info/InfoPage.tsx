@@ -20,7 +20,7 @@ type InfoPageProps = {
 }
 
 export function InfoPage({ cartCount, title, children }: InfoPageProps) {
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
 
   return (
     <PageShell

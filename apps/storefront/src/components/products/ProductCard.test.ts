@@ -1,6 +1,7 @@
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import type { StoreProduct } from "../../lib/mock-data"
+import { BuyerLocaleProvider } from "../../lib/locale"
 import { ProductCard } from "./ProductCard"
 
 const product: StoreProduct = {
@@ -14,9 +15,12 @@ const product: StoreProduct = {
   isCartAddable: true,
 }
 
+const render = (value: StoreProduct) =>
+  renderToStaticMarkup(createElement(BuyerLocaleProvider, null, createElement(ProductCard, { product: value })))
+
 describe("ProductCard", () => {
   it("renders the title, image, price, and product detail link", () => {
-    const html = renderToStaticMarkup(createElement(ProductCard, { product }))
+    const html = render(product)
     expect(html).toContain("Modern tote")
     expect(html).toContain("https://example.com/tote.jpg")
     expect(html).toContain("$24.50")
@@ -24,8 +28,15 @@ describe("ProductCard", () => {
   })
 
   it("renders an explicit placeholder when the image is missing", () => {
-    const html = renderToStaticMarkup(createElement(ProductCard, { product: { ...product, imageUrl: "" } }))
+    const html = render({ ...product, imageUrl: "" })
     expect(html).toContain("Product image unavailable")
     expect(html).not.toContain("undefined")
+  })
+
+  it("shows customize badge and studio link for designable products", () => {
+    const html = render({ ...product, hasDesigner: true })
+    expect(html).toContain("Customize")
+    expect(html).toContain('href="/design/prod_123"')
+    expect(html).toContain("/ai-design?productId=prod_123")
   })
 })

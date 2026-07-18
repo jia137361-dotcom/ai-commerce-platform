@@ -10,7 +10,7 @@ const allowedOrigins = new Set(
   parseOrigins(
     process.env.AUTH_CORS ||
       process.env.ADMIN_CORS ||
-      "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5175,http://localhost:5175"
+      "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5175,http://localhost:5175,http://127.0.0.1:5176,http://localhost:5176"
   )
 )
 

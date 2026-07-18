@@ -16,11 +16,6 @@ import { Card } from "../components/ui/Card"
 import { Input, Label, Select } from "../components/ui/Input"
 import type { StoreSettings } from "@ai-commerce/shared-types"
 
-const readGalleryUrls = (metadata: Record<string, unknown> | null | undefined) =>
-  Array.isArray(metadata?.gallery_urls)
-    ? metadata.gallery_urls.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
-    : []
-
 export function SettingsPage() {
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -37,7 +32,6 @@ export function SettingsPage() {
   const [description, setDescription] = useState("")
   const [announcement, setAnnouncement] = useState("")
   const [bannerUrl, setBannerUrl] = useState("")
-  const [galleryUrls, setGalleryUrls] = useState<string[]>([])
   const [policyPresets, setPolicyPresets] = useState<StorePolicyPresetFields>({})
 
   useEffect(() => {
@@ -51,7 +45,6 @@ export function SettingsPage() {
     setDescription(String(s.metadata?.description ?? s.seo_description ?? ""))
     setAnnouncement(String(s.metadata?.announcement ?? ""))
     setBannerUrl(String(s.metadata?.banner_url ?? ""))
-    setGalleryUrls(readGalleryUrls(s.metadata))
     setPolicyPresets(mergeStorePolicyPresets(s.metadata))
   }, [data])
 
@@ -59,6 +52,8 @@ export function SettingsPage() {
     mutationFn: () => {
       const mergedPresets = mergeStorePolicyPresets({ ...data?.settings.metadata, policy_presets: policyPresets })
       const generatedPolicies = buildStorePolicyTexts(mergedPresets, brandName)
+      const previousMetadata = { ...(data?.settings.metadata ?? {}) }
+      delete previousMetadata.gallery_urls
 
       return apiFetch("/admin/store-settings", {
         method: "PUT",
@@ -68,13 +63,12 @@ export function SettingsPage() {
           support_email: supportEmail,
           seo_description: description || null,
           metadata: {
-            ...(data?.settings.metadata ?? {}),
+            ...previousMetadata,
             currency,
             language,
             description,
             announcement,
             banner_url: bannerUrl || null,
-            gallery_urls: galleryUrls,
             policy_presets: mergedPresets,
             ...generatedPolicies,
             faqs: null,
@@ -108,10 +102,8 @@ export function SettingsPage() {
             <StoreSettingsMediaFields
               logoUrl={logoUrl}
               bannerUrl={bannerUrl}
-              galleryUrls={galleryUrls}
               onLogoChange={setLogoUrl}
               onBannerChange={setBannerUrl}
-              onGalleryChange={setGalleryUrls}
             />
 
             <Label>Store Name</Label>

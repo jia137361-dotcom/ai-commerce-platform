@@ -1,6 +1,7 @@
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import type { StoreProduct } from "../../lib/mock-data"
+import { BuyerLocaleProvider } from "../../lib/locale"
 import { StoreProductResults } from "./StoreProductResults"
 
 const product: StoreProduct = {
@@ -13,13 +14,20 @@ const product: StoreProduct = {
   isCartAddable: false,
 }
 
-const render = (props: Partial<Parameters<typeof StoreProductResults>[0]> = {}) => renderToStaticMarkup(createElement(StoreProductResults, {
-  loading: false,
-  products: [],
-  hasFilters: false,
-  onRetry: () => undefined,
-  ...props,
-}))
+const render = (props: Partial<Parameters<typeof StoreProductResults>[0]> = {}) =>
+  renderToStaticMarkup(
+    createElement(
+      BuyerLocaleProvider,
+      null,
+      createElement(StoreProductResults, {
+        loading: false,
+        products: [],
+        hasFilters: false,
+        onRetry: () => undefined,
+        ...props,
+      })
+    )
+  )
 
 describe("StoreProductResults", () => {
   it("renders loading state", () => expect(render({ loading: true })).toContain("Loading products"))

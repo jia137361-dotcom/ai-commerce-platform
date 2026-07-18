@@ -141,7 +141,7 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     basicProductId: product.basic_product_id ?? undefined,
     viewId: product.view_id ?? undefined,
     designType: product.design_type ?? undefined,
-    hasDesigner: Boolean(product.basic_product_id),
+    hasDesigner: Boolean(product.basic_product_id || product.supplier_product_id),
     isCartAddable: Boolean(product.is_cart_addable && variants.some((variant) => variant.isPurchasable)),
     averageRating: product.average_rating ?? null,
     reviewCount: product.review_count ?? 0,

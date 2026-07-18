@@ -16,6 +16,7 @@ type Category = {
   sort_order: number
   level: number
   supplier_category_id: string | null
+  product_count?: number
 }
 
 function buildTree(flat: Category[]): Category[] {
@@ -140,10 +141,13 @@ export function CategoryManagerPage() {
 
   const productCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    // Count products per category from the flat list
-    // (This is approximate - the real count would need a separate query)
+    for (const category of categories) {
+      counts.set(category.category_id, category.product_count ?? 0)
+    }
     return counts
   }, [categories])
+
+  const [pendingDelete, setPendingDelete] = useState<Category | null>(null)
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -193,6 +197,7 @@ export function CategoryManagerPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-categories"] })
       toast.push("Category deleted", "success")
+      setPendingDelete(null)
     },
     onError: (err: unknown) => {
       toast.push(err instanceof ApiError ? err.message : "Failed to delete category", "error")
@@ -207,8 +212,7 @@ export function CategoryManagerPage() {
       )
       return
     }
-    if (!confirm(`Delete category "${cat.name}"?`)) return
-    deleteMutation.mutate(cat.category_id)
+    setPendingDelete(cat)
   }
 
   return (
@@ -359,6 +363,33 @@ export function CategoryManagerPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={Boolean(pendingDelete)}
+        title="Delete category?"
+        onClose={() => setPendingDelete(null)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteMutation.isPending || !pendingDelete}
+              onClick={() => {
+                if (!pendingDelete) return
+                deleteMutation.mutate(pendingDelete.category_id)
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Delete category <strong>{pendingDelete?.name}</strong>? This cannot be undone.
+        </p>
       </Modal>
     </div>
   )

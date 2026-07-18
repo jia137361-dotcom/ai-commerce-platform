@@ -20,6 +20,22 @@ export type ProductDesignConfig = {
   redesign_mode: boolean
   designer_url: string
   assets_refreshed?: boolean
+  /** Present when opening an existing buyer My Design draft (Continue editing). */
+  saved_design?: {
+    mc_product_id: string
+    medusa_variant_id: string | null
+    title: string
+    mockup_url: string | null
+    price: number | null
+    supplier_product_id: string | null
+    basic_product_id: string | null
+    blank_product_id: string | null
+    size_id: string | null
+    color_id: string | null
+    size_name: string | null
+    color_name: string | null
+    editor_path: string
+  } | null
 }
 
 export function isMockS2bProvision(product: Record<string, unknown>): boolean {
@@ -70,7 +86,12 @@ export function resolveS2bEditorMode(
   }
 
   const metadata = (product.metadata ?? {}) as Record<string, unknown>
-  if (metadata.s2b_sdk_saved === true) {
+  // Buyer Studio saves / seller SDK saves already have a real designed product on S2B.
+  if (
+    metadata.s2b_sdk_saved === true ||
+    metadata.buyer_design === true ||
+    metadata.design_source === "buyer_sdk"
+  ) {
     return "redesign"
   }
 
@@ -79,6 +100,11 @@ export function resolveS2bEditorMode(
     product.supplier_material_id &&
     !String(product.supplier_material_id).startsWith("mock_")
   ) {
+    return "redesign"
+  }
+
+  // Numeric S2B designed-product id without material row (common for buyer DIY drafts).
+  if (/^\d+$/.test(s2bProductId)) {
     return "redesign"
   }
 
@@ -200,6 +226,48 @@ export async function buildProductDesignConfig(
     editorMode,
   })
 
+  const metadata = (resolvedProduct.metadata ?? {}) as Record<string, unknown>
+  const isBuyerDesign =
+    metadata.buyer_design === true || metadata.design_source === "buyer_sdk"
+  const medusaVariantId =
+    typeof resolvedProduct.medusa_variant_id === "string" && resolvedProduct.medusa_variant_id.trim()
+      ? resolvedProduct.medusa_variant_id.trim()
+      : null
+  const savedDesign =
+    isBuyerDesign || (editorMode === "redesign" && medusaVariantId)
+      ? {
+          mc_product_id: String(resolvedProduct.id ?? options?.productId ?? ""),
+          medusa_variant_id: medusaVariantId,
+          title:
+            typeof resolvedProduct.title === "string" && resolvedProduct.title.trim()
+              ? resolvedProduct.title.trim()
+              : "Custom Design",
+          mockup_url:
+            (typeof resolvedProduct.mockup_image_url === "string" &&
+              resolvedProduct.mockup_image_url.trim()) ||
+            (typeof resolvedProduct.image_url === "string" && resolvedProduct.image_url.trim()) ||
+            null,
+          price: typeof resolvedProduct.price === "number" ? resolvedProduct.price : null,
+          supplier_product_id: s2bProductId,
+          basic_product_id: basicProductId,
+          blank_product_id:
+            typeof metadata.blank_product_id === "string" && metadata.blank_product_id.trim()
+              ? metadata.blank_product_id.trim()
+              : null,
+          size_id: sizeId,
+          color_id: colorId,
+          size_name:
+            typeof metadata.size_name === "string" && metadata.size_name.trim()
+              ? metadata.size_name.trim()
+              : null,
+          color_name:
+            typeof metadata.color_name === "string" && metadata.color_name.trim()
+              ? metadata.color_name.trim()
+              : null,
+          editor_path: `/design/${encodeURIComponent(String(resolvedProduct.id ?? options?.productId ?? ""))}`,
+        }
+      : null
+
   return {
     sdk_base_url: sdkBaseUrl,
     token,
@@ -215,5 +283,6 @@ export async function buildProductDesignConfig(
     redesign_mode: editorMode === "redesign",
     designer_url: designerUrl,
     assets_refreshed: assetsRefreshed || undefined,
+    saved_design: savedDesign,
   }
 }

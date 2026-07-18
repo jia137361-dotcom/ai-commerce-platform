@@ -7,17 +7,25 @@ import { cn } from "../lib/cn"
 import type { StoreNotification } from "@ai-commerce/shared-types"
 
 const NAV = [
-  { to: "/products", label: "Products" },
-  { to: "/categories", label: "Categories" },
-  { to: "/suppliers", label: "Suppliers" },
+  { to: "/", label: "Overview", end: true },
   { to: "/orders", label: "Orders" },
+  { to: "/messages", label: "Inbox" },
   { to: "/reviews", label: "Reviews" },
-  { to: "/messages", label: "Messages" },
   { to: "/settings", label: "Settings" },
-  { to: "/ai-studio/create", label: "AI Studio" },
 ]
 
+function notificationHref(notification: StoreNotification): string | null {
+  const type = String(notification.type || "").toLowerCase()
+  if (type.includes("message") || type.includes("inbox")) return "/messages"
+  if (type.includes("review")) return "/reviews"
+  if (type.includes("order") || type.includes("fulfill") || type.includes("shipment")) {
+    return "/orders"
+  }
+  return null
+}
+
 function NotificationsBell() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const { data } = useQuery({
@@ -59,7 +67,7 @@ function NotificationsBell() {
       {open ? (
         <div className="absolute right-0 z-30 mt-2 w-80 rounded-card border bg-white p-3 shadow-xl">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold">Notifications</p>
+            <p className="text-sm font-semibold">To-dos & alerts</p>
             {unread > 0 ? (
               <button
                 type="button"
@@ -74,29 +82,56 @@ function NotificationsBell() {
             {notifications.length === 0 ? (
               <li className="py-4 text-center text-sm text-slate-500">No notifications</li>
             ) : (
-              notifications.map((n) => (
-                <li
-                  key={n.id}
-                  className={cn(
-                    "rounded-lg border px-3 py-2 text-sm",
-                    n.read ? "border-slate-100 bg-slate-50" : "border-brand/20 bg-brand-light/40"
-                  )}
-                >
-                  <p className="font-medium text-slate-800">{n.title}</p>
-                  <p className="text-xs text-slate-500">{n.body ?? n.title}</p>
-                  {!n.read ? (
-                    <button
-                      type="button"
-                      className="mt-1 text-xs text-brand hover:underline"
-                      onClick={() => markRead.mutate(n.id)}
-                    >
-                      Mark read
-                    </button>
-                  ) : null}
-                </li>
-              ))
+              notifications.map((n) => {
+                const href = notificationHref(n)
+                return (
+                  <li
+                    key={n.id}
+                    className={cn(
+                      "rounded-lg border px-3 py-2 text-sm",
+                      n.read ? "border-slate-100 bg-slate-50" : "border-brand/20 bg-brand-light/40"
+                    )}
+                  >
+                    <p className="font-medium text-slate-800">{n.title}</p>
+                    <p className="text-xs text-slate-500">{n.body ?? n.title}</p>
+                    <div className="mt-1 flex gap-3">
+                      {href ? (
+                        <button
+                          type="button"
+                          className="text-xs text-brand hover:underline"
+                          onClick={() => {
+                            setOpen(false)
+                            if (!n.read) markRead.mutate(n.id)
+                            navigate(href)
+                          }}
+                        >
+                          Open
+                        </button>
+                      ) : null}
+                      {!n.read ? (
+                        <button
+                          type="button"
+                          className="text-xs text-slate-500 hover:underline"
+                          onClick={() => markRead.mutate(n.id)}
+                        >
+                          Mark read
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                )
+              })
             )}
           </ul>
+          <div className="mt-3 border-t border-slate-100 pt-2">
+            <Link
+              to="/"
+              className="text-xs font-medium text-brand hover:underline"
+              onClick={() => setOpen(false)}
+            >
+              Back to overview
+            </Link>
+          </div>
         </div>
       ) : null}
     </div>
@@ -109,21 +144,15 @@ export function Navbar() {
   const { email, logout } = useAuthStore()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const isActive = (to: string) => {
-    if (to === "/products") return location.pathname.startsWith("/products")
-    if (to === "/categories") return location.pathname.startsWith("/categories")
-    if (to === "/suppliers") return location.pathname.startsWith("/suppliers")
-    if (to === "/orders") return location.pathname.startsWith("/orders")
-    if (to === "/reviews") return location.pathname.startsWith("/reviews")
-    if (to === "/messages") return location.pathname.startsWith("/messages")
-    if (to === "/settings") return location.pathname.startsWith("/settings")
-    return location.pathname.startsWith("/ai-studio")
+  const isActive = (to: string, end?: boolean) => {
+    if (end || to === "/") return location.pathname === "/"
+    return location.pathname === to || location.pathname.startsWith(`${to}/`)
   }
 
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <Link to="/products" className="text-2xl font-bold tracking-tight">
+        <Link to="/" className="text-2xl font-bold tracking-tight">
           <span className="text-brand">Cii</span>
           <span className="text-slate-900">Verse</span>
         </Link>
@@ -134,7 +163,7 @@ export function Navbar() {
               to={item.to}
               className={cn(
                 "pb-1 text-sm font-medium transition",
-                isActive(item.to)
+                isActive(item.to, item.end)
                   ? "border-b-2 border-brand text-brand"
                   : "text-slate-600 hover:text-slate-900"
               )}
@@ -152,9 +181,14 @@ export function Navbar() {
           >
             ☰
           </button>
-          <Link to="/products" className="hidden text-sm text-slate-500 hover:text-brand sm:inline">
-            ← Back to Dashboard
-          </Link>
+          <a
+            href={STOREFRONT_URL.replace(/\/$/, "") + "/"}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden text-sm text-slate-500 hover:text-brand sm:inline"
+          >
+            View store
+          </a>
           <NotificationsBell />
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-light text-sm font-semibold text-brand">
             {(email ?? "U").slice(0, 1).toUpperCase()}
@@ -179,13 +213,22 @@ export function Navbar() {
               to={item.to}
               className={cn(
                 "rounded-lg px-3 py-2 text-sm font-medium",
-                isActive(item.to) ? "bg-brand-light text-brand" : "text-slate-600"
+                isActive(item.to, item.end) ? "bg-brand-light text-brand" : "text-slate-600"
               )}
               onClick={() => setMobileOpen(false)}
             >
               {item.label}
             </Link>
           ))}
+          <a
+            href={STOREFRONT_URL.replace(/\/$/, "") + "/"}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600"
+            onClick={() => setMobileOpen(false)}
+          >
+            View store
+          </a>
         </nav>
       ) : null}
     </header>
@@ -195,7 +238,7 @@ export function Navbar() {
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
-      <p className="font-medium text-slate-700">CiiVerse x Nespresso</p>
+      <p className="font-medium text-slate-700">Seller operations</p>
       <div className="mt-2 flex flex-wrap justify-center gap-4">
         <a href={`${STOREFRONT_URL}/privacy`} target="_blank" rel="noreferrer">
           Privacy Policy
@@ -206,7 +249,7 @@ export function Footer() {
         <a href={`${STOREFRONT_URL}/help`} target="_blank" rel="noreferrer">
           Contact Support
         </a>
-        <a href={`${STOREFRONT_URL}/store`} target="_blank" rel="noreferrer">
+        <a href={STOREFRONT_URL.replace(/\/$/, "") + "/"} target="_blank" rel="noreferrer">
           Buyer Storefront
         </a>
       </div>

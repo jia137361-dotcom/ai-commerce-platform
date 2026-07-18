@@ -8,7 +8,7 @@ import { Card } from "../../components/ui/Card"
 import { LoadingState } from "../../components/ui/States"
 
 export function AccountHomePage({ cartCount }: { cartCount: number }) {
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const auth = useBuyerAuth()
 
   return (

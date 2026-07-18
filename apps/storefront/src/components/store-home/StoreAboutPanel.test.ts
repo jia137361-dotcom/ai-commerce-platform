@@ -1,7 +1,7 @@
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import type { BuyerStoreSettings } from "../../lib/buyer-api"
-import { normalizeStoreGalleryUrls, StoreAboutPanel, StoreInformationContent } from "./StoreAboutPanel"
+import { StoreAboutPanel, StoreInformationContent } from "./StoreAboutPanel"
 
 const settings: BuyerStoreSettings = {
   storeId: "isolated_store",
@@ -11,7 +11,7 @@ const settings: BuyerStoreSettings = {
   announcement: "A real seller announcement.",
   bannerUrl: "https://example.com/banner.png",
   logoUrl: "https://example.com/logo.png",
-  galleryUrls: ["https://example.com/gallery-1.png", "https://picsum.photos/id/1025/800/600"],
+  galleryUrls: [],
   metadata: {},
   returnsPolicy: "Returns accepted within the seller policy window.",
 }
@@ -24,8 +24,8 @@ describe("StoreAboutPanel", () => {
     expect(html).toContain("A real seller-managed description.")
     expect(html).toContain("A real seller announcement.")
     expect(html).toContain("support@example.com")
-    expect(html).toContain("gallery-1.png")
-    expect(html).toContain("Gallery image selector")
+    expect(html).not.toContain("Inside the shop")
+    expect(html).not.toContain("Gallery image selector")
     expect(html).toContain("Shipping")
     expect(html).toContain("Returns &amp; exchanges")
     expect(html).toContain("Privacy Policy")
@@ -41,28 +41,12 @@ describe("StoreAboutPanel", () => {
     expect(returnsHtml).toContain("not available in the buyer portal yet")
   })
 
-  it("hides empty or unsafe gallery values and preserves direct image URLs", () => {
-    expect(normalizeStoreGalleryUrls([
-      "",
-      "  ",
-      "javascript:alert(1)",
-      "data:image/png;base64,test",
-      "https://placehold.co/800x600/png?text=Gallery",
-      "https://placehold.co/800x600/png?text=Gallery",
-      " http://example.com/image.jpg ",
-    ])).toEqual([
-      "https://placehold.co/800x600/png?text=Gallery",
-      "http://example.com/image.jpg",
-    ])
-  })
-
   it("shows honest empty states when seller metadata is absent", () => {
     const html = renderToStaticMarkup(createElement(StoreAboutPanel, {
       settings: { storeId: "isolated_store", brandName: "Empty Store", metadata: {}, galleryUrls: [] },
     }))
 
     expect(html).toContain("has not added an about description")
-    expect(html).toContain("Store gallery has not been provided")
     expect(html).toContain("Seller support email unavailable")
   })
 })

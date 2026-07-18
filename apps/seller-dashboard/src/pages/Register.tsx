@@ -30,7 +30,7 @@ export function RegisterPage() {
         lastName,
       })
       setEmail(seller.email ?? email)
-      navigate("/products")
+      navigate("/")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Registration failed")
     } finally {

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest"
 import {
   buildS2bdiyDesignerUrl,
   resolveS2bEditorMode,
@@ -52,6 +53,27 @@ describe("S2BDIY designer URL", () => {
     })
 
     expect(url).toContain("productId=174951")
+    expect(url).not.toContain("basicProductId=")
+  })
+
+  it("opens redesign mode for buyer DIY drafts without material_id", () => {
+    const product = {
+      supplier_product_id: "175872",
+      basic_product_id: "3000",
+      metadata: { buyer_design: true, design_source: "buyer_sdk" },
+    }
+
+    expect(resolveS2bEditorMode(product, "175872")).toBe("redesign")
+
+    const url = buildS2bdiyDesignerUrl({
+      sdkBaseUrl: "https://opensdktest.s2bdiy.com",
+      token: "abc123",
+      basicProductId: "3000",
+      s2bProductId: "175872",
+      editorMode: "redesign",
+    })
+
+    expect(url).toContain("productId=175872")
     expect(url).not.toContain("basicProductId=")
   })
 

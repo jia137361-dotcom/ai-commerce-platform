@@ -320,6 +320,8 @@ const normalizeMoney = (value: number | null) => {
   return value > 999 ? value / 100 : value
 }
 
+export { normalizeMoney }
+
 export const summarizeAdminOrderRow = (order: Record<string, unknown>) => {
   const items = Array.isArray(order.items) ? order.items : []
   const items_count = items.reduce((sum, item) => {

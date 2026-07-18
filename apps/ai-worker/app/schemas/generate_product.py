@@ -11,6 +11,8 @@ class GenerateProductRequest(BaseModel):
     print_position: str = "front"
     base_cost: float | None = None
     generation_request_id: str | None = None
+    # Buyer AI Design only needs artwork — never call language/copy models.
+    skip_copy: bool = False
 
 
 class SeoPayload(BaseModel):

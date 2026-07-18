@@ -1,6 +1,5 @@
 import { useState } from "react"
 import type { BuyerStoreSettings } from "../../lib/buyer-api"
-import { StoreGalleryCarousel } from "./StoreGalleryCarousel"
 
 export type StoreInformationSection =
   | "shop-info"
@@ -19,15 +18,7 @@ const navigation: Array<{ id: StoreInformationSection; label: string; icon: stri
   { id: "privacy", label: "Privacy Policy", icon: "◇" },
 ]
 
-export function normalizeStoreGalleryUrls(urls: string[] | undefined) {
-  return (urls ?? [])
-    .map((url) => url.trim())
-    .filter((url, index, all) => /^https?:\/\//i.test(url) && all.indexOf(url) === index)
-}
-
 function ShopInfo({ settings }: { settings: BuyerStoreSettings }) {
-  const galleryUrls = normalizeStoreGalleryUrls(settings.galleryUrls)
-
   return (
     <div className="buyer-shop-information-stack">
       <article className="buyer-shop-information-card">
@@ -43,12 +34,6 @@ function ShopInfo({ settings }: { settings: BuyerStoreSettings }) {
           <p>{settings.announcement}</p>
         </article>
       ) : null}
-
-      <article className="buyer-shop-information-card">
-        <p className="buyer-shop-information-eyebrow">Gallery</p>
-        <h2>Inside the shop</h2>
-        <StoreGalleryCarousel images={galleryUrls} title={settings.brandName} />
-      </article>
     </div>
   )
 }

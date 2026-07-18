@@ -85,23 +85,39 @@ export const getScopedBuyerStoreId = (explicitStoreId?: string | null) => {
 /** Backward-compatible alias for store-scoped cart/checkout operations. */
 export const getBuyerStoreId = () => getScopedBuyerStoreId()
 
+/**
+ * Bind store context from the current buyer route.
+ * Indie single-store is the default; only `/marketplace` clears store scope.
+ */
 export const syncRouteStoreContext = (pathname: string) => {
+  if (pathname.startsWith("/marketplace")) {
+    enterMarketplaceContext()
+    return
+  }
+
+  // /shops/:slug is resolved by the page after loading marketplace store metadata.
+  if (pathname.startsWith("/shops/")) {
+    return
+  }
+
+  // Single-store indie routes always keep the default store binding.
   if (
     pathname === "/" ||
-    pathname.startsWith("/?") ||
+    pathname.startsWith("/store") ||
+    pathname.startsWith("/studio") ||
+    pathname.startsWith("/my-designs") ||
+    pathname.startsWith("/ai-design") ||
+    pathname.startsWith("/ai-studio") ||
+    pathname.startsWith("/design") ||
+    pathname.startsWith("/products") ||
     pathname.startsWith("/cart") ||
-    pathname.startsWith("/checkout/platform") ||
+    pathname.startsWith("/checkout") ||
     pathname.startsWith("/account") ||
     pathname.startsWith("/orders") ||
     pathname.startsWith("/help") ||
     pathname.startsWith("/terms") ||
     pathname.startsWith("/privacy")
   ) {
-    enterMarketplaceContext()
-    return
-  }
-
-  if (pathname.startsWith("/store")) {
     enterLegacyDefaultStoreContext()
   }
 }

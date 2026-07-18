@@ -7,9 +7,15 @@ import {
 } from "../../../../../lib/assert-cart-store"
 import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
+import { quoteS2bShippingForCart } from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
 
 type ShippingMethodBody = {
   option_id?: string
+}
+
+type CartShippingMethodRow = {
+  id?: string | null
+  shipping_option_id?: string | null
 }
 
 const readHeader = (req: MedusaRequest, name: string) => {
@@ -29,6 +35,19 @@ const validateCheckoutBridgeHeaders = (req: MedusaRequest) => {
   return null
 }
 
+const isMissingShippingMethodError = (error: unknown) =>
+  /ShippingMethod with id .+ not found/i.test(
+    error instanceof Error ? error.message : String(error ?? "")
+  )
+
+const findShippingMethodForOption = (
+  methods: CartShippingMethodRow[] | null | undefined,
+  optionId: string
+) =>
+  methods?.find((method) => String(method.shipping_option_id ?? "") === optionId) ??
+  methods?.[0] ??
+  null
+
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const headerError = validateCheckoutBridgeHeaders(req)
@@ -40,8 +59,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const cart_id = req.params.id as string
     const body = (req.body || {}) as ShippingMethodBody
+    const optionId = body.option_id?.trim()
 
-    if (!body.option_id) {
+    if (!optionId) {
       return res.status(400).json({
         error: { code: "VALIDATION_ERROR", message: "option_id is required" },
       })
@@ -53,22 +73,113 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     })
     assertCartBelongsToCurrentStore(req, cart)
 
+    // Clear existing methods first so Medusa's remove+add race cannot leave a
+    // stale casm_* id for a concurrent select / S2B amount update.
+    const existingMethodIds = ((cart.shipping_methods ?? []) as CartShippingMethodRow[])
+      .map((method) => String(method.id ?? "").trim())
+      .filter(Boolean)
+    if (existingMethodIds.length) {
+      await cartModule.softDeleteShippingMethods(existingMethodIds)
+    }
+
     await addShippingMethodToCartWorkflow(req.scope).run({
       input: {
         cart_id,
-        options: [{ id: body.option_id }],
+        options: [{ id: optionId }],
       },
     })
 
-    const cartAfter = await cartModule.retrieveCart(cart_id, {
+    let cartAfter = await cartModule.retrieveCart(cart_id, {
       relations: ["items", "shipping_address", "shipping_methods"],
     })
+
+    const s2bQuote = await quoteS2bShippingForCart(req.scope, cart_id)
+    if (s2bQuote) {
+      const applyS2bAmount = async () => {
+        const fresh = await cartModule.retrieveCart(cart_id, {
+          relations: ["items", "shipping_address", "shipping_methods"],
+        })
+        const method = findShippingMethodForOption(
+          fresh.shipping_methods as CartShippingMethodRow[] | null | undefined,
+          optionId
+        )
+        const shippingMethodId = String(method?.id ?? "").trim()
+        if (!shippingMethodId) return fresh
+
+        // Cart module only accepts UpdateShippingMethodDTO[] (not id + data overload).
+        await cartModule.updateShippingMethods([
+          {
+            id: shippingMethodId,
+            amount: s2bQuote.amountMinor,
+            data: {
+              pricing_source: s2bQuote.source,
+              s2b_amount_cny: s2bQuote.amountCny,
+              s2b_logistics_name: s2bQuote.logisticsName,
+              s2b_logistics_platform_id: s2bQuote.logisticsPlatformId,
+            },
+          },
+        ])
+
+        const existingMeta =
+          fresh.metadata && typeof fresh.metadata === "object"
+            ? (fresh.metadata as Record<string, unknown>)
+            : {}
+        await cartModule.updateCarts(cart_id, {
+          metadata: {
+            ...existingMeta,
+            s2b_shipping_quote: {
+              amount_minor: s2bQuote.amountMinor,
+              amount_usd: s2bQuote.amountUsd,
+              amount_cny: s2bQuote.amountCny,
+              logistics_platform_id: s2bQuote.logisticsPlatformId,
+              logistics_name: s2bQuote.logisticsName,
+              basic_product_id: s2bQuote.basicProductId,
+              source: s2bQuote.source,
+              quoted_at: new Date().toISOString(),
+            },
+          },
+        })
+
+        return cartModule.retrieveCart(cart_id, {
+          relations: ["items", "shipping_address", "shipping_methods"],
+        })
+      }
+
+      try {
+        cartAfter = await applyS2bAmount()
+      } catch (updateError) {
+        if (!isMissingShippingMethodError(updateError)) throw updateError
+        // Concurrent select may have replaced the method; retry once against the latest row.
+        console.warn(
+          "[cart-shipping-method] S2B amount update hit missing method; retrying once:",
+          updateError instanceof Error ? updateError.message : updateError
+        )
+        try {
+          cartAfter = await applyS2bAmount()
+        } catch (retryError) {
+          if (!isMissingShippingMethodError(retryError)) throw retryError
+          // Shipping option is already on the cart; keep selection successful.
+          console.warn(
+            "[cart-shipping-method] S2B amount update skipped after retry:",
+            retryError instanceof Error ? retryError.message : retryError
+          )
+          cartAfter = await cartModule.retrieveCart(cart_id, {
+            relations: ["items", "shipping_address", "shipping_methods"],
+          })
+        }
+      }
+    }
 
     if (process.env.NODE_ENV !== "production") {
       console.info("[cart-shipping-method] selected", {
         cart_id,
-        selected_option_id: body.option_id,
-        shipping_method_id: cartAfter.shipping_methods?.[0]?.id ?? null,
+        selected_option_id: optionId,
+        shipping_method_id:
+          findShippingMethodForOption(
+            cartAfter.shipping_methods as CartShippingMethodRow[] | null | undefined,
+            optionId
+          )?.id ?? null,
+        s2b_quote_amount_minor: s2bQuote?.amountMinor ?? null,
       })
     }
 

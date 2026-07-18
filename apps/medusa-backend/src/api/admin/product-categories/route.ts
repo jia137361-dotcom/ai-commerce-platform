@@ -84,15 +84,30 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: storeId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
 
-  const categories = await storeCoreService.listProductCategories(
-    { store_id: storeId },
-    { order: { sort_order: "ASC" } }
-  )
+  const [categories, products] = await Promise.all([
+    storeCoreService.listProductCategories(
+      { store_id: storeId },
+      { order: { sort_order: "ASC" } }
+    ),
+    storeCoreService.listProducts({ store_id: storeId }, { select: ["id", "category_ids"] }),
+  ])
+
+  const productCountByCategory = new Map<string, number>()
+  for (const product of products as Array<{ category_ids?: unknown }>) {
+    const ids = Array.isArray(product.category_ids) ? product.category_ids : []
+    for (const categoryId of ids) {
+      if (typeof categoryId !== "string" || !categoryId) continue
+      productCountByCategory.set(categoryId, (productCountByCategory.get(categoryId) ?? 0) + 1)
+    }
+  }
 
   return res.json({
     store_id: storeId,
     count: categories.length,
-    categories: categories.map(normalizeCategory)
+    categories: categories.map((category: any) => ({
+      ...normalizeCategory(category),
+      product_count: productCountByCategory.get(category.id) ?? 0,
+    })),
   })
 }
 

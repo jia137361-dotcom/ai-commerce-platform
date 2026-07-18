@@ -27,6 +27,8 @@ export type AiWorkerGenerateInput = {
   print_position?: string
   base_cost?: number | null
   generation_request_id?: string | null
+  /** Buyer AI Design: artwork only — do not call language/copy models. */
+  skip_copy?: boolean
 }
 
 export async function callAiWorkerGenerateProduct(
@@ -47,6 +49,7 @@ export async function callAiWorkerGenerateProduct(
       print_position: input.print_position ?? "front",
       base_cost: input.base_cost ?? null,
       generation_request_id: input.generation_request_id ?? null,
+      skip_copy: input.skip_copy ?? false,
     }),
   })
 

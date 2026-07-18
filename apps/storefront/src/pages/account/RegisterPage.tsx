@@ -7,7 +7,7 @@ import { safeReturnTo } from "./account-utils"
 import { Card } from "../../components/ui/Card"
 
 export function RegisterPage({ cartCount }: { cartCount: number }) {
-  const { settings, marketplaceMode } = useBuyerPageSettings({ marketplace: true })
+  const { settings, marketplaceMode } = useBuyerPageSettings()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const auth = useBuyerAuth()

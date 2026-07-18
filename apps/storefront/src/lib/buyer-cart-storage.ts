@@ -22,6 +22,39 @@ export const getBuyerCartIdentity = (
 export const getScopedBuyerCartStorageKey = (storeId: string, identity: string) =>
   `citigoo:${storeId}:cart:${encodeURIComponent(identity)}`
 
+export const getBuyerGuestCartIdentity = (storage: ReadWriteStorage) => {
+  const existing = storage.getItem(GUEST_SESSION_KEY)
+  return existing ? `guest:${existing}` : null
+}
+
+export const resolveBuyerCartStorageId = (
+  storeId: string,
+  customerId: string | null | undefined,
+  storage: ReadWriteStorage
+) => {
+  const preferredIdentity = getBuyerCartIdentity(customerId, storage)
+  const preferredKey = getScopedBuyerCartStorageKey(storeId, preferredIdentity)
+  const preferredCartId = storage.getItem(preferredKey)
+  if (preferredCartId) {
+    return { cartId: preferredCartId, identity: preferredIdentity, storageKey: preferredKey }
+  }
+
+  // Logged-in checkout previously missed items written into the guest cart key.
+  if (customerId) {
+    const guestIdentity = getBuyerGuestCartIdentity(storage)
+    if (guestIdentity) {
+      const guestKey = getScopedBuyerCartStorageKey(storeId, guestIdentity)
+      const guestCartId = storage.getItem(guestKey)
+      if (guestCartId) {
+        storage.setItem(preferredKey, guestCartId)
+        return { cartId: guestCartId, identity: preferredIdentity, storageKey: preferredKey }
+      }
+    }
+  }
+
+  return { cartId: null, identity: preferredIdentity, storageKey: preferredKey }
+}
+
 export const removeLegacySharedCartKey = (storeId: string, storage: ReadWriteStorage) => {
   storage.removeItem(`citigoo:${storeId}:cart_id`)
 }

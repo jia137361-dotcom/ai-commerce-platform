@@ -35,19 +35,17 @@ def _calculate_tiered_markup(
     return round(markup_max - t * (markup_max - markup_min), 2)
 
 
-def _mock_copy(prompt: str, product_name: str, base_cost: float) -> dict[str, Any]:
+def build_template_copy(prompt: str, product_name: str, base_cost: float) -> dict[str, Any]:
+    """Local title/tags without calling any language model."""
     settings = get_settings()
     markup = _calculate_tiered_markup(
         base_cost, settings.usd_cny_rate, settings.price_markup_min, settings.price_markup_max
     )
     price = round((base_cost / settings.usd_cny_rate) * markup, 2)
-    title = f"Custom Design — {prompt[:60]}".strip()
-    description = (
-        f"Custom {product_name} featuring your design: {prompt}. "
-        "Made to order using the selected fulfillment product."
-    )
+    title = f"AI artwork — {prompt[:60]}".strip()
+    description = f"AI-generated artwork from prompt: {prompt}"
     product_tag = product_name.strip().lower() or "product"
-    tags = ["custom", "pod", "ai-generated", product_tag]
+    tags = ["ai-artwork", "buyer-design", product_tag]
     return {
         "title": title,
         "description": description,
@@ -55,6 +53,10 @@ def _mock_copy(prompt: str, product_name: str, base_cost: float) -> dict[str, An
         "seo": {"title": title[:60], "description": description[:155]},
         "price_suggestion": price,
     }
+
+
+# Backward-compatible alias used by mock/fallback paths.
+_mock_copy = build_template_copy
 
 
 async def generate_product_copy(

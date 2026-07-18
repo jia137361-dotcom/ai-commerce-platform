@@ -50,7 +50,20 @@ export const normalizeProduct = (product: any) => ({
   medusa_variant_id: product.medusa_variant_id,
   requires_shipping: resolveProductRequiresShipping(product),
   supported_region_ids: resolveProductSupportedRegionIds(product),
-  is_cart_addable: product.status === "published" && Boolean(product.medusa_variant_id),
+  is_cart_addable: (() => {
+    const hasVariant = Boolean(product.medusa_variant_id)
+    if (!hasVariant) return false
+    if (product.status === "published") return true
+    const metadata = product.metadata && typeof product.metadata === "object" ? product.metadata : null
+    return (
+      metadata?.buyer_design === true ||
+      metadata?.design_source === "buyer_sdk" ||
+      (Array.isArray(product.tags) &&
+        product.tags.some(
+          (tag: unknown) => tag === "buyer-diy" || tag === "my-design" || tag === "custom-design"
+        ))
+    )
+  })(),
   design_image_url: product.design_image_url,
   mockup_image_url: product.mockup_image_url,
   print_file_url: product.print_file_url,

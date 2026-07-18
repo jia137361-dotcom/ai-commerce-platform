@@ -12,4 +12,12 @@ describe("checkout country and shipping mapping", () => {
     expect(shippingUnavailableMessage(new Error("Shipping options with IDs so_1 do not have a price")))
       .toBe("Shipping method unavailable for this cart/address. Choose another country or contact the store.")
   })
+
+  it("maps missing cart shipping method races to a retryable message", () => {
+    expect(
+      shippingUnavailableMessage(
+        new Error('ShippingMethod with id "casm_01KXGCH9EAV7SCJCXDJ1BHCNS0" not found')
+      )
+    ).toBe("Shipping selection was interrupted. Save the address again or re-select a delivery method.")
+  })
 })
