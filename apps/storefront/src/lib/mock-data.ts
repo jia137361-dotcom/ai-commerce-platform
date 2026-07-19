@@ -39,6 +39,8 @@ export type StoreProduct = {
   storeId?: string
   storeName?: string
   storeSlug?: string
+  shipFromCountry?: string | null
+  shipFromLabel?: string | null
 }
 
 export type BuyerProductVariant = {

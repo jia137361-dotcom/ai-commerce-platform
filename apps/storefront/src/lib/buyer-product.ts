@@ -48,6 +48,8 @@ export type BuyerProductApiInput = {
   basic_product_id?: string | null
   view_id?: string | null
   design_type?: number | null
+  ship_from_country?: string | null
+  ship_from_label?: string | null
   is_cart_addable?: boolean
   average_rating?: number | null
   review_count?: number
@@ -141,6 +143,8 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     basicProductId: product.basic_product_id ?? undefined,
     viewId: product.view_id ?? undefined,
     designType: product.design_type ?? undefined,
+    shipFromCountry: product.ship_from_country ?? null,
+    shipFromLabel: product.ship_from_label ?? null,
     hasDesigner: Boolean(product.basic_product_id || product.supplier_product_id),
     isCartAddable: Boolean(product.is_cart_addable && variants.some((variant) => variant.isPurchasable)),
     averageRating: product.average_rating ?? null,

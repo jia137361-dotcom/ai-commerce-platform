@@ -101,6 +101,8 @@ Fields:
 | `prompt` | text, nullable | AI prompt or generation context. |
 | `platform_product_id` | text, nullable | Optional reference to a global platform product. |
 | `supplier_product_id` | text, nullable | Supplier product id, either provided directly or inherited from a platform product. |
+| `ship_from_country` | text, nullable | ISO 3166-1 alpha-2 country code for shipping origin. Inherited from supplier. |
+| `metadata.supported_region_ids` | json, nullable | Array of region IDs where this product can be sold. Inherited from supplier's `ship_to_regions`. |
 | `medusa_product_id` | text, nullable | Explicit bridge to a native Medusa product. |
 | `medusa_variant_id` | text, nullable | Explicit bridge to the native Medusa variant used for cart line items. |
 | `design_image_url` | text, nullable | Design image URL. |

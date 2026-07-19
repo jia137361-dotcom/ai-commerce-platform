@@ -27,6 +27,31 @@ export const sendError = (
   })
 }
 
+const getCountryLabel = (code: string | null): string | null => {
+  if (!code) return null
+  const labels: Record<string, string> = {
+    US: "United States",
+    CN: "China",
+    GB: "United Kingdom",
+    UK: "United Kingdom",
+    DE: "Germany",
+    JP: "Japan",
+    FR: "France",
+    IT: "Italy",
+    CA: "Canada",
+    AU: "Australia",
+    RU: "Russia",
+    ES: "Spain",
+    KR: "South Korea",
+    PH: "Philippines",
+    MX: "Mexico",
+    PL: "Poland",
+    SG: "Singapore",
+    EU: "Europe",
+  }
+  return labels[code] || code
+}
+
 export const normalizeProduct = (product: any) => ({
   product_id: product.id,
   store_id: product.store_id,
@@ -46,6 +71,8 @@ export const normalizeProduct = (product: any) => ({
   supplier_color_id: product.supplier_color_id,
   view_id: product.view_id,
   design_type: product.design_type,
+  ship_from_country: product.ship_from_country ?? null,
+  ship_from_label: getCountryLabel(product.ship_from_country),
   medusa_product_id: product.medusa_product_id,
   medusa_variant_id: product.medusa_variant_id,
   requires_shipping: resolveProductRequiresShipping(product),

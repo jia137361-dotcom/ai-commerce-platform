@@ -11,12 +11,19 @@ import {
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: storeId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
+  const shipFrom = req.query.ship_from as string | undefined
+
+  const filters: Record<string, unknown> = {
+    store_id: storeId,
+    status: "published"
+  }
+
+  if (shipFrom) {
+    filters.ship_from_country = shipFrom
+  }
 
   const products = await storeCoreService.listProducts(
-    {
-      store_id: storeId,
-      status: "published"
-    },
+    filters,
     {
       order: {
         created_at: "DESC"

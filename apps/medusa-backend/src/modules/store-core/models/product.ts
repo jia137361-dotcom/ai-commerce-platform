@@ -19,6 +19,7 @@ const Product = model.define("mc_product", {
   supplier_color_id: model.text().nullable(),
   view_id: model.text().nullable(),
   design_type: model.number().default(1),
+  ship_from_country: model.text().nullable(),
   medusa_product_id: model.text().nullable(),
   medusa_variant_id: model.text().nullable(),
   design_image_url: model.text().nullable(),

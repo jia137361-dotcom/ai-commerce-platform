@@ -134,6 +134,7 @@ export function EditDraftPage() {
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
   const [requiresShipping, setRequiresShipping] = useState(true)
   const [supportedRegionIds, setSupportedRegionIds] = useState<string[]>([])
+  const [shipFromCountry, setShipFromCountry] = useState<string>("")
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
 
   const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
@@ -173,6 +174,7 @@ export function EditDraftPage() {
         ? p.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
         : []
     setSupportedRegionIds(savedRegionIds)
+    setShipFromCountry((p as any).ship_from_country ?? "")
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
@@ -276,6 +278,7 @@ export function EditDraftPage() {
     variants,
     requires_shipping: requiresShipping,
     supported_region_ids: supportedRegionIds,
+    ship_from_country: shipFromCountry || null,
     metadata: {
       ...(product?.metadata ?? {}),
       requires_shipping: requiresShipping,
@@ -922,6 +925,39 @@ export function EditDraftPage() {
             {!supportedRegionIds.length ? (
               <p className="mt-3 text-sm text-amber-700">Select at least one region before saving.</p>
             ) : null}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-900">Shipping origin</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Where this product ships from. This is displayed to buyers as "Ships from: [Country]".
+            </p>
+            <div className="mt-4">
+              <Label>Ship From Country</Label>
+              <select
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                value={shipFromCountry}
+                disabled={isArchived}
+                onChange={(e) => setShipFromCountry(e.target.value)}
+              >
+                <option value="">Not specified</option>
+                <option value="US">United States</option>
+                <option value="CN">China</option>
+                <option value="GB">United Kingdom</option>
+                <option value="RU">Russia</option>
+                <option value="AU">Australia</option>
+                <option value="DE">Germany</option>
+                <option value="CA">Canada</option>
+                <option value="IT">Italy</option>
+                <option value="FR">France</option>
+                <option value="ES">Spain</option>
+                <option value="KR">South Korea</option>
+                <option value="JP">Japan</option>
+                <option value="PH">Philippines</option>
+                <option value="MX">Mexico</option>
+                <option value="PL">Poland</option>
+              </select>
+            </div>
           </div>
 
           <div className="rounded-lg border border-slate-200">
