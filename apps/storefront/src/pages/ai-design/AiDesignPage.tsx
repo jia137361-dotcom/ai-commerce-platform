@@ -16,9 +16,11 @@ import {
   buildStudioEditorHref,
   setPendingStudioMaterial,
 } from "../../lib/buyer-design-handoff"
+import { getBuyerDesignGuestKey } from "../../lib/buyer-my-designs"
 import { navigateBuyer } from "../../lib/buyer-navigate"
 import { useBuyerLocale } from "../../lib/locale"
 import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
 
 type AiDesignPageProps = {
   cartCount: number
@@ -61,6 +63,9 @@ const DESIGN_STYLES: DesignStyle[] = [
 
 export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps) {
   const { t } = useBuyerLocale()
+  const auth = useBuyerAuth()
+  const customerId = auth.customer?.id ?? null
+  const materialGuestKey = () => getBuyerDesignGuestKey()
   const { settings } = useBuyerPageSettings()
   const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams()
   const productId = (productIdFromPath || search.get("productId") || "").trim()
@@ -79,7 +84,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
 
   const refreshLibrary = async () => {
     setLibraryLoading(true)
-    const result = await fetchBuyerAiMaterials()
+    const result = await fetchBuyerAiMaterials(materialGuestKey())
     setLibrary(result.data)
     if (result.error) setError((current) => current ?? result.error ?? null)
     setLibraryLoading(false)
@@ -91,7 +96,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current)
     }
-  }, [])
+  }, [customerId])
 
   const previewUrl =
     job?.designImageUrl || job?.materialUrl || job?.mockupImageUrl
@@ -115,7 +120,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
     pollRef.current = window.setInterval(() => {
       void (async () => {
         try {
-          const next = await fetchBuyerAiJob(jobId)
+          const next = await fetchBuyerAiJob(jobId, materialGuestKey())
           setJob(next)
           if (next.status === "complete" || next.status === "failed") {
             if (pollRef.current) window.clearInterval(pollRef.current)
@@ -153,6 +158,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
         productId: productId || null,
         prompt: fullPrompt,
         stylePreset: selectedStyle,
+        guestKey: materialGuestKey(),
       })
       setJob(started)
       pollJob(started.jobId)

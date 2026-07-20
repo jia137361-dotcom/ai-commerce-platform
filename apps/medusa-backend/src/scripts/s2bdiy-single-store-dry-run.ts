@@ -2,7 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import zlib from "node:zlib"
 import { execSync } from "node:child_process"
-import type { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { S2bdiyClient } from "../modules/suppliers/s2bdiy/s2bdiy-client"
 import { getS2bdiyAccessToken } from "../modules/suppliers/s2bdiy/s2bdiy-auth"
 import {

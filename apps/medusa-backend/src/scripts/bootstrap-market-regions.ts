@@ -1,4 +1,4 @@
-import type { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { ensureMarketRegions } from "../lib/product-regions"
 import { ensureStripePaymentProvidersOnRegions } from "../lib/stripe-region-setup"
 

@@ -1,4 +1,4 @@
-import type { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../modules/buyer-refund-requests"
 import type BuyerRefundRequestsModuleService from "../modules/buyer-refund-requests/service"

@@ -2959,6 +2959,7 @@ export const startBuyerAiGenerate = async (input: {
   prompt: string
   productId?: string | null
   stylePreset?: string
+  guestKey?: string | null
 }): Promise<BuyerAiJobResult> => {
   const payload = await apiFetch<ApiBuyerAiJob>("/store/ai/generate", {
     method: "POST",
@@ -2967,6 +2968,7 @@ export const startBuyerAiGenerate = async (input: {
       prompt: input.prompt,
       style_preset: input.stylePreset,
       print_position: "front",
+      guest_key: input.guestKey ?? undefined,
     }),
   })
   if (!payload.job_id) {
@@ -2975,9 +2977,15 @@ export const startBuyerAiGenerate = async (input: {
   return mapBuyerAiJob(payload)
 }
 
-export const fetchBuyerAiJob = async (jobId: string): Promise<BuyerAiJobResult> => {
+export const fetchBuyerAiJob = async (
+  jobId: string,
+  guestKey?: string | null
+): Promise<BuyerAiJobResult> => {
+  const params = new URLSearchParams()
+  if (guestKey) params.set("guest_key", guestKey)
+  const query = params.toString()
   const payload = await apiFetch<ApiBuyerAiJob>(
-    `/store/ai/jobs/${encodeURIComponent(jobId)}`
+    `/store/ai/jobs/${encodeURIComponent(jobId)}${query ? `?${query}` : ""}`
   )
   return mapBuyerAiJob(payload)
 }
@@ -2998,8 +3006,13 @@ export type BuyerAiMaterial = {
   mockMode?: boolean
 }
 
-export const fetchBuyerAiMaterials = async (): Promise<LoadResult<BuyerAiMaterial[]>> => {
+export const fetchBuyerAiMaterials = async (
+  guestKey?: string | null
+): Promise<LoadResult<BuyerAiMaterial[]>> => {
   try {
+    const params = new URLSearchParams()
+    if (guestKey) params.set("guest_key", guestKey)
+    const query = params.toString()
     const payload = await apiFetch<{
       materials?: Array<{
         id?: string
@@ -3016,7 +3029,7 @@ export const fetchBuyerAiMaterials = async (): Promise<LoadResult<BuyerAiMateria
         editor_path?: string | null
         mock_mode?: boolean
       }>
-    }>("/store/ai/materials")
+    }>(`/store/ai/materials${query ? `?${query}` : ""}`)
     return {
       data: (payload.materials ?? []).map((row) => ({
         id: String(row.id ?? row.job_id ?? ""),

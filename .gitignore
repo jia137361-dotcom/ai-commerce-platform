@@ -22,6 +22,7 @@ github仓库.txt
 .DS_Store
 scripts/*.local.env
 scripts/dev3-full-backend-pipeline.local.env
+scripts/s2bdiy-products.json
 
 .tmp/
 apps/medusa-backend/static/logos/

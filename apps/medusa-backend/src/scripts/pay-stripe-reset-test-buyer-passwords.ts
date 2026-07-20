@@ -1,4 +1,4 @@
-import type { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { Modules } from "@medusajs/framework/utils"
 
 const TARGET_BUYER_EMAILS = [

@@ -1,4 +1,4 @@
-import type { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { getS2bdiyConfig } from "../modules/suppliers/s2bdiy/config"
 import { syncBasicProduct } from "../modules/suppliers/services/supplier-sync-service"
 import { STORE_CORE_MODULE } from "../modules/store-core"

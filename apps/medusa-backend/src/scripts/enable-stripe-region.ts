@@ -1,4 +1,4 @@
-import type { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { ensureStripePaymentProvidersOnRegions } from "../lib/stripe-region-setup"
 
 export default async function enableStripeRegion({ container }: ExecArgs) {

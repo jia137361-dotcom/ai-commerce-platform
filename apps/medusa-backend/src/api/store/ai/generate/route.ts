@@ -9,6 +9,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import { enqueueBuyerAiGenerationJob } from "../../../../lib/ai-generation/buyer-generate"
 import { normalizeAiJobResponse } from "../../../../lib/ai-generation/run-job"
+import { resolveBuyerAiRequestOwner } from "../../../../lib/buyer-ai-request"
 import { getStoreCoreService, requireText, sendError } from "../../../_helpers/store-core"
 
 type GenerateBody = {
@@ -16,6 +17,7 @@ type GenerateBody = {
   product_id?: string
   style_preset?: string
   print_position?: string
+  guest_key?: string
 }
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
@@ -42,11 +44,15 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       }
     }
 
+    const owner = resolveBuyerAiRequestOwner(req)
+
     const job = await enqueueBuyerAiGenerationJob(req.scope, storeId, {
       prompt,
       product_id: productId,
       style_preset: requireText(body.style_preset),
       print_position: requireText(body.print_position) ?? "front",
+      customer_id: owner.customer_id,
+      guest_key: owner.guest_key,
     })
 
     return res.status(202).json(normalizeAiJobResponse(job as Record<string, unknown>))

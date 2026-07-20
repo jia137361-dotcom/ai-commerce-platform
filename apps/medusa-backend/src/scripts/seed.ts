@@ -1,4 +1,4 @@
-import { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import StoreCoreModuleService from "../modules/store-core/service"
 import { DEFAULT_STORE_ID } from "../lib/store-context"
@@ -380,6 +380,13 @@ const platformDesignTemplates: PlatformDesignTemplateSeed[] = [
   }
 ]
 
+const toSupplierCreatePayload = (supplier: SupplierSeed) => ({
+  ...supplier,
+  ship_to_regions: supplier.ship_to_regions
+    ? (supplier.ship_to_regions as unknown as Record<string, unknown>)
+    : null,
+})
+
 const createMissing = async <T extends { id: string }>(
   existingIds: Set<string>,
   items: T[],
@@ -393,13 +400,13 @@ const createMissing = async <T extends { id: string }>(
 }
 
 export default async function seedStoreCore({ container }: ExecArgs) {
-  const storeCoreService = container.resolve<StoreCoreModuleService>(STORE_CORE_MODULE)
+  const storeCoreService = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
 
   const existingStores = await storeCoreService.listStores({
     id: [DEFAULT_STORE_ID, "test_store"]
   })
 
-  const existingIds = new Set(existingStores.map((store) => store.id))
+  const existingIds = new Set<string>(existingStores.map((store) => String(store.id)))
 
   if (!existingIds.has(DEFAULT_STORE_ID)) {
     await storeCoreService.createStores({
@@ -422,8 +429,8 @@ export default async function seedStoreCore({ container }: ExecArgs) {
   const existingPlatformProducts = await storeCoreService.listPlatformProducts({
     id: platformProducts.map((product) => product.id)
   })
-  const existingPlatformProductIds = new Set(
-    existingPlatformProducts.map((product) => product.id)
+  const existingPlatformProductIds = new Set<string>(
+    existingPlatformProducts.map((product) => String(product.id))
   )
   await createMissing(existingPlatformProductIds, platformProducts, (items) =>
     storeCoreService.createPlatformProducts(items)
@@ -433,16 +440,16 @@ export default async function seedStoreCore({ container }: ExecArgs) {
     id: suppliers.map((supplier) => supplier.id)
   })
   await createMissing(
-    new Set(existingSuppliers.map((supplier) => supplier.id)),
+    new Set<string>(existingSuppliers.map((supplier) => String(supplier.id))),
     suppliers,
-    (items) => storeCoreService.createSuppliers(items)
+    (items) => storeCoreService.createSuppliers(items.map(toSupplierCreatePayload))
   )
 
   const existingSupplierProducts = await storeCoreService.listSupplierProducts({
     id: supplierProducts.map((product) => product.id)
   })
   await createMissing(
-    new Set(existingSupplierProducts.map((product) => product.id)),
+    new Set<string>(existingSupplierProducts.map((product) => String(product.id))),
     supplierProducts,
     (items) => storeCoreService.createSupplierProducts(items)
   )
@@ -452,7 +459,7 @@ export default async function seedStoreCore({ container }: ExecArgs) {
       id: supplierProductVariants.map((variant) => variant.id)
     })
   await createMissing(
-    new Set(existingSupplierProductVariants.map((variant) => variant.id)),
+    new Set<string>(existingSupplierProductVariants.map((variant) => String(variant.id))),
     supplierProductVariants,
     (items) => storeCoreService.createSupplierProductVariants(items)
   )
@@ -461,7 +468,7 @@ export default async function seedStoreCore({ container }: ExecArgs) {
     id: supplierPrintSpecs.map((spec) => spec.id)
   })
   await createMissing(
-    new Set(existingSupplierPrintSpecs.map((spec) => spec.id)),
+    new Set<string>(existingSupplierPrintSpecs.map((spec) => String(spec.id))),
     supplierPrintSpecs,
     (items) => storeCoreService.createSupplierPrintSpecs(items)
   )
@@ -471,7 +478,7 @@ export default async function seedStoreCore({ container }: ExecArgs) {
       id: platformDesignTemplates.map((template) => template.id)
     })
   await createMissing(
-    new Set(existingPlatformDesignTemplates.map((template) => template.id)),
+    new Set<string>(existingPlatformDesignTemplates.map((template) => String(template.id))),
     platformDesignTemplates,
     (items) => storeCoreService.createPlatformDesignTemplates(items)
   )

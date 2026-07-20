@@ -12,6 +12,11 @@ import { publishAiJobEvent } from "./job-events"
 import { updateAiJobRecord } from "./run-job"
 import { requireText } from "../../api/_helpers/store-core"
 import { resolveBasicProductIdForMcProduct } from "../s2bdiy/product-design-config"
+import {
+  buyerOwnsLegacyResource,
+  readBuyerResourceOwner,
+  type BuyerResourceOwnerFields,
+} from "../buyer-resource-ownership"
 
 const ESTIMATED_SECONDS = 45
 
@@ -21,6 +26,13 @@ export type BuyerAiGeneratePayload = {
   product_id?: string | null
   style_preset?: string | null
   print_position?: string
+  customer_id?: string | null
+  guest_key?: string | null
+}
+
+export type BuyerAiMaterialListContext = {
+  customerId: string | null
+  guestKey: string | null
 }
 
 export type BuyerAiMaterial = {
@@ -44,16 +56,29 @@ function templateTitle(prompt: string) {
   return clipped ? `AI artwork — ${clipped}` : "AI artwork"
 }
 
-async function tryUploadMaterial(
+export type BuyerMaterialUploadResult =
+  | { ok: true; material_id: string; material_url: string | null }
+  | { ok: false; error: string }
+
+/** Upload artwork to S2BDIY so it appears in Studio's material panel. */
+export async function uploadBuyerArtworkToS2bdiy(
   imageUrl: string,
   name: string
-): Promise<{ material_id: string; material_url: string | null } | null> {
-  if (isS2bdiyMockMode() || !getS2bdiyConfig()) {
-    return null
+): Promise<BuyerMaterialUploadResult> {
+  if (isS2bdiyMockMode()) {
+    return { ok: false, error: "S2BDIY_MOCK_MODE=true — turn off mock to upload Studio materials" }
+  }
+  if (!getS2bdiyConfig()) {
+    return {
+      ok: false,
+      error: "S2BDIY not configured — set S2BDIY_APP_KEY / S2BDIY_APP_SECRET",
+    }
   }
   try {
     const config = getS2bdiyConfig()
-    if (!config) return null
+    if (!config) {
+      return { ok: false, error: "S2BDIY not configured" }
+    }
     const client = new S2bdiyClient(config)
     const { buffer, filename } = await fetchPrintFileBuffer(imageUrl)
     const uploaded = await uploadMaterialClient(client, {
@@ -62,16 +87,30 @@ async function tryUploadMaterial(
       name: name.slice(0, 80) || "buyer-ai-design",
     })
     return {
+      ok: true,
       material_id: String(uploaded.id),
       material_url: uploaded.image_url ?? null,
     }
   } catch (error) {
-    console.warn(
-      "[buyer-ai] material upload skipped:",
-      error instanceof Error ? error.message : String(error)
-    )
-    return null
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn("[buyer-ai] material upload failed:", message)
+    return { ok: false, error: message }
   }
+}
+
+async function tryUploadMaterial(
+  imageUrl: string,
+  name: string
+): Promise<{
+  material_id: string | null
+  material_url: string | null
+  upload_error?: string
+}> {
+  const uploaded = await uploadBuyerArtworkToS2bdiy(imageUrl, name)
+  if (uploaded.ok === true) {
+    return { material_id: uploaded.material_id, material_url: uploaded.material_url }
+  }
+  return { material_id: null, material_url: null, upload_error: uploaded.error }
 }
 
 export async function runBuyerAiGenerationJob(
@@ -154,18 +193,24 @@ export async function runBuyerAiGenerationJob(
 
     const title = templateTitle(prompt)
     const uploadSource = generated.print_file_url || generated.design_image_url
-    const material = uploadSource ? await tryUploadMaterial(uploadSource, title) : null
+    const material = uploadSource
+      ? await tryUploadMaterial(uploadSource, title)
+      : { material_id: null, material_url: null, upload_error: "no artwork url to upload" }
+
+    if (material.upload_error) {
+      console.warn(`[buyer-ai] job ${jobId} Studio material upload skipped: ${material.upload_error}`)
+    }
 
     const basicProductId = product
       ? await resolveBasicProductIdForMcProduct(storeCoreService, product)
       : null
 
     const editorPath =
-      productId && material?.material_id
+      productId && material.material_id
         ? `/design/${encodeURIComponent(productId)}?materialId=${encodeURIComponent(material.material_id)}`
         : productId
           ? `/design/${encodeURIComponent(productId)}`
-          : material?.material_id
+          : material.material_id
             ? `/studio`
             : "/studio"
 
@@ -178,8 +223,9 @@ export async function runBuyerAiGenerationJob(
       mockup_image_url: generated.mockup_image_url,
       title,
       prompt,
-      material_id: material?.material_id ?? null,
-      material_url: material?.material_url ?? generated.design_image_url ?? null,
+      material_id: material.material_id,
+      material_url: material.material_url ?? generated.design_image_url ?? null,
+      material_upload_error: material.upload_error ?? null,
       basic_product_id: basicProductId,
       editor_path: editorPath,
       mock_mode: Boolean(generated.mock_mode),
@@ -198,18 +244,18 @@ export async function runBuyerAiGenerationJob(
       status: "complete",
       progress: 100,
       current_step: "complete",
-      product_id: productId || null,
+      product_id: null,
       result,
       error: null,
     })
     publishAiJobEvent(jobId, {
       type: "complete",
-      product_id: productId || null,
+      product_id: null,
       generation: {
         design_image_url: generated.design_image_url,
         print_file_url: generated.print_file_url,
         mockup_image_url: generated.mockup_image_url,
-        material_id: material?.material_id ?? null,
+        material_id: material.material_id,
         editor_path: result.editor_path,
         title,
       },
@@ -225,6 +271,26 @@ export async function runBuyerAiGenerationJob(
   }
 }
 
+function readJobOwner(job: Record<string, unknown>): BuyerResourceOwnerFields {
+  const payload =
+    job.payload && typeof job.payload === "object"
+      ? (job.payload as Record<string, unknown>)
+      : {}
+  const metadata =
+    job.metadata && typeof job.metadata === "object"
+      ? (job.metadata as Record<string, unknown>)
+      : {}
+  return readBuyerResourceOwner(payload, metadata)
+}
+
+export function buyerOwnsAiMaterial(
+  job: Record<string, unknown>,
+  customerId: string | null,
+  guestKey: string | null
+) {
+  return buyerOwnsLegacyResource(readJobOwner(job), customerId, guestKey)
+}
+
 export async function enqueueBuyerAiGenerationJob(
   container: MedusaContainer,
   storeId: string,
@@ -232,6 +298,10 @@ export async function enqueueBuyerAiGenerationJob(
 ) {
   const storeCoreService = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
   const productId = requireText(payload.product_id) || null
+  const owner = {
+    customer_id: requireText(payload.customer_id),
+    guest_key: requireText(payload.guest_key),
+  }
 
   const job = await storeCoreService.createAiGenerationJobs({
     store_id: storeId,
@@ -242,13 +312,22 @@ export async function enqueueBuyerAiGenerationJob(
     payload: {
       ...payload,
       product_id: productId,
+      customer_id: owner.customer_id,
+      guest_key: owner.guest_key,
       buyer_diy: true,
       skip_copy: true,
+      library_item: true,
     },
     result: null,
     error: null,
-    product_id: productId,
-    metadata: { source: "buyer_ai_design", skip_copy: true },
+    product_id: null,
+    metadata: {
+      source: "buyer_ai_design",
+      skip_copy: true,
+      library_item: true,
+      customer_id: owner.customer_id,
+      guest_key: owner.guest_key,
+    },
   })
 
   setImmediate(() => {
@@ -320,14 +399,20 @@ export function mapBuyerAiMaterial(job: Record<string, unknown>): BuyerAiMateria
 export async function listBuyerAiMaterials(
   storeCoreService: StoreCoreModuleService,
   storeId: string,
-  limit = 48
+  limit = 48,
+  context?: BuyerAiMaterialListContext
 ): Promise<BuyerAiMaterial[]> {
   const jobs = (await storeCoreService.listAiGenerationJobs(
     { store_id: storeId, status: "complete" },
-    { order: { created_at: "DESC" }, take: Math.min(Math.max(limit, 1), 100) }
+    { order: { created_at: "DESC" }, take: Math.min(Math.max(limit * 4, limit), 200) }
   )) as Array<Record<string, unknown>>
 
+  const customerId = context?.customerId ?? null
+  const guestKey = context?.guestKey ?? null
+
   return jobs
+    .filter((job) => buyerOwnsAiMaterial(job, customerId, guestKey))
     .map((job) => mapBuyerAiMaterial(job))
     .filter((item): item is BuyerAiMaterial => Boolean(item))
+    .slice(0, Math.min(Math.max(limit, 1), 100))
 }

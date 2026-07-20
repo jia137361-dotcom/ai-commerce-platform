@@ -8,6 +8,10 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../lib/store-context"
 import { getStoreCoreService } from "../../_helpers/store-core"
 import { readString } from "../../../lib/product-cart-bridge"
+import {
+  buyerOwnsResource,
+  readBuyerResourceOwner,
+} from "../../../lib/buyer-resource-ownership"
 
 type AuthenticatedRequest = MedusaRequest & {
   auth_context?: { actor_id?: string }
@@ -21,30 +25,13 @@ function isBuyerDesign(product: Record<string, unknown>) {
   return metadata.buyer_design === true
 }
 
-/** Exclusive ownership: logged-out guests never see designs already claimed by a customer. */
+/** @deprecated Import buyerOwnsResource + readBuyerResourceOwner instead. */
 export function buyerOwnsDesign(
   metadata: Record<string, unknown>,
   customerId: string | null,
   guestKey: string | null
 ) {
-  const ownerCustomer =
-    typeof metadata.customer_id === "string" && metadata.customer_id.trim()
-      ? metadata.customer_id.trim()
-      : null
-  const ownerGuest =
-    typeof metadata.guest_key === "string" && metadata.guest_key.trim()
-      ? metadata.guest_key.trim()
-      : null
-
-  if (customerId) {
-    if (ownerCustomer === customerId) return true
-    // Allow claiming guest-only drafts from this browser after sign-in.
-    return !ownerCustomer && Boolean(guestKey) && ownerGuest === guestKey
-  }
-  if (guestKey) {
-    return !ownerCustomer && ownerGuest === guestKey
-  }
-  return false
+  return buyerOwnsResource(readBuyerResourceOwner(metadata), customerId, guestKey)
 }
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {

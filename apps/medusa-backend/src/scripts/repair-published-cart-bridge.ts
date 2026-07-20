@@ -1,4 +1,4 @@
-import type { ExecArgs } from "@medusajs/framework/types"
+import type { ExecArgs } from "./medusa-exec-args"
 import { ensureDefaultSalesChannelStockLocation, ensureNativeBridgeCartable } from "../lib/ensure-native-bridge-cartable"
 import { resolveNativeBridgeForPublish } from "../lib/native-product-bridge"
 import { readString } from "../lib/product-cart-bridge"
