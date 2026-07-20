@@ -174,9 +174,7 @@ export function EditDraftPage() {
         ? p.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
         : []
     setSupportedRegionIds(savedRegionIds)
-    setShipFromCountry(
-      typeof p.ship_from_country === "string" ? p.ship_from_country.toUpperCase() : ""
-    )
+    setShipFromCountry(p.ship_from_country ?? "")
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
@@ -280,7 +278,7 @@ export function EditDraftPage() {
     variants,
     requires_shipping: requiresShipping,
     supported_region_ids: supportedRegionIds,
-    ship_from_country: shipFromCountry.trim() ? shipFromCountry.trim().toUpperCase() : null,
+    ship_from_country: shipFromCountry || null,
     metadata: {
       ...(product?.metadata ?? {}),
       requires_shipping: requiresShipping,
@@ -874,20 +872,6 @@ export function EditDraftPage() {
                 </span>
               </span>
             </label>
-            <div className="mt-4">
-              <Label>Ship from country</Label>
-              <Input
-                className="mt-1"
-                value={shipFromCountry}
-                disabled={isArchived}
-                placeholder="e.g. US, CN, EU"
-                maxLength={8}
-                onChange={(e) => setShipFromCountry(e.target.value.toUpperCase())}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Origin shown to buyers (ISO-style code such as US / CN / EU).
-              </p>
-            </div>
           </div>
 
           <div className="rounded-lg border border-slate-200 p-4">
@@ -941,6 +925,39 @@ export function EditDraftPage() {
             {!supportedRegionIds.length ? (
               <p className="mt-3 text-sm text-amber-700">Select at least one region before saving.</p>
             ) : null}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-900">Shipping origin</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Where this product ships from. This is displayed to buyers as &quot;Ships from: [Country]&quot;.
+            </p>
+            <div className="mt-4">
+              <Label>Ship From Country</Label>
+              <select
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                value={shipFromCountry}
+                disabled={isArchived}
+                onChange={(e) => setShipFromCountry(e.target.value)}
+              >
+                <option value="">Not specified</option>
+                <option value="US">United States</option>
+                <option value="CN">China</option>
+                <option value="GB">United Kingdom</option>
+                <option value="RU">Russia</option>
+                <option value="AU">Australia</option>
+                <option value="DE">Germany</option>
+                <option value="CA">Canada</option>
+                <option value="IT">Italy</option>
+                <option value="FR">France</option>
+                <option value="ES">Spain</option>
+                <option value="KR">South Korea</option>
+                <option value="JP">Japan</option>
+                <option value="PH">Philippines</option>
+                <option value="MX">Mexico</option>
+                <option value="PL">Poland</option>
+              </select>
+            </div>
           </div>
 
           <div className="rounded-lg border border-slate-200">

@@ -5,6 +5,10 @@ import { ErrorCodes } from "../../lib/errors"
 import { summarizeProductReviews } from "../../lib/product-reviews"
 import { resolveProductRequiresShipping } from "../../lib/product-shipping"
 import { resolveProductSupportedRegionIds } from "../../lib/product-regions"
+import {
+  getShipFromCountryLabel,
+  normalizeShipFromCountryCode,
+} from "../../lib/ship-from-country"
 
 export type ProductStatus = "draft" | "published" | "unpublished" | "archived"
 export type ProductSource = "manual" | "ai"
@@ -46,6 +50,8 @@ export const normalizeProduct = (product: any) => ({
   supplier_color_id: product.supplier_color_id,
   view_id: product.view_id,
   design_type: product.design_type,
+  ship_from_country: normalizeShipFromCountryCode(product.ship_from_country),
+  ship_from_label: getShipFromCountryLabel(product.ship_from_country),
   medusa_product_id: product.medusa_product_id,
   medusa_variant_id: product.medusa_variant_id,
   requires_shipping: resolveProductRequiresShipping(product),
@@ -73,10 +79,6 @@ export const normalizeProduct = (product: any) => ({
   cost: product.cost,
   variants: product.variants ?? [],
   category_ids: product.category_ids ?? [],
-  ship_from_country:
-    typeof product.ship_from_country === "string" && product.ship_from_country.trim()
-      ? product.ship_from_country.trim().toUpperCase()
-      : null,
   metadata: product.metadata ?? {},
   created_at: product.created_at,
   updated_at: product.updated_at

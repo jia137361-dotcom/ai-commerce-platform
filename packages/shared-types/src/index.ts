@@ -63,6 +63,7 @@ export type NormalizedProduct = {
   supported_region_ids?: string[]
   supported_regions?: ProductRegionSummary[]
   ship_from_country?: string | null
+  ship_from_label?: string | null
   variants?: ProductVariantRow[]
   design_image_url?: string | null
   mockup_image_url?: string | null

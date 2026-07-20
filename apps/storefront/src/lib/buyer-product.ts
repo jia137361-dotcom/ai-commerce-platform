@@ -43,6 +43,7 @@ export type BuyerProductApiInput = {
     country_codes: string[]
   }>
   ship_from_country?: string | null
+  ship_from_label?: string | null
   supplier_id?: string | null
   supplier_product_id?: string | null
   supplier_variant_id?: string | null
@@ -136,10 +137,8 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     supportedRegionIds: product.supported_region_ids,
     supportedRegions: product.supported_regions,
     supportedRegionsLabel: formatSupportedRegions(product.supported_regions),
-    shipFromCountry:
-      typeof product.ship_from_country === "string" && product.ship_from_country.trim()
-        ? product.ship_from_country.trim().toUpperCase()
-        : null,
+    shipFromCountry: product.ship_from_country ?? null,
+    shipFromLabel: product.ship_from_label ?? null,
     supplierId: product.supplier_id ?? undefined,
     supplierProductId: product.supplier_product_id ?? undefined,
     supplierVariantId: product.supplier_variant_id ?? undefined,

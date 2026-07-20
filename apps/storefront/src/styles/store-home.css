@@ -1368,13 +1368,16 @@
   font-size: 12px;
 }
 
-.buyer-shop-product-ship-from {
-  display: inline-flex;
-  color: #6b7280;
-}
-
 .buyer-shop-product-meta small {
   color: var(--buyer-text-muted);
+}
+
+.buyer-shop-product-ship-from {
+  display: block;
+  margin-top: 4px;
+  color: var(--buyer-text-muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .buyer-shop-product-body .buyer-ui-money {

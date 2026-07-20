@@ -1,6 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../lib/store-context"
 import { pickProductUpdateData } from "../../../lib/admin-products"
+import { normalizeShipFromCountryCode } from "../../../lib/ship-from-country"
 import {
   mergeRequiresShippingIntoMetadata,
   resolveProductRequiresShipping,
@@ -102,10 +103,12 @@ export const putStoreProductByIdHandler = async (req: MedusaRequest, res: Medusa
     const raw = data.ship_from_country
     if (raw === null || raw === "") {
       data.ship_from_country = null
-    } else if (typeof raw === "string" && raw.trim()) {
-      data.ship_from_country = raw.trim().toUpperCase()
     } else {
-      return sendError(res, 400, "VALIDATION_ERROR", "ship_from_country must be a string or null")
+      const normalized = normalizeShipFromCountryCode(raw)
+      if (!normalized) {
+        return sendError(res, 400, "VALIDATION_ERROR", "ship_from_country must be a string or null")
+      }
+      data.ship_from_country = normalized
     }
   }
 

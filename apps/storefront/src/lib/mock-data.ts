@@ -25,6 +25,7 @@ export type StoreProduct = {
   supportedRegions?: ProductRegionSummary[]
   supportedRegionsLabel?: string
   shipFromCountry?: string | null
+  shipFromLabel?: string | null
   supplierId?: string
   supplierProductId?: string
   supplierVariantId?: string
