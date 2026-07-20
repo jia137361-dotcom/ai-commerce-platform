@@ -22,6 +22,9 @@ export default defineConfig({
   admin: { disable: true },
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    databaseDriverOptions: {
+      connection: { ssl: false },
+    },
     redisUrl: process.env.REDIS_URL,
     http: {
       storeCors:

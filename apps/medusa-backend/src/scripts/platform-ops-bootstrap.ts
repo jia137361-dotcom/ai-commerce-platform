@@ -1,4 +1,3 @@
-import type { ExecArgs } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
@@ -6,7 +5,7 @@ import type StoreCoreModuleService from "../modules/store-core/service"
 const DEFAULT_OPERATOR_EMAIL =
   process.env.PLATFORM_OPS_OPERATOR_EMAIL || "1355026750@qq.com"
 
-export default async function platformOpsBootstrap({ container }: ExecArgs) {
+export default async function platformOpsBootstrap({ container }: { container: any }) {
   const userModule = container.resolve(Modules.USER) as {
     listUsers: (filters: { email: string }) => Promise<Array<{ id: string; email?: string }>>
   }

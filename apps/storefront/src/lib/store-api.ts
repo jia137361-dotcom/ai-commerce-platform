@@ -107,7 +107,7 @@ const isPlaceholderValue = (value: string) =>
 
 export const storefrontConfig = {
   backendUrl: readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
-  publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
+  publishableKey: import.meta.env.VITE_PUBLISHABLE_API_KEY || readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY"),
   storeId: readEnv("VITE_DEFAULT_STORE_ID", readEnv("NEXT_PUBLIC_STORE_ID", "default_store")),
 }
 

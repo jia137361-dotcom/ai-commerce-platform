@@ -5,6 +5,13 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
+ARG VITE_MEDUSA_URL=http://localhost:9000
+ARG VITE_STRIPE_PK=pk_test_xxx
+ARG VITE_STORE_ID=default_store
+ENV VITE_MEDUSA_URL=$VITE_MEDUSA_URL
+ENV VITE_STRIPE_PK=$VITE_STRIPE_PK
+ENV VITE_STORE_ID=$VITE_STORE_ID
+
 # 复制根 package 文件和 workspaces 配置
 COPY package*.json ./
 

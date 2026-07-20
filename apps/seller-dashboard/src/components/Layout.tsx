@@ -8,6 +8,7 @@ import type { StoreNotification } from "@ai-commerce/shared-types"
 
 const NAV = [
   { to: "/", label: "Overview", end: true },
+  { to: "/products", label: "Products" },
   { to: "/orders", label: "Orders" },
   { to: "/messages", label: "Inbox" },
   { to: "/reviews", label: "Reviews" },

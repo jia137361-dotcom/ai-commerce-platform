@@ -31,6 +31,7 @@ type CreateDraftProductBody = {
   medusa_variant_id?: string | null
   tags?: string[]
   category_ids?: string[]
+  supported_region_ids?: string[]
   price?: number | string
   cost?: number | string
   variants?: unknown[]

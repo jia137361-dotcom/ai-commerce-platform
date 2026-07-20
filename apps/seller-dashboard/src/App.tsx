@@ -4,6 +4,7 @@ import { LoginPage } from "./pages/Login"
 import { RegisterPage } from "./pages/Register"
 import { OverviewPage } from "./pages/Overview"
 import { EditDraftPage } from "./pages/Products/EditDraft"
+import { ProductListPage } from "./pages/Products/ProductList"
 import { OrderListPage } from "./pages/Orders/OrderList"
 import { OrderFulfillmentPage } from "./pages/Orders/OrderFulfillment"
 import { SettingsPage } from "./pages/Settings"
@@ -34,8 +35,7 @@ export default function App() {
         <Route path="reviews" element={<ProductReviewsPage />} />
         <Route path="messages" element={<SellerStoreMessagesPage />} />
         <Route path="settings" element={<SettingsPage />} />
-        {/* Legacy deep links — middleman sellers no longer manage catalog / supply blanks */}
-        <Route path="products" element={<Navigate to="/" replace />} />
+        <Route path="products" element={<ProductListPage />} />
         <Route
           path="products/:id/edit"
           element={

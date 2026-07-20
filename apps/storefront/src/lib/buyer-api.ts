@@ -799,7 +799,7 @@ const isPlaceholderValue = (value: string) =>
 
 const config = {
   backendUrl: readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
-  publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
+  publishableKey: import.meta.env.VITE_PUBLISHABLE_API_KEY || readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY"),
   aiWorkerPublicBase: (() => {
     const explicit = readEnv("VITE_AI_WORKER_PUBLIC_BASE_URL", readEnv("NEXT_PUBLIC_AI_WORKER_PUBLIC_BASE_URL"))
     if (explicit) return explicit.replace(/\/+$/, "")

@@ -624,11 +624,12 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
           window.sessionStorage.removeItem(splitKey)
         }
       }
-      if (split?.checkoutCartId === cart.id && split.sourceCartId) {
+      const checkoutSplit = split
+      if (checkoutSplit && checkoutSplit.checkoutCartId === cart.id && checkoutSplit.sourceCartId) {
         const failedLineIds: string[] = []
-        for (const lineId of split.selectedLineIds ?? []) {
+        for (const lineId of checkoutSplit.selectedLineIds ?? []) {
           try {
-            await deleteCartLineItem(split.sourceCartId, lineId)
+            await deleteCartLineItem(checkoutSplit.sourceCartId, lineId)
           } catch (cleanupError) {
             failedLineIds.push(lineId)
             console.warn("[checkout] unable to remove purchased source line", {
@@ -642,13 +643,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
           window.sessionStorage.setItem(
             splitKey,
             JSON.stringify({
-              ...split,
+              ...checkoutSplit,
               selectedLineIds: failedLineIds,
             })
           )
-          window.localStorage.setItem(cartStorageKey, split.sourceCartId)
+          window.localStorage.setItem(cartStorageKey, checkoutSplit.sourceCartId)
         } else {
-          window.localStorage.setItem(cartStorageKey, split.sourceCartId)
+          window.localStorage.setItem(cartStorageKey, checkoutSplit.sourceCartId)
           window.sessionStorage.removeItem(splitKey)
         }
       } else {
