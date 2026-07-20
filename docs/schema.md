@@ -110,6 +110,7 @@ Fields:
 | `cost` | float, nullable | Product cost, either provided directly or inherited from a platform product. |
 | `variants` | json, nullable | Future or simple variant payload. |
 | `category_ids` | text array, nullable | Product category ids assigned to the product. |
+| `ship_from_country` | text, nullable | ISO-style origin country/region code (e.g. `US`, `CN`, `EU`). |
 | `metadata` | json, nullable | Flexible product metadata. |
 
 API-derived fields:

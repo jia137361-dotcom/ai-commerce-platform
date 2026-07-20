@@ -141,7 +141,9 @@ export function OverviewPage() {
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="h-28 animate-pulse bg-slate-100" />
+            <Card key={index} className="h-28 animate-pulse bg-slate-100">
+              <span className="sr-only">Loading</span>
+            </Card>
           ))}
         </div>
       ) : (

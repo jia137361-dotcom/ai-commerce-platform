@@ -98,6 +98,17 @@ export const putStoreProductByIdHandler = async (req: MedusaRequest, res: Medusa
 
   const data = pickProductUpdateData(body, product.status as string)
 
+  if ("ship_from_country" in data) {
+    const raw = data.ship_from_country
+    if (raw === null || raw === "") {
+      data.ship_from_country = null
+    } else if (typeof raw === "string" && raw.trim()) {
+      data.ship_from_country = raw.trim().toUpperCase()
+    } else {
+      return sendError(res, 400, "VALIDATION_ERROR", "ship_from_country must be a string or null")
+    }
+  }
+
   if ("price" in data) {
     const price = parseOptionalNumber(data.price)
     if (price === undefined) {

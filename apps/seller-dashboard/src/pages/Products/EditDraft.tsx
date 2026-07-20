@@ -134,6 +134,7 @@ export function EditDraftPage() {
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
   const [requiresShipping, setRequiresShipping] = useState(true)
   const [supportedRegionIds, setSupportedRegionIds] = useState<string[]>([])
+  const [shipFromCountry, setShipFromCountry] = useState("")
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
 
   const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
@@ -173,6 +174,9 @@ export function EditDraftPage() {
         ? p.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
         : []
     setSupportedRegionIds(savedRegionIds)
+    setShipFromCountry(
+      typeof p.ship_from_country === "string" ? p.ship_from_country.toUpperCase() : ""
+    )
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
@@ -276,6 +280,7 @@ export function EditDraftPage() {
     variants,
     requires_shipping: requiresShipping,
     supported_region_ids: supportedRegionIds,
+    ship_from_country: shipFromCountry.trim() ? shipFromCountry.trim().toUpperCase() : null,
     metadata: {
       ...(product?.metadata ?? {}),
       requires_shipping: requiresShipping,
@@ -869,6 +874,20 @@ export function EditDraftPage() {
                 </span>
               </span>
             </label>
+            <div className="mt-4">
+              <Label>Ship from country</Label>
+              <Input
+                className="mt-1"
+                value={shipFromCountry}
+                disabled={isArchived}
+                placeholder="e.g. US, CN, EU"
+                maxLength={8}
+                onChange={(e) => setShipFromCountry(e.target.value.toUpperCase())}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Origin shown to buyers (ISO-style code such as US / CN / EU).
+              </p>
+            </div>
           </div>
 
           <div className="rounded-lg border border-slate-200 p-4">

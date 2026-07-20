@@ -23,6 +23,8 @@ type SupplierSeed = {
   name: string
   country: string
   status: "active" | "inactive" | "archived"
+  ship_from_country?: string | null
+  ship_to_regions?: string[] | null
   raw_json: Record<string, unknown>
 }
 
@@ -169,6 +171,8 @@ const suppliers: SupplierSeed[] = [
     name: "CitiGoo Mock Supplier",
     country: "US",
     status: "active",
+    ship_from_country: "US",
+    ship_to_regions: ["us"],
     raw_json: {
       phase: "2A",
       note: "Mock supplier for default_store AI product generation"
@@ -180,6 +184,8 @@ const suppliers: SupplierSeed[] = [
     name: "S2BDIY",
     country: "CN",
     status: "active",
+    ship_from_country: "US",
+    ship_to_regions: ["us"],
     raw_json: {
       phase: "2B",
       note: "S2BDIY print-on-demand supplier for production fulfillment"

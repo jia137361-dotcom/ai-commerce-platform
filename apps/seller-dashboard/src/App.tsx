@@ -3,11 +3,18 @@ import { Layout } from "./components/Layout"
 import { LoginPage } from "./pages/Login"
 import { RegisterPage } from "./pages/Register"
 import { OverviewPage } from "./pages/Overview"
+import { ProductListPage } from "./pages/Products/ProductList"
 import { EditDraftPage } from "./pages/Products/EditDraft"
 import { OrderListPage } from "./pages/Orders/OrderList"
 import { OrderFulfillmentPage } from "./pages/Orders/OrderFulfillment"
 import { SettingsPage } from "./pages/Settings"
+import { CreateProductPage } from "./pages/AiStudio/CreateProduct"
+import { GenerationProgressPage } from "./pages/AiStudio/GenerationProgress"
+import { GenerationCompletePage } from "./pages/AiStudio/GenerationComplete"
 import { ProductReviewsPage, StoreMessagesPage as SellerStoreMessagesPage } from "./pages/Reviews/ProductReviews"
+import { SupplierCatalogPage } from "./pages/Supplier/SupplierCatalog"
+import { SupplierListPage } from "./pages/Suppliers/SupplierList"
+import { CategoryManagerPage } from "./pages/Categories/CategoryManager"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -29,13 +36,7 @@ export default function App() {
         }
       >
         <Route index element={<OverviewPage />} />
-        <Route path="orders" element={<OrderListPage />} />
-        <Route path="orders/:orderId/fulfillment" element={<OrderFulfillmentPage />} />
-        <Route path="reviews" element={<ProductReviewsPage />} />
-        <Route path="messages" element={<SellerStoreMessagesPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        {/* Legacy deep links — middleman sellers no longer manage catalog / supply blanks */}
-        <Route path="products" element={<Navigate to="/" replace />} />
+        <Route path="products" element={<ProductListPage />} />
         <Route
           path="products/:id/edit"
           element={
@@ -44,11 +45,25 @@ export default function App() {
             </ErrorBoundary>
           }
         />
-        <Route path="categories" element={<Navigate to="/" replace />} />
-        <Route path="suppliers" element={<Navigate to="/" replace />} />
-        <Route path="suppliers/:supplierId/catalog" element={<Navigate to="/" replace />} />
-        <Route path="supplier-catalog" element={<Navigate to="/" replace />} />
-        <Route path="ai-studio/*" element={<Navigate to="/" replace />} />
+        <Route path="orders" element={<OrderListPage />} />
+        <Route path="orders/:orderId/fulfillment" element={<OrderFulfillmentPage />} />
+        <Route path="reviews" element={<ProductReviewsPage />} />
+        <Route path="messages" element={<SellerStoreMessagesPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="categories" element={<CategoryManagerPage />} />
+        <Route path="suppliers" element={<SupplierListPage />} />
+        <Route
+          path="suppliers/:supplierId/catalog"
+          element={
+            <ErrorBoundary>
+              <SupplierCatalogPage />
+            </ErrorBoundary>
+          }
+        />
+        <Route path="supplier-catalog" element={<Navigate to="/suppliers" replace />} />
+        <Route path="ai-studio/create" element={<CreateProductPage />} />
+        <Route path="ai-studio/progress/:jobId" element={<GenerationProgressPage />} />
+        <Route path="ai-studio/complete/:productId" element={<GenerationCompletePage />} />
       </Route>
     </Routes>
   )

@@ -6,12 +6,16 @@ import { useAuthStore } from "../lib/auth-store"
 import { cn } from "../lib/cn"
 import type { StoreNotification } from "@ai-commerce/shared-types"
 
-const NAV = [
+const NAV: Array<{ to: string; label: string; end?: boolean }> = [
   { to: "/", label: "Overview", end: true },
+  { to: "/products", label: "Products" },
+  { to: "/categories", label: "Categories" },
+  { to: "/suppliers", label: "Suppliers" },
   { to: "/orders", label: "Orders" },
-  { to: "/messages", label: "Inbox" },
   { to: "/reviews", label: "Reviews" },
+  { to: "/messages", label: "Inbox" },
   { to: "/settings", label: "Settings" },
+  { to: "/ai-studio/create", label: "AI Studio" },
 ]
 
 function notificationHref(notification: StoreNotification): string | null {

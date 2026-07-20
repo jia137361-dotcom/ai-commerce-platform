@@ -37,6 +37,7 @@ type CreateDraftProductBody = {
   ai_job_id?: string | null
   prompt?: string | null
   supplier_id?: string | null
+  ship_from_country?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -247,6 +248,7 @@ export const POST = async (
     price,
     cost: inheritedCost,
     variants: Array.isArray(body.variants) ? body.variants : null,
+    ship_from_country: requireText(body.ship_from_country)?.toUpperCase() ?? null,
     metadata: body.metadata ?? {}
   })
 

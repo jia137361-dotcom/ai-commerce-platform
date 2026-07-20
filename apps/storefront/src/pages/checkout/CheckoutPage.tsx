@@ -151,7 +151,10 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   }
 
   const emailVerified = !auth.customer || isBuyerEmailVerified(auth.customer.metadata)
-  const contactIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim()) && contact.phone.trim().length >= 4 && contact.name.trim().length > 1
+  const contactIsValid =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((contact.email ?? "").trim()) &&
+    (contact.phone ?? "").trim().length >= 4 &&
+    (contact.name ?? "").trim().length > 1
   const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && isCheckoutCountryCode(address.country))
   const stripePublishableKey = getStripePublishableKey()
   const stripeSelected = isStripeProviderId(selectedPaymentProviderId)
@@ -438,13 +441,14 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setAddressError(undefined)
     setShippingError(undefined)
     try {
-      const [firstName, ...restName] = nextContact.name.trim().split(/\s+/)
+      const fullName = (nextContact.name ?? "").trim()
+      const [firstName, ...restName] = fullName.split(/\s+/).filter(Boolean)
       const updated = await updateCartAddress(cart.id, {
-        email: nextContact.email.trim(),
-        phone: nextContact.phone.trim(),
+        email: (nextContact.email ?? "").trim(),
+        phone: (nextContact.phone ?? "").trim(),
         shippingAddress: {
-          firstName: firstName || nextContact.name.trim(),
-          lastName: restName.join(" ") || firstName || nextContact.name.trim() || "Customer",
+          firstName: firstName || fullName || "Customer",
+          lastName: restName.join(" ") || firstName || fullName || "Customer",
           address1: nextAddress.address1.trim(),
           address2: nextAddress.address2.trim() || undefined,
           city: nextAddress.city.trim(),
@@ -460,8 +464,8 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       if (auth.customer && saveToAddressBook && !input?.selectedId) {
         const refreshed = await createCustomerAddress({
           label: nextAddress.label || "Home",
-          firstName: firstName || nextContact.name.trim(),
-          lastName: restName.join(" ") || firstName || nextContact.name.trim() || "Customer",
+          firstName: firstName || fullName || "Customer",
+          lastName: restName.join(" ") || firstName || fullName || "Customer",
           address1: nextAddress.address1.trim(),
           address2: nextAddress.address2.trim() || undefined,
           city: nextAddress.city.trim(),

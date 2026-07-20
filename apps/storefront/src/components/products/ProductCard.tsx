@@ -49,6 +49,9 @@ export function ProductCard({ product }: ProductCardProps) {
             {rating ? `★ ${rating}` : "New"}
           </span>
           {rating ? <small>{product.reviewCount ?? 0} reviews</small> : null}
+          {product.shipFromCountry ? (
+            <small className="buyer-shop-product-ship-from">Ships from {product.shipFromCountry}</small>
+          ) : null}
         </div>
         <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" />
         {customizeHref ? (

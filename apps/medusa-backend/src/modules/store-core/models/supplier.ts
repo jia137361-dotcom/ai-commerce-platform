@@ -9,6 +9,8 @@ const Supplier = model.define("mc_supplier", {
   api_base_url: model.text().nullable(),
   test_api_base_url: model.text().nullable(),
   status: model.enum(["active", "inactive", "archived"]).default("active"),
+  ship_from_country: model.text().nullable(),
+  ship_to_regions: model.json().nullable(),
   raw_json: model.json().nullable()
 })
 

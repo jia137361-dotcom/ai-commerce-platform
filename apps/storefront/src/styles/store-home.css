@@ -1368,6 +1368,11 @@
   font-size: 12px;
 }
 
+.buyer-shop-product-ship-from {
+  display: inline-flex;
+  color: #6b7280;
+}
+
 .buyer-shop-product-meta small {
   color: var(--buyer-text-muted);
 }

@@ -73,6 +73,10 @@ export const normalizeProduct = (product: any) => ({
   cost: product.cost,
   variants: product.variants ?? [],
   category_ids: product.category_ids ?? [],
+  ship_from_country:
+    typeof product.ship_from_country === "string" && product.ship_from_country.trim()
+      ? product.ship_from_country.trim().toUpperCase()
+      : null,
   metadata: product.metadata ?? {},
   created_at: product.created_at,
   updated_at: product.updated_at

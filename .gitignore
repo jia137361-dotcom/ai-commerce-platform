@@ -25,3 +25,9 @@ scripts/dev3-full-backend-pipeline.local.env
 
 .tmp/
 apps/medusa-backend/static/logos/
+
+# Production deploy artifacts
+.prod-backups/
+*.sql.gz
+ai_commerce.dump
+exports/
