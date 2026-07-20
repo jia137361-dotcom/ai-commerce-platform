@@ -8,6 +8,10 @@
 # - no `docker compose down`
 # - no `git stash --include-untracked`
 # - backup + migrate fail hard before service switch
+#
+# Optional env:
+# - MEDUSA_ADMIN_DISABLE=true  (disable Medusa admin UI in production)
+# - DATABASE_SSL=false         (local/docker Postgres without SSL)
 
 services:
   postgres:
@@ -38,11 +42,15 @@ services:
     build:
       context: ..
       dockerfile: apps/medusa-backend/Dockerfile
+      provenance: false
     restart: unless-stopped
     env_file:
       - ../apps/medusa-backend/.env
     environment:
       NODE_ENV: production
+      AI_WORKER_BASE_URL: ${AI_WORKER_BASE_URL:-http://ai-worker:8001}
+      MEDUSA_ADMIN_DISABLE: ${MEDUSA_ADMIN_DISABLE:-true}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
     ports:
       - "${MEDUSA_HOST_PORT:-9000}:9000"
     depends_on:
@@ -50,6 +58,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ai-worker:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health >/dev/null || exit 1"]
       interval: 15s
@@ -57,14 +67,48 @@ services:
       retries: 20
       start_period: 40s
 
+  ai-worker:
+    build:
+      context: ../apps/ai-worker
+      dockerfile: Dockerfile.prod
+      provenance: false
+    restart: unless-stopped
+    env_file:
+      - ../apps/medusa-backend/.env
+    environment:
+      AI_WORKER_HOST: 0.0.0.0
+      AI_WORKER_PORT: 8001
+      AI_WORKER_MOCK_GENERATION: ${AI_WORKER_MOCK_GENERATION:-false}
+      MEDUSA_BASE_URL: ${MEDUSA_BASE_URL:-http://medusa:9000}
+      AI_WORKER_UPLOAD_DIR: /app/uploads
+      AI_WORKER_PUBLIC_BASE_URL: ${AI_WORKER_PUBLIC_BASE_URL:-http://127.0.0.1:8001/static}
+    ports:
+      - "${AI_WORKER_HOST_PORT:-8001}:8001"
+    volumes:
+      - ai_commerce_prod_ai_uploads:/app/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import httpx; httpx.get('http://127.0.0.1:8001/health', timeout=5).raise_for_status()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   seller-dashboard:
     build:
       context: ..
       dockerfile: apps/seller-dashboard/Dockerfile
+      provenance: false
       args:
         VITE_MEDUSA_URL: ${VITE_MEDUSA_URL:-http://127.0.0.1:9000}
         VITE_STOREFRONT_URL: ${VITE_STOREFRONT_URL:-http://127.0.0.1:3000}
         VITE_STORE_ID: ${VITE_STORE_ID:-default_store}
+        VITE_PUBLISHABLE_API_KEY: ${VITE_PUBLISHABLE_API_KEY:-}
     restart: unless-stopped
     ports:
       - "${SELLER_HOST_PORT:-5173}:80"
@@ -76,9 +120,11 @@ services:
     build:
       context: ..
       dockerfile: apps/storefront/Dockerfile
+      provenance: false
       args:
         VITE_MEDUSA_BASE_URL: ${VITE_MEDUSA_BASE_URL:-http://127.0.0.1:9000}
         VITE_STORE_ID: ${VITE_STORE_ID:-default_store}
+        VITE_PUBLISHABLE_API_KEY: ${VITE_PUBLISHABLE_API_KEY:-}
     restart: unless-stopped
     ports:
       - "${STOREFRONT_HOST_PORT:-3000}:80"
@@ -88,3 +134,4 @@ services:
 
 volumes:
   ai_commerce_prod_pg:
+  ai_commerce_prod_ai_uploads:

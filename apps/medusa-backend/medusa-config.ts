@@ -18,9 +18,16 @@ const stripePaymentProviders =
       ]
     : []
 
+const disableAdmin = process.env.MEDUSA_ADMIN_DISABLE === "true"
+const databaseSslDisabled = process.env.DATABASE_SSL === "false"
+
 export default defineConfig({
+  ...(disableAdmin ? { admin: { disable: true } } : {}),
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    ...(databaseSslDisabled
+      ? { databaseDriverOptions: { connection: { ssl: false } } }
+      : {}),
     redisUrl: process.env.REDIS_URL,
     http: {
       storeCors:

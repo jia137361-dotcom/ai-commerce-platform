@@ -6,6 +6,7 @@ build/
 coverage/
 *.log
 *.tsbuildinfo
+*.tar.gz
 .env
 .env.*
 !.env.example
