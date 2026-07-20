@@ -1,10 +1,15 @@
 import { defineMiddlewares } from "@medusajs/framework/http"
+import { stashStoreProductsShipFromQuery } from "../lib/http/store-products-ship-from-query"
 import { sellerPublicCorsMiddleware } from "../lib/http/seller-public-cors"
 import { sellerAdminGuardMiddleware } from "../lib/platform-admin/seller-admin-guard"
 import { enforceActiveStoreMiddleware } from "../lib/store-context/enforce-active-store"
 
 export default defineMiddlewares({
   routes: [
+    {
+      matcher: "/store",
+      middlewares: [stashStoreProductsShipFromQuery],
+    },
     {
       matcher: "/seller/*",
       middlewares: [sellerPublicCorsMiddleware],

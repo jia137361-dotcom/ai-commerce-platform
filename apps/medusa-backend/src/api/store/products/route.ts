@@ -12,7 +12,7 @@ import { normalizeShipFromCountryCode } from "../../../lib/ship-from-country"
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: storeId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
-  const shipFrom = req.query.ship_from as string | undefined
+  const shipFrom = req.shipFromFilter ?? (req.query.ship_from as string | undefined)
 
   const filters: Record<string, unknown> = {
     store_id: storeId,
