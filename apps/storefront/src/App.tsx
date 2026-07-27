@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import type { ReactNode } from "react"
 import type { StoreCart } from "./lib/mock-data"
 import { CartPage } from "./pages/cart/CartPage"
 import { CheckoutPage } from "./pages/checkout/CheckoutPage"
@@ -17,13 +18,17 @@ import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
+import { SearchPage } from "./pages/search/SearchPage"
+import { SavedPage } from "./pages/saved/SavedPage"
+import { CategoriesPage } from "./pages/categories/CategoriesPage"
 import { DesignerPage } from "./pages/design/DesignerPage"
 import { AiDesignPage } from "./pages/ai-design/AiDesignPage"
 import { MyDesignsPage } from "./pages/my-designs/MyDesignsPage"
 import { StudioLandingPage } from "./pages/studio/StudioLandingPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
-import { HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
+import { AboutPage, CookiesPage, HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
+import { PlansPage } from "./pages/account/PlansPage"
 import { useBuyerAuth } from "./auth/useBuyerAuth"
 import { countPlatformCartItems } from "./lib/buyer-platform-cart"
 import { getBuyerCartIdentity } from "./lib/buyer-cart-storage"
@@ -117,136 +122,103 @@ function App() {
     setCartCount(cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
   }
 
+  let page: ReactNode = <StoreHomePage cartCount={cartCount} />
+
   if (path.startsWith("/design/")) {
-    return (
+    page = (
       <DesignerPage
         productId={decodeURIComponent(path.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}
       />
     )
-  }
-
-  if (path === "/studio" || path.startsWith("/studio/")) {
-    return <StudioLandingPage cartCount={cartCount} />
-  }
-
-  if (path === "/my-designs" || path.startsWith("/my-designs/")) {
-    return <MyDesignsPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
-  }
-
-  if (path === "/ai-design" || path.startsWith("/ai-design/")) {
+  } else if (path === "/studio" || path.startsWith("/studio/")) {
+    page = <StudioLandingPage cartCount={cartCount} />
+  } else if (path === "/my-designs" || path.startsWith("/my-designs/")) {
+    page = <MyDesignsPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
+  } else if (path === "/ai-design" || path.startsWith("/ai-design/")) {
     const parts = path.split("/").filter(Boolean)
     const productIdFromPath = parts.length >= 2 ? decodeURIComponent(parts[1]) : undefined
-    return <AiDesignPage cartCount={cartCount} productIdFromPath={productIdFromPath} />
-  }
-
-  if (path.startsWith("/ai-studio/")) {
-    // Backward-compatible alias → AI Design with product context.
+    page = <AiDesignPage cartCount={cartCount} productIdFromPath={productIdFromPath} />
+  } else if (path.startsWith("/ai-studio/")) {
     const productId = decodeURIComponent(path.split("/").pop() ?? "")
-    return <AiDesignPage cartCount={cartCount} productIdFromPath={productId} />
-  }
-
-  if (path.startsWith("/products/")) {
-    return (
+    page = <AiDesignPage cartCount={cartCount} productIdFromPath={productId} />
+  } else if (path.startsWith("/categories")) {
+    page = <CategoriesPage cartCount={cartCount} />
+  } else if (path.startsWith("/search")) {
+    page = <SearchPage cartCount={cartCount} />
+  } else if (path.startsWith("/saved")) {
+    page = <SavedPage cartCount={cartCount} />
+  } else if (path.startsWith("/products/")) {
+    page = (
       <ProductDetailPage
         productId={decodeURIComponent(path.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}
       />
     )
-  }
-
-  if (path.startsWith("/cart")) {
-    return <CartPage onCartUpdated={onCartUpdated} />
-  }
-
-  if (path.startsWith("/checkout/success")) {
-    return <CheckoutSuccessPage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/checkout/platform")) {
-    return <PlatformCheckoutPage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/checkout")) {
-    return <CheckoutPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
-  }
-
-  if (path.startsWith("/orders/lookup")) {
-    return <OrderLookupPage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/account/sign-in")) {
-    return <SignInPage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/account/register")) {
-    return <RegisterPage cartCount={cartCount} />
-  }
-
-  const realAccountSetting = (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[])
-    .find((slug) => path === `/account/${slug}`)
-  if (realAccountSetting) {
-    return <AccountSettingsPage cartCount={cartCount} slug={realAccountSetting} />
-  }
-
-  const accountSettingPlaceholder = findAccountSettingPlaceholder(path)
-  if (accountSettingPlaceholder) {
-    return <AccountSettingPlaceholderPage cartCount={cartCount} setting={accountSettingPlaceholder} />
-  }
-
-  if (path.startsWith("/account/profile")) {
-    return <AccountProfilePage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/account/messages")) {
+  } else if (path.startsWith("/cart")) {
+    page = <CartPage onCartUpdated={onCartUpdated} />
+  } else if (path.startsWith("/checkout/success")) {
+    page = <CheckoutSuccessPage cartCount={cartCount} />
+  } else if (path.startsWith("/checkout/platform")) {
+    page = <PlatformCheckoutPage cartCount={cartCount} />
+  } else if (path.startsWith("/checkout")) {
+    page = <CheckoutPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
+  } else if (path.startsWith("/orders/lookup")) {
+    page = <OrderLookupPage cartCount={cartCount} />
+  } else if (path.startsWith("/account/sign-in")) {
+    page = <SignInPage cartCount={cartCount} />
+  } else if (path.startsWith("/account/register")) {
+    page = <RegisterPage cartCount={cartCount} />
+  } else if (
+    (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[]).some(
+      (slug) => path === `/account/${slug}`
+    )
+  ) {
+    const realAccountSetting = (
+      ["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[]
+    ).find((slug) => path === `/account/${slug}`)!
+    page = <AccountSettingsPage cartCount={cartCount} slug={realAccountSetting} />
+  } else if (findAccountSettingPlaceholder(path)) {
+    page = (
+      <AccountSettingPlaceholderPage cartCount={cartCount} setting={findAccountSettingPlaceholder(path)!} />
+    )
+  } else if (path.startsWith("/account/profile")) {
+    page = <AccountProfilePage cartCount={cartCount} />
+  } else if (path.startsWith("/account/messages")) {
     const orderId = new URLSearchParams(window.location.search).get("orderId") ?? undefined
-    return <StoreMessagesPage cartCount={cartCount} orderId={orderId} />
-  }
-
-  if (path.startsWith("/account/orders/") && path.endsWith("/tracking")) {
-    return <OrderTrackingPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/account/orders/")) {
-    return <OrderDetailPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/account/orders")) {
-    return <OrderHistoryPage cartCount={cartCount} />
-  }
-
-  if (path === "/account" || path.startsWith("/account?")) {
-    return <AccountHomePage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/help")) {
-    return <HelpPage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/terms")) {
-    return <TermsPage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/privacy")) {
-    return <PrivacyPage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/shops/")) {
+    page = <StoreMessagesPage cartCount={cartCount} orderId={orderId} />
+  } else if (path.startsWith("/account/orders/") && path.endsWith("/tracking")) {
+    page = <OrderTrackingPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
+  } else if (path.startsWith("/account/orders/")) {
+    page = <OrderDetailPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
+  } else if (path.startsWith("/account/orders")) {
+    page = <OrderHistoryPage cartCount={cartCount} />
+  } else if (path === "/account" || path.startsWith("/account?")) {
+    page = <AccountHomePage cartCount={cartCount} />
+  } else if (path.startsWith("/plans")) {
+    page = <PlansPage cartCount={cartCount} />
+  } else if (path.startsWith("/help")) {
+    page = <HelpPage cartCount={cartCount} />
+  } else if (path.startsWith("/about")) {
+    page = <AboutPage cartCount={cartCount} />
+  } else if (path.startsWith("/cookies")) {
+    page = <CookiesPage cartCount={cartCount} />
+  } else if (path.startsWith("/terms")) {
+    page = <TermsPage cartCount={cartCount} />
+  } else if (path.startsWith("/privacy")) {
+    page = <PrivacyPage cartCount={cartCount} />
+  } else if (path.startsWith("/shops/")) {
     const slug = decodeURIComponent(path.split("/")[2] ?? "")
-    return <StoreHomePage cartCount={cartCount} storeSlug={slug} />
+    page = <StoreHomePage cartCount={cartCount} storeSlug={slug} />
+  } else if (path.startsWith("/store") || path === "/" || path.startsWith("/?")) {
+    page = <StoreHomePage cartCount={cartCount} />
+  } else if (path.startsWith("/marketplace")) {
+    page = <MarketplaceHomePage cartCount={cartCount} />
   }
 
-  if (path.startsWith("/store") || path === "/" || path.startsWith("/?")) {
-    return <StoreHomePage cartCount={cartCount} />
-  }
-
-  if (path.startsWith("/marketplace")) {
-    return <MarketplaceHomePage cartCount={cartCount} />
-  }
-
-  return <StoreHomePage cartCount={cartCount} />
+  return page
 }
 
 export default App

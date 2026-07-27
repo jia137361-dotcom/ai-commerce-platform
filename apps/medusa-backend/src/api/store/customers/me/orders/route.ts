@@ -26,6 +26,7 @@ type OrderLineItem = {
   title?: string | null
   thumbnail?: string | null
   quantity?: number | string | null
+  variant_id?: string | null
   metadata?: Record<string, unknown> | null
 }
 
@@ -196,6 +197,7 @@ const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<
       thumbnail: resolveOrderLineItemThumbnail(item),
       quantity: readNumber(item.quantity) ?? 0,
       product_id: typeof item.metadata?.mc_product_id === "string" ? item.metadata.mc_product_id : null,
+      variant_id: typeof item.variant_id === "string" ? item.variant_id : null,
     })),
   }
 }
@@ -243,6 +245,7 @@ const loadOrdersWithQueryGraph = async (
       "items.title",
       "items.thumbnail",
       "items.quantity",
+      "items.variant_id",
       "items.metadata",
     ],
     filters: selector,

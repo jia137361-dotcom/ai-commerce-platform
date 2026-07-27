@@ -8,7 +8,14 @@ import {
 import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-cart-line-item-shipping"
-import { quoteS2bShippingForCart } from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
+import {
+  buildS2bShippingQuoteMetadata,
+  quoteS2bShippingForCart,
+} from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
+
+/** Medusa calculated_amount / S2B amount_minor → major USD for storefront MoneyText. */
+const minorToMajor = (value: number | null | undefined) =>
+  value == null || !Number.isFinite(value) ? null : Math.round(value) / 100
 
 type ShippingOptionResult = {
   id?: string
@@ -27,8 +34,8 @@ type CartForShippingOptions = {
   id?: string
   currency_code?: string
   metadata?: Record<string, unknown> | null
-  items?: Array<{ requires_shipping?: boolean | null }> | null
-  shipping_address?: { id?: string | null; country_code?: string | null } | null
+  items?: Array<{ requires_shipping?: boolean | null; quantity?: number | null }> | null
+  shipping_address?: { id?: string | null; country_code?: string | null; province?: string | null; postal_code?: string | null } | null
 }
 
 const readHeader = (req: MedusaRequest, name: string) => {
@@ -93,44 +100,62 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
         cart.metadata && typeof cart.metadata === "object"
           ? (cart.metadata as Record<string, unknown>)
           : {}
+      const address = cart.shipping_address as
+        | { country_code?: string | null; province?: string | null; postal_code?: string | null }
+        | null
+        | undefined
+      const quantity = (cart.items ?? []).reduce((sum, item) => {
+        const qty = typeof item.quantity === "number" ? item.quantity : 1
+        return sum + Math.max(1, qty)
+      }, 0)
       await cartModule.updateCarts(cart_id, {
         metadata: {
           ...existingMeta,
-          s2b_shipping_quote: {
-            amount_minor: s2bQuote.amountMinor,
-            amount_usd: s2bQuote.amountUsd,
-            amount_cny: s2bQuote.amountCny,
-            logistics_platform_id: s2bQuote.logisticsPlatformId,
-            logistics_name: s2bQuote.logisticsName,
-            basic_product_id: s2bQuote.basicProductId,
-            source: s2bQuote.source,
-            quoted_at: new Date().toISOString(),
-          },
+          s2b_shipping_quote: buildS2bShippingQuoteMetadata(
+            s2bQuote,
+            {
+              country: (address?.country_code ?? "").trim().toUpperCase(),
+              province: address?.province ?? "",
+              postcode: address?.postal_code ?? "",
+            },
+            Math.max(1, quantity)
+          ),
         },
       })
     }
 
-    const shipping_options = (result as ShippingOptionResult[]).map((option) => ({
-      id: option.id,
-      name: option.name,
-      amount: s2bQuote
-        ? s2bQuote.amountMinor
-        : option.amount ?? option.calculated_price?.calculated_amount ?? null,
-      currency_code,
-      provider_id: option.provider_id ?? null,
-      service_zone_id: option.service_zone_id ?? null,
-      shipping_profile_id: option.shipping_profile_id ?? null,
-      data: {
-        ...(option.data ?? {}),
-        ...(s2bQuote
-          ? {
-              pricing_source: s2bQuote.source,
-              s2b_amount_cny: s2bQuote.amountCny,
-              s2b_logistics_name: s2bQuote.logisticsName,
-            }
-          : {}),
-      },
-    }))
+    const shipping_options = (result as ShippingOptionResult[]).map((option) => {
+      const medusaMinor =
+        option.amount ?? option.calculated_price?.calculated_amount ?? null
+      const amountMajor = s2bQuote
+        ? s2bQuote.amountUsd
+        : minorToMajor(typeof medusaMinor === "number" ? medusaMinor : null)
+      return {
+        id: option.id,
+        name: option.name,
+        // Storefront expects major USD (e.g. 1.46), not minor cents (146).
+        amount: amountMajor,
+        amount_minor: s2bQuote
+          ? s2bQuote.amountMinor
+          : typeof medusaMinor === "number"
+            ? Math.round(medusaMinor)
+            : null,
+        currency_code,
+        provider_id: option.provider_id ?? null,
+        service_zone_id: option.service_zone_id ?? null,
+        shipping_profile_id: option.shipping_profile_id ?? null,
+        data: {
+          ...(option.data ?? {}),
+          ...(s2bQuote
+            ? {
+                pricing_source: s2bQuote.source,
+                s2b_amount_cny: s2bQuote.amountCny,
+                s2b_logistics_name: s2bQuote.logisticsName,
+              }
+            : {}),
+        },
+      }
+    })
 
     if (process.env.NODE_ENV !== "production") {
       console.info("[cart-shipping-options] listed", {
@@ -149,7 +174,8 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       requires_shipping_method: requiresShipping,
       s2b_shipping_quote: s2bQuote
         ? {
-            amount: s2bQuote.amountMinor,
+            amount: s2bQuote.amountUsd,
+            amount_minor: s2bQuote.amountMinor,
             amount_usd: s2bQuote.amountUsd,
             amount_cny: s2bQuote.amountCny,
             logistics_name: s2bQuote.logisticsName,

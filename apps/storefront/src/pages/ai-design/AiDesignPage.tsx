@@ -8,9 +8,11 @@ import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import {
   fetchBuyerAiJob,
   fetchBuyerAiMaterials,
+  fetchBuyerPlan,
   startBuyerAiGenerate,
   type BuyerAiJobResult,
   type BuyerAiMaterial,
+  type BuyerPlanSnapshot,
 } from "../../lib/buyer-api"
 import {
   buildStudioEditorHref,
@@ -78,6 +80,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
   const [error, setError] = useState<string | null>(null)
   const [library, setLibrary] = useState<BuyerAiMaterial[]>([])
   const [libraryLoading, setLibraryLoading] = useState(true)
+  const [plan, setPlan] = useState<BuyerPlanSnapshot | null>(null)
   const pollRef = useRef<number | null>(null)
 
   const selectedStyleObj = DESIGN_STYLES.find((s) => s.id === selectedStyle)
@@ -90,9 +93,23 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
     setLibraryLoading(false)
   }
 
+  const refreshPlan = async () => {
+    if (!auth.customer) {
+      setPlan(null)
+      return
+    }
+    try {
+      const result = await fetchBuyerPlan()
+      setPlan(result.plan)
+    } catch {
+      setPlan(null)
+    }
+  }
+
   useEffect(() => {
     enterLegacyDefaultStoreContext()
     void refreshLibrary()
+    void refreshPlan()
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current)
     }
@@ -148,6 +165,11 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
       return
     }
 
+    if (auth.customer && plan && !plan.canUseAi) {
+      setError("No AI image credits remaining. Upgrade your plan to continue.")
+      return
+    }
+
     setIsGenerating(true)
     setError(null)
     setJob(null)
@@ -161,10 +183,13 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
         guestKey: materialGuestKey(),
       })
       setJob(started)
+      void refreshPlan()
       pollJob(started.jobId)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate design")
+      const message = err instanceof Error ? err.message : "Failed to generate design"
+      setError(message)
       setIsGenerating(false)
+      if (/credit|upgrade|402/i.test(message)) void refreshPlan()
     }
   }
 
@@ -230,6 +255,17 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
           <p className="buyer-studio-landing-kicker">{t("aiDesignKicker")}</p>
           <h1>{t("aiDesignTitle")}</h1>
           <p>{t("aiDesignDescription")}</p>
+          {plan ? (
+            <p className="buyer-ai-plan-chip">
+              {plan.planName}: {plan.aiCreditsRemaining}/{plan.aiCreditsMonthly} AI credits ·{" "}
+              <a href="/plans">{plan.canUseAi ? "Manage plan" : "Upgrade"}</a>
+            </p>
+          ) : auth.customer ? null : (
+            <p className="buyer-ai-plan-chip">
+              Sign in to use plan credits. <a href={`/account/sign-in?returnTo=${encodeURIComponent("/ai-design")}`}>Sign in</a>{" "}
+              · <a href="/plans">View plans</a>
+            </p>
+          )}
           {returnTo || productId ? (
             <p>
               <a href={returnTo || (productId ? buildStudioEditorHref(productId) : "/studio")}>
@@ -277,11 +313,21 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
               <Button
                 className="buyer-ai-studio-generate-button"
                 loading={isGenerating}
-                disabled={!prompt.trim() || isGenerating}
+                disabled={!prompt.trim() || isGenerating || Boolean(auth.customer && plan && !plan.canUseAi)}
                 onClick={() => void handleGenerate()}
               >
-                {isGenerating ? `Generating… ${job?.progress ?? 0}%` : "Generate image"}
+                {isGenerating
+                  ? `Generating… ${job?.progress ?? 0}%`
+                  : auth.customer && plan && !plan.canUseAi
+                    ? "Upgrade to generate"
+                    : "Generate image"}
               </Button>
+
+              {auth.customer && plan && !plan.canUseAi ? (
+                <p className="buyer-ai-studio-error">
+                  Credits exhausted. <a href="/plans">Upgrade to AI Creative</a> for more monthly credits.
+                </p>
+              ) : null}
 
               {error ? <p className="buyer-ai-studio-error">{error}</p> : null}
 

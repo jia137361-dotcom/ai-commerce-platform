@@ -1648,3 +1648,181 @@ button.buyer-ai-studio-editor-link {
   cursor: pointer;
   font-weight: 650;
 }
+
+.buyer-product-anchor-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 0 16px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.buyer-product-anchor-tabs button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: #667085;
+}
+
+.buyer-product-anchor-tabs button.active {
+  color: #111827;
+  border-color: #ea580c;
+}
+
+.buyer-product-design-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.buyer-product-add-button--secondary {
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #111827;
+}
+
+.buyer-product-sticky-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 44;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -8px 24px rgba(17, 24, 39, 0.08);
+}
+
+.buyer-product-sticky-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.buyer-product-sticky-price del {
+  color: #667085;
+  font-size: 13px;
+}
+
+.buyer-product-sticky-design {
+  min-height: 44px;
+  padding: 0 24px;
+  border-radius: 999px;
+  background: #ea580c;
+  color: #fff;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+}
+
+.buyer-product-size-guide table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.buyer-product-size-guide th,
+.buyer-product-size-guide td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+@media (max-width: 980px) {
+  .buyer-product-page .buyer-ui-page-shell-main {
+    padding-bottom: 120px;
+  }
+
+  /* 页面分析: 删掉 Add to cart — 仅隐藏呈现，不删加购逻辑 */
+  .buyer-product-page .buyer-product-add-button,
+  .buyer-product-page .buyer-product-add-button--secondary {
+    display: none !important;
+  }
+
+  .buyer-product-page .buyer-product-primary {
+    display: grid;
+    gap: 12px;
+  }
+
+  .buyer-product-page .buyer-product-breadcrumb {
+    display: none;
+  }
+}
+
+
+.buyer-product-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.buyer-product-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.buyer-product-toolbar-actions button,
+.buyer-product-toolbar-actions a {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+
+.buyer-product-popup-menu {
+  display: grid;
+  gap: 6px;
+}
+
+.buyer-product-popup-menu button,
+.buyer-product-popup-menu a {
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.buyer-product-region-field {
+  display: grid;
+  gap: 6px;
+}
+
+.buyer-product-region-field select {
+  min-height: 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.buyer-product-logistics-row button {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}

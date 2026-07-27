@@ -9,9 +9,9 @@ import type { StoreNotification } from "@ai-commerce/shared-types"
 const NAV: Array<{ to: string; label: string; end?: boolean }> = [
   { to: "/", label: "Overview", end: true },
   { to: "/products", label: "Products" },
-  { to: "/categories", label: "Categories" },
-  { to: "/suppliers", label: "Suppliers" },
   { to: "/orders", label: "Orders" },
+  { to: "/followers", label: "Followers" },
+  { to: "/coupons", label: "Coupons" },
   { to: "/reviews", label: "Reviews" },
   { to: "/messages", label: "Inbox" },
   { to: "/settings", label: "Settings" },

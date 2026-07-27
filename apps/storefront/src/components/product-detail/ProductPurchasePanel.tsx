@@ -26,10 +26,31 @@ type ProductPurchasePanelProps = {
   isFavorited?: boolean
   onToggleFavorite?: () => void
   favoriteLoading?: boolean
+  designHref?: string
 }
 
-export function ProductPurchasePanel({ product, variants, selectedVariantId, onVariantChange, purchaseState, quantity, setQuantity, adding, authLoading = false, requiresSignIn = false, addNotice, onAddToCart, share, isFavorited = false, onToggleFavorite, favoriteLoading = false }: ProductPurchasePanelProps) {
+export function ProductPurchasePanel({
+  product,
+  variants,
+  selectedVariantId,
+  onVariantChange,
+  purchaseState,
+  quantity,
+  setQuantity,
+  adding,
+  authLoading = false,
+  requiresSignIn = false,
+  addNotice,
+  onAddToCart,
+  share,
+  isFavorited = false,
+  onToggleFavorite,
+  favoriteLoading = false,
+  designHref,
+}: ProductPurchasePanelProps) {
   const reviewCount = product.reviewCount ?? 0
+  const editorHref = designHref ?? (product.id ? `/design/${encodeURIComponent(product.id)}` : undefined)
+
   return (
     <Card as="aside" className="buyer-product-purchase">
       <div className="buyer-product-purchase-heading">
@@ -51,46 +72,79 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
       </div>
       <h1>{product.title}</h1>
       <div className="buyer-product-score">
-        {product.averageRating != null ? <><span aria-hidden="true">★</span><strong>{product.averageRating.toFixed(1)}</strong><a href="#reviews">{reviewCount} reviews</a></> : <a href="#reviews">No reviews yet</a>}
+        {product.averageRating != null ? (
+          <>
+            <span aria-hidden="true">★</span>
+            <strong>{product.averageRating.toFixed(1)}</strong>
+            <a href="#pdp-review">{reviewCount} reviews</a>
+          </>
+        ) : (
+          <a href="#pdp-review">No reviews yet</a>
+        )}
       </div>
 
       <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" className="buyer-product-price" />
 
       {variants.length > 1 ? (
-        <SelectField label="Option" value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>
-          {variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.title}</option>)}
+        <SelectField label="Size" value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>
+          {variants.map((variant) => (
+            <option key={variant.id} value={variant.id}>
+              {variant.title}
+            </option>
+          ))}
         </SelectField>
       ) : variants.length === 1 ? (
-        <div className="buyer-product-option-unavailable"><strong>Option</strong><span>{variants[0].title || "Default option"}</span></div>
+        <div className="buyer-product-option-unavailable">
+          <strong>Size</strong>
+          <span>{variants[0].title || "Default option"}</span>
+        </div>
       ) : (
-        <div className="buyer-product-option-unavailable"><strong>Options unavailable</strong><span>No purchasable variant was returned.</span></div>
+        <div className="buyer-product-option-unavailable">
+          <strong>Size</strong>
+          <span>Visual selector only — variant contract pending backend options.</span>
+        </div>
       )}
 
       <div className="buyer-product-quantity">
         <span>Quantity</span>
         <div>
-          <Button variant="ghost" ariaLabel="Decrease quantity" disabled={quantity <= 1 || adding} onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</Button>
+          <Button variant="ghost" ariaLabel="Decrease quantity" disabled={quantity <= 1 || adding} onClick={() => setQuantity(Math.max(1, quantity - 1))}>
+            −
+          </Button>
           <strong aria-live="polite">{quantity}</strong>
-          <Button variant="ghost" ariaLabel="Increase quantity" disabled={quantity >= 99 || adding} onClick={() => setQuantity(Math.min(99, quantity + 1))}>+</Button>
+          <Button variant="ghost" ariaLabel="Increase quantity" disabled={quantity >= 99 || adding} onClick={() => setQuantity(Math.min(99, quantity + 1))}>
+            +
+          </Button>
         </div>
       </div>
 
       {!purchaseState.canAdd && purchaseState.reason ? <p className="buyer-product-disabled-reason">{purchaseState.reason}</p> : null}
-      {addNotice ? <p className={`buyer-product-add-notice ${addNotice.tone}`} role={addNotice.tone === "error" ? "alert" : "status"}>{addNotice.message}{addNotice.tone === "success" ? <a href="/cart">View cart</a> : null}</p> : null}
+      {addNotice ? (
+        <p className={`buyer-product-add-notice ${addNotice.tone}`} role={addNotice.tone === "error" ? "alert" : "status"}>
+          {addNotice.message}
+          {addNotice.tone === "success" ? <a href="/cart">View cart</a> : null}
+        </p>
+      ) : null}
 
-      <Button className="buyer-product-add-button" loading={adding || authLoading} disabled={!purchaseState.canAdd || adding || authLoading} onClick={onAddToCart}>
-        {authLoading ? "Checking account..." : adding ? "Adding..." : requiresSignIn ? "Sign in to add to cart" : "Add to cart"}
-      </Button>
-      {product.hasDesigner && product.id ? (
-        <a href={`/design/${encodeURIComponent(product.id)}`} className="designer-entry-button">
-          Customize This Product
+      {editorHref ? (
+        <a href={editorHref} className="buyer-product-design-primary">
+          Design now
         </a>
       ) : null}
+
+      <Button
+        className="buyer-product-add-button buyer-product-add-button--secondary"
+        loading={adding || authLoading}
+        disabled={!purchaseState.canAdd || adding || authLoading}
+        onClick={onAddToCart}
+      >
+        {authLoading ? "Checking account..." : adding ? "Adding..." : requiresSignIn ? "Sign in to add to cart" : "Add to cart"}
+      </Button>
 
       <div className="buyer-product-action-buttons">
         {product.id && product.hasDesigner ? (
           <>
-            <a href={`/design/${encodeURIComponent(product.id)}`} className="buyer-action-button buyer-action-editor">
+            <a href={editorHref} className="buyer-action-button buyer-action-editor">
               <span className="buyer-action-icon">🎨</span>
               <span className="buyer-action-text">
                 <strong>Studio</strong>
@@ -98,7 +152,7 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
               </span>
             </a>
             <a
-              href={`/ai-design?productId=${encodeURIComponent(product.id)}&returnTo=${encodeURIComponent(`/design/${product.id}`)}`}
+              href={`/ai-design?productId=${encodeURIComponent(product.id)}&returnTo=${encodeURIComponent(editorHref ?? `/design/${product.id}`)}`}
               className="buyer-action-button buyer-action-ai"
             >
               <span className="buyer-action-icon">✨</span>
@@ -110,7 +164,9 @@ export function ProductPurchasePanel({ product, variants, selectedVariantId, onV
           </>
         ) : null}
       </div>
-      {requiresSignIn ? <p className="buyer-product-checkout-note">Browsing is open to everyone. Sign in before adding this option to your cart.</p> : null}
+      {requiresSignIn ? (
+        <p className="buyer-product-checkout-note">Browsing is open to everyone. Sign in before adding this option to your cart.</p>
+      ) : null}
       <p className="buyer-product-checkout-note">
         Available for purchase in: <strong>{formatProductRegionNames(product.supportedRegions)}</strong>.
       </p>

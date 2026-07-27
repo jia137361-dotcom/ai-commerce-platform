@@ -3,6 +3,10 @@ import { Modules } from "@medusajs/framework/utils"
 import { assertOrderBelongsToCurrentStore, readOrderStoreId } from "../../../../../lib/order-store-context"
 import { OrderStoreAccessError } from "../../../../../lib/order-store-error"
 import { enrichOrderWithSummaryTotals, minorMoneyToMajor, readOrderMoney, resolveBuyerOrderTotalsForStorefront } from "../../../../../lib/buyer-order-totals"
+import {
+  ORDER_META_COUPON_DISCOUNT,
+  ORDER_META_PLAN_DISCOUNT,
+} from "../../../../../lib/store-coupons"
 import { enrichOrderLineItemsWithImages, resolveOrderLineItemThumbnail } from "../../../../../lib/order-line-item-display"
 import {
   ORDER_META_PAYMENT_STATUS,
@@ -92,9 +96,13 @@ const normalizeItem = (item: OrderLineItem) => {
     readNumber(item.subtotal) ??
     readNumber(item.total) ??
     (unitPriceMinor != null ? unitPriceMinor * quantity : null)
+  const metadata = item.metadata ?? null
+  const mcProductId =
+    metadata && typeof metadata.mc_product_id === "string" ? metadata.mc_product_id : null
   return {
     id: item.id ?? "",
-    product_id: item.product_id ?? null,
+    // Prefer store-core id so Order again / product links resolve on the buyer PDP.
+    product_id: mcProductId ?? item.product_id ?? null,
     variant_id: item.variant_id ?? null,
     title: item.title ?? item.product_title ?? "Untitled item",
     variant_title: item.variant_title ?? null,
@@ -102,7 +110,7 @@ const normalizeItem = (item: OrderLineItem) => {
     quantity,
     unit_price: minorMoneyToMajor(unitPriceMinor),
     subtotal: minorMoneyToMajor(subtotalMinor),
-    metadata: item.metadata ?? null,
+    metadata,
   }
 }
 
@@ -212,6 +220,34 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
     const displayItems = await enrichOrderLineItemsWithImages(storeCore, responseItems)
 
+    const couponDiscountMajor =
+      typeof metadata?.[ORDER_META_COUPON_DISCOUNT] === "number"
+        ? metadata[ORDER_META_COUPON_DISCOUNT]
+        : typeof metadata?.discount_total_major === "number"
+          ? null
+          : null
+    const planDiscountMajor =
+      typeof metadata?.[ORDER_META_PLAN_DISCOUNT] === "number" ? metadata[ORDER_META_PLAN_DISCOUNT] : 0
+    const metaDiscountMajor =
+      typeof metadata?.discount_total_major === "number"
+        ? metadata.discount_total_major
+        : (typeof couponDiscountMajor === "number" ? couponDiscountMajor : 0) +
+          (typeof planDiscountMajor === "number" ? planDiscountMajor : 0)
+    const metaPayable =
+      typeof metadata?.payable_total_major === "number" ? metadata.payable_total_major : null
+
+    const discountTotal =
+      metaDiscountMajor > 0 ? metaDiscountMajor : totals.discountTotal
+    const total =
+      metaPayable != null
+        ? metaPayable
+        : discountTotal && totals.subtotal != null
+          ? Math.max(
+              0,
+              (totals.subtotal ?? 0) + (totals.shippingTotal ?? 0) - discountTotal + (totals.taxTotal ?? 0)
+            )
+          : totals.total
+
     res.status(200).json({
       order_id: retrievedOrder.id,
       display_id: retrievedOrder.display_id ?? null,
@@ -227,9 +263,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       billing_address: retrievedOrder.billing_address ?? null,
       subtotal: totals.subtotal,
       shipping_total: totals.shippingTotal,
-      discount_total: totals.discountTotal,
+      discount_total: discountTotal,
       tax_total: totals.taxTotal,
-      total: totals.total,
+      total,
       cancellation,
       refund_request: refundRequest,
     })

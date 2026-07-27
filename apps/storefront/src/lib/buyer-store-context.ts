@@ -115,6 +115,9 @@ export const syncRouteStoreContext = (pathname: string) => {
     pathname.startsWith("/account") ||
     pathname.startsWith("/orders") ||
     pathname.startsWith("/help") ||
+    pathname.startsWith("/plans") ||
+    pathname.startsWith("/about") ||
+    pathname.startsWith("/cookies") ||
     pathname.startsWith("/terms") ||
     pathname.startsWith("/privacy")
   ) {

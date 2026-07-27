@@ -674,3 +674,159 @@
     width: 100%;
   }
 }
+
+/* Plan & AI (metadata entitlements) */
+.buyer-account-plan-card {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-account-plan-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.buyer-account-plan-title-row h2 {
+  margin: 0;
+}
+
+.buyer-account-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.buyer-account-plan-meter {
+  display: grid;
+  gap: 6px;
+}
+
+.buyer-account-plan-meter-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.buyer-account-plan-meter-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.buyer-account-plan-meter-track > span {
+  display: block;
+  height: 100%;
+  background: #ea580c;
+}
+
+.buyer-account-plan-meta {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.buyer-plans-page {
+  display: grid;
+  gap: 20px;
+  width: min(960px, 100%);
+}
+
+.buyer-plans-header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(28px, 4vw, 40px);
+}
+
+.buyer-plans-current,
+.buyer-plans-message,
+.buyer-plans-note {
+  color: #4b5563;
+}
+
+.buyer-plans-message {
+  color: #047857;
+  font-weight: 650;
+}
+
+.buyer-plans-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.buyer-plans-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.buyer-plans-card.is-current {
+  outline: 2px solid #ea580c;
+}
+
+.buyer-plans-card-kicker {
+  margin: 0;
+  color: #ea580c;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.buyer-plans-card h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.buyer-plans-card ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #374151;
+  line-height: 1.55;
+}
+
+.buyer-plans-table-wrap {
+  overflow-x: auto;
+}
+
+.buyer-plans-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.buyer-plans-table th,
+.buyer-plans-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 8px;
+  text-align: left;
+}
+
+.buyer-ai-plan-chip {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.buyer-ai-plan-chip a {
+  color: #ea580c;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .buyer-plans-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.buyer-coupons-claim{display:flex;gap:8px;margin:12px 0 16px}.buyer-coupons-claim input{flex:1;min-height:42px;border:1px solid #e5e7eb;border-radius:10px;padding:0 12px}.buyer-coupons-tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}.buyer-coupons-tabs button{border:0;background:transparent;padding:8px 10px;color:#6b7280;font-weight:600;border-bottom:2px solid transparent}.buyer-coupons-tabs button.active{color:#111827;border-bottom-color:#f97316}.buyer-coupons-list{display:grid;gap:12px}.buyer-coupon-card{display:grid;grid-template-columns:88px 1fr auto;gap:10px;align-items:center;border:1px solid #f3d1d7;border-radius:14px;overflow:hidden;background:#fff}.buyer-coupon-card-value{display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:96px;background:#ff6b81;color:#fff;border:0;padding:10px}.buyer-coupon-card-value strong{font-size:22px}.buyer-coupon-card-value span{font-size:11px;opacity:.95}.buyer-coupon-card-body{padding:10px 0}.buyer-coupon-card-body p{margin:2px 0;font-size:12px;color:#6b7280}.buyer-coupon-detail-hero{padding:14px;border-radius:12px;background:linear-gradient(135deg,#ff6b81,#ff8a9b);color:#fff;margin-bottom:12px}.buyer-coupon-detail-copy{font-size:14px;color:#4b5563;margin-bottom:12px}

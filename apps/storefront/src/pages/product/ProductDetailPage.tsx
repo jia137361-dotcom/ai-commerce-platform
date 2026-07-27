@@ -3,10 +3,13 @@ import { PageShell } from "../../components/layout/PageShell"
 import { ProductCard } from "../../components/products/ProductCard"
 import { ProductDetailStatus } from "../../components/product-detail/ProductDetailStatus"
 import { ProductDetailsSection } from "../../components/product-detail/ProductDetailsSection"
+import { ProductDetailTabs } from "../../components/product-detail/ProductDetailTabs"
 import { ProductMediaGallery } from "../../components/product-detail/ProductMediaGallery"
 import { ProductPurchasePanel } from "../../components/product-detail/ProductPurchasePanel"
 import { ProductReviewSection } from "../../components/product-detail/ProductReviewSection"
 import { ProductStoreCard } from "../../components/product-detail/ProductStoreCard"
+import { ProductDetailPopups } from "../../components/product-detail/ProductDetailPopups"
+import { StickyDesignBar } from "../../components/product-detail/StickyDesignBar"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import {
@@ -34,6 +37,8 @@ import { resolveProductPurchaseState, resolveSelectedProductVariant } from "./pr
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { buildProductSignInHref } from "./product-auth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import { buildStudioEditorHref } from "../../lib/buyer-design-handoff"
+import { pushBrowseHistory } from "../../lib/buyer-browse-history"
 
 type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
 type Notice = { label: string; message: string }
@@ -59,75 +64,83 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const [loadVersion, setLoadVersion] = useState(0)
   const [isFavorited, setIsFavorited] = useState(false)
   const [favoriteLoading, setFavoriteLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<"item" | "size" | "package" | "review" | "detail" | "recommend">("item")
   const reviewOrderNumber = new URLSearchParams(window.location.search).get("reviewOrder")
   const viewReviewOrderNumber = new URLSearchParams(window.location.search).get("viewReviewOrder")
   const storeFromQuery = new URLSearchParams(window.location.search).get("store")
-  const productStoreId = useMemo(
-    () => getScopedBuyerStoreId(storeFromQuery),
-    [storeFromQuery]
-  )
+  const productStoreId = useMemo(() => getScopedBuyerStoreId(storeFromQuery), [storeFromQuery])
 
-  const loadProduct = useCallback(async (isActive: () => boolean) => {
-    setLoading(true)
-    setFatalError(undefined)
-    setAddNotice(undefined)
-    if (storeFromQuery) {
-      setActiveBuyerStoreId(storeFromQuery)
-    }
-    const [productResult, reviewsResult, settingsResult, productsResult] = await Promise.all([
-      fetchProductDetail(productId, { storeId: productStoreId }),
-      fetchProductReviews(productId),
-      fetchStoreSettings({ storeId: productStoreId }),
-      fetchProducts(),
-    ])
-    if (!isActive()) return
-
-    setSettings(settingsResult.data)
-    setReviewSource(reviewsResult.source)
-    setReviews(reviewsResult.data)
-
-    if (!productResult.data) {
-      setProduct(null)
-      setShare(null)
-      setRecommendations([])
-      setFatalError(productResult.error ?? "Product not found")
-      setNotices([])
-      setLoading(false)
-      return
-    }
-
-    const realProduct = productResult.data
-    const shareResult =
-      productResult.source === "backend"
-        ? await fetchProductShare(realProduct)
-        : { data: null as BuyerShareInfo | null, source: productResult.source as DataSource, error: undefined }
-    if (!isActive()) return
-    setProduct(realProduct)
-    setSelectedVariantId(realProduct.variants?.[0]?.id ?? realProduct.medusaVariantId)
-
-    if (auth.customer) {
-      const favResult = await checkProductFavorite(productId)
-      if (isActive()) {
-        setIsFavorited(favResult.is_favorited)
+  const loadProduct = useCallback(
+    async (isActive: () => boolean) => {
+      setLoading(true)
+      setFatalError(undefined)
+      setAddNotice(undefined)
+      if (storeFromQuery) {
+        setActiveBuyerStoreId(storeFromQuery)
       }
-    }
+      const [productResult, reviewsResult, settingsResult, productsResult] = await Promise.all([
+        fetchProductDetail(productId, { storeId: productStoreId }),
+        fetchProductReviews(productId),
+        fetchStoreSettings({ storeId: productStoreId }),
+        fetchProducts(),
+      ])
+      if (!isActive()) return
 
-    setRecommendations(
-      productsResult.data.filter((item) => item.id !== realProduct.id).slice(0, 4)
-    )
-    setShare(shareResult.data)
-    setShareError(shareResult.error)
-    setNotices([
-      ...(productResult.source !== "backend"
-        ? [{ label: "product", message: productResult.error ?? "Showing fallback product data." }]
-        : []),
-      { label: "reviews", message: reviewsResult.error },
-      { label: "store", message: settingsResult.error },
-      { label: "recommendations", message: productsResult.error },
-      { label: "share", message: shareResult.error },
-    ].filter((notice): notice is Notice => Boolean(notice.message)))
-    setLoading(false)
-  }, [productId, productStoreId, storeFromQuery])
+      setSettings(settingsResult.data)
+      setReviewSource(reviewsResult.source)
+      setReviews(reviewsResult.data)
+
+      if (!productResult.data) {
+        setProduct(null)
+        setShare(null)
+        setRecommendations([])
+        setFatalError(productResult.error ?? "Product not found")
+        setNotices([])
+        setLoading(false)
+        return
+      }
+
+      const realProduct = productResult.data
+      const shareResult =
+        productResult.source === "backend"
+          ? await fetchProductShare(realProduct)
+          : { data: null as BuyerShareInfo | null, source: productResult.source as DataSource, error: undefined }
+      if (!isActive()) return
+      setProduct(realProduct)
+      setSelectedVariantId(realProduct.variants?.[0]?.id ?? realProduct.medusaVariantId)
+      pushBrowseHistory({
+        id: realProduct.id,
+        title: realProduct.title,
+        imageUrl: realProduct.mockupImageUrl || realProduct.imageUrl,
+        price: realProduct.numericPrice,
+        href: `/products/${encodeURIComponent(realProduct.id)}`,
+      })
+
+      if (auth.customer) {
+        const favResult = await checkProductFavorite(productId)
+        if (isActive()) {
+          setIsFavorited(favResult.is_favorited)
+        }
+      }
+
+      setRecommendations(productsResult.data.filter((item) => item.id !== realProduct.id).slice(0, 4))
+      setShare(shareResult.data)
+      setShareError(shareResult.error)
+      setNotices(
+        [
+          ...(productResult.source !== "backend"
+            ? [{ label: "product", message: productResult.error ?? "Showing fallback product data." }]
+            : []),
+          { label: "reviews", message: reviewsResult.error },
+          { label: "store", message: settingsResult.error },
+          { label: "recommendations", message: productsResult.error },
+          { label: "share", message: shareResult.error },
+        ].filter((notice): notice is Notice => Boolean(notice.message))
+      )
+      setLoading(false)
+    },
+    [auth.customer, productId, productStoreId, storeFromQuery]
+  )
 
   useEffect(() => {
     let active = true
@@ -137,10 +150,16 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     }
   }, [loadProduct, loadVersion])
 
-  const galleryImages = useMemo(() => product ? [product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[] : [], [product])
+  const galleryImages = useMemo(
+    () => (product ? ([product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[]) : []),
+    [product]
+  )
   const variants = product?.variants ?? []
   const selectedVariant = product ? resolveSelectedProductVariant(product, selectedVariantId) : undefined
-  const purchaseState = product ? resolveProductPurchaseState(product, selectedVariant) : { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" as const }
+  const purchaseState = product
+    ? resolveProductPurchaseState(product, selectedVariant)
+    : { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" as const }
+  const designHref = product?.id ? buildStudioEditorHref(product.id) : undefined
 
   const addToCart = async () => {
     if (!product || !selectedVariant?.id || !purchaseState.canAdd || adding) return
@@ -152,10 +171,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     setAdding(true)
     setAddNotice(undefined)
     try {
-      const cartStoreId =
-        product.storeId ??
-        storeFromQuery ??
-        settings.storeId
+      const cartStoreId = product.storeId ?? storeFromQuery ?? settings.storeId
       const cartIdentity = getBuyerCartIdentity(auth.customer.id, window.localStorage)
       setActiveBuyerStoreId(cartStoreId)
       const updated = await addProductSelectionToCart({
@@ -172,13 +188,15 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
             storeId: cartStoreId,
             countryCode: readBuyerPreferences(auth.customer).countryCode,
           }),
-        addLineItem: (cartId, variantId, qty) =>
-          addCartLineItem(cartId, variantId, qty, { storeId: cartStoreId }),
+        addLineItem: (cartId, variantId, qty) => addCartLineItem(cartId, variantId, qty, { storeId: cartStoreId }),
       })
       onCartUpdated(updated)
       setAddNotice({ tone: "success", message: "Added to cart." })
     } catch (error) {
-      setAddNotice({ tone: "error", message: error instanceof Error ? error.message : "Unable to add this product to cart." })
+      setAddNotice({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Unable to add this product to cart.",
+      })
     } finally {
       setAdding(false)
     }
@@ -205,47 +223,142 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   }
 
   return (
-    <PageShell className="buyer-product-page" contentClassName="buyer-product-shell-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
-      <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb"><a href="/store">Store</a><span>/</span><span>{product?.title ?? "Product"}</span></nav>
-      {notices.length ? <aside className="buyer-product-api-notices" role="status">{notices.map((notice) => <p key={`${notice.label}-${notice.message}`}>{notice.label} fallback: {notice.message}</p>)}</aside> : null}
+    <PageShell
+      className="buyer-product-page"
+      contentClassName="buyer-product-shell-content"
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      footer={<StoreFooter />}
+    >
+      <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
+        <a href="/store">Store</a>
+        <span>/</span>
+        <span>{product?.title ?? "Product"}</span>
+      </nav>
+      {notices.length ? (
+        <aside className="buyer-product-api-notices" role="status">
+          {notices.map((notice) => (
+            <p key={`${notice.label}-${notice.message}`}>
+              {notice.label} fallback: {notice.message}
+            </p>
+          ))}
+        </aside>
+      ) : null}
 
       <ProductDetailStatus loading={loading} error={fatalError} onRetry={() => setLoadVersion((version) => version + 1)} />
 
-      {!loading && product ? <>
-        <section className="buyer-product-primary">
-          <ProductMediaGallery images={galleryImages} title={product.title} />
-          <ProductPurchasePanel
-            product={product}
-            variants={variants}
-            selectedVariantId={selectedVariant?.id}
-            onVariantChange={setSelectedVariantId}
-            purchaseState={purchaseState}
-            quantity={quantity}
-            setQuantity={setQuantity}
-            adding={adding}
-            authLoading={auth.isLoading}
-            requiresSignIn={!auth.isLoading && !auth.customer}
-            addNotice={addNotice}
-            onAddToCart={() => void addToCart()}
+      {!loading && product ? (
+        <>
+          <ProductDetailPopups
             share={share}
+            productTitle={product.title}
             isFavorited={isFavorited}
             onToggleFavorite={() => void toggleFavorite()}
-            favoriteLoading={favoriteLoading}
           />
-        </section>
-        <ProductStoreCard settings={settings} />
-        <ProductDetailsSection product={product} />
+          <ProductDetailTabs active={activeTab} onChange={setActiveTab} />
+          <section className="buyer-product-logistics-row">
+            <button type="button" onClick={() => document.getElementById("pdp-size")?.scrollIntoView({ behavior: "smooth" })}>
+              Shipping: 9–15 days · Production 3–4 days
+            </button>
+          </section>
+          <section className="buyer-product-primary" id="pdp-item">
+            <ProductMediaGallery images={galleryImages} title={product.title} />
+            <ProductPurchasePanel
+              product={product}
+              variants={variants}
+              selectedVariantId={selectedVariant?.id}
+              onVariantChange={setSelectedVariantId}
+              purchaseState={purchaseState}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              adding={adding}
+              authLoading={auth.isLoading}
+              requiresSignIn={!auth.isLoading && !auth.customer}
+              addNotice={addNotice}
+              onAddToCart={() => void addToCart()}
+              share={share}
+              isFavorited={isFavorited}
+              onToggleFavorite={() => void toggleFavorite()}
+              favoriteLoading={favoriteLoading}
+              designHref={designHref}
+            />
+          </section>
+          <section id="pdp-size" className="buyer-product-size-guide">
+            <h2>Size guide</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Size</th>
+                  <th>Chest (in)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>S</td>
+                  <td>34–36</td>
+                </tr>
+                <tr>
+                  <td>M</td>
+                  <td>38–40</td>
+                </tr>
+                <tr>
+                  <td>L</td>
+                  <td>42–44</td>
+                </tr>
+                <tr>
+                  <td>XL</td>
+                  <td>46–48</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section id="pdp-package" className="buyer-product-package">
+            <h2>Package</h2>
+            <p>Production time: 3–4 business days. Shipping: 9–15 days.</p>
+          </section>
+          <ProductStoreCard settings={settings} />
+          <div id="pdp-detail">
+            <ProductDetailsSection product={product} />
+          </div>
 
-        {recommendations.length ? <section className="buyer-product-recommendations"><header><p>More from this store</p><h2>You may also like</h2></header><div className="buyer-product-recommendation-grid">{recommendations.map((item) => <div key={item.id}><ProductCard product={item} /></div>)}</div></section> : null}
-        <ProductReviewSection
-          summary={reviews}
-          source={reviewSource}
-          error={notices.find((notice) => notice.label === "reviews")?.message}
-          review={reviewOrderNumber && auth.customer?.email ? { productId: product.id, orderNumber: reviewOrderNumber, email: auth.customer.email, customerName: [auth.customer.firstName, auth.customer.lastName].filter(Boolean).join(" ") || undefined } : undefined}
-          viewReviewOrderNumber={viewReviewOrderNumber}
-          onSubmitted={() => setLoadVersion((version) => version + 1)}
-        />
-      </> : null}
+          {recommendations.length ? (
+            <section className="buyer-product-recommendations" id="pdp-recommend">
+              <header>
+                <p>More from this store</p>
+                <h2>You may also like</h2>
+              </header>
+              <div className="buyer-product-recommendation-grid">
+                {recommendations.map((item) => (
+                  <div key={item.id}>
+                    <ProductCard product={item} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <div id="pdp-review">
+            <ProductReviewSection
+              summary={reviews}
+              source={reviewSource}
+              error={notices.find((notice) => notice.label === "reviews")?.message}
+              review={
+                reviewOrderNumber && auth.customer?.email
+                  ? {
+                      productId: product.id,
+                      orderNumber: reviewOrderNumber,
+                      email: auth.customer.email,
+                      customerName: [auth.customer.firstName, auth.customer.lastName].filter(Boolean).join(" ") || undefined,
+                    }
+                  : undefined
+              }
+              viewReviewOrderNumber={viewReviewOrderNumber}
+              onSubmitted={() => setLoadVersion((version) => version + 1)}
+            />
+          </div>
+          {designHref ? (
+            <StickyDesignBar amount={product.numericPrice} designHref={designHref} disabled={!product.hasDesigner} />
+          ) : null}
+        </>
+      ) : null}
     </PageShell>
   )
 }

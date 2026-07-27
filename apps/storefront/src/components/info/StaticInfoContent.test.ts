@@ -1,6 +1,8 @@
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import {
+  AboutContent,
+  CookiesContent,
   HelpContent,
   PrivacyContent,
   StaticPageNavigation,
@@ -8,47 +10,56 @@ import {
 } from "./StaticInfoContent"
 
 describe("buyer static information pages", () => {
-  it("renders help sections for ordering, payment, cancellation, refunds, lookup, and support", () => {
+  it("renders help topics from Getting Started / Support Center", () => {
     const html = renderToStaticMarkup(createElement(HelpContent))
 
-    expect(html).toContain("How to order")
-    expect(html).toContain("How checkout works")
-    expect(html).toContain("Payment authorization")
-    expect(html).toContain("Cancel an order")
-    expect(html).toContain("Request a refund")
-    expect(html).toContain("Guest order lookup")
-    expect(html).toContain("Support and contact")
-    expect(html).toContain("authorizes payment but does not capture")
-    expect(html).toContain("pending review, not money returned")
+    expect(html).toContain("Create an Account")
+    expect(html).toContain("Generate AI Images")
+    expect(html).toContain("Cancel an Order")
+    expect(html).toContain("Refund Policy")
+    expect(html).toContain("AI Prompt Guide")
+    expect(html).toContain("support@ciiverse.com")
   })
 
-  it("does not claim captured or refunded payment in the terms", () => {
+  it("renders official terms sections without inventing capture wording", () => {
     const html = renderToStaticMarkup(createElement(TermsContent))
 
-    expect(html).toContain("Payment authorization")
-    expect(html).toContain("pending review")
+    expect(html).toContain("Acceptance of Terms")
+    expect(html).toContain("Orders and Payments")
+    expect(html).toContain("Citigoo Limited")
+    expect(html).toContain("Hong Kong")
     expect(html).not.toContain("Payment captured")
-    expect(html).not.toContain("Money paid")
-    expect(html).not.toContain("Refunded")
-    expect(html).not.toContain("Money returned")
     expect(html).not.toContain("Guaranteed refund")
   })
 
-  it("renders account, cart, order, guest lookup, and data-separation privacy sections", () => {
+  it("renders official privacy policy sections", () => {
     const html = renderToStaticMarkup(createElement(PrivacyContent))
 
-    expect(html).toContain("Account data")
-    expect(html).toContain("Cart data")
-    expect(html).toContain("Order data")
-    expect(html).toContain("Guest lookup data")
-    expect(html).toContain("Seller and admin data separation")
+    expect(html).toContain("Information We Collect")
+    expect(html).toContain("AI Image Generation and Processing")
+    expect(html).toContain("Payment Processing")
+    expect(html).toContain("Cookies and Tracking Technologies")
+    expect(html).toContain("privacy@ciiverse.com")
   })
 
-  it("includes store, account, and order navigation actions", () => {
+  it("renders about and cookie policy pages", () => {
+    const about = renderToStaticMarkup(createElement(AboutContent))
+    const cookies = renderToStaticMarkup(createElement(CookiesContent))
+
+    expect(about).toContain("AI-native print-on-demand")
+    expect(about).toContain("Hong Kong")
+    expect(cookies).toContain("Strictly Necessary Cookies")
+    expect(cookies).toContain("Withdrawal of Consent")
+  })
+
+  it("includes store and legal navigation actions", () => {
     const html = renderToStaticMarkup(createElement(StaticPageNavigation))
 
     expect(html).toContain('href="/store"')
-    expect(html).toContain('href="/account"')
-    expect(html).toContain('href="/account/orders"')
+    expect(html).toContain('href="/help"')
+    expect(html).toContain('href="/about"')
+    expect(html).toContain('href="/terms"')
+    expect(html).toContain('href="/privacy"')
+    expect(html).toContain('href="/cookies"')
   })
 })

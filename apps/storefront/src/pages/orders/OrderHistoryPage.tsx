@@ -24,6 +24,7 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
   const [ordersError, setOrdersError] = useState<string | undefined>()
   const [activeFilter, setActiveFilter] = useState<OrderHistoryFilter>(orderHistoryFilters[0])
   const auth = useBuyerAuth()
+  const storeName = settings.brandName?.trim() || "Store"
 
   useEffect(() => {
     let active = true
@@ -65,12 +66,23 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
 
   return (
     <PageShell
-      className="buyer-orders-page"
+      className="buyer-orders-page buyer-orders-page--temu"
       contentClassName="buyer-orders-main buyer-order-history-main"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
+      header={
+        <>
+          <div className="buyer-order-history-mobile-chrome">
+            <OrderHistoryHeader signedInEmail={auth.customer?.email} />
+          </div>
+          <div className="buyer-order-history-desktop-chrome">
+            <StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />
+          </div>
+        </>
+      }
       footer={<StoreFooter />}
     >
-      <OrderHistoryHeader signedInEmail={auth.customer?.email} />
+      <div className="buyer-order-history-desktop-title">
+        <OrderHistoryHeader signedInEmail={auth.customer?.email} />
+      </div>
       <OrderHistoryTabs activeKey={activeFilter.key} onChange={changeFilter} />
       {auth.isLoading ? (
         <LoadingState label="Checking account session..." />
@@ -89,10 +101,14 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
               <div key={group.key}>
                 <OrderHistoryGroupSection
                   group={group}
+                  storeName={storeName}
                   customerEmail={auth.customer?.email}
                   customerName={[auth.customer?.firstName, auth.customer?.lastName].filter(Boolean).join(" ") || undefined}
                   onConfirmReceipt={async (orderId) => {
                     await confirmOrderReceived(orderId)
+                  }}
+                  onCancelOrder={(orderId) => {
+                    window.location.assign(`/account/orders/${encodeURIComponent(orderId)}`)
                   }}
                   onReviewSubmitted={() => window.location.reload()}
                   onRefundSubmitted={() => window.location.reload()}

@@ -55,8 +55,10 @@ function StudioFooter({ brandName }: { brandName: string }) {
         <span>
           © {year} {brandName}
         </span>
+        <a href="/about">About</a>
         <a href="/terms">Terms</a>
         <a href="/privacy">Privacy</a>
+        <a href="/cookies">Cookies</a>
       </div>
     </footer>
   )
@@ -166,7 +168,8 @@ export function StudioLandingPage({ cartCount }: StudioLandingPageProps) {
         hasFilters={false}
         openingId={openingId}
         onRetry={() => void loadCatalog(1, false)}
-        onCustomize={handleCustomize}
+        onViewDetail={handleCustomize}
+        onDesignNow={handleCustomize}
         canLoadMore={page < lastPage}
         loadingMore={loadingMore}
         onLoadMore={() => void loadCatalog(page + 1, true)}

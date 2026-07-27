@@ -290,6 +290,7 @@ type ApiShippingOption = {
   id?: string
   name?: string
   amount?: number
+  amount_minor?: number
   currency_code?: string
 }
 
@@ -480,6 +481,7 @@ type ApiMyOrderPreviewItem = {
   thumbnail?: string | null
   quantity?: number
   product_id?: string | null
+  variant_id?: string | null
 }
 
 type ApiMyOrder = {
@@ -749,6 +751,7 @@ export type BuyerOrderSummary = {
     thumbnail?: string | null
     quantity: number
     productId?: string | null
+    variantId?: string | null
   }>
   reviewEligible?: boolean
   reviewCompleted?: boolean
@@ -900,6 +903,13 @@ const readNumber = (value: number | string | null | undefined) => {
   if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
+}
+
+/** Medusa cart / payment amounts are stored in minor units (cents). */
+const fromCartMinorUnits = (value: number | string | null | undefined) => {
+  if (value == null || value === "") return undefined
+  const numeric = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(numeric) ? numeric / 100 : undefined
 }
 
 const readString = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined)
@@ -1138,8 +1148,8 @@ const normalizeShare = (payload: ApiShare, product: StoreProduct): BuyerShareInf
 
 const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
   const quantity = Math.max(1, Math.floor(item.quantity ?? 1))
-  const rawUnitPrice = readNumber(item.unit_price)
-  const rawTotal = readNumber(item.total)
+  const rawUnitPrice = fromCartMinorUnits(item.unit_price)
+  const rawTotal = fromCartMinorUnits(item.total)
   const unitPrice = rawUnitPrice ?? (rawTotal != null ? rawTotal / quantity : 0)
   const total = rawTotal ?? (rawUnitPrice != null ? rawUnitPrice * quantity : 0)
   return {
@@ -1175,8 +1185,8 @@ const normalizeCartShippingAddress = (address?: ApiCartAddress | null) => {
 
 const normalizeCart = (cart: ApiCart): StoreCart => {
   const items = (cart.items ?? []).map(normalizeCartLineItem)
-  const rawSubtotal = readNumber(cart.subtotal)
-  const rawTotal = readNumber(cart.total)
+  const rawSubtotal = fromCartMinorUnits(cart.subtotal)
+  const rawTotal = fromCartMinorUnits(cart.total)
   const derivedSubtotalAvailable = items.length > 0 && items.every((item) => item.hasTotal)
   const subtotal = rawSubtotal ?? (derivedSubtotalAvailable ? items.reduce((sum, item) => sum + item.total, 0) : 0)
   const total = rawTotal ?? subtotal
@@ -1687,6 +1697,50 @@ export const addCartLineItem = async (
   return fetchCart(cartId, options)
 }
 
+export type ReorderLineInput = {
+  variantId: string
+  quantity: number
+}
+
+/**
+ * Rebuild a checkout cart from prior order lines and return the checkout URL.
+ * Custom designs / catalog items both re-add via Medusa variant_id.
+ */
+export const reorderItemsToCheckout = async (input: {
+  storeId: string
+  countryCode?: string
+  items: ReorderLineInput[]
+  customerId?: string | null
+}): Promise<{ cart: StoreCart; checkoutHref: string }> => {
+  const lines = input.items.filter((item) => item.variantId && item.quantity > 0)
+  if (!lines.length) {
+    throw new Error("This order has no purchasable variants to order again.")
+  }
+
+  setActiveBuyerStoreId(input.storeId)
+  let cart = await createCart({
+    storeId: input.storeId,
+    countryCode: input.countryCode ?? "us",
+  })
+  for (const line of lines) {
+    cart = await addCartLineItem(cart.id, line.variantId, line.quantity, {
+      storeId: input.storeId,
+    })
+  }
+
+  const identity = input.customerId ? `buyer:${input.customerId}` : "guest:anonymous"
+  try {
+    window.localStorage.setItem(getBuyerCartStorageKey(input.storeId, identity), cart.id)
+  } catch {
+    // Storage may be unavailable in private mode; checkout still works with the returned href.
+  }
+
+  return {
+    cart,
+    checkoutHref: `/checkout?store=${encodeURIComponent(input.storeId)}`,
+  }
+}
+
 export const updateCartLineItem = async (
   cartId: string,
   lineId: string,
@@ -1752,14 +1806,23 @@ export const getCartShippingOptions = async (cartId: string) => {
     .filter((option): option is Required<Pick<ApiShippingOption, "id" | "name">> & ApiShippingOption =>
       Boolean(option.id && option.name)
     )
-    .map<CartShippingOption>((option) => ({
-      id: option.id,
-      name: option.name,
-      amount: readNumber(option.amount),
-      currencyCode: option.currency_code ?? "usd",
-      available: readNumber(option.amount) != null,
-      unavailableReason: readNumber(option.amount) == null ? "Price is unavailable for this cart/address." : undefined,
-    }))
+    .map<CartShippingOption>((option) => {
+      // Backend now returns major USD in `amount`. Fall back to minor if a legacy payload slips through.
+      const major =
+        typeof option.amount === "number" && Number.isFinite(option.amount)
+          ? option.amount
+          : typeof option.amount_minor === "number" && Number.isFinite(option.amount_minor)
+            ? option.amount_minor / 100
+            : undefined
+      return {
+        id: option.id,
+        name: option.name,
+        amount: major,
+        currencyCode: option.currency_code ?? "usd",
+        available: major != null,
+        unavailableReason: major == null ? "Price is unavailable for this cart/address." : undefined,
+      }
+    })
 
   return {
     options,
@@ -1984,6 +2047,7 @@ export const getMyOrders = async ({
         thumbnail: resolveOrderItemThumbnailUrl(item.thumbnail),
         quantity: item.quantity ?? 0,
         productId: item.product_id ?? null,
+        variantId: item.variant_id ?? null,
       })),
       reviewEligible: Boolean(order.review_eligible),
       reviewCompleted: Boolean(order.review_completed),
@@ -2474,6 +2538,259 @@ export const confirmBuyerEmailVerification = async (code: string) => {
     }
   )
   return payload
+}
+
+export type BuyerPlanId = "free" | "ai_creative"
+
+export type BuyerPlanSnapshot = {
+  planId: BuyerPlanId
+  planName: string
+  planStatus: "active" | "past_due" | "canceled"
+  priceLabel: string
+  aiCreditsRemaining: number
+  aiCreditsMonthly: number
+  productLimit: number
+  storageLimitBytes: number
+  storageUsedBytes: number
+  discountPercent: number
+  planRenewsAt?: string | null
+  canUseAi: boolean
+}
+
+export type BuyerPlanCatalogEntry = {
+  id: BuyerPlanId
+  name: string
+  priceLabel: string
+  monthlyPriceUsd: number
+  aiCreditsMonthly: number
+  productLimit: number
+  storageLimitBytes: number
+  discountPercent: number
+  description: string
+}
+
+type ApiBuyerPlan = {
+  plan_id?: string
+  plan_name?: string
+  plan_status?: string
+  price_label?: string
+  ai_credits_remaining?: number
+  ai_credits_monthly?: number
+  product_limit?: number
+  storage_limit_bytes?: number
+  storage_used_bytes?: number
+  plan_discount_percent?: number
+  plan_renews_at?: string | null
+  can_use_ai?: boolean
+}
+
+const mapBuyerPlan = (payload?: ApiBuyerPlan | null): BuyerPlanSnapshot => ({
+  planId: payload?.plan_id === "ai_creative" ? "ai_creative" : "free",
+  planName: payload?.plan_name ?? (payload?.plan_id === "ai_creative" ? "AI Creative" : "Free"),
+  planStatus:
+    payload?.plan_status === "past_due" || payload?.plan_status === "canceled"
+      ? payload.plan_status
+      : "active",
+  priceLabel: payload?.price_label ?? "$0/month",
+  aiCreditsRemaining: Number(payload?.ai_credits_remaining ?? 5),
+  aiCreditsMonthly: Number(payload?.ai_credits_monthly ?? 5),
+  productLimit: Number(payload?.product_limit ?? 25),
+  storageLimitBytes: Number(payload?.storage_limit_bytes ?? 2 * 1024 * 1024 * 1024),
+  storageUsedBytes: Number(payload?.storage_used_bytes ?? 0),
+  discountPercent: Number(payload?.plan_discount_percent ?? 0),
+  planRenewsAt: payload?.plan_renews_at ?? null,
+  canUseAi: Boolean(payload?.can_use_ai ?? (Number(payload?.ai_credits_remaining ?? 5) > 0)),
+})
+
+export const formatStorageGb = (bytes: number) => {
+  const gb = bytes / (1024 * 1024 * 1024)
+  return `${gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)}GB`
+}
+
+export type BuyerCoupon = {
+  walletId: string | null
+  couponId: string
+  code: string
+  title: string
+  description: string | null
+  couponType: string
+  discountAmount: number
+  minSubtotal: number
+  amountLabel: string
+  conditionLabel: string
+  scope: string
+  productIds: string[]
+  scopeLabel: string
+  storeName: string
+  quantity: number
+  status: string
+  expiresAt: string | null
+  expiringSoon: boolean
+  isDefault: boolean
+}
+
+export type CheckoutPricingBreakdown = {
+  merchandiseSubtotal: number
+  shippingTotal: number
+  couponDiscount: number
+  planDiscount: number
+  planDiscountPercent: number
+  discountTotal: number
+  payableTotal: number
+  appliedCoupon: {
+    buyerCouponId: string
+    couponId: string
+    code: string
+    title: string
+    discountAmount: number
+    minSubtotal: number
+  } | null
+  currencyCode: string
+}
+
+const mapBuyerCoupon = (row: Record<string, unknown>): BuyerCoupon => ({
+  walletId: typeof row.wallet_id === "string" ? row.wallet_id : null,
+  couponId: String(row.coupon_id ?? ""),
+  code: String(row.code ?? ""),
+  title: String(row.title ?? "Coupon"),
+  description: typeof row.description === "string" ? row.description : null,
+  couponType: String(row.coupon_type ?? "goods_voucher"),
+  discountAmount: Number(row.discount_amount ?? 0),
+  minSubtotal: Number(row.min_subtotal ?? 0),
+  amountLabel: String(row.amount_label ?? ""),
+  conditionLabel: String(row.condition_label ?? ""),
+  scope: String(row.scope ?? "all_store"),
+  productIds: Array.isArray(row.product_ids) ? row.product_ids.map(String) : [],
+  scopeLabel: String(row.scope_label ?? "All items in this store"),
+  storeName: String(row.store_name ?? "ciiverse"),
+  quantity: Math.max(1, Number(row.quantity ?? 1)),
+  status: String(row.status ?? "available"),
+  expiresAt: typeof row.expires_at === "string" ? row.expires_at : null,
+  expiringSoon: Boolean(row.expiring_soon),
+  isDefault: Boolean(row.is_default),
+})
+
+const mapCheckoutPricing = (payload: Record<string, unknown>): CheckoutPricingBreakdown => {
+  const applied = payload.applied_coupon && typeof payload.applied_coupon === "object"
+    ? (payload.applied_coupon as Record<string, unknown>)
+    : null
+  return {
+    merchandiseSubtotal: Number(payload.merchandise_subtotal ?? 0),
+    shippingTotal: Number(payload.shipping_total ?? 0),
+    couponDiscount: Number(payload.coupon_discount ?? 0),
+    planDiscount: Number(payload.plan_discount ?? 0),
+    planDiscountPercent: Number(payload.plan_discount_percent ?? 0),
+    discountTotal: Number(payload.discount_total ?? 0),
+    payableTotal: Number(payload.payable_total ?? 0),
+    appliedCoupon: applied
+      ? {
+          buyerCouponId: String(applied.buyer_coupon_id ?? ""),
+          couponId: String(applied.coupon_id ?? ""),
+          code: String(applied.code ?? ""),
+          title: String(applied.title ?? ""),
+          discountAmount: Number(applied.discount_amount ?? 0),
+          minSubtotal: Number(applied.min_subtotal ?? 0),
+        }
+      : null,
+    currencyCode: String(payload.currency_code ?? "usd"),
+  }
+}
+
+export const fetchMyCoupons = async (bucket = "all"): Promise<BuyerCoupon[]> => {
+  const params = new URLSearchParams({ bucket })
+  const payload = await apiFetch<{ coupons?: Array<Record<string, unknown>> }>(
+    `/store/customers/me/coupons?${params.toString()}`
+  )
+  return (payload.coupons ?? []).map(mapBuyerCoupon)
+}
+
+export const claimCouponByCode = async (code: string): Promise<BuyerCoupon> => {
+  const payload = await apiFetch<{ coupon?: Record<string, unknown> }>(
+    "/store/customers/me/coupons/claim",
+    { method: "POST", body: JSON.stringify({ code }) }
+  )
+  if (!payload.coupon) throw new Error("Coupon claim did not return a coupon")
+  return mapBuyerCoupon(payload.coupon)
+}
+
+export const fetchCartCouponPricing = async (cartId: string): Promise<CheckoutPricingBreakdown> => {
+  const payload = await apiFetch<{ pricing?: Record<string, unknown> }>(
+    `/store/carts/${encodeURIComponent(cartId)}/coupons`
+  )
+  return mapCheckoutPricing((payload.pricing ?? {}) as Record<string, unknown>)
+}
+
+export const applyCartCoupon = async (
+  cartId: string,
+  buyerCouponId: string
+): Promise<CheckoutPricingBreakdown> => {
+  const payload = await apiFetch<{ pricing?: Record<string, unknown> }>(
+    `/store/carts/${encodeURIComponent(cartId)}/coupons`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action: "apply", buyer_coupon_id: buyerCouponId }),
+    }
+  )
+  return mapCheckoutPricing((payload.pricing ?? {}) as Record<string, unknown>)
+}
+
+export const clearCartCoupon = async (cartId: string): Promise<CheckoutPricingBreakdown> => {
+  const payload = await apiFetch<{ pricing?: Record<string, unknown> }>(
+    `/store/carts/${encodeURIComponent(cartId)}/coupons`,
+    { method: "POST", body: JSON.stringify({ action: "clear" }) }
+  )
+  return mapCheckoutPricing((payload.pricing ?? {}) as Record<string, unknown>)
+}
+
+export const fetchBuyerPlan = async (): Promise<{
+  plan: BuyerPlanSnapshot
+  catalog: BuyerPlanCatalogEntry[]
+}> => {
+  const payload = await apiFetch<{
+    plan?: ApiBuyerPlan
+    catalog?: Array<{
+      id?: string
+      name?: string
+      price_label?: string
+      monthly_price_usd?: number
+      ai_credits_monthly?: number
+      product_limit?: number
+      storage_limit_bytes?: number
+      discount_percent?: number
+      description?: string
+    }>
+  }>("/store/customers/me/plan")
+
+  return {
+    plan: mapBuyerPlan(payload.plan),
+    catalog: (payload.catalog ?? []).map((entry) => ({
+      id: entry.id === "ai_creative" ? "ai_creative" : "free",
+      name: entry.name ?? "Plan",
+      priceLabel: entry.price_label ?? "$0/month",
+      monthlyPriceUsd: Number(entry.monthly_price_usd ?? 0),
+      aiCreditsMonthly: Number(entry.ai_credits_monthly ?? 5),
+      productLimit: Number(entry.product_limit ?? 25),
+      storageLimitBytes: Number(entry.storage_limit_bytes ?? 2 * 1024 * 1024 * 1024),
+      discountPercent: Number(entry.discount_percent ?? 0),
+      description: entry.description ?? "",
+    })),
+  }
+}
+
+export const upgradeBuyerPlan = async (planId: BuyerPlanId) => {
+  const payload = await apiFetch<{
+    plan?: ApiBuyerPlan
+    message?: string
+    billing?: string
+  }>("/store/customers/me/plan", {
+    method: "POST",
+    body: JSON.stringify({ action: "upgrade", plan_id: planId }),
+  })
+  return {
+    plan: mapBuyerPlan(payload.plan),
+    message: payload.message,
+    billing: payload.billing,
+  }
 }
 
 export const signOutCustomer = async () => {

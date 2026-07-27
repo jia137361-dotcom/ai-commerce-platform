@@ -69,6 +69,12 @@ export function OverviewPage() {
       apiFetch<{ notifications: StoreNotification[] }>("/admin/notifications?limit=8"),
   })
 
+  const followersQuery = useQuery({
+    queryKey: ["store-followers"],
+    queryFn: () =>
+      apiFetch<{ follower_count: number }>("/admin/store-followers?limit=1"),
+  })
+
   const orders = ordersQuery.data?.orders ?? []
   const threads = messagesQuery.data?.threads ?? []
   const reviews = reviewsQuery.data?.reviews ?? []
@@ -86,9 +92,13 @@ export function OverviewPage() {
   const recentOrderCount = orders.length
   const reviewCount =
     reviewsQuery.data?.review_count ?? reviewsQuery.data?.count ?? reviews.length
+  const followerCount = followersQuery.data?.follower_count ?? 0
 
   const loading =
-    ordersQuery.isLoading || messagesQuery.isLoading || reviewsQuery.isLoading
+    ordersQuery.isLoading ||
+    messagesQuery.isLoading ||
+    reviewsQuery.isLoading ||
+    followersQuery.isLoading
 
   const stats = [
     {
@@ -97,6 +107,13 @@ export function OverviewPage() {
       to: "/orders",
       accent: "bg-orange-100 text-brand",
       hint: "Orders needing production / ship",
+    },
+    {
+      label: "Followers",
+      value: followerCount,
+      to: "/followers",
+      accent: "bg-violet-50 text-violet-700",
+      hint: "Buyers following this store",
     },
     {
       label: "Unread inbox",
@@ -139,15 +156,15 @@ export function OverviewPage() {
       />
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
             <Card key={index} className="h-28 animate-pulse bg-slate-100">
               <span className="sr-only">Loading</span>
             </Card>
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {stats.map((stat) => (
             <Link key={stat.label} to={stat.to} className="group block">
               <Card className="transition hover:border-brand/30 hover:shadow-md">

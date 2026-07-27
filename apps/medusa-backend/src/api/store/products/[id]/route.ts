@@ -18,10 +18,18 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const storeId = queryStoreId || headerStoreId
   const storeCoreService = getStoreCoreService(req)
 
-  const products = await storeCoreService.listProducts({
+  let products = await storeCoreService.listProducts({
     id: productId,
     store_id: storeId,
   })
+
+  // Order lines sometimes expose Medusa native product ids; resolve store-core via bridge.
+  if (!products[0]) {
+    products = await storeCoreService.listProducts({
+      medusa_product_id: productId,
+      store_id: storeId,
+    })
+  }
 
   const product = products[0]
 

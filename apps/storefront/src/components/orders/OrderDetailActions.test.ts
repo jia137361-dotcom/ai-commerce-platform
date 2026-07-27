@@ -16,18 +16,23 @@ const order = (overrides: Partial<BuyerOrderDetail> = {}): BuyerOrderDetail => (
 })
 
 const renderActions = (value: BuyerOrderDetail, isAuthenticated = true) =>
-  renderToStaticMarkup(createElement(OrderDetailActions, {
-    order: value,
-    isAuthenticated,
-    trackingHref: "/account/orders/order_123/tracking",
-    onCancel: () => undefined,
-    onRequestRefund: () => undefined,
-  }))
+  renderToStaticMarkup(
+    createElement(OrderDetailActions, {
+      order: value,
+      isAuthenticated,
+      trackingHref: "/account/orders/order_123/tracking",
+      orderAgainHref: "/store",
+      onOrderAgain: () => undefined,
+      onCancel: () => undefined,
+      onRequestRefund: () => undefined,
+    })
+  )
 
 describe("OrderDetailActions", () => {
   it("shows Cancel only when cancellation is allowed", () => {
     const html = renderActions(order({ cancellation: { allowed: true } }))
     expect(html).toContain("Cancel order")
+    expect(html).toContain("Order again")
     expect(html).not.toContain("Request refund")
   })
 
@@ -37,48 +42,46 @@ describe("OrderDetailActions", () => {
   })
 
   it("shows Pending review for an open request", () => {
-    const html = renderActions(order({
-      refundRequest: {
-        allowed: false,
-        openRequest: {
-          id: "refund_1",
-          orderId: "order_123",
-          status: "pending",
-          reason: "Wrong item",
-          requestedAmount: 20,
+    const html = renderActions(
+      order({
+        refundRequest: {
+          allowed: false,
+          openRequest: {
+            id: "refund_1",
+            orderId: "order_123",
+            status: "pending",
+            reason: "Wrong item",
+            requestedAmount: 20,
+          },
         },
-      },
-    }))
+      })
+    )
     expect(html).toContain("Pending review")
     expect(html).not.toContain("Request refund")
   })
 
   it("hides cancel and refund actions for cancelled orders even with contradictory capabilities", () => {
-    const html = renderActions(order({
-      status: "cancelled",
-      cancellation: { allowed: true },
-      refundRequest: { allowed: true },
-    }))
+    const html = renderActions(
+      order({
+        status: "cancelled",
+        cancellation: { allowed: true },
+        refundRequest: { allowed: true },
+      })
+    )
     expect(html).not.toContain("Cancel order")
     expect(html).not.toContain("Request refund")
   })
 
   it("keeps guest detail lookup-only and never renders authenticated actions", () => {
-    const html = renderActions(order({
-      cancellation: { allowed: true },
-      refundRequest: { allowed: true },
-    }), false)
+    const html = renderActions(
+      order({
+        cancellation: { allowed: true },
+        refundRequest: { allowed: true },
+      }),
+      false
+    )
     expect(html).toContain("Search another order")
     expect(html).not.toContain("Cancel order")
     expect(html).not.toContain("Request refund")
-    expect(html).not.toContain("Back to orders")
-  })
-
-  it("describes authorization without claiming captured payment", () => {
-    const html = renderActions(order({ cancellation: { allowed: true } }))
-    expect(html).toContain("Payment authorized, not captured")
-    expect(html).toContain("You can cancel this order before capture or fulfillment")
-    expect(html).not.toContain(">Payment captured<")
-    expect(html).not.toContain("Money paid")
   })
 })

@@ -3,7 +3,7 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { AccountAuthLayout } from "../../components/account/AccountAuthLayout"
 import { AccountAuthRequired } from "../../components/account/AccountAuthRequired"
 import { AccountNavigation } from "../../components/account/AccountNavigation"
-import { AccountCouponsEmpty } from "../../components/account/AccountCouponsEmpty"
+import { AccountCouponsPanel } from "../../components/account/AccountCouponsPanel"
 import { AccountPaymentMethods } from "./AccountPaymentMethods"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
@@ -165,7 +165,7 @@ export function AccountSettingsPage({ cartCount, slug }: { cartCount: number; sl
     if (slug === "country-region") return <PreferenceList kind="country" />
     if (slug === "currency") return <PreferenceList kind="currency" />
     if (slug === "following") return <FollowingList settings={settings} />
-    return <AccountCouponsEmpty />
+    return <AccountCouponsPanel />
   }, [settings, slug])
 
   return <AccountAuthLayout settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode}>{auth.isLoading ? <LoadingState label="Loading account settings..." /> : !auth.customer ? <AccountAuthRequired /> : <section className="buyer-account-layout"><AccountNavigation customer={auth.customer} onSignOut={() => void auth.signOut().then(() => window.location.assign("/store"))} onSwitchAccount={() => void auth.signOut().then(() => window.location.assign("/account/sign-in"))} />{content}</section>}</AccountAuthLayout>

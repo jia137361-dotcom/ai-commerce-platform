@@ -119,6 +119,26 @@ describe("GET /store/carts/:cart_id/shipping-options", () => {
     expect(mockListShippingOptionsRun).not.toHaveBeenCalled()
   })
 
+  it("returns major-unit shipping amounts for Medusa calculated prices", async () => {
+    const { req } = createReq()
+    const res = createRes()
+
+    await getShippingOptions(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      shipping_options: [
+        {
+          id: "so_1",
+          name: "Standard",
+          amount: 12,
+          amount_minor: 1200,
+        },
+      ],
+      requires_shipping_method: true,
+    })
+  })
+
   it("returns requires_shipping_method=true for shippable carts even when no options exist", async () => {
     mockListShippingOptionsRun.mockResolvedValueOnce({ result: [] })
     const { req } = createReq()

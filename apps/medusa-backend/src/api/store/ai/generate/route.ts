@@ -10,6 +10,7 @@ import { resolveCurrentStore } from "../../../../lib/store-context"
 import { enqueueBuyerAiGenerationJob } from "../../../../lib/ai-generation/buyer-generate"
 import { normalizeAiJobResponse } from "../../../../lib/ai-generation/run-job"
 import { resolveBuyerAiRequestOwner } from "../../../../lib/buyer-ai-request"
+import { BuyerPlanError, consumeBuyerAiCredit, serializeBuyerPlan } from "../../../../lib/buyer-plan"
 import { getStoreCoreService, requireText, sendError } from "../../../_helpers/store-core"
 
 type GenerateBody = {
@@ -46,6 +47,23 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const owner = resolveBuyerAiRequestOwner(req)
 
+    // Logged-in buyers consume AI image credits from customer.metadata plan.
+    // Guests remain allowed for demo; ME/Plans UX pushes sign-in + upgrade.
+    let planPayload: ReturnType<typeof serializeBuyerPlan> | null = null
+    if (owner.customer_id) {
+      try {
+        const plan = await consumeBuyerAiCredit(req.scope, owner.customer_id, 1)
+        planPayload = serializeBuyerPlan(plan)
+      } catch (error) {
+        if (error instanceof BuyerPlanError) {
+          return res.status(error.status).json({
+            error: { code: error.code, message: error.message },
+          })
+        }
+        throw error
+      }
+    }
+
     const job = await enqueueBuyerAiGenerationJob(req.scope, storeId, {
       prompt,
       product_id: productId,
@@ -55,7 +73,10 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       guest_key: owner.guest_key,
     })
 
-    return res.status(202).json(normalizeAiJobResponse(job as Record<string, unknown>))
+    return res.status(202).json({
+      ...normalizeAiJobResponse(job as Record<string, unknown>),
+      ...(planPayload ? { plan: planPayload } : {}),
+    })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to enqueue buyer AI job"
     return res.status(500).json({

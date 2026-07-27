@@ -7,7 +7,10 @@ import {
 } from "../../../../../lib/assert-cart-store"
 import { CartStoreAccessError } from "../../../../../lib/cart-store-error"
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
-import { quoteS2bShippingForCart } from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
+import {
+  buildS2bShippingQuoteMetadata,
+  quoteS2bShippingForCart,
+} from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
 
 type ShippingMethodBody = {
   option_id?: string
@@ -124,19 +127,29 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           fresh.metadata && typeof fresh.metadata === "object"
             ? (fresh.metadata as Record<string, unknown>)
             : {}
+        const address = fresh.shipping_address as
+          | { country_code?: string | null; province?: string | null; postal_code?: string | null }
+          | null
+          | undefined
+        const quantity = ((fresh.items ?? []) as Array<{ quantity?: number }>).reduce(
+          (sum, item) => {
+            const qty = typeof item.quantity === "number" ? item.quantity : 1
+            return sum + Math.max(1, qty)
+          },
+          0
+        )
         await cartModule.updateCarts(cart_id, {
           metadata: {
             ...existingMeta,
-            s2b_shipping_quote: {
-              amount_minor: s2bQuote.amountMinor,
-              amount_usd: s2bQuote.amountUsd,
-              amount_cny: s2bQuote.amountCny,
-              logistics_platform_id: s2bQuote.logisticsPlatformId,
-              logistics_name: s2bQuote.logisticsName,
-              basic_product_id: s2bQuote.basicProductId,
-              source: s2bQuote.source,
-              quoted_at: new Date().toISOString(),
-            },
+            s2b_shipping_quote: buildS2bShippingQuoteMetadata(
+              s2bQuote,
+              {
+                country: (address?.country_code ?? "").trim().toUpperCase(),
+                province: address?.province ?? "",
+                postcode: address?.postal_code ?? "",
+              },
+              Math.max(1, quantity)
+            ),
           },
         })
 

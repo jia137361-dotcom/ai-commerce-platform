@@ -5,31 +5,66 @@ const read = (address: OrderAddress, key: string) => {
   return typeof value === "string" && value.trim() ? value : undefined
 }
 
-export function OrderDetailAddress({ address, email }: { address: OrderAddress; email?: string | null }) {
+export function OrderDetailAddress({
+  address,
+  email,
+  trackingHref,
+}: {
+  address: OrderAddress
+  email?: string | null
+  trackingHref?: string
+}) {
+  const receiver = [read(address, "first_name"), read(address, "last_name")].filter(Boolean).join(" ")
+  const phone = read(address, "phone")
   const lines = [
-    [read(address, "first_name"), read(address, "last_name")].filter(Boolean).join(" "),
     read(address, "address_1"),
     read(address, "address_2"),
     [read(address, "city"), read(address, "province"), read(address, "postal_code")].filter(Boolean).join(", "),
     read(address, "country_code")?.toUpperCase(),
-    read(address, "phone"),
   ].filter(Boolean)
 
   return (
     <section className="buyer-order-card buyer-order-detail-section">
       <header>
-        <p className="buyer-order-kicker">Contact & delivery</p>
-        <h2>Delivery information</h2>
+        <h2>Delivery</h2>
       </header>
-      <dl className="buyer-order-data-grid">
+      <dl className="buyer-order-data-grid buyer-order-data-grid--temu">
         <div>
-          <dt>Email</dt>
-          <dd>{email || "Not provided"}</dd>
+          <dt>Estimated delivery</dt>
+          <dd>—</dd>
+        </div>
+        <div>
+          <dt>Track number</dt>
+          <dd>
+            {trackingHref ? (
+              <a href={trackingHref}>View logistics</a>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Shipping method</dt>
+          <dd>—</dd>
+        </div>
+        <div>
+          <dt>Receiver</dt>
+          <dd>{receiver || "—"}</dd>
+        </div>
+        <div>
+          <dt>Phone number</dt>
+          <dd>{phone || "—"}</dd>
         </div>
         <div>
           <dt>Delivery address</dt>
-          <dd>{lines.length ? lines.map((line) => <span key={line}>{line}<br /></span>) : "Not provided"}</dd>
+          <dd>{lines.length ? lines.join(", ") : "—"}</dd>
         </div>
+        {email ? (
+          <div>
+            <dt>Email</dt>
+            <dd>{email}</dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   )

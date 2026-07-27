@@ -5,18 +5,22 @@ import type { OrderHistoryGroup } from "../../pages/orders/order-history-groups"
 
 type OrderHistoryGroupSectionProps = {
   group: OrderHistoryGroup
+  storeName?: string
   customerEmail?: string | null
   customerName?: string | null
   onConfirmReceipt?: (orderId: string) => Promise<void>
+  onCancelOrder?: (orderId: string) => void
   onReviewSubmitted?: () => void
   onRefundSubmitted?: () => void
 }
 
 export function OrderHistoryGroupSection({
   group,
+  storeName,
   customerEmail,
   customerName,
   onConfirmReceipt,
+  onCancelOrder,
   onReviewSubmitted,
   onRefundSubmitted,
 }: OrderHistoryGroupSectionProps) {
@@ -24,9 +28,11 @@ export function OrderHistoryGroupSection({
     return (
       <OrderHistoryCard
         order={group.order}
+        storeName={storeName}
         customerEmail={customerEmail}
         customerName={customerName}
         onConfirmReceipt={onConfirmReceipt}
+        onCancelOrder={onCancelOrder}
         onReviewSubmitted={onReviewSubmitted}
         onRefundSubmitted={onRefundSubmitted}
       />
@@ -47,9 +53,11 @@ export function OrderHistoryGroupSection({
           <div key={order.orderId}>
             <OrderHistoryCard
               order={order}
+              storeName={storeName}
               customerEmail={customerEmail}
               customerName={customerName}
               onConfirmReceipt={onConfirmReceipt}
+              onCancelOrder={onCancelOrder}
               onReviewSubmitted={onReviewSubmitted}
               onRefundSubmitted={onRefundSubmitted}
             />

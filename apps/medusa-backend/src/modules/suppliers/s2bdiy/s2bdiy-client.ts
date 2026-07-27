@@ -19,6 +19,8 @@ export type S2bdiyRequestOptions = {
   body?: unknown
   formData?: FormData
   skipAuth?: boolean
+  /** Abort the upstream call after this many ms (default: no timeout). */
+  timeoutMs?: number
 }
 
 // ---- S2bdiyClient class ----
@@ -48,10 +50,35 @@ export class S2bdiyClient {
         body = JSON.stringify(options.body)
       }
 
-      const res = await fetch(url.toString(), {
-        method: options.method ?? (options.body || options.formData ? "POST" : "GET"),
-        headers, body,
-      })
+      const timeoutMs =
+        typeof options.timeoutMs === "number" && options.timeoutMs > 0
+          ? options.timeoutMs
+          : undefined
+      const controller = timeoutMs ? new AbortController() : null
+      const timer = controller
+        ? setTimeout(() => controller.abort(), timeoutMs)
+        : null
+
+      let res: Response
+      try {
+        res = await fetch(url.toString(), {
+          method: options.method ?? (options.body || options.formData ? "POST" : "GET"),
+          headers,
+          body,
+          signal: controller?.signal,
+        })
+      } catch (error) {
+        if (controller?.signal.aborted) {
+          throw new S2bDiyError(
+            `S2BDIY ${options.method ?? "GET"} ${path} timed out after ${timeoutMs}ms`,
+            408,
+            { timeout_ms: timeoutMs }
+          )
+        }
+        throw error
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
 
       if (res.status === 401 && retryOn401 && !options.skipAuth) {
         clearS2bdiyTokenCache()

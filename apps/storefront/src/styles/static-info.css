@@ -25,6 +25,8 @@
 
 .buyer-info-section-body {
   margin-top: var(--buyer-space-3);
+  display: grid;
+  gap: 12px;
 }
 
 .buyer-info-section-body p,
@@ -32,6 +34,55 @@
   margin: 0;
   color: var(--buyer-text-muted);
   line-height: 1.65;
+}
+
+.buyer-info-bullet-heading {
+  margin: 0 0 4px !important;
+  color: var(--buyer-text) !important;
+  font-weight: 700;
+}
+
+.buyer-info-section-body ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--buyer-text-muted);
+  line-height: 1.55;
+}
+
+.buyer-info-section-body li + li {
+  margin-top: 4px;
+}
+
+.buyer-info-inline-links,
+.buyer-info-meta p {
+  margin: 0;
+}
+
+.buyer-info-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.buyer-info-toc a {
+  color: var(--buyer-focus);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.buyer-info-toc a:hover {
+  text-decoration: underline;
+}
+
+.buyer-info-help-block + .buyer-info-help-block {
+  margin-top: 16px;
+}
+
+.buyer-info-help-block h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
 }
 
 .buyer-info-section-body a {

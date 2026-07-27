@@ -11,6 +11,7 @@ type ShopBrowseControlsProps = {
   onSortChange: (sort: string) => void
   activeSection: "items" | "reviews" | "about"
   onSectionChange: (section: "items" | "reviews" | "about") => void
+  onOpenFilters?: () => void
 }
 
 export function ShopBrowseControls({
@@ -23,6 +24,7 @@ export function ShopBrowseControls({
   onSortChange,
   activeSection,
   onSectionChange,
+  onOpenFilters,
 }: ShopBrowseControlsProps) {
   const { t } = useBuyerLocale()
   return (
@@ -49,11 +51,7 @@ export function ShopBrowseControls({
       {activeSection === "items" ? (
         <>
           <nav className="buyer-shop-real-categories" aria-label={t("catalogCategoryFilter")}>
-            <button
-              className={activeCategoryId === "all" ? "active" : ""}
-              type="button"
-              onClick={() => onCategoryChange("all")}
-            >
+            <button className={activeCategoryId === "all" ? "active" : ""} type="button" onClick={() => onCategoryChange("all")}>
               {t("catalogAllItems")}
             </button>
             {categories.length ? (
@@ -70,6 +68,11 @@ export function ShopBrowseControls({
             ) : null}
           </nav>
           <div className="buyer-shop-filterbar">
+            {onOpenFilters ? (
+              <button type="button" className="buyer-shop-filter-trigger" onClick={onOpenFilters}>
+                Filters
+              </button>
+            ) : null}
             <label className="buyer-store-search">
               <span aria-hidden="true">⌕</span>
               <input
@@ -82,7 +85,9 @@ export function ShopBrowseControls({
             <label className="buyer-shop-sort">
               <span>Sort by</span>
               <select aria-label="Sort blanks" value={sort} onChange={(event) => onSortChange(event.target.value)}>
-                <option value="recommended">Recommended</option>
+                <option value="recommended">Relevance</option>
+                <option value="top-sales">Top sales</option>
+                <option value="recent">Most recent</option>
                 <option value="price-asc">Price low to high</option>
                 <option value="price-desc">Price high to low</option>
                 <option value="name">Name</option>

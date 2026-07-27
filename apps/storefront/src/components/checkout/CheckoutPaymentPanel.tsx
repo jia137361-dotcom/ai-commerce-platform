@@ -114,8 +114,8 @@ export function CheckoutPaymentPanel({
           <div className="buyer-checkout-payment-message">
             <strong>Select shipping first</strong>
             <p>
-              Save your delivery address in Step 1 and choose a shipping method in Step 2. Stripe card payment unlocks
-              after shipping is confirmed.
+              Save your delivery address in Step 1 and choose a shipping method in Step 2. Card payment unlocks after
+              shipping is confirmed (live freight quotes usually finish within a few seconds).
             </p>
           </div>
         ) : (
@@ -173,7 +173,9 @@ export function CheckoutPaymentPanel({
                 Selected saved card will be charged when you click <strong>Place order</strong>.
               </p>
             ) : preparing ? (
-              <p className="buyer-checkout-card-copy">Creating the Stripe payment session...</p>
+              <p className="buyer-checkout-card-copy">
+                Creating the Stripe payment session… This contacts Stripe and can take longer on slow networks.
+              </p>
             ) : !validClientSecret || !stripePromise ? (
               <div className="buyer-checkout-payment-message">
                 <strong>Unable to start Stripe payment</strong>

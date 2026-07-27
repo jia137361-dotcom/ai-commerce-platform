@@ -10,7 +10,8 @@ type StoreCatalogResultsProps = {
   hasFilters: boolean
   openingId?: number | null
   onRetry: () => void
-  onCustomize: (item: SupplierCatalogItem) => void
+  onViewDetail: (item: SupplierCatalogItem) => void
+  onDesignNow: (item: SupplierCatalogItem) => void
   canLoadMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
@@ -23,7 +24,8 @@ export function StoreCatalogResults({
   hasFilters,
   openingId,
   onRetry,
-  onCustomize,
+  onViewDetail,
+  onDesignNow,
   canLoadMore,
   loadingMore,
   onLoadMore,
@@ -51,7 +53,8 @@ export function StoreCatalogResults({
             <CatalogBlankCard
               item={item}
               opening={openingId === item.id}
-              onCustomize={onCustomize}
+              onViewDetail={onViewDetail}
+              onDesignNow={onDesignNow}
             />
           </div>
         ))}

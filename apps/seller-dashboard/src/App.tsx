@@ -15,6 +15,8 @@ import { ProductReviewsPage, StoreMessagesPage as SellerStoreMessagesPage } from
 import { SupplierCatalogPage } from "./pages/Supplier/SupplierCatalog"
 import { SupplierListPage } from "./pages/Suppliers/SupplierList"
 import { CategoryManagerPage } from "./pages/Categories/CategoryManager"
+import { CouponsPage } from "./pages/Coupons/CouponsPage"
+import { FollowersPage } from "./pages/Followers/FollowersPage"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -47,6 +49,8 @@ export default function App() {
         />
         <Route path="orders" element={<OrderListPage />} />
         <Route path="orders/:orderId/fulfillment" element={<OrderFulfillmentPage />} />
+        <Route path="coupons" element={<CouponsPage />} />
+        <Route path="followers" element={<FollowersPage />} />
         <Route path="reviews" element={<ProductReviewsPage />} />
         <Route path="messages" element={<SellerStoreMessagesPage />} />
         <Route path="settings" element={<SettingsPage />} />

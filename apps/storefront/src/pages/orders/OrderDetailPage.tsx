@@ -20,10 +20,13 @@ import {
   getBuyerStoreId,
   getAuthenticatedOrderDetail,
   getOrderDetail,
+  readBuyerPreferences,
+  reorderItemsToCheckout,
   type BuyerOrderDetail,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { resolveOrderDetailActions } from "./order-detail-state"
+import { collectReorderLinesFromDetail, orderAgainHref } from "./order-history-display"
 
 type OrderDetailPageProps = {
   orderId: string
@@ -62,6 +65,8 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const [refundSubmitting, setRefundSubmitting] = useState(false)
   const [refundError, setRefundError] = useState<string | undefined>()
   const [refundSuccess, setRefundSuccess] = useState<string | undefined>()
+  const [orderAgainLoading, setOrderAgainLoading] = useState(false)
+  const [orderAgainError, setOrderAgainError] = useState<string | undefined>()
 
   const params = new URLSearchParams(window.location.search)
   const guestEmail = params.get("email")?.trim() || readSessionEmail(orderId)
@@ -112,6 +117,32 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   })
   const canCancel = actionState.showCancel
   const canRequestRefund = actionState.showRequestRefund
+
+  const handleOrderAgain = async () => {
+    if (!order || orderAgainLoading) return
+    const lines = collectReorderLinesFromDetail(order)
+    if (!lines.length) {
+      setOrderAgainError("This order has no purchasable variants to order again.")
+      return
+    }
+    setOrderAgainLoading(true)
+    setOrderAgainError(undefined)
+    try {
+      const storeId = order.storeId?.trim() || getBuyerStoreId()
+      const { checkoutHref } = await reorderItemsToCheckout({
+        storeId,
+        countryCode: readBuyerPreferences(auth.customer).countryCode,
+        items: lines,
+        customerId: auth.customer?.id ?? null,
+      })
+      window.location.assign(checkoutHref)
+    } catch (reorderError) {
+      setOrderAgainError(
+        reorderError instanceof Error ? reorderError.message : "Unable to prepare the cart for reorder."
+      )
+      setOrderAgainLoading(false)
+    }
+  }
 
   const submitCancel = async () => {
     if (!order || !canCancel || cancelSubmitting) return
@@ -182,8 +213,8 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
 
   return (
     <PageShell
-      className="buyer-orders-page"
-      contentClassName="buyer-orders-main"
+      className="buyer-orders-page buyer-orders-page--temu"
+      contentClassName="buyer-orders-main buyer-order-detail-main-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
     >
@@ -196,34 +227,51 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
           </>
         ) : (
           <>
-            <OrderDetailHeader order={order} />
-            <section className="buyer-order-detail-grid">
-              <div className="buyer-order-detail-main">
-                <OrderDetailItems order={order} />
-                <OrderDetailAddress address={order.shippingAddress} email={order.email} />
-              </div>
-              <aside className="buyer-order-detail-side">
-                <OrderDetailSummary order={order} />
-                <OrderDetailActions
-                  order={order}
-                  isAuthenticated={Boolean(auth.customer)}
-                  trackingHref={trackingHref}
-                  onCancel={() => {
-                    setCancelOpen(true)
-                    setCancelError(undefined)
-                    setCancelSuccess(undefined)
-                  }}
-                  onRequestRefund={() => {
-                    setRefundOpen(true)
-                    setRefundError(undefined)
-                    setRefundSuccess(undefined)
-                  }}
-                  cancelSuccess={cancelSuccess}
-                  cancelError={!cancelOpen ? cancelError : undefined}
-                  refundSuccess={refundSuccess}
-                  refundError={!refundOpen ? refundError : undefined}
-                />
-              </aside>
+            <OrderDetailHeader order={order} storeName={settings.brandName?.trim() || "Store"} />
+            {/* Merchant Info intentionally omitted per 页面分析 annotation */}
+            <section className="buyer-order-detail-stack">
+              <OrderDetailItems order={order} />
+              <OrderDetailAddress address={order.shippingAddress} email={order.email} trackingHref={trackingHref} />
+              <OrderDetailSummary order={order} />
+              <OrderDetailActions
+                order={order}
+                isAuthenticated={Boolean(auth.customer)}
+                trackingHref={trackingHref}
+                orderAgainHref={
+                  order.items.find((item) => item.productId)?.productId
+                    ? orderAgainHref({
+                        orderId: order.orderId,
+                        itemCount: order.items.length,
+                        previewItems: order.items.map((item) => ({
+                          title: item.title,
+                          quantity: item.quantity,
+                          productId: item.productId,
+                          variantId: item.variantId,
+                        })),
+                        storeId: order.storeId,
+                      })
+                    : "/store"
+                }
+                onOrderAgain={() => {
+                  void handleOrderAgain()
+                }}
+                orderAgainLoading={orderAgainLoading}
+                orderAgainError={orderAgainError}
+                onCancel={() => {
+                  setCancelOpen(true)
+                  setCancelError(undefined)
+                  setCancelSuccess(undefined)
+                }}
+                onRequestRefund={() => {
+                  setRefundOpen(true)
+                  setRefundError(undefined)
+                  setRefundSuccess(undefined)
+                }}
+                cancelSuccess={cancelSuccess}
+                cancelError={!cancelOpen ? cancelError : undefined}
+                refundSuccess={refundSuccess}
+                refundError={!refundOpen ? refundError : undefined}
+              />
             </section>
           </>
         )}

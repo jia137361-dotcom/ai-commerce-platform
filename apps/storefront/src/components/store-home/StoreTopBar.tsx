@@ -1,103 +1,189 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { useBuyerLocale } from "../../lib/locale"
-import type { BuyerStoreSettings } from "../../lib/buyer-api"
+import type { BuyerStoreSettings, SupplierCatalogCategory } from "../../lib/buyer-api"
+import { AccountHoverPanel } from "./AccountHoverPanel"
+import { MobileHomeHeader } from "./MobileHomeHeader"
+import { StoreSubNav } from "./StoreSubNav"
 
 type StoreTopBarProps = {
   settings: BuyerStoreSettings
   cartCount: number
   marketplaceMode?: boolean
+  searchValue?: string
+  onSearchChange?: (value: string) => void
+  onSearchSubmit?: () => void
+  /** Show search field under mobile brand/nav (store home / search). */
+  showMobileSearch?: boolean
+  categories?: SupplierCatalogCategory[]
+  activeCategoryId?: string
+  onCategoryChange?: (categoryId: string) => void
+  showCategoryRow?: boolean
 }
 
-export function StoreTopBar({ settings, cartCount, marketplaceMode = false }: StoreTopBarProps) {
+export function StoreTopBar({
+  settings,
+  cartCount,
+  marketplaceMode = false,
+  searchValue,
+  onSearchChange,
+  onSearchSubmit,
+  showMobileSearch = false,
+  categories = [],
+  activeCategoryId = "all",
+  onCategoryChange,
+  showCategoryRow = false,
+}: StoreTopBarProps) {
   const auth = useBuyerAuth()
   const { locale, toggleLocale, t } = useBuyerLocale()
   const accountHref = auth.customer ? "/account" : "/account/sign-in"
-  const ordersHref = auth.customer ? "/account/orders" : "/orders/lookup"
   const brand = settings.brandName?.trim() || "Store"
   const [path, setPath] = useState(() => (typeof window !== "undefined" ? window.location.pathname : "/"))
-  const [hash, setHash] = useState(() => (typeof window !== "undefined" ? window.location.hash : ""))
+  const [localSearch, setLocalSearch] = useState("")
 
   useEffect(() => {
-    const sync = () => {
-      setPath(window.location.pathname)
-      setHash(window.location.hash)
-    }
+    const sync = () => setPath(window.location.pathname)
     window.addEventListener("popstate", sync)
-    window.addEventListener("hashchange", sync)
     window.addEventListener("citigoo:buyer-navigate", sync)
     return () => {
       window.removeEventListener("popstate", sync)
-      window.removeEventListener("hashchange", sync)
       window.removeEventListener("citigoo:buyer-navigate", sync)
     }
   }, [])
 
-  // Indie store nav stays identical on Shop / Studio / Orders / Account / Cart.
-  // Marketplace chrome is only allowed on the marketplace route itself.
   const showMarketplaceNav = marketplaceMode && path.startsWith("/marketplace")
-  const storeHomeHref = "/store"
-  const howItWorksHref = "/store#how-it-works"
-  const isShop =
-    (path === "/store" || path === "/" || path.startsWith("/shops/")) && hash !== "#how-it-works"
-  const isAiDesign = path.startsWith("/ai-design") || path.startsWith("/ai-studio")
-  const isStudio = path.startsWith("/studio") || path.startsWith("/design")
-  const isMyDesigns = path.startsWith("/my-designs")
-  const isHowItWorks =
-    (path === "/store" || path === "/" || path.startsWith("/shops/")) && hash === "#how-it-works"
-  const isOrders = path.startsWith("/account/orders") || path.startsWith("/orders/")
+  const searchTerm = searchValue ?? localSearch
+  const handleSearchChange = (value: string) => {
+    if (onSearchChange) onSearchChange(value)
+    else setLocalSearch(value)
+  }
+
+  const submitSearch = (event?: FormEvent) => {
+    event?.preventDefault()
+    if (onSearchSubmit) {
+      onSearchSubmit()
+      return
+    }
+    const term = searchTerm.trim()
+    if (!term) return
+    window.location.assign(`/search?q=${encodeURIComponent(term)}`)
+  }
+
+  const categoryTabs =
+    categories.length > 0
+      ? [{ id: "all", label: "All" }, ...categories.slice(0, 8).map((c) => ({ id: String(c.id), label: c.enName || c.name }))]
+      : [
+          { id: "all", label: "All" },
+          { id: "tshirt", label: "T-Shirt" },
+          { id: "hoodie", label: "Hoodie" },
+          { id: "mug", label: "Mug" },
+          { id: "phone", label: "Phone Case" },
+          { id: "poster", label: "Poster" },
+          { id: "canvas", label: "Canvas" },
+        ]
+
+  const searchForm = (
+    <form className="buyer-mhome-search buyer-mhome-search--chrome" onSubmit={submitSearch}>
+      <input
+        aria-label={t("catalogSearchPlaceholder")}
+        value={searchTerm}
+        onChange={(event) => handleSearchChange(event.target.value)}
+        placeholder={t("catalogSearchPlaceholder")}
+      />
+      <button type="submit" aria-label="Search">
+        ⌕
+      </button>
+    </form>
+  )
 
   return (
-    <header className="buyer-store-topbar">
-      <a className="buyer-store-logo buyer-store-logo--indie" href={storeHomeHref} aria-label={`${brand} home`}>
-        {settings.logoUrl ? (
-          <img src={settings.logoUrl} alt="" className="buyer-store-logo-img" />
+    <header className="buyer-store-chrome">
+      <div className="buyer-chrome-mobile">
+        <MobileHomeHeader brandName={brand} />
+        {!showMarketplaceNav ? <StoreSubNav className="buyer-store-subnav--mobile" /> : null}
+        {showMobileSearch ? searchForm : null}
+      </div>
+
+      <div className="buyer-chrome-desktop">
+        <div className="buyer-store-topbar buyer-store-topbar--temu">
+          <a className="buyer-store-logo buyer-store-logo--indie" href="/store" aria-label={`${brand} home`}>
+            {settings.logoUrl ? <img src={settings.logoUrl} alt="" className="buyer-store-logo-img" /> : null}
+            <span className="buyer-store-logo-text">{brand}</span>
+          </a>
+
+          <div className="buyer-store-ship" aria-label="Ship to">
+            <span aria-hidden="true">📍</span>
+            <div>
+              <small>Ship to</small>
+              <strong>United States</strong>
+            </div>
+          </div>
+
+          <a className="buyer-store-categories-trigger" href="/categories">
+            Categories
+          </a>
+
+          <form className="buyer-store-search buyer-store-search--header buyer-store-search--pill" onSubmit={submitSearch}>
+            <input
+              aria-label={t("catalogSearchPlaceholder")}
+              value={searchTerm}
+              onChange={(event) => handleSearchChange(event.target.value)}
+              placeholder={t("catalogSearchPlaceholder")}
+            />
+            <button type="submit" aria-label="Search">
+              ⌕
+            </button>
+          </form>
+
+          <div className="buyer-store-actions buyer-store-actions--temu">
+            <div className="buyer-store-account buyer-store-account--dropdown">
+              <a href={accountHref} className="buyer-store-account-trigger">
+                <span className="buyer-store-avatar" aria-hidden="true">
+                  ◎
+                </span>
+                <div>
+                  <small>Orders &amp; Account</small>
+                  <strong>{auth.isLoading ? t("navMe") : auth.customer ? t("navMe") : t("signIn")}</strong>
+                </div>
+              </a>
+              <AccountHoverPanel />
+            </div>
+            <a className="buyer-store-support" href="/help">
+              <span aria-hidden="true" />
+              <strong>Support</strong>
+            </a>
+            <button
+              className="buyer-store-language"
+              type="button"
+              aria-label={`Switch language to ${t("localeAlt")}`}
+              onClick={toggleLocale}
+            >
+              <span aria-hidden="true" />
+              {locale === "en" ? "EN" : "中文"}
+            </button>
+            <a className="buyer-store-cart" href="/cart" aria-label={`${t("navCart")} (${cartCount})`}>
+              <i aria-hidden="true" />
+              <span>{cartCount}</span>
+            </a>
+          </div>
+        </div>
+
+        {showCategoryRow && !showMarketplaceNav ? (
+          <nav className="buyer-store-category-row buyer-store-category-row--temu" aria-label="Store categories">
+            {categoryTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={activeCategoryId === tab.id ? "active" : ""}
+                onClick={() => onCategoryChange?.(tab.id === "tshirt" || tab.id === "hoodie" ? "all" : tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
         ) : null}
-        <span className="buyer-store-logo-text">{brand}</span>
-      </a>
-      {!showMarketplaceNav ? (
-        <nav className="buyer-store-mainnav" aria-label="Store navigation">
-          <a className={isShop ? "active" : ""} href={storeHomeHref}>
-            {t("navShop")}
-          </a>
-          <a className={isAiDesign ? "active" : ""} href="/ai-design">
-            {t("navAiDesign")}
-          </a>
-          <a className={isStudio ? "active" : ""} href="/studio">
-            {t("navStudio")}
-          </a>
-          <a className={isMyDesigns ? "active" : ""} href="/my-designs">
-            {t("navMyDesigns")}
-          </a>
-          <a className={isHowItWorks ? "active" : ""} href={howItWorksHref}>
-            {t("navHowItWorks")}
-          </a>
-          <a className={isOrders ? "active" : ""} href={ordersHref}>
-            {t("navOrders")}
-          </a>
-        </nav>
-      ) : (
-        <nav className="buyer-store-mainnav" aria-label="Marketplace navigation">
-          <a className="active" href="/marketplace">{t("stores")}</a>
-        </nav>
-      )}
-      <div className="buyer-store-actions">
-        <a className="buyer-store-me" href={accountHref} aria-label={t("navMe")}>
-          <span className="buyer-store-avatar" aria-hidden="true">◎</span>
-          <strong>{auth.isLoading ? t("navMe") : auth.customer ? t("navMe") : t("signIn")}</strong>
-        </a>
-        <button
-          className="buyer-store-language"
-          type="button"
-          aria-label={`Switch language to ${t("localeAlt")}`}
-          onClick={toggleLocale}
-        >
-          {locale === "en" ? t("localeLabel") : t("localeLabel")}
-        </button>
-        <a className="buyer-store-cart" href="/cart" aria-label={`${t("navCart")} (${cartCount})`}>
-          <i aria-hidden="true" />
-          <span>{cartCount}</span>
-        </a>
+
+        {!showMarketplaceNav ? <StoreSubNav /> : null}
       </div>
     </header>
   )

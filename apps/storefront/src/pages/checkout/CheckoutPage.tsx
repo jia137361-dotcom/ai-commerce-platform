@@ -32,12 +32,18 @@ import {
   setActiveBuyerStoreId,
   updateCartAddress,
   updateCartContact,
+  applyCartCoupon,
+  clearCartCoupon,
+  fetchCartCouponPricing,
+  fetchMyCoupons,
   type CartShippingOption,
+  type BuyerCoupon,
   type BuyerPaymentMethod,
   type BuyerPaymentProvider,
   type BuyerPaymentSession,
   type BuyerStoreSettings,
   type BuyerCustomerAddress,
+  type CheckoutPricingBreakdown,
 } from "../../lib/buyer-api"
 import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
 import type { StoreCart } from "../../lib/mock-data"
@@ -120,6 +126,10 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [loadVersion, setLoadVersion] = useState(0)
   const [saveToAddressBook, setSaveToAddressBook] = useState(true)
   const [usingNewAddress, setUsingNewAddress] = useState(false)
+  const [walletCoupons, setWalletCoupons] = useState<BuyerCoupon[]>([])
+  const [couponsLoading, setCouponsLoading] = useState(false)
+  const [checkoutPricing, setCheckoutPricing] = useState<CheckoutPricingBreakdown | null>(null)
+  const [couponError, setCouponError] = useState<string | undefined>()
   const skipAddressResetRef = useRef(false)
   const autoSavedAddressRef = useRef(false)
   const shippingSelectGenerationRef = useRef(0)
@@ -406,6 +416,33 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
 
     return () => { active = false }
   }, [auth.customer?.id])
+
+  useEffect(() => {
+    if (!cart?.id || !auth.customer) {
+      setWalletCoupons([])
+      setCheckoutPricing(null)
+      return
+    }
+    let active = true
+    setCouponsLoading(true)
+    void Promise.all([fetchMyCoupons("all"), fetchCartCouponPricing(cart.id)])
+      .then(([coupons, pricing]) => {
+        if (!active) return
+        setWalletCoupons(coupons)
+        setCheckoutPricing(pricing)
+        setCouponError(undefined)
+      })
+      .catch((reason) => {
+        if (!active) return
+        setCouponError(reason instanceof Error ? reason.message : "Unable to load coupons")
+      })
+      .finally(() => {
+        if (active) setCouponsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [auth.customer?.id, cart?.id, shippingMethodSaved, cart?.total])
 
   useEffect(() => {
     if (!cart || !auth.customer || autoSavedAddressRef.current || addressSaved || usingNewAddress) return
@@ -784,6 +821,36 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
               }}
               placing={placingOrder}
               shippingAmount={shippingMethodSaved ? selectedShippingOption?.amount ?? 0 : undefined}
+              pricing={checkoutPricing}
+              coupons={walletCoupons}
+              couponsLoading={couponsLoading}
+              couponError={couponError}
+              onApplyCoupon={(walletId) => {
+                if (!cart) return
+                setCouponError(undefined)
+                void applyCartCoupon(cart.id, walletId)
+                  .then((pricing) => {
+                    setCheckoutPricing(pricing)
+                    return fetchMyCoupons("all")
+                  })
+                  .then(setWalletCoupons)
+                  .catch((reason) => {
+                    setCouponError(reason instanceof Error ? reason.message : "Unable to apply coupon")
+                  })
+              }}
+              onClearCoupon={() => {
+                if (!cart) return
+                setCouponError(undefined)
+                void clearCartCoupon(cart.id)
+                  .then((pricing) => {
+                    setCheckoutPricing(pricing)
+                    return fetchMyCoupons("all")
+                  })
+                  .then(setWalletCoupons)
+                  .catch((reason) => {
+                    setCouponError(reason instanceof Error ? reason.message : "Unable to clear coupon")
+                  })
+              }}
             />
           </section>
       ) : null}

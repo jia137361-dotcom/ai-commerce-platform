@@ -1,4 +1,4 @@
-import type { BuyerOrderSummary } from "../../lib/buyer-api"
+import type { BuyerOrderDetail, BuyerOrderSummary } from "../../lib/buyer-api"
 
 export type BuyerOrderDisplayStatus =
   | "cancelled"
@@ -21,18 +21,52 @@ export const buyerOrderDisplayStatusLabel = (status: BuyerOrderDisplayStatus) =>
     case "packing":
       return "Processing"
     case "awaiting_receipt":
-      return "To receive"
+      return "Delivered, pending confirmation"
     case "awaiting_review":
-      return "Awaiting review"
+      return "Received"
     case "reviewed":
-      return "Reviewed"
+      return "Received"
     case "completed":
-      return "Completed"
+      return "Closed"
     case "refunding":
-      return "Refund in progress"
+      return "Refund / After-sales"
     default:
       return "Processing"
   }
+}
+
+/** Fallback product link when reorder-by-variant is unavailable. */
+export const orderAgainHref = (order: BuyerOrderSummary) => {
+  const productId = order.previewItems.find((item) => item.productId)?.productId
+  if (!productId) return "/store"
+  const params = new URLSearchParams()
+  if (order.storeId) params.set("store", order.storeId)
+  const query = params.toString()
+  return `/products/${encodeURIComponent(productId)}${query ? `?${query}` : ""}`
+}
+
+export const collectReorderLinesFromSummary = (order: BuyerOrderSummary) =>
+  order.previewItems
+    .filter((item): item is typeof item & { variantId: string } => Boolean(item.variantId))
+    .map((item) => ({
+      variantId: item.variantId,
+      quantity: Math.max(1, item.quantity || 1),
+    }))
+
+export const collectReorderLinesFromDetail = (order: BuyerOrderDetail) =>
+  order.items
+    .filter((item): item is typeof item & { variantId: string } => Boolean(item.variantId))
+    .map((item) => ({
+      variantId: item.variantId,
+      quantity: Math.max(1, item.quantity || 1),
+    }))
+
+export const formatOrderTime = (value?: string | null) => {
+  if (!value) return "—"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 export const resolveBuyerOrderDisplayStatus = (order: BuyerOrderSummary): BuyerOrderDisplayStatus => {
@@ -71,5 +105,6 @@ export const buildViewReviewHref = (order: BuyerOrderSummary) => {
   if (!productId) return null
   const orderNumber = order.displayId ?? order.orderId
   const params = new URLSearchParams({ viewReviewOrder: orderNumber })
+  if (order.storeId) params.set("store", order.storeId)
   return `/products/${encodeURIComponent(productId)}?${params.toString()}#reviews`
 }

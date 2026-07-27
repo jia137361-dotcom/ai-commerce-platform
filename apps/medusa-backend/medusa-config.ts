@@ -60,6 +60,9 @@ export default defineConfig({
       resolve: "./src/modules/buyer-refund-requests"
     },
     {
+      resolve: "./src/modules/store-coupons"
+    },
+    {
       resolve: "@medusajs/medusa/payment",
       options: {
         providers: stripePaymentProviders,

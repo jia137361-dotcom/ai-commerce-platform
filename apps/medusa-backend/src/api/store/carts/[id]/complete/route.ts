@@ -25,6 +25,12 @@ import { syncCartLineItemShippingRequirements } from "../../../../../lib/sync-ca
 import { resolvePaymentMethodLabelFromClientSecret } from "../../../../../lib/stripe-payment-method-label"
 import { applyPlatformCheckoutMetadata } from "../../../../../lib/marketplace/platform-checkout"
 import { publishBuyerDesignsFromOrder } from "../../../../../lib/publish-buyer-designs-from-order"
+import {
+  ORDER_META_APPLIED_COUPON,
+  ORDER_META_COUPON_DISCOUNT,
+  ORDER_META_PLAN_DISCOUNT,
+  redeemAppliedCouponOnOrder,
+} from "../../../../../lib/store-coupons"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
@@ -219,6 +225,32 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
     await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
+    try {
+      const discount = await redeemAppliedCouponOnOrder(req.scope, {
+        cartId,
+        orderId,
+        customerId: authCustomerId ?? cart.customer_id ?? null,
+        storeId,
+      })
+      if (discount.discount_total > 0 || discount.applied_coupon) {
+        const existingMeta = (completedOrder.metadata ?? {}) as Record<string, unknown>
+        await orderModule.updateOrders(orderId, {
+          metadata: {
+            ...existingMeta,
+            [ORDER_META_COUPON_DISCOUNT]: discount.coupon_discount,
+            [ORDER_META_PLAN_DISCOUNT]: discount.plan_discount,
+            discount_total_major: discount.discount_total,
+            payable_total_major: discount.payable_total,
+            ...(discount.applied_coupon
+              ? { [ORDER_META_APPLIED_COUPON]: discount.applied_coupon }
+              : {}),
+          },
+        } as never)
+        completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+      }
+    } catch (error) {
+      console.warn("[checkout-complete] unable to redeem coupon / plan discount", error)
+    }
     try {
       await publishBuyerDesignsFromOrder(req.scope, { orderId, storeId })
     } catch (error) {

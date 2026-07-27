@@ -20,6 +20,10 @@ import {
 } from "../../modules/suppliers/s2bdiy/s2bdiy-status-mapper"
 import { toJsonRecord } from "./json-record"
 
+/** Local mock push ids must never hit live S2BDIY order APIs. */
+export const isMockSupplierOrderId = (supplierOrderId: string | null | undefined) =>
+  Boolean(supplierOrderId && /^mock_s2b_/i.test(supplierOrderId.trim()))
+
 export async function syncSupplierOrderById(
   container: MedusaContainer,
   supplierOrderRowId: string
@@ -28,6 +32,9 @@ export async function syncSupplierOrderById(
   const rows = await storeCore.listSupplierOrders({ id: supplierOrderRowId })
   const row = rows[0]
   if (!row?.supplier_order_id) {
+    return
+  }
+  if (isMockSupplierOrderId(row.supplier_order_id)) {
     return
   }
 
@@ -121,7 +128,7 @@ export async function syncPendingSupplierOrders(container: MedusaContainer): Pro
   const rows = await storeCore.listSupplierOrders({})
   let synced = 0
   for (const row of rows) {
-    if (!row.supplier_order_id) continue
+    if (!row.supplier_order_id || isMockSupplierOrderId(row.supplier_order_id)) continue
     const status =
       row.supplier_status as import("../../modules/suppliers/s2bdiy/s2bdiy-status-mapper").SupplierOrderStatus
     if (isTerminalSupplierOrderStatus(status)) continue

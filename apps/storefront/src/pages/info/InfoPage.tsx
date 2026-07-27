@@ -4,9 +4,11 @@ import { StoreFooter } from "../../components/layout/StoreFooter"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { Card } from "../../components/ui/Card"
 import {
-  DraftLegalNotice,
+  AboutContent,
+  CookiesContent,
   HelpContent,
   PrivacyContent,
+  SourceDocumentNotice,
   StaticPageNavigation,
   TermsContent,
 } from "../../components/info/StaticInfoContent"
@@ -16,10 +18,11 @@ import { type ReactNode } from "react"
 type InfoPageProps = {
   cartCount: number
   title: string
+  sourceLabel: string
   children: ReactNode
 }
 
-export function InfoPage({ cartCount, title, children }: InfoPageProps) {
+export function InfoPage({ cartCount, title, sourceLabel, children }: InfoPageProps) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
 
   return (
@@ -36,7 +39,7 @@ export function InfoPage({ cartCount, title, children }: InfoPageProps) {
         </nav>
         <SectionHeader eyebrow="Buyer information" title={title} level={1} />
         <div className="buyer-info-body">{children}</div>
-        <DraftLegalNotice />
+        <SourceDocumentNotice source={sourceLabel} />
         <StaticPageNavigation />
       </Card>
     </PageShell>
@@ -45,7 +48,7 @@ export function InfoPage({ cartCount, title, children }: InfoPageProps) {
 
 export function HelpPage({ cartCount }: { cartCount: number }) {
   return (
-    <InfoPage cartCount={cartCount} title="Help Center">
+    <InfoPage cartCount={cartCount} title="Support Center & FAQ" sourceLabel="Getting Started / Support Center & FAQ">
       <HelpContent />
     </InfoPage>
   )
@@ -53,7 +56,7 @@ export function HelpPage({ cartCount }: { cartCount: number }) {
 
 export function TermsPage({ cartCount }: { cartCount: number }) {
   return (
-    <InfoPage cartCount={cartCount} title="Terms of Service">
+    <InfoPage cartCount={cartCount} title="Terms of Service" sourceLabel="CIIVERSE TERMS OF SERVICE">
       <TermsContent />
     </InfoPage>
   )
@@ -61,8 +64,24 @@ export function TermsPage({ cartCount }: { cartCount: number }) {
 
 export function PrivacyPage({ cartCount }: { cartCount: number }) {
   return (
-    <InfoPage cartCount={cartCount} title="Privacy Policy">
+    <InfoPage cartCount={cartCount} title="Privacy Policy" sourceLabel="Ciiverse AI POD Privacy Policy">
       <PrivacyContent />
+    </InfoPage>
+  )
+}
+
+export function AboutPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="About Ciiverse" sourceLabel="About Ciiverse">
+      <AboutContent />
+    </InfoPage>
+  )
+}
+
+export function CookiesPage({ cartCount }: { cartCount: number }) {
+  return (
+    <InfoPage cartCount={cartCount} title="Cookie Policy" sourceLabel="Ciiverse Cookie Policy">
+      <CookiesContent />
     </InfoPage>
   )
 }

@@ -34,8 +34,12 @@ export function StoreFooter() {
       <nav aria-label="Store footer">
         <a href="/store">Shopping</a>
         <a href="/orders/lookup">Order Tracking</a>
+        <a href="/help">Help</a>
+        <a href="/about">About</a>
         <a href="/store?tab=about">Shipping & Returns</a>
-        <a href="/store?tab=reviews">Reviews</a>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/cookies">Cookies</a>
       </nav>
       <form className="newsletter-form" onSubmit={(event) => void onSubmit(event)}>
         <label htmlFor="newsletter-email">{t("newsletter")}</label>

@@ -16,13 +16,30 @@ export type SubmitLogisticsInput = {
 }
 
 // ---- Client-based (Dev2 compat) ----
-export async function calculateLogisticsClient(client: S2bdiyClient, input: LogisticsCalculationInput): Promise<LogisticsOption[]> {
-  const data = await client.request<unknown>("/open/v1/logisticsCalculation", { method: "GET", query: {
-    basic_product_id: input.basic_product_id, platform: input.platform, num: input.num, country: input.country,
-    province: input.province ?? "", postcode: input.postcode ?? "",
-    weight: input.weight, length: input.length, width: input.width, height: input.height,
-  }})
-  if (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).data)) return (data as Record<string, unknown>).data as LogisticsOption[]
+export async function calculateLogisticsClient(
+  client: S2bdiyClient,
+  input: LogisticsCalculationInput,
+  options?: { timeoutMs?: number }
+): Promise<LogisticsOption[]> {
+  const data = await client.request<unknown>("/open/v1/logisticsCalculation", {
+    method: "GET",
+    timeoutMs: options?.timeoutMs,
+    query: {
+      basic_product_id: input.basic_product_id,
+      platform: input.platform,
+      num: input.num,
+      country: input.country,
+      province: input.province ?? "",
+      postcode: input.postcode ?? "",
+      weight: input.weight,
+      length: input.length,
+      width: input.width,
+      height: input.height,
+    },
+  })
+  if (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).data)) {
+    return (data as Record<string, unknown>).data as LogisticsOption[]
+  }
   return unwrapList<LogisticsOption>(data)
 }
 export function resolveLogisticsPlatformId(options: LogisticsOption[]): string | null {
