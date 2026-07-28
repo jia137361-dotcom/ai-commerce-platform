@@ -1,9 +1,21 @@
-import {
-  buildReturnsPolicyText,
-  buildShippingPolicyText,
-  buildStorePolicyTexts,
-  resolveStorePolicyDisplay,
-} from "@ai-commerce/shared-types"
+let buildReturnsPolicyText: (presets: Record<string, unknown>) => string
+let buildShippingPolicyText: (presets: Record<string, unknown>) => string
+let buildStorePolicyTexts: (
+  presets: Record<string, unknown>,
+  brandName?: string
+) => Record<string, string>
+let resolveStorePolicyDisplay: (
+  metadata: Record<string, unknown> | null | undefined,
+  brandName?: string
+) => Record<string, string | undefined>
+
+beforeAll(async () => {
+  const sharedTypes = await import("@ai-commerce/shared-types")
+  buildReturnsPolicyText = sharedTypes.buildReturnsPolicyText
+  buildShippingPolicyText = sharedTypes.buildShippingPolicyText
+  buildStorePolicyTexts = sharedTypes.buildStorePolicyTexts
+  resolveStorePolicyDisplay = sharedTypes.resolveStorePolicyDisplay
+})
 
 describe("store policy presets", () => {
   it("builds shipping text from structured presets", () => {

@@ -112,6 +112,9 @@ const createReq = ({
   const queryGraph = {
     graph: jest.fn(async () => ({ data: graphOrders })),
   }
+  const customerModule = {
+    retrieveCustomer: jest.fn(async (id: string) => ({ id, metadata: {} })),
+  }
   const req = {
     query,
     headers,
@@ -119,13 +122,14 @@ const createReq = ({
     scope: {
       resolve: jest.fn((key: string) => {
         if (key === Modules.ORDER) return orderModule
+        if (key === Modules.CUSTOMER) return customerModule
         if (key === ContainerRegistrationKeys.QUERY) return queryGraph
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
   } as unknown as MedusaRequest
 
-  return { req, orderModule, queryGraph }
+  return { req, orderModule, queryGraph, customerModule }
 }
 
 describe("GET /store/customers/me/orders", () => {

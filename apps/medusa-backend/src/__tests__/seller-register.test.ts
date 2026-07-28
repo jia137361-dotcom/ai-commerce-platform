@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest"
 import { slugifyStoreName } from "../lib/seller-register"
 
 describe("slugifyStoreName", () => {

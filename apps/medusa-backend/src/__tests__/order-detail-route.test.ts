@@ -4,6 +4,7 @@ import { GET as getOrderDetail } from "../api/store/orders/[id]/detail/route"
 import { GET as getAuthenticatedOrderDetail } from "../api/store/customers/me/orders/[id]/route"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../modules/buyer-refund-requests"
+import { STORE_CORE_MODULE } from "../modules/store-core"
 
 type MockRes = MedusaResponse & {
   statusCode?: number
@@ -97,6 +98,9 @@ const createReq = ({
   const refundRequestService = {
     listBuyerRefundRequests: jest.fn(async () => refundRequests),
   }
+  const storeCore = {
+    listProductReviews: jest.fn(async () => []),
+  }
   const req = {
     params: { id: "order_1" },
     query,
@@ -108,12 +112,13 @@ const createReq = ({
         if (key === ContainerRegistrationKeys.QUERY) return queryGraph
         if (key === FULFILLMENT_ORDERS_MODULE) return fulfillmentOrders
         if (key === BUYER_REFUND_REQUESTS_MODULE) return refundRequestService
+        if (key === STORE_CORE_MODULE) return storeCore
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
   } as unknown as MedusaRequest
 
-  return { req, orderModule, queryGraph, fulfillmentOrders, refundRequestService }
+  return { req, orderModule, queryGraph, fulfillmentOrders, refundRequestService, storeCore }
 }
 
 describe("GET /store/orders/:order_id/detail", () => {

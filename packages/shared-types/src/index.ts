@@ -109,4 +109,4 @@ export type StoreSettings = {
   metadata: Record<string, unknown>
 }
 
-export * from "./store-policy-presets"
+export * from "./store-policy-presets.js"

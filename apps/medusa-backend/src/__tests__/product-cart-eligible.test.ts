@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest"
 import { isBuyerDesignProduct, isProductCartEligible } from "../lib/product-cart-eligible"
 
 describe("product-cart-eligible", () => {

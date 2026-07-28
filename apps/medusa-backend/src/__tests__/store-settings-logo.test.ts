@@ -24,7 +24,7 @@ describe("validateLogoUpload", () => {
     const large = Buffer.alloc(LOGO_MAX_BYTES + 1, 1).toString("base64")
     expect(validateLogoUpload(large, "image/png")).toEqual({
       ok: false,
-      message: "Logo must be between 1 byte and 2MB",
+      message: "Image must be between 1 byte and 2MB",
     })
   })
 
