@@ -2,7 +2,10 @@ import {
   computeCouponDiscount,
   computePlanDiscount,
   formatCouponCondition,
+  redeemAppliedCouponOnOrder,
 } from "../lib/store-coupons"
+import { STORE_COUPONS_MODULE } from "../modules/store-coupons"
+import { Modules } from "@medusajs/framework/utils"
 
 describe("store coupon pricing", () => {
   it("formats no-threshold and threshold labels", () => {
@@ -59,5 +62,83 @@ describe("store coupon pricing", () => {
   it("stacks plan percent after coupon", () => {
     const afterCoupon = 29.99 - 2
     expect(computePlanDiscount(afterCoupon, 25)).toBe(7)
+  })
+
+  it("marks a buyer coupon row used after order redemption even when quantity remains", async () => {
+    const buyerCoupon = {
+      id: "bc_1",
+      store_id: "store_1",
+      customer_id: "cus_1",
+      coupon_id: "coupon_1",
+      status: "reserved",
+      quantity: 5,
+      reserved_cart_id: "cart_1",
+      metadata: {},
+    }
+    const updates: Array<Record<string, unknown>> = []
+    const couponService = {
+      listStoreCoupons: jest.fn().mockResolvedValue([
+        {
+          id: "coupon_1",
+          store_id: "store_1",
+          code: "SAVE2",
+          title: "$2 off",
+          coupon_type: "goods_voucher",
+          discount_amount: 2,
+          min_subtotal: 10,
+          scope: "all_store",
+          status: "active",
+        },
+      ]),
+      listBuyerCoupons: jest.fn().mockResolvedValue([buyerCoupon]),
+      updateBuyerCoupons: jest.fn(async (data) => {
+        updates.push(data)
+        return data
+      }),
+    }
+    const cartService = {
+      retrieveCart: jest.fn().mockResolvedValue({
+        id: "cart_1",
+        currency_code: "usd",
+        customer_id: "cus_1",
+        metadata: {
+          store_id: "store_1",
+          applied_coupon: {
+            buyer_coupon_id: "bc_1",
+            coupon_id: "coupon_1",
+            code: "SAVE2",
+            title: "$2 off",
+            discount_amount: 2,
+            min_subtotal: 10,
+            coupon_type: "goods_voucher",
+          },
+        },
+        items: [{ product_id: "prod_1", unit_price: 2999, quantity: 1 }],
+        shipping_methods: [],
+      }),
+    }
+    const container = {
+      resolve: (key: string) => {
+        if (key === STORE_COUPONS_MODULE) return couponService
+        if (key === Modules.CART) return cartService
+        throw new Error(`Unexpected dependency: ${key}`)
+      },
+    }
+
+    await redeemAppliedCouponOnOrder(container as never, {
+      cartId: "cart_1",
+      orderId: "order_1",
+      customerId: null,
+      storeId: "store_1",
+    })
+
+    expect(updates[0]).toMatchObject({
+      id: "bc_1",
+      status: "used",
+      quantity: 0,
+      used_order_id: "order_1",
+      reserved_cart_id: null,
+    })
+    expect(updates[0].metadata).toMatchObject({ redeemed_quantity: 5 })
   })
 })

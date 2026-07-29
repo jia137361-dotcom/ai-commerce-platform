@@ -622,29 +622,18 @@ export async function redeemAppliedCouponOnOrder(
     ) as unknown) as BuyerCouponRecord[]
     const row = rows[0]
     if (row) {
-      const nextQty = Math.max(0, asNumber(row.quantity) - 1)
-      if (nextQty <= 0) {
-        await coupons.updateBuyerCoupons({
-          id: row.id,
-          status: "used",
-          quantity: 0,
-          used_at: new Date(),
-          used_order_id: input.orderId,
-          reserved_cart_id: null,
-        })
-      } else {
-        await coupons.updateBuyerCoupons({
-          id: row.id,
-          status: "available",
-          quantity: nextQty,
-          reserved_cart_id: null,
-          metadata: {
-            ...(row.metadata && typeof row.metadata === "object" ? row.metadata : {}),
-            last_used_order_id: input.orderId,
-            last_used_at: new Date().toISOString(),
-          },
-        })
-      }
+      await coupons.updateBuyerCoupons({
+        id: row.id,
+        status: "used",
+        quantity: 0,
+        used_at: new Date(),
+        used_order_id: input.orderId,
+        reserved_cart_id: null,
+        metadata: {
+          ...(row.metadata && typeof row.metadata === "object" ? row.metadata : {}),
+          redeemed_quantity: Math.max(1, asNumber(row.quantity, 1)),
+        },
+      })
     }
   }
 
