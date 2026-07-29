@@ -151,7 +151,7 @@ export function CategoryTreePicker({ selectedIds, onChange, disabled }: Props) {
   const { data } = useQuery({
     queryKey: ["product-categories"],
     queryFn: () =>
-      apiFetch<{ categories: CategoryNode[] }>("/admin/product-categories"),
+      apiFetch<{ categories: CategoryNode[] }>("/admin/store-product-categories"),
   })
 
   const categories = data?.categories ?? []
@@ -184,7 +184,7 @@ export function CategoryTreePicker({ selectedIds, onChange, disabled }: Props) {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      apiFetch<{ category_id: string }>("/admin/product-categories", {
+      apiFetch<{ category_id: string }>("/admin/store-product-categories", {
         method: "POST",
         body: JSON.stringify({ name: newName.trim(), parent_id: newParentId }),
       }),
@@ -203,7 +203,7 @@ export function CategoryTreePicker({ selectedIds, onChange, disabled }: Props) {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      apiFetch(`/admin/product-categories/${id}`, { method: "DELETE" }),
+      apiFetch(`/admin/store-product-categories/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-categories"] })
       setPendingDelete(null)

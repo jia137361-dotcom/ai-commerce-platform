@@ -133,7 +133,7 @@ export function CategoryManagerPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["product-categories"],
     queryFn: () =>
-      apiFetch<{ categories: Category[]; count: number }>("/admin/product-categories"),
+      apiFetch<{ categories: Category[]; count: number }>("/admin/store-product-categories"),
   })
 
   const categories = data?.categories ?? []
@@ -151,7 +151,7 @@ export function CategoryManagerPage() {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      apiFetch<{ category_id: string }>("/admin/product-categories", {
+      apiFetch<{ category_id: string }>("/admin/store-product-categories", {
         method: "POST",
         body: JSON.stringify({
           name: newName.trim(),
@@ -174,7 +174,7 @@ export function CategoryManagerPage() {
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      apiFetch(`/admin/product-categories/${editing!.category_id}`, {
+      apiFetch(`/admin/store-product-categories/${editing!.category_id}`, {
         method: "PUT",
         body: JSON.stringify({
           name: editing!.name,
@@ -193,7 +193,7 @@ export function CategoryManagerPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      apiFetch(`/admin/product-categories/${id}`, { method: "DELETE" }),
+      apiFetch(`/admin/store-product-categories/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-categories"] })
       toast.push("Category deleted", "success")

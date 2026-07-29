@@ -143,11 +143,6 @@ export function CreateProductPage() {
   }
 
   const createManualDraft = async () => {
-    if (!supplierProductId || !supplierVariantId || !selectedSupplier) {
-      setError("White T-shirt fulfillment base is not ready.")
-      return
-    }
-
     setManualLoading(true)
     setError(null)
     try {
@@ -157,12 +152,24 @@ export function CreateProductPage() {
           title: "Untitled Product",
           description: "",
           price: 24.99,
-          cost: selectedSupplier.base_cost ?? 8.5,
+          cost: 0,
           source: "manual",
-          platform_product_id: selectedSupplier.platform_product_id ?? "pp_tshirt",
-          supplier_product_id: supplierProductId,
-          supplier_variant_id: supplierVariantId,
+          variants: [
+            {
+              supplier_variant_id: `manual-${Date.now()}`,
+              color: "Default",
+              size: "Default",
+              price: 24.99,
+              supplier_sku: "MANUAL-DEFAULT",
+              enabled: true,
+            },
+          ],
           metadata: {
+            is_own_product: true,
+            fulfillment_mode: "self_managed",
+            logistics_mode: "self_managed",
+            requires_shipping: true,
+            image_urls: [],
             marketplace_category: MARKETPLACE_CATEGORY.id,
             marketplace_category_label: MARKETPLACE_CATEGORY.label,
             style_preset: selectedStyle.id,

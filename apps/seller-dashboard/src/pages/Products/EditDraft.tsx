@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch, ApiError, STOREFRONT_URL } from "../../lib/api-client"
@@ -18,6 +18,8 @@ import { Skeleton } from "../../components/ui/EmptyState"
 import { ProductEditorPanel } from "../../components/ProductEditorPanel"
 import { CategoryTreePicker } from "../../components/CategoryTreePicker"
 import { TranslateButton } from "../../components/TranslateButton"
+import { getSellerStoreId } from "../../lib/seller-store-id"
+import { fileToBase64 } from "../../lib/file-to-base64"
 import type { NormalizedProduct, ProductRegionSummary, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type SupplierVariant = {
@@ -53,9 +55,16 @@ const toVariantRows = (
         medusa_variant_id: typeof v.medusa_variant_id === "string" ? v.medusa_variant_id : undefined,
         supplier_size_id: typeof v.supplier_size_id === "string" ? v.supplier_size_id : undefined,
         supplier_color_id: typeof v.supplier_color_id === "string" ? v.supplier_color_id : undefined,
+        option_type: typeof v.option_type === "string" ? v.option_type : undefined,
+        option_value: typeof v.option_value === "string" ? v.option_value : undefined,
         color: String(v.color ?? "Default"),
         size: String(v.size ?? "Default"),
         price: Number(v.price ?? fallbackPrice) || fallbackPrice,
+        cost: typeof v.cost === "number" ? v.cost : undefined,
+        weight: typeof v.weight === "number" ? v.weight : null,
+        supplier_sku: typeof v.supplier_sku === "string" ? v.supplier_sku : null,
+        image_url: typeof v.image_url === "string" ? v.image_url : null,
+        enabled: v.enabled !== false,
       }]
     })
 }
@@ -71,7 +80,50 @@ const buildVariantsFromSupplier = (
     color: variant.color_name ?? variant.color ?? "Default",
     size: variant.size_name ?? variant.size ?? "Default",
     price: fallbackPrice,
+    enabled: true,
   }))
+
+const readStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value.flatMap((entry) => (typeof entry === "string" && entry.trim() ? [entry.trim()] : []))
+    : []
+
+const readS2bColorImages = (value: unknown) =>
+  Array.isArray(value)
+    ? value.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return []
+        const row = entry as Record<string, unknown>
+        const colorName = typeof row.color_name === "string" && row.color_name.trim() ? row.color_name.trim() : "Default"
+        const colorId = typeof row.color_id === "string" ? row.color_id : String(row.color_id ?? "")
+        const images = readStringArray(row.images)
+        return images.length ? [{ colorId, colorName, images }] : []
+      })
+    : []
+
+const newManualVariant = (price: number, index: number): ProductVariantRow => ({
+  supplier_variant_id:
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? `manual-${crypto.randomUUID()}`
+      : `manual-${Date.now()}-${index}`,
+  option_type: "",
+  option_value: "",
+  color: "Default",
+  size: "Default",
+  price,
+  supplier_sku: index === 0 ? "MANUAL-DEFAULT" : "",
+  image_url: null,
+  enabled: true,
+})
+
+const validateProductImageFile = (file: File) => {
+  if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+    return "Only PNG and JPG files are supported"
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    return "Image must be 2MB or smaller"
+  }
+  return null
+}
 
 export function EditDraftPage() {
   const { id } = useParams<{ id: string }>()
@@ -134,8 +186,11 @@ export function EditDraftPage() {
   const [variants, setVariants] = useState<ProductVariantRow[]>([])
   const [requiresShipping, setRequiresShipping] = useState(true)
   const [supportedRegionIds, setSupportedRegionIds] = useState<string[]>([])
-  const [shipFromCountry, setShipFromCountry] = useState("")
   const [previewKey, setPreviewKey] = useState<string>("mockup_front")
+  const [showCustomizeEditor, setShowCustomizeEditor] = useState(false)
+  const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([])
+  const [imageUploading, setImageUploading] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
 
@@ -174,11 +229,14 @@ export function EditDraftPage() {
         ? p.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
         : []
     setSupportedRegionIds(savedRegionIds)
-    setShipFromCountry(p.ship_from_country ?? "")
+    setSelectedImageUrls(readStringArray(p.metadata?.image_urls))
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
       setVariants(savedVariants)
+      setVariantsInitialized(true)
+    } else if (p.metadata?.is_own_product === true || p.metadata?.fulfillment_mode === "self_managed") {
+      setVariants([newManualVariant(Number(p.price ?? 0) || 24.99, 0)])
       setVariantsInitialized(true)
     }
   }, [data, stateProduct])
@@ -201,11 +259,49 @@ export function EditDraftPage() {
     setVariantsInitialized(true)
   }, [supplierData, product, variants.length, variantsInitialized, price])
 
+  const isOwnProduct =
+    product?.metadata?.is_own_product === true ||
+    product?.metadata?.fulfillment_mode === "self_managed" ||
+    product?.metadata?.logistics_mode === "self_managed"
+
+  const isS2bSupplierProduct =
+    !isOwnProduct &&
+    (product?.supplier_id === "sup_s2bdiy" ||
+      product?.metadata?.synced_from_supplier === true ||
+      product?.metadata?.import_source === "s2bdiy_supplier" ||
+      product?.metadata?.import_source === "s2bdiy_csv")
+
+  const s2bColorImages = readS2bColorImages(product?.metadata?.s2b_color_images)
+  const s2bCategoryLabels = [
+    ...readStringArray(product?.metadata?.category_path),
+    typeof product?.metadata?.category_level_1 === "string" ? product.metadata.category_level_1 : "",
+    typeof product?.metadata?.category_level_2 === "string" ? product.metadata.category_level_2 : "",
+  ].filter(Boolean)
+  const s2bWarehouseLabel =
+    typeof product?.metadata?.warehouse_region === "string" ? product.metadata.warehouse_region : product?.ship_from_label
+  const s2bSellableCountries = readStringArray(product?.metadata?.sellable_country_codes)
+
   const { mockups, diyAssets } = buildProductGallery(product, stateGeneration ?? jobData?.result?.generation, {
     cacheKey: resolvedJobId,
     preferProduct: Boolean(product?.metadata?.gallery),
   })
-  const previewOptions = mockups
+  const s2bImageOptions = selectedImageUrls.map((url, index) => ({
+    id: `s2b_image_${index}`,
+    label: `Image ${index + 1}`,
+    url,
+    kind: "mockup" as const,
+  }))
+  const manualImageOptions = selectedImageUrls.map((url, index) => ({
+    id: `manual_image_${index}`,
+    label: `Image ${index + 1}`,
+    url,
+    kind: "mockup" as const,
+  }))
+  const previewOptions = isS2bSupplierProduct && s2bImageOptions.length
+    ? s2bImageOptions
+    : manualImageOptions.length
+      ? manualImageOptions
+      : mockups
 
   const s2bProvisionError =
     (typeof product?.metadata?.s2b_provision_error === "string"
@@ -269,22 +365,48 @@ export function EditDraftPage() {
     return Number.isFinite(parsed) ? parsed : NaN
   }
 
-  const buildPayload = () => ({
-    title: title.trim(),
-    description,
-    price: parsePrice(),
-    tags,
-    category_ids: categoryIds,
-    variants,
-    requires_shipping: requiresShipping,
-    supported_region_ids: supportedRegionIds,
-    ship_from_country: shipFromCountry || null,
-    metadata: {
-      ...(product?.metadata ?? {}),
-      requires_shipping: requiresShipping,
-      supported_region_ids: supportedRegionIds,
-    },
-  })
+  const buildPayload = () => {
+    const selectedImageSet = new Set(selectedImageUrls)
+    const selectedColorImage = (color: string) =>
+      s2bColorImages
+        .filter((entry) => entry.colorName === color)
+        .flatMap((entry) => entry.images)
+        .find((url) => selectedImageSet.has(url)) ?? null
+    const normalizedVariants = variants.map((variant) => ({
+      ...variant,
+      image_url:
+        variant.enabled === false
+          ? null
+          : isS2bSupplierProduct
+            ? (variant.image_url && selectedImageSet.has(variant.image_url)
+                ? variant.image_url
+                : selectedColorImage(variant.color))
+            : (variant.image_url || selectedImageUrls[0] || null),
+      enabled: variant.enabled !== false,
+    }))
+    return {
+      title: title.trim(),
+      description,
+      price: parsePrice(),
+      tags,
+      category_ids: categoryIds,
+      variants: normalizedVariants,
+      requires_shipping: isS2bSupplierProduct ? true : requiresShipping,
+      supported_region_ids: isS2bSupplierProduct ? supportedRegionIds : supportedRegionIds,
+      ship_from_country: isS2bSupplierProduct ? product?.ship_from_country ?? null : null,
+      image_url: selectedImageUrls[0] ?? product?.image_url ?? null,
+      mockup_image_url: selectedImageUrls[0] ?? product?.mockup_image_url ?? null,
+      metadata: {
+        ...(product?.metadata ?? {}),
+        is_own_product: isOwnProduct || product?.metadata?.is_own_product === true,
+        fulfillment_mode: isOwnProduct ? "self_managed" : product?.metadata?.fulfillment_mode,
+        logistics_mode: isOwnProduct ? "self_managed" : product?.metadata?.logistics_mode,
+        requires_shipping: isS2bSupplierProduct ? true : requiresShipping,
+        supported_region_ids: supportedRegionIds,
+        image_urls: selectedImageUrls,
+      },
+    }
+  }
 
   const formatError = (err: unknown) => {
     if (err instanceof ApiError) return err.message
@@ -316,7 +438,7 @@ export function EditDraftPage() {
       toast.push("Enter a valid base price", "error")
       return false
     }
-    if (!supportedRegionIds.length) {
+    if (!isS2bSupplierProduct && !supportedRegionIds.length) {
       toast.push("Select at least one sales region", "error")
       return false
     }
@@ -441,7 +563,7 @@ export function EditDraftPage() {
   const updateVariant = (
     index: number,
     field: keyof ProductVariantRow,
-    value: string
+    value: string | boolean
   ) => {
     setVariants((prev) =>
       prev.map((row, i) => {
@@ -451,6 +573,94 @@ export function EditDraftPage() {
         }
         return { ...row, [field]: value }
       })
+    )
+  }
+
+  const addManualVariant = () => {
+    const fallbackPrice = Number(price) || Number(product?.price) || 24.99
+    setVariants((current) => [...current, newManualVariant(fallbackPrice, current.length)])
+  }
+
+  const removeManualVariant = (index: number) => {
+    setVariants((current) => current.filter((_, rowIndex) => rowIndex !== index))
+  }
+
+  const uploadProductImages = async (files: FileList | null) => {
+    if (!files?.length || !id) return
+    const nextFiles = Array.from(files)
+    for (const file of nextFiles) {
+      const validation = validateProductImageFile(file)
+      if (validation) {
+        toast.push(validation, "error")
+        return
+      }
+    }
+
+    setImageUploading(true)
+    try {
+      const uploadedUrls: string[] = []
+      for (const file of nextFiles) {
+        const fileBase64 = await fileToBase64(file)
+        const res = await apiFetch<{ url: string; image_urls?: string[] }>(
+          `${storeProductPath(id)}/images`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              file_base64: fileBase64,
+              content_type: file.type || "image/png",
+            }),
+          }
+        )
+        if (res.url) uploadedUrls.push(res.url)
+      }
+      if (uploadedUrls.length) {
+        setSelectedImageUrls((current) => Array.from(new Set([...current, ...uploadedUrls])))
+        toast.push("Product image uploaded", "success")
+        void queryClient.invalidateQueries({ queryKey: ["product", id] })
+      }
+    } catch (err: unknown) {
+      toast.push(formatError(err), "error")
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
+  const restoreSupplierImages = () => {
+    const urls = Array.from(new Set(s2bColorImages.flatMap((entry) => entry.images)))
+    if (urls.length) setSelectedImageUrls(urls)
+  }
+
+  const variantColors = Array.from(new Set(variants.map((variant) => variant.color).filter(Boolean)))
+  const variantSizes = Array.from(new Set(variants.map((variant) => variant.size).filter(Boolean)))
+  const enabledColors = new Set(variants.filter((variant) => variant.enabled !== false).map((variant) => variant.color))
+  const enabledSizes = new Set(variants.filter((variant) => variant.enabled !== false).map((variant) => variant.size))
+  const imageUrlsForColor = (color: string) => {
+    const fromMeta = s2bColorImages
+      .filter((entry) => entry.colorName === color)
+      .flatMap((entry) => entry.images)
+    const fromVariants = variants
+      .filter((variant) => variant.color === color && variant.image_url)
+      .map((variant) => variant.image_url as string)
+    return Array.from(new Set([...fromMeta, ...fromVariants]))
+  }
+  const toggleColor = (color: string) => {
+    const shouldEnable = !enabledColors.has(color)
+    const colorImages = imageUrlsForColor(color)
+    setVariants((current) =>
+      current.map((variant) => variant.color === color ? { ...variant, enabled: shouldEnable } : variant)
+    )
+    if (colorImages.length) {
+      setSelectedImageUrls((current) =>
+        shouldEnable
+          ? Array.from(new Set([...current, ...colorImages]))
+          : current.filter((url) => !colorImages.includes(url))
+      )
+    }
+  }
+  const toggleSize = (size: string) => {
+    const shouldEnable = !enabledSizes.has(size)
+    setVariants((current) =>
+      current.map((variant) => variant.size === size ? { ...variant, enabled: shouldEnable } : variant)
     )
   }
 
@@ -478,26 +688,32 @@ export function EditDraftPage() {
       toast.push("Publish the product first to preview it on the buyer storefront.", "info")
       return
     }
-    window.open(`${STOREFRONT_URL}/products/${product.product_id}`, "_blank", "noopener,noreferrer")
+    window.open(
+      `${STOREFRONT_URL}/products/${product.product_id}?store=${encodeURIComponent(getSellerStoreId())}`,
+      "_blank",
+      "noopener,noreferrer"
+    )
   }
 
   const isArchived = product.status === "archived"
   const isDraft = !isArchived && product.status === "draft"
   const isAiDraftReview =
     isDraft &&
+    !isS2bSupplierProduct &&
     (aiReview ||
       product.source === "ai" ||
       Boolean(product.ai_job_id) ||
       Boolean(product.platform_product_id) ||
       fulfillmentStatus.state !== "not_applicable")
-  const useConfirmPublish = isAiDraftReview
+  const useConfirmPublish = isAiDraftReview && !isS2bSupplierProduct
   const isBusy =
     saveMutation.isPending ||
     publishMutation.isPending ||
     confirmPublishMutation.isPending ||
     provisionS2bMutation.isPending ||
     restoreMutation.isPending ||
-    duplicateMutation.isPending
+    duplicateMutation.isPending ||
+    imageUploading
 
   return (
     <div>
@@ -599,7 +815,7 @@ export function EditDraftPage() {
         className={isDraft ? "flex flex-col gap-6" : "grid gap-8 lg:grid-cols-2"}
       >
         <div className="space-y-4">
-          {isDraft && id ? (
+          {isDraft && id && isAiDraftReview && (!isS2bSupplierProduct || showCustomizeEditor) ? (
             <Card className="overflow-hidden p-0">
               <div className="border-b bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Product Editor
@@ -616,6 +832,22 @@ export function EditDraftPage() {
                   toast.push("Design saved in editor", "success")
                 }}
               />
+            </Card>
+          ) : null}
+
+          {isDraft && id && isS2bSupplierProduct && !showCustomizeEditor ? (
+            <Card className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Supplier product preview</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Edit title, description, images, and included variants. Open the custom editor only if this item needs artwork changes.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => setShowCustomizeEditor(true)}>
+                  Customize edit
+                </Button>
+              </div>
             </Card>
           ) : null}
 
@@ -753,6 +985,68 @@ export function EditDraftPage() {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+          {previewOptions.length || (isOwnProduct && !isArchived) ? (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label>Publish image preview</Label>
+                {isOwnProduct && !isArchived ? (
+                  <div>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      multiple
+                      className="hidden"
+                      disabled={imageUploading}
+                      onChange={(event) => {
+                        void uploadProductImages(event.target.files)
+                        if (imageInputRef.current) imageInputRef.current.value = ""
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={imageUploading}
+                      onClick={() => imageInputRef.current?.click()}
+                    >
+                      {imageUploading ? "Uploading…" : "Upload images"}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              {previewOptions.length ? (
+                <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {previewOptions.map((option) => (
+                    <div key={option.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <img src={option.url} alt={option.label} className="aspect-square w-full object-cover" />
+                      <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-slate-500">
+                        <span className="truncate">{option.label}</span>
+                        {!isArchived ? (
+                        <button
+                          type="button"
+                          className="font-medium text-red-600"
+                          onClick={() => setSelectedImageUrls((current) => current.filter((url) => url !== option.url))}
+                        >
+                          Remove
+                        </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2 rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+                  Upload product images before publishing.
+                </div>
+              )}
+              {isS2bSupplierProduct && s2bColorImages.length ? (
+                <Button type="button" variant="outline" className="mt-2" onClick={restoreSupplierImages}>
+                  Restore supplier images
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Base Price</Label>
@@ -761,13 +1055,16 @@ export function EditDraftPage() {
                 type="number"
                 step="0.01"
                 value={price}
-                disabled={isArchived}
+                disabled={isArchived || isS2bSupplierProduct}
                 onChange={(e) => setPrice(e.target.value)}
               />
+              {isS2bSupplierProduct ? (
+                <p className="mt-1 text-xs text-slate-500">Locked to S2BDIY purchase cost × 2.3 after CNY→USD conversion.</p>
+              ) : null}
             </div>
             <div>
               <Label>Default Stock</Label>
-              <Input className="mt-1" value="Managed by supplier on order" readOnly />
+              <Input className="mt-1" value={isS2bSupplierProduct ? "Managed by supplier on order" : "Self-managed"} readOnly />
             </div>
           </div>
           <div>
@@ -801,6 +1098,7 @@ export function EditDraftPage() {
             </div>
           </div>
 
+          {!isS2bSupplierProduct ? (
           <div>
             <Label>Categories</Label>
             <div className="mt-1">
@@ -811,8 +1109,18 @@ export function EditDraftPage() {
               />
             </div>
           </div>
+          ) : (
+          <div>
+            <Label>S2B Category</Label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(s2bCategoryLabels.length ? Array.from(new Set(s2bCategoryLabels)) : ["Uncategorized"]).map((label) => (
+                <span key={label} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">{label}</span>
+              ))}
+            </div>
+          </div>
+          )}
 
-          {fulfillmentStatus.state !== "not_applicable" ? (
+          {!isS2bSupplierProduct && fulfillmentStatus.state !== "not_applicable" ? (
           <div className="rounded-lg border border-slate-200 p-4">
             <p className="text-sm font-semibold text-slate-900">S2BDIY Fulfillment</p>
             <p className="mt-1 text-sm text-slate-500">{fulfillmentStatus.detail}</p>
@@ -852,10 +1160,11 @@ export function EditDraftPage() {
           </div>
           ) : null}
 
+          {!isS2bSupplierProduct ? (
           <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-sm font-semibold text-slate-900">Fulfillment</p>
+            <p className="text-sm font-semibold text-slate-900">Self-managed fulfillment</p>
             <p className="mt-1 text-sm text-slate-500">
-              Controls whether buyers must enter a delivery address and shipping method at checkout.
+              You handle inventory and shipping for this own product. Buyers enter a delivery address and shipping method at checkout when physical delivery is required.
             </p>
             <label className="mt-4 flex items-start gap-3 text-sm text-slate-700">
               <input
@@ -873,7 +1182,16 @@ export function EditDraftPage() {
               </span>
             </label>
           </div>
+          ) : (
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-900">S2B supplier fulfillment</p>
+            <p className="mt-1 text-sm text-slate-500">
+              This product is sourced from the S2B supplier catalog. Supplier inventory and order fulfillment are handled by the supplier; shipping service and cost are calculated later from the buyer address.
+            </p>
+          </div>
+          )}
 
+          {!isS2bSupplierProduct ? (
           <div className="rounded-lg border border-slate-200 p-4">
             <p className="text-sm font-semibold text-slate-900">Sales regions</p>
             <p className="mt-1 text-sm text-slate-500">
@@ -926,68 +1244,158 @@ export function EditDraftPage() {
               <p className="mt-3 text-sm text-amber-700">Select at least one region before saving.</p>
             ) : null}
           </div>
-
+          ) : (
           <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-sm font-semibold text-slate-900">Shipping origin</p>
+            <p className="text-sm font-semibold text-slate-900">Supplier shipping and sale region</p>
             <p className="mt-1 text-sm text-slate-500">
-              Where this product ships from. This is displayed to buyers as &quot;Ships from: [Country]&quot;.
+              {s2bWarehouseLabel || product.ship_from_label || "Supplier warehouse"}{s2bSellableCountries.length ? ` · ${s2bSellableCountries.join(", ")}` : ""}
             </p>
-            <div className="mt-4">
-              <Label>Ship From Country</Label>
-              <select
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                value={shipFromCountry}
-                disabled={isArchived}
-                onChange={(e) => setShipFromCountry(e.target.value)}
-              >
-                <option value="">Not specified</option>
-                <option value="US">United States</option>
-                <option value="CN">China</option>
-                <option value="GB">United Kingdom</option>
-                <option value="RU">Russia</option>
-                <option value="AU">Australia</option>
-                <option value="DE">Germany</option>
-                <option value="CA">Canada</option>
-                <option value="IT">Italy</option>
-                <option value="FR">France</option>
-                <option value="ES">Spain</option>
-                <option value="KR">South Korea</option>
-                <option value="JP">Japan</option>
-                <option value="PH">Philippines</option>
-                <option value="MX">Mexico</option>
-                <option value="PL">Poland</option>
-              </select>
-            </div>
           </div>
+          )}
 
           <div className="rounded-lg border border-slate-200">
-            <div className="border-b px-4 py-2 text-xs font-semibold uppercase text-slate-500">
-              Product Variants
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+              <span className="text-xs font-semibold uppercase text-slate-500">
+                Product Variants
+              </span>
+              {isOwnProduct && !isArchived ? (
+                <Button type="button" variant="outline" onClick={addManualVariant}>
+                  Add variant
+                </Button>
+              ) : null}
             </div>
-            {variants.length ? (
-              <table className="w-full text-sm">
+            {isS2bSupplierProduct && variants.length ? (
+              <div className="space-y-5 p-4">
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900">Colors</p>
+                    <span className="text-xs text-slate-500">{enabledColors.size} selected</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {variantColors.map((color) => {
+                      const active = enabledColors.has(color)
+                      const image = imageUrlsForColor(color)[0]
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => toggleColor(color)}
+                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                            active ? "border-brand bg-brand-light text-brand" : "border-slate-200 bg-white text-slate-600"
+                          }`}
+                        >
+                          {image ? <img src={image} alt="" className="h-8 w-8 rounded object-cover" /> : null}
+                          <span>{color}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900">Sizes</p>
+                    <span className="text-xs text-slate-500">{enabledSizes.size} selected</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {variantSizes.map((size) => {
+                      const active = enabledSizes.has(size)
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => toggleSize(size)}
+                          className={`rounded-lg border px-3 py-2 text-sm ${
+                            active ? "border-brand bg-brand-light text-brand" : "border-slate-200 bg-white text-slate-600"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-slate-900">Enabled combinations</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {variants.filter((variant) => variant.enabled !== false).map((variant) => (
+                      <div key={variant.supplier_variant_id} className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
+                        {variant.image_url ? (
+                          <img src={variant.image_url} alt="" className="h-12 w-12 rounded object-cover" />
+                        ) : (
+                          <span className="h-12 w-12 rounded bg-slate-50" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-900">{variant.color} / {variant.size}</p>
+                          <p className="text-xs text-slate-500">{variant.supplier_sku || variant.supplier_variant_id}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : variants.length ? (
+              <div className="overflow-x-auto">
+              <table className="min-w-[980px] w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-slate-400">
-                    <th className="px-4 py-2">Color</th>
-                    <th className="px-4 py-2">Size</th>
+                    <th className="px-4 py-2">Include</th>
+                    <th className="px-4 py-2">Image</th>
+                    <th className="px-4 py-2">Option type</th>
+                    <th className="px-4 py-2">Option value</th>
+                    <th className="px-4 py-2">SKU</th>
                     <th className="px-4 py-2">Price</th>
+                    {isOwnProduct ? <th className="px-4 py-2">Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {variants.map((variant, index) => (
                     <tr key={variant.supplier_variant_id} className="border-t">
                       <td className="px-4 py-2">
-                        <Input
-                          value={variant.color}
+                        <input
+                          type="checkbox"
+                          checked={variant.enabled !== false}
                           disabled={isArchived}
-                          onChange={(e) => updateVariant(index, "color", e.target.value)}
+                          onChange={(e) => updateVariant(index, "enabled", e.target.checked)}
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex min-w-40 items-center gap-2">
+                          {variant.image_url ? (
+                            <img src={variant.image_url} alt="" className="h-12 w-12 rounded border object-cover" />
+                          ) : (
+                            <span className="block h-12 w-12 rounded border bg-slate-50" />
+                          )}
+                          {isOwnProduct ? (
+                            <Input
+                              value={variant.image_url ?? ""}
+                              placeholder="Image URL"
+                              disabled={isArchived}
+                              onChange={(e) => updateVariant(index, "image_url", e.target.value)}
+                            />
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <Input
+                          value={variant.option_type ?? ""}
+                          placeholder="Material, Style, Color..."
+                          disabled={isArchived || isS2bSupplierProduct}
+                          onChange={(e) => updateVariant(index, "option_type", e.target.value)}
                         />
                       </td>
                       <td className="px-4 py-2">
                         <Input
-                          value={variant.size}
-                          disabled={isArchived}
-                          onChange={(e) => updateVariant(index, "size", e.target.value)}
+                          value={variant.option_value ?? ""}
+                          placeholder="Cotton, Bundle A, Blue..."
+                          disabled={isArchived || isS2bSupplierProduct}
+                          onChange={(e) => updateVariant(index, "option_value", e.target.value)}
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <Input
+                          value={variant.supplier_sku ?? ""}
+                          disabled={isArchived || isS2bSupplierProduct}
+                          onChange={(e) => updateVariant(index, "supplier_sku", e.target.value)}
                         />
                       </td>
                       <td className="px-4 py-2">
@@ -996,14 +1404,27 @@ export function EditDraftPage() {
                           step="0.01"
                           min={0}
                           value={variant.price}
-                          disabled={isArchived}
+                          disabled={isArchived || isS2bSupplierProduct}
                           onChange={(e) => updateVariant(index, "price", e.target.value)}
                         />
                       </td>
+                      {isOwnProduct ? (
+                        <td className="px-4 py-2">
+                          <Button
+                            type="button"
+                            variant="danger"
+                            disabled={isArchived || variants.length <= 1}
+                            onClick={() => removeManualVariant(index)}
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : supplierLoading || (Boolean(product?.platform_product_id) && !variantsInitialized && !supplierError) ? (
               <p className="px-4 py-6 text-sm text-slate-500">Loading variants…</p>
             ) : supplierError ? (

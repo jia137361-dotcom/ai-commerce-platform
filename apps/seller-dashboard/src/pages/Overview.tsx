@@ -1,7 +1,8 @@
 import { useMemo } from "react"
 import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { apiFetch, STOREFRONT_URL } from "../lib/api-client"
+import { apiFetch, fetchSellerSession, STOREFRONT_URL } from "../lib/api-client"
+import { getSellerStoreId } from "../lib/seller-store-id"
 import { PageHeader } from "../components/PageHeader"
 import { Card, CardTitle } from "../components/ui/Card"
 import type { StoreNotification } from "@ai-commerce/shared-types"
@@ -75,6 +76,12 @@ export function OverviewPage() {
       apiFetch<{ follower_count: number }>("/admin/store-followers?limit=1"),
   })
 
+  const sessionQuery = useQuery({
+    queryKey: ["seller-session"],
+    queryFn: fetchSellerSession,
+    staleTime: 60_000,
+  })
+
   const orders = ordersQuery.data?.orders ?? []
   const threads = messagesQuery.data?.threads ?? []
   const reviews = reviewsQuery.data?.reviews ?? []
@@ -137,6 +144,8 @@ export function OverviewPage() {
       hint: "Latest order list window",
     },
   ]
+  const currentStoreId = sessionQuery.data?.store_id?.trim() || getSellerStoreId()
+  const storefrontHref = `${STOREFRONT_URL.replace(/\/$/, "")}/store?store_id=${encodeURIComponent(currentStoreId)}`
 
   return (
     <div>
@@ -145,7 +154,7 @@ export function OverviewPage() {
         description="Store operations desk — fulfill orders, reply to buyers, watch reviews."
         action={
           <a
-            href={STOREFRONT_URL.replace(/\/$/, "") + "/"}
+            href={storefrontHref}
             target="_blank"
             rel="noreferrer"
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-brand hover:text-brand"

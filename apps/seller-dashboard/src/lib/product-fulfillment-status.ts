@@ -20,6 +20,15 @@ export function isS2bProvisioned(product: FulfillmentProduct): boolean {
   return Boolean(product.supplier_material_id) || /^\d+$/.test(supplierProductId)
 }
 
+export function isS2bCatalogSupplierProduct(product: FulfillmentProduct | null | undefined): boolean {
+  return Boolean(
+    product?.supplier_id === "sup_s2bdiy" &&
+      (product.metadata?.synced_from_supplier === true ||
+        product.metadata?.import_source === "s2bdiy_supplier" ||
+        product.metadata?.import_source === "s2bdiy_csv")
+  )
+}
+
 export type ProductFulfillmentStatus =
   | { state: "not_applicable"; label: string; detail: string }
   | { state: "ready"; label: string; detail: string; s2bProductId?: string }
@@ -43,6 +52,15 @@ export function resolveProductFulfillmentStatus(
     (typeof product.metadata?.s2b_provision_error === "string"
       ? product.metadata.s2b_provision_error
       : null)
+
+  if (isS2bCatalogSupplierProduct(product)) {
+    return {
+      state: "ready",
+      label: "S2BDIY catalog ready",
+      detail: "Supplier catalog product is synced. No print file upload is required.",
+      s2bProductId: product.basic_product_id ?? product.supplier_product_id ?? undefined,
+    }
+  }
 
   const hasPrintFile = Boolean(
     product.print_file_url ||

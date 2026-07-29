@@ -13,6 +13,34 @@ type Supplier = {
   adapter_ready: boolean
 }
 
+const supplierDisplay = (supplier: Supplier) => {
+  if (supplier.id === "sup_citigoo_mock" || supplier.code === "citigoo_mock") {
+    return {
+      name: "Own products",
+      code: "manual_catalog",
+      description: "Create products from your own images, descriptions, categories, variants, and shipping regions.",
+      action: "/ai-studio/create#manual-draft",
+      ready: true,
+    }
+  }
+  if (supplier.id === "sup_s2bdiy" || supplier.code === "s2bdiy") {
+    return {
+      name: "S2B Supplier",
+      code: "s2b_supplier",
+      description: "Browse the S2B catalog, sync products, then edit title, description, images, and variants.",
+      action: `/suppliers/${supplier.id}/catalog`,
+      ready: supplier.adapter_ready,
+    }
+  }
+  return {
+    name: supplier.name,
+    code: supplier.code,
+    description: "Browse supplier catalog and sync products.",
+    action: `/suppliers/${supplier.id}/catalog`,
+    ready: supplier.adapter_ready,
+  }
+}
+
 export function SupplierListPage() {
   const navigate = useNavigate()
 
@@ -44,36 +72,40 @@ export function SupplierListPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {suppliers.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => navigate(`/suppliers/${s.id}/catalog`)}
-              className="rounded-xl border border-slate-200 bg-white p-6 text-left shadow-card transition hover:border-brand hover:shadow-lg"
-            >
-              <div className="mb-3 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand-light text-lg font-bold text-brand">
-                  {s.name.charAt(0)}
+          {suppliers.map((s) => {
+            const display = supplierDisplay(s)
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => navigate(display.action)}
+                className="rounded-xl border border-slate-200 bg-white p-6 text-left shadow-card transition hover:border-brand hover:shadow-lg"
+              >
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand-light text-lg font-bold text-brand">
+                    {display.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">{display.name}</h3>
+                    <p className="text-xs text-slate-500">{display.code}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">{s.name}</h3>
-                  <p className="text-xs text-slate-500">{s.code}</p>
+                <p className="mb-3 text-xs leading-relaxed text-slate-500">{display.description}</p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      display.ready
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {display.ready ? "Ready" : "Coming Soon"}
+                  </span>
+                  <span className="text-xs text-slate-400">· {s.adapter_type}</span>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    s.adapter_ready
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {s.adapter_ready ? "Ready" : "Coming Soon"}
-                </span>
-                <span className="text-xs text-slate-400">· {s.adapter_type}</span>
-              </div>
-            </button>
-          ))}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

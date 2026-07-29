@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiFetch, STOREFRONT_URL } from "../lib/api-client"
+import { apiFetch, fetchSellerSession, STOREFRONT_URL } from "../lib/api-client"
 import { useAuthStore } from "../lib/auth-store"
 import { cn } from "../lib/cn"
 import type { StoreNotification } from "@ai-commerce/shared-types"
+import { getSellerStoreId } from "../lib/seller-store-id"
 
 const NAV: Array<{ to: string; label: string; end?: boolean }> = [
   { to: "/", label: "Overview", end: true },
@@ -147,6 +148,13 @@ export function Navbar() {
   const location = useLocation()
   const { email, logout } = useAuthStore()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const sessionQuery = useQuery({
+    queryKey: ["seller-session"],
+    queryFn: fetchSellerSession,
+    staleTime: 60_000,
+  })
+  const currentStoreId = sessionQuery.data?.store_id?.trim() || getSellerStoreId()
+  const storefrontHref = `${STOREFRONT_URL.replace(/\/$/, "")}/store?store_id=${encodeURIComponent(currentStoreId)}`
 
   const isActive = (to: string, end?: boolean) => {
     if (end || to === "/") return location.pathname === "/"
@@ -186,7 +194,7 @@ export function Navbar() {
             ☰
           </button>
           <a
-            href={STOREFRONT_URL.replace(/\/$/, "") + "/"}
+            href={storefrontHref}
             target="_blank"
             rel="noreferrer"
             className="hidden text-sm text-slate-500 hover:text-brand sm:inline"
@@ -225,7 +233,7 @@ export function Navbar() {
             </Link>
           ))}
           <a
-            href={STOREFRONT_URL.replace(/\/$/, "") + "/"}
+            href={storefrontHref}
             target="_blank"
             rel="noreferrer"
             className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600"
