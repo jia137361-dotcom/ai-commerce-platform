@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "../../lib/api-client"
 import { useToast } from "../../components/ToastProvider"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
+import { S2bImportWorkspace } from "../Products/s2b-import/S2bImportWorkspace"
 
 type S2bProduct = {
   id: number
@@ -14,6 +15,14 @@ type S2bProduct = {
   purchase_price: string
   view_image_src: string
   blank_design_image: string
+  produce_country?: string
+  warehouse_name?: string
+  deliver_goods_text?: string
+  synced_product?: {
+    product_id: string
+    status: string
+    title?: string
+  } | null
 }
 
 type S2bProductDetail = {
@@ -27,6 +36,9 @@ type S2bProductDetail = {
   print_areas: Array<{ view_id: number; width: string; height: string }>
   product_show_images: Array<{ color_id: number; color_name: string; images: Array<{ src: string }> }>
   categorys: Array<{ id: number; name: string; en_name: string }>
+  produce_country?: string
+  warehouse_name?: string
+  deliver_goods_text?: string
 }
 
 type SyncResult = {
@@ -45,9 +57,28 @@ type CatalogResponse = {
 }
 
 type StoreCategory = {
-  category_id: string
-  name: string
-  supplier_category_id: string | null
+  id: number
+  name?: string
+  en_name?: string
+  children?: StoreCategory[]
+}
+
+const flattenCategories = (categories: StoreCategory[], depth = 0): Array<{ id: number; label: string }> =>
+  categories.flatMap((category) => {
+    const label = `${"  ".repeat(depth)}${category.en_name || category.name || `Category ${category.id}`}`
+    return [{ id: category.id, label }, ...flattenCategories(category.children ?? [], depth + 1)]
+  })
+
+const resolveShippingRegion = (product: Partial<S2bProduct | S2bProductDetail>) => {
+  const direct = [
+    product.warehouse_name,
+    product.produce_country,
+    product.deliver_goods_text,
+  ].find((value) => typeof value === "string" && value.trim())
+  if (direct) return direct.trim()
+  const title = [product.name, product.en_name].filter(Boolean).join(" ")
+  const match = title.match(/[（(]([^）)]*(?:发|仓|工厂)[^）)]*)[）)]/)
+  return match?.[1]?.trim() || "Unknown region"
 }
 
 export function SupplierCatalogPage() {
@@ -55,27 +86,21 @@ export function SupplierCatalogPage() {
   const { supplierId } = useParams<{ supplierId: string }>()
   const qc = useQueryClient()
   const toast = useToast()
+  const categoryScrollerRef = useRef<HTMLDivElement | null>(null)
   const [page, setPage] = useState(1)
   const [selId, setSelId] = useState<number | null>(null)
   const [catId, setCatId] = useState<number | null>(null)
+  const [regionFilter, setRegionFilter] = useState("")
   const pp = 12
 
   const { data: categoryData } = useQuery({
-    queryKey: ["product-categories"],
+    queryKey: ["s2bdiy-categories"],
     queryFn: () =>
-      apiFetch<{ categories: StoreCategory[] }>("/admin/product-categories"),
+      apiFetch<{ categories: StoreCategory[] }>("/admin/s2bdiy/categories"),
   })
 
   const catalogCategories = useMemo(() => {
-    const seen = new Map<number, string>()
-    for (const category of categoryData?.categories ?? []) {
-      if (!category.supplier_category_id) continue
-      const id = Number(category.supplier_category_id)
-      if (!Number.isFinite(id) || id <= 0) continue
-      if (!seen.has(id)) seen.set(id, category.name)
-    }
-    return [...seen.entries()]
-      .map(([id, label]) => ({ id, label }))
+    return flattenCategories(categoryData?.categories ?? [])
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [categoryData])
 
@@ -120,8 +145,15 @@ export function SupplierCatalogPage() {
   })
 
   const items = listData?.data ?? []
+  const shippingRegions = useMemo(
+    () => Array.from(new Set(items.map(resolveShippingRegion).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [items]
+  )
+  const visibleItems = regionFilter ? items.filter((item) => resolveShippingRegion(item) === regionFilter) : items
   const det = detailData?.data ?? null
   const total = listData?.total
+
+  const selectedCategory = catalogCategories.find((category) => category.id === catId)
 
   return (
     <div>
@@ -130,94 +162,163 @@ export function SupplierCatalogPage() {
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <button type="button" onClick={() => navigate("/suppliers")} className="hover:text-brand">Suppliers</button>
             <span>/</span>
-            <span className="text-slate-600">{supplierId}</span>
+            <span className="text-slate-600">{supplierId === "sup_s2bdiy" ? "s2b_supplier" : supplierId}</span>
           </div>
-          <h1 className="mt-1 text-xl font-bold">Supplier Catalog</h1>
+          <h1 className="mt-1 text-xl font-bold">{supplierId === "sup_s2bdiy" ? "S2B Supplier Catalog" : "Supplier Catalog"}</h1>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate("/suppliers")}>Back to Suppliers</Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <div className="lg:col-span-1">
-          <Card className="p-3">
-            <div className="mb-3 flex flex-wrap gap-1">
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={() => { setCatId(null); setPage(1); setSelId(null) }}
-                onKeyDown={(e) => { if (e.key === "Enter") { setCatId(null); setPage(1); setSelId(null) } }}
-                className={
-                  "cursor-pointer rounded-full px-2 py-0.5 text-xs " +
-                  (catId == null ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
-                }
-              >
-                All
-              </span>
-              {catalogCategories.map((c) => (
-                <span
-                  key={c.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => { setCatId(catId === c.id ? null : c.id); setPage(1); setSelId(null) }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { setCatId(catId === c.id ? null : c.id); setPage(1); setSelId(null) } }}
+      <Card className="mb-4 p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">S2B Categories</p>
+            <p className="text-sm font-medium text-slate-700">{selectedCategory?.label.trim() || "All categories"}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => categoryScrollerRef.current?.scrollBy({ left: -360, behavior: "smooth" })}
+            >
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => categoryScrollerRef.current?.scrollBy({ left: 360, behavior: "smooth" })}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+        <div ref={categoryScrollerRef} className="flex gap-2 overflow-x-auto pb-2">
+          <button
+            type="button"
+            onClick={() => { setCatId(null); setPage(1); setSelId(null) }}
+            className={
+              "shrink-0 rounded-full px-3 py-1 text-sm " +
+              (catId == null ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+            }
+          >
+            All
+          </button>
+          {catalogCategories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => { setCatId(catId === c.id ? null : c.id); setPage(1); setSelId(null) }}
+              className={
+                "shrink-0 rounded-full px-3 py-1 text-sm " +
+                (catId === c.id ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+              }
+            >
+              {c.label.trim()}
+            </button>
+          ))}
+        </div>
+        {!catalogCategories.length ? (
+          <p className="mt-2 text-xs text-slate-500">
+            No S2B categories returned yet. Confirm supplier API credentials and reload.
+          </p>
+        ) : null}
+      </Card>
+
+      <Card className="mb-4 p-3">
+        <div className="mb-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">S2B fulfillment locations</p>
+          <p className="text-sm font-medium text-slate-700">{regionFilter || "All warehouses / factories"}</p>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          <button
+            type="button"
+            onClick={() => { setRegionFilter(""); setSelId(null) }}
+            className={
+              "shrink-0 rounded-full px-3 py-1 text-sm " +
+              (!regionFilter ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+            }
+          >
+            All locations
+          </button>
+          {shippingRegions.map((region) => (
+            <button
+              key={region}
+              type="button"
+              onClick={() => { setRegionFilter(regionFilter === region ? "" : region); setSelId(null) }}
+              className={
+                "shrink-0 rounded-full px-3 py-1 text-sm " +
+                (regionFilter === region ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+              }
+            >
+              {region}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
+        <Card className="p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Products</p>
+              <p className="text-sm text-gray-500">
+                {total != null ? total + " products" : "Loading..."}
+              </p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">P{page}</span>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1,2,3,4,5].map((i) => <div key={i} className="h-20 animate-pulse rounded bg-gray-100" />)}
+            </div>
+          ) : visibleItems.length === 0 ? (
+            <p className="text-xs text-gray-400">No products found</p>
+          ) : (
+            <div className="max-h-[620px] space-y-2 overflow-y-auto pr-1">
+              {visibleItems.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelId(p.id)}
                   className={
-                    "cursor-pointer rounded-full px-2 py-0.5 text-xs " +
-                    (catId === c.id ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+                    "flex w-full items-center gap-3 rounded-lg border p-2 text-left text-sm " +
+                    (selId === p.id ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:bg-gray-50")
                   }
                 >
-                  {c.label}
-                </span>
+                  {p.view_image_src ? (
+                    <img src={p.view_image_src} alt="" className="h-14 w-14 shrink-0 rounded object-cover" />
+                  ) : <span className="h-14 w-14 shrink-0 rounded bg-slate-100" />}
+                  <span className="min-w-0">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <strong className="line-clamp-2 text-slate-900">{p.en_name || p.name}</strong>
+                      {p.synced_product ? (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                          {p.synced_product.status}
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                          unsynced
+                        </span>
+                      )}
+                    </span>
+                    <small className="block text-slate-400">S2B #{p.id} · {p.purchase_price ?? "—"} · {resolveShippingRegion(p)}</small>
+                  </span>
+                </button>
               ))}
             </div>
-            {!catalogCategories.length ? (
-              <p className="mb-3 text-xs text-slate-500">
-                No supplier-linked categories yet. Sync a catalog item or import S2B categories first.
-              </p>
-            ) : null}
+          )}
 
-            <div className="mb-2 text-xs text-gray-500">
-              {total != null ? total + " products" : "Loading..."}
-            </div>
+          <div className="mt-3 flex justify-between">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</Button>
+            <Button variant="outline" size="sm" disabled={items.length < pp} onClick={() => setPage(page + 1)}>Next</Button>
+          </div>
+        </Card>
 
-            {isLoading ? (
-              <div className="space-y-1">
-                {[1,2,3,4,5].map((i) => <div key={i} className="h-12 animate-pulse rounded bg-gray-100" />)}
-              </div>
-            ) : items.length === 0 ? (
-              <p className="text-xs text-gray-400">No products found</p>
-            ) : (
-              <div className="max-h-[500px] space-y-1 overflow-y-auto">
-                {items.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setSelId(p.id)}
-                    className={
-                      "w-full rounded border p-2 text-left text-xs " +
-                      (selId === p.id ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:bg-gray-50")
-                    }
-                  >
-                    {p.view_image_src ? (
-                      <img src={p.view_image_src} alt="" className="mb-1 h-10 w-10 rounded object-cover" />
-                    ) : null}
-                    <div className="truncate font-medium">{p.name}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-2 flex justify-between">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</Button>
-              <span className="text-xs text-gray-400">P{page}</span>
-              <Button variant="outline" size="sm" disabled={items.length < pp} onClick={() => setPage(page + 1)}>Next</Button>
-            </div>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-3">
+        <div>
           {!selId ? (
-            <Card className="flex h-48 items-center justify-center">
-              <p className="text-sm text-gray-400">Select a product</p>
+            <Card className="flex min-h-[360px] items-center justify-center">
+              <p className="text-sm text-gray-400">Select a product from the list</p>
             </Card>
           ) : detLoading ? (
             <Card className="p-4"><div className="h-40 animate-pulse rounded bg-gray-100" /></Card>
@@ -226,11 +327,20 @@ export function SupplierCatalogPage() {
               <div className="mb-3 flex items-start justify-between">
                 <div>
                   <h2 className="text-lg font-bold">{det.name}</h2>
-                  <p className="text-xs text-gray-500">ID: {det.id}</p>
+                  <p className="text-xs text-gray-500">ID: {det.id} · {resolveShippingRegion(det)}</p>
                 </div>
                 <Button size="sm" onClick={() => sync.mutate(det.id)} disabled={sync.isPending}>
                   {sync.isPending ? "Syncing..." : "Sync to Store"}
                 </Button>
+                {items.find((item) => item.id === det.id)?.synced_product?.product_id ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/products/${items.find((item) => item.id === det.id)?.synced_product?.product_id}/edit`)}
+                  >
+                    Edit synced product
+                  </Button>
+                ) : null}
               </div>
 
               <div className="mb-3">
@@ -283,6 +393,10 @@ export function SupplierCatalogPage() {
             </Card>
           ) : null}
         </div>
+      </div>
+
+      <div className="mt-6">
+        <S2bImportWorkspace />
       </div>
     </div>
   )

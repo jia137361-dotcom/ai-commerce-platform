@@ -47,6 +47,12 @@ export function ProductListPage() {
   const [offset, setOffset] = useState(0)
   const [q, setQ] = useState("")
   const [search, setSearch] = useState("")
+  const [filters, setFilters] = useState({
+    category: "",
+    product_type: "",
+    warehouse_region: "",
+    country: "",
+  })
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -58,13 +64,17 @@ export function ProductListPage() {
     limit: String(limit),
     offset: String(offset),
     ...(search ? { q: search } : {}),
+    ...(filters.category ? { category: filters.category } : {}),
+    ...(filters.product_type ? { product_type: filters.product_type } : {}),
+    ...(filters.warehouse_region ? { warehouse_region: filters.warehouse_region } : {}),
+    ...(filters.country ? { country: filters.country } : {}),
   })
   if (apiStatus !== "all") {
     queryParams.set("status", apiStatus)
   }
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["products", apiStatus, offset, search],
+    queryKey: ["products", apiStatus, offset, search, filters],
     queryFn: () =>
       apiFetch<{ products: NormalizedProduct[]; count: number }>(
         storeProductsListPath(queryParams)
@@ -221,6 +231,49 @@ export function ProductListPage() {
         </form>
       </div>
 
+      <div className="mb-4 grid gap-3 rounded-card border border-slate-200 bg-white p-3 shadow-sm md:grid-cols-4">
+        <input
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          placeholder="Category"
+          value={filters.category}
+          onChange={(event) => {
+            setOffset(0)
+            setFilters((current) => ({ ...current, category: event.target.value }))
+            clearSelection()
+          }}
+        />
+        <input
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          placeholder="Product type"
+          value={filters.product_type}
+          onChange={(event) => {
+            setOffset(0)
+            setFilters((current) => ({ ...current, product_type: event.target.value }))
+            clearSelection()
+          }}
+        />
+        <input
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          placeholder="Shipping from"
+          value={filters.warehouse_region}
+          onChange={(event) => {
+            setOffset(0)
+            setFilters((current) => ({ ...current, warehouse_region: event.target.value }))
+            clearSelection()
+          }}
+        />
+        <input
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          placeholder="Sellable country, e.g. US"
+          value={filters.country}
+          onChange={(event) => {
+            setOffset(0)
+            setFilters((current) => ({ ...current, country: event.target.value.toUpperCase() }))
+            clearSelection()
+          }}
+        />
+      </div>
+
       {selectedCount ? (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-sm text-slate-700">
@@ -256,7 +309,7 @@ export function ProductListPage() {
           }
           description={
             status === "all"
-              ? "Browse the supplier catalog and publish products your buyers can customize in Studio."
+              ? "Add products from the supplier catalog, import CSV drafts, then publish selected products."
                 : status === "failed"
                 ? "Failed products need supplier re-provisioning or a new catalog draft."
                 : status === "archived"
@@ -267,7 +320,7 @@ export function ProductListPage() {
           onAction={status === "all" ? () => navigate("/suppliers") : undefined}
         />
       ) : (
-        <div className="overflow-hidden rounded-card border border-slate-200 bg-white shadow-card">
+        <div className="overflow-visible rounded-card border border-slate-200 bg-white shadow-card">
           <table className="min-w-full text-sm">
             <thead className="bg-surface-muted text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
