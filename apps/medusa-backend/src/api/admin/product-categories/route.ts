@@ -13,6 +13,16 @@ type CreateProductCategoryBody = {
   parent_id?: string | null
 }
 
+const slugifyCategoryName = (name: string) => {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+  return slug || `category-${Date.now()}`
+}
+
 export const POST = async (
   req: MedusaRequest<CreateProductCategoryBody>,
   res: MedusaResponse
@@ -33,7 +43,7 @@ export const POST = async (
     return sendError(res, 404, "STORE_NOT_FOUND", "Store not found")
   }
 
-  const slug = name.toLowerCase().replace(/\s+/g, "-")
+  const slug = slugifyCategoryName(name)
 
   const existingCategories = await storeCoreService.listProductCategories({
     store_id: storeId,
@@ -49,6 +59,7 @@ export const POST = async (
     )
   }
 
+  let level = 1
   if (body.parent_id) {
     const parentCategories = await storeCoreService.listProductCategories({
       id: body.parent_id,
@@ -63,6 +74,7 @@ export const POST = async (
         "parent_id must belong to current store"
       )
     }
+    level = (parentCategories[0].level ?? 1) + 1
   }
 
   const category = await storeCoreService.createProductCategories({
@@ -70,7 +82,8 @@ export const POST = async (
     name,
     slug,
     description: body.description ?? null,
-    parent_id: body.parent_id ?? null
+    parent_id: body.parent_id ?? null,
+    level
   })
 
   return res.status(201).json({

@@ -78,14 +78,20 @@ export async function syncBasicProduct(
     basic_product_name: data.name ?? null,
     basic_product_en_name: data.en_name ?? null,
     name: data.name ?? `Basic Product ${data.id}`,
-    category: "apparel",
+    category:
+      data.categorys?.[0]?.en_name ??
+      data.categorys?.[0]?.name ??
+      null,
     purchase_price: Number(data.purchase_price) || null,
     product_show_master_image: data.product_show_master_image ?? null,
     produce_country: data.produce_country ?? null,
     warehouse_name: data.warehouse_name ?? null,
     deliver_goods_text: data.deliver_goods_text ?? null,
     base_cost: Number(data.purchase_price) || 0,
-    raw_json: data.raw ?? (data as unknown as Record<string, unknown>),
+    raw_json: {
+      ...(data.raw ?? (data as unknown as Record<string, unknown>)),
+      ...(data.product_show_images ? { product_show_images: data.product_show_images } : {}),
+    },
   }
 
   let supplierProductId: string

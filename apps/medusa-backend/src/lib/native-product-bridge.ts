@@ -33,6 +33,37 @@ const bridgeHandle = (productId: string, multiVariant = false) =>
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "")
 
+const buildNativeVariantOptionSchema = (rows: StoreCoreVariantRow[]) => {
+  const customOptionRows = rows.filter((row) => row.option_type && row.option_value)
+  if (customOptionRows.length) {
+    const optionTitle = customOptionRows[0].option_type || "Option"
+    const values = [...new Set(rows.map((row) => row.option_value || row.supplier_variant_id))]
+    return {
+      options: [{ title: optionTitle, values }],
+      rowOptions: (row: StoreCoreVariantRow) => ({ [optionTitle]: row.option_value || row.supplier_variant_id }),
+      rowTitle: (row: StoreCoreVariantRow) => row.option_value || "Default",
+    }
+  }
+
+  const optionPairs = new Set(rows.map((row) => `${row.color}\u0000${row.size}`))
+  const needsSupplierOption = optionPairs.size !== rows.length
+  return {
+    options: [
+      { title: "Color", values: [...new Set(rows.map((row) => row.color))] },
+      { title: "Size", values: [...new Set(rows.map((row) => row.size))] },
+      ...(needsSupplierOption
+        ? [{ title: "Supplier option", values: rows.map((row) => row.supplier_variant_id) }]
+        : []),
+    ],
+    rowOptions: (row: StoreCoreVariantRow) => ({
+      Color: row.color,
+      Size: row.size,
+      ...(needsSupplierOption ? { "Supplier option": row.supplier_variant_id } : {}),
+    }),
+    rowTitle: (row: StoreCoreVariantRow) => [row.color, row.size].filter((value) => value !== "Default").join(" / ") || "Default",
+  }
+}
+
 async function findNativeProductAndVariantByHandle(
   container: MedusaContainer,
   handle: string
@@ -128,15 +159,7 @@ async function createNativeBridgeProduct(
         price,
         stock: 0,
       }]
-  const optionPairs = new Set(rows.map((row) => `${row.color}\u0000${row.size}`))
-  const needsSupplierOption = optionPairs.size !== rows.length
-  const options = [
-    { title: "Color", values: [...new Set(rows.map((row) => row.color))] },
-    { title: "Size", values: [...new Set(rows.map((row) => row.size))] },
-    ...(needsSupplierOption
-      ? [{ title: "Supplier option", values: rows.map((row) => row.supplier_variant_id) }]
-      : []),
-  ]
+  const variantOptionSchema = buildNativeVariantOptionSchema(rows)
 
   const { result } = await createProductsWorkflow(container).run({
     input: {
@@ -146,22 +169,20 @@ async function createNativeBridgeProduct(
           handle,
           status: "published",
           metadata,
-          options,
+          options: variantOptionSchema.options,
           variants: rows.map((row) => {
             const variantMetadata = {
               ...metadata,
               supplier_variant_id: row.supplier_variant_id,
+              option_type: row.option_type,
+              option_value: row.option_value,
             }
             return {
-              title: [row.color, row.size].filter((value) => value !== "Default").join(" / ") || "Default",
+              title: variantOptionSchema.rowTitle(row),
               manage_inventory: false,
               allow_backorder: true,
               metadata: variantMetadata,
-              options: {
-                Color: row.color,
-                Size: row.size,
-                ...(needsSupplierOption ? { "Supplier option": row.supplier_variant_id } : {}),
-              },
+              options: variantOptionSchema.rowOptions(row),
               prices: [
                 {
                   amount: Math.max(1, Math.round(row.price * 100)),

@@ -2,17 +2,32 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../lib/store-context"
 import { resolveProductRequiresShipping } from "../../../lib/product-shipping"
 import { attachSupportedRegionsToProducts } from "../../../lib/product-regions"
+import { isProductAvailableInRegion, listMarketRegionSummaries, resolveRegionIdForCountry } from "../../../lib/product-regions"
 import {
   getProductReviewSummaries,
   getStoreCoreService,
   normalizeProductWithReviewSummary
 } from "../../_helpers/store-core"
 import { normalizeShipFromCountryCode } from "../../../lib/ship-from-country"
+import { isStorefrontProductVisible } from "../../../lib/storefront-product-visibility"
+
+const storefrontProductPayload = (product: any) => ({
+  ...product,
+  variants: Array.isArray(product.variants)
+    ? product.variants.filter((variant: any) => variant?.enabled !== false)
+    : product.variants,
+})
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: storeId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
   const shipFrom = req.shipFromFilter ?? (req.query.ship_from as string | undefined)
+  const countryCode = typeof req.query.country_code === "string" ? req.query.country_code.trim().toLowerCase() : ""
+  let requestedRegionId = typeof req.query.region_id === "string" ? req.query.region_id.trim() : ""
+  if (countryCode && !requestedRegionId) {
+    const regions = await listMarketRegionSummaries(req.scope)
+    requestedRegionId = resolveRegionIdForCountry(regions, countryCode) ?? ""
+  }
 
   const filters: Record<string, unknown> = {
     store_id: storeId,
@@ -38,7 +53,15 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       product.metadata && typeof product.metadata === "object"
         ? (product.metadata as Record<string, unknown>)
         : {}
-    return !(metadata.buyer_design === true || metadata.design_source === "buyer_sdk")
+    const countries = Array.isArray(metadata.sellable_country_codes)
+      ? metadata.sellable_country_codes.map((value) => String(value).trim().toLowerCase())
+      : []
+    const countryAllowed = !countryCode || !countries.length || countries.includes(countryCode)
+    return (
+      isStorefrontProductVisible(product as Record<string, unknown>) &&
+      countryAllowed &&
+      isProductAvailableInRegion(product, requestedRegionId)
+    )
   })
 
   const summaries = await getProductReviewSummaries(
@@ -49,7 +72,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const categories = await storeCoreService.listProductCategories({ store_id: storeId })
   const categoryNames = new Map(categories.map((category: any) => [category.id, category.name]))
   const productsWithShipping = catalogProducts.map((product: any) => ({
-    ...product,
+    ...storefrontProductPayload(product),
     requires_shipping: resolveProductRequiresShipping(product as Record<string, unknown>),
   }))
   const productsWithRegions = await attachSupportedRegionsToProducts(req.scope, productsWithShipping)

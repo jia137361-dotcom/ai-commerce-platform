@@ -7,7 +7,8 @@
  */
 
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { sendError } from "../../_helpers/store-core"
+import { getStoreCoreService, sendError } from "../../_helpers/store-core"
+import { resolveCurrentStore } from "../../../lib/store-context"
 import { requireSupplierAdapter } from "../../../modules/suppliers/registry"
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
@@ -30,7 +31,33 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
   try {
     const result = await adapter.listProducts({ page, perPage, categoryId, keyword })
-    return res.json(result)
+    const { store_id: storeId } = resolveCurrentStore(req)
+    const storeCoreService = getStoreCoreService(req)
+    const sourceIds = result.data.map((item: any) => String(item.id)).filter(Boolean)
+    const existing = sourceIds.length
+      ? await (storeCoreService as any).listProducts({
+          store_id: storeId,
+          supplier_id: supplierId,
+          basic_product_id: sourceIds,
+        })
+      : []
+    const syncedBySource = new Map(
+      existing.map((product: any) => [
+        String(product.basic_product_id),
+        {
+          product_id: product.id,
+          status: product.status,
+          title: product.title,
+        },
+      ])
+    )
+    return res.json({
+      ...result,
+      data: result.data.map((item: any) => ({
+        ...item,
+        synced_product: syncedBySource.get(String(item.id)) ?? null,
+      })),
+    })
   } catch (error: any) {
     return sendError(res, 502, "VALIDATION_ERROR", `Supplier catalog error: ${error.message}`)
   }

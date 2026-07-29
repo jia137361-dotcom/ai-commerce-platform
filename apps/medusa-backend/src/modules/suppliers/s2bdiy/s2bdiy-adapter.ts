@@ -39,6 +39,15 @@ async function fetchCatalog(params: {
   }
 
   const body = await resp.json()
+  if (
+    body &&
+    typeof body === "object" &&
+    (body as Record<string, unknown>).status_code !== undefined &&
+    Number((body as Record<string, unknown>).status_code) !== 200
+  ) {
+    const message = String((body as Record<string, unknown>).msg ?? "S2BDIY catalog business error")
+    throw new Error(`S2BDIY catalog API failed: ${message}`)
+  }
   const data = body.data ?? body
 
   return {
@@ -71,6 +80,9 @@ export const s2bdiyAdapter: SupplierAdapter = {
       items: (d.items ?? []) as ProductDetailView["items"],
       product_show_images: (d.product_show_images ?? []) as ProductDetailView["product_show_images"],
       categorys: (d.categorys ?? []) as ProductDetailView["categorys"],
+      produce_country: data.produce_country,
+      warehouse_name: data.warehouse_name,
+      deliver_goods_text: data.deliver_goods_text,
     }
   },
 
@@ -82,6 +94,7 @@ export const s2bdiyAdapter: SupplierAdapter = {
       en_name: data.en_name,
       purchase_price: data.purchase_price,
       product_show_master_image: data.product_show_master_image,
+      product_show_images: data.product_show_images,
       produce_country: data.produce_country,
       warehouse_name: data.warehouse_name,
       deliver_goods_text: data.deliver_goods_text,

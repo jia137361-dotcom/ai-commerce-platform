@@ -14,6 +14,9 @@ export type CatalogProduct = {
   view_image_src: string
   blank_design_image?: string
   categorys?: Array<{ id: number; name: string; en_name: string }>
+  produce_country?: string
+  warehouse_name?: string
+  deliver_goods_text?: string
 }
 
 export type CatalogResult = {
@@ -35,6 +38,9 @@ export type ProductDetailView = {
   items: Array<{ id: number; code: string; size_id: number; color_id: number; price: string; weight: number }>
   product_show_images: Array<{ color_id: number; color_name: string; images: Array<{ src: string }> }>
   categorys: Array<{ id: number; name: string; en_name: string }>
+  produce_country?: string
+  warehouse_name?: string
+  deliver_goods_text?: string
 }
 
 export type SyncData = {
@@ -44,6 +50,18 @@ export type SyncData = {
   en_name?: string
   purchase_price: number | string
   product_show_master_image?: string
+  product_show_images?: Array<{
+    color_id: number | string
+    color_name?: string
+    tone?: string
+    images: Array<{ src?: string; big_src?: string }>
+  }>
+  show_images?: Array<{
+    color_id: number | string
+    color_name?: string
+    tone?: string
+    images: Array<{ src?: string; big_src?: string }>
+  }>
   produce_country?: string
   warehouse_name?: string
   deliver_goods_text?: string

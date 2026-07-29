@@ -15,6 +15,16 @@ type UpdateCategoryBody = {
   sort_order?: number
 }
 
+const slugifyCategoryName = (name: string) => {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+  return slug || `category-${Date.now()}`
+}
+
 export const GET = async (
   req: MedusaRequest,
   res: MedusaResponse
@@ -72,7 +82,7 @@ export const PUT = async (
 
   const newName = requireText(body.name)
   if (newName && newName !== existing.name) {
-    const slug = newName.toLowerCase().replace(/\s+/g, "-")
+    const slug = slugifyCategoryName(newName)
     const duplicate = await storeCoreService.listProductCategories({
       store_id: storeId,
       slug,

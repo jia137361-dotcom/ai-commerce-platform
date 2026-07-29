@@ -1,4 +1,10 @@
-const MEDUSA_STATIC_PREFIXES = ["/static/logos/", "/static/gallery/", "/static/banners/", "/static/reviews/"]
+const MEDUSA_STATIC_PREFIXES = [
+  "/static/logos/",
+  "/static/gallery/",
+  "/static/banners/",
+  "/static/reviews/",
+  "/static/product-images/",
+]
 
 const AI_WORKER_STATIC_FILE = /^\/static\/(mockup_|design_|print_)/i
 

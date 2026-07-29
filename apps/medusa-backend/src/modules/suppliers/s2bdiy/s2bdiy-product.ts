@@ -9,6 +9,12 @@ export interface S2bBasicProductResponse {
   colors: S2bColor[]; sizes: S2bSize[]; items: S2bItem[]; views: S2bView[]
   print_areas: S2bPrintArea[]
   categorys: Array<{ id: number; name: string; en_name: string }>
+  product_show_images?: Array<{
+    color_id: number
+    color_name?: string
+    tone?: string
+    images: Array<{ src?: string; big_src?: string }>
+  }>
 }
 export interface S2bColor { id: number; name: string }
 export interface S2bSize { id: number; name: string }

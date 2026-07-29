@@ -5,6 +5,10 @@ export type AdminProductListQuery = {
   limit: number
   offset: number
   q?: string
+  category?: string
+  product_type?: string
+  warehouse_region?: string
+  country?: string
 }
 
 const VALID_STATUSES: ProductStatus[] = [
@@ -28,8 +32,12 @@ export const parseAdminProductListQuery = (query: Record<string, unknown>): Admi
   const limit = Math.min(Math.max(Number(query.limit ?? 20) || 20, 1), 100)
   const offset = Math.max(Number(query.offset ?? 0) || 0, 0)
   const q = typeof query.q === "string" && query.q.trim() ? query.q.trim().toLowerCase() : undefined
+  const category = typeof query.category === "string" && query.category.trim() ? query.category.trim().toLowerCase() : undefined
+  const product_type = typeof query.product_type === "string" && query.product_type.trim() ? query.product_type.trim().toLowerCase() : undefined
+  const warehouse_region = typeof query.warehouse_region === "string" && query.warehouse_region.trim() ? query.warehouse_region.trim().toLowerCase() : undefined
+  const country = typeof query.country === "string" && query.country.trim() ? query.country.trim().toUpperCase() : undefined
 
-  return { status, limit, offset, q }
+  return { status, limit, offset, q, category, product_type, warehouse_region, country }
 }
 
 export const buildProductListFilters = (
@@ -64,6 +72,52 @@ export const filterProductsByTitle = <T extends { title?: string | null }>(
     return products
   }
   return products.filter((p) => (p.title ?? "").toLowerCase().includes(q))
+}
+
+export const filterProductsByFacets = <
+  T extends {
+    category_ids?: unknown
+    ship_from_country?: string | null
+    metadata?: Record<string, unknown> | null
+  },
+>(
+  products: T[],
+  query: Pick<AdminProductListQuery, "category" | "product_type" | "warehouse_region" | "country">
+): T[] => {
+  return products.filter((product) => {
+    const meta = product.metadata ?? {}
+    if (query.category) {
+      const categoryIds = Array.isArray(product.category_ids)
+        ? product.category_ids.map((value) => String(value).toLowerCase())
+        : []
+      const categoryText = [
+        meta.category_level_1,
+        meta.category_level_2,
+        meta.product_type,
+        ...(Array.isArray(meta.category_path) ? meta.category_path : []),
+      ]
+        .map((value) => String(value ?? "").toLowerCase())
+        .filter(Boolean)
+      if (!categoryIds.includes(query.category) && !categoryText.some((value) => value.includes(query.category!))) {
+        return false
+      }
+    }
+    if (query.product_type) {
+      const productType = String(meta.product_type ?? "").toLowerCase()
+      if (!productType.includes(query.product_type)) return false
+    }
+    if (query.warehouse_region) {
+      const warehouse = String(meta.warehouse_region ?? product.ship_from_country ?? "").toLowerCase()
+      if (!warehouse.includes(query.warehouse_region)) return false
+    }
+    if (query.country) {
+      const countries = Array.isArray(meta.sellable_country_codes)
+        ? meta.sellable_country_codes.map((value) => String(value).toUpperCase())
+        : []
+      if (countries.length && !countries.includes(query.country)) return false
+    }
+    return true
+  })
 }
 
 export const paginateList = <T>(items: T[], offset: number, limit: number) => {

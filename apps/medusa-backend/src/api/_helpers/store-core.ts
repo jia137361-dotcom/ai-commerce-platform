@@ -31,6 +31,20 @@ export const sendError = (
   })
 }
 
+const readStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+}
+
+const resolveProductGalleryImageUrls = (product: any): string[] => {
+  const metadata = product.metadata && typeof product.metadata === "object" ? product.metadata : {}
+  return [
+    ...readStringArray(metadata.image_urls),
+    ...readStringArray(metadata.gallery_image_urls),
+    ...readStringArray(product.image_urls),
+  ].filter((url, index, list) => list.indexOf(url) === index)
+}
+
 export const normalizeProduct = (product: any) => ({
   product_id: product.id,
   store_id: product.store_id,
@@ -74,6 +88,7 @@ export const normalizeProduct = (product: any) => ({
   mockup_image_url: product.mockup_image_url,
   print_file_url: product.print_file_url,
   image_url: product.image_url,
+  gallery_image_urls: resolveProductGalleryImageUrls(product),
   tags: product.tags ?? [],
   price: product.price,
   cost: product.cost,

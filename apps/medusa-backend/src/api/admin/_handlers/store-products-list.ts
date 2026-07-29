@@ -3,6 +3,7 @@ import { resolveCurrentStore } from "../../../lib/store-context"
 import {
   applyProductStatusFilter,
   buildProductListFilters,
+  filterProductsByFacets,
   filterProductsByTitle,
   paginateList,
   parseAdminProductListQuery,
@@ -36,7 +37,8 @@ export const listStoreProductsHandler = async (req: MedusaRequest, res: MedusaRe
     allProducts as Array<{ title?: string | null; status?: string | null }>,
     query.status
   )
-  const filtered = filterProductsByTitle(byStatus, query.q)
+  const byTitle = filterProductsByTitle(byStatus, query.q)
+  const filtered = filterProductsByFacets(byTitle as Array<Record<string, unknown>>, query)
   const { items, count } = paginateList(filtered, query.offset, query.limit)
 
   return res.json({

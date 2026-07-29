@@ -96,6 +96,13 @@ export class S2bdiyClient {
       }
 
       const envelope = parsed as Record<string, unknown>
+      if (envelope.status_code !== undefined && Number(envelope.status_code) !== 200) {
+        throw new S2bDiyError(
+          `S2BDIY ${options.method ?? "GET"} ${path} failed: ${String(envelope.msg ?? "business error")}`,
+          Number(envelope.status_code) || 400,
+          parsed
+        )
+      }
       return (envelope.data !== undefined ? envelope.data : parsed) as T
     }
     return attempt(true)

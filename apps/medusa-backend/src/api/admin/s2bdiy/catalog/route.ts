@@ -36,6 +36,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     const body = await resp.json()
+    if (body && typeof body === "object" && body.status_code !== undefined && Number(body.status_code) !== 200) {
+      return sendError(res, 502, "VALIDATION_ERROR", `S2BDIY API error: ${body.msg ?? "business error"}`)
+    }
     const data = body.data ?? body
 
     return res.json({

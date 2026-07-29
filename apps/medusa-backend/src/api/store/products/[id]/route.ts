@@ -10,6 +10,13 @@ import {
 } from "../../../_helpers/store-core"
 import { isStorefrontProductVisible } from "../../../../lib/storefront-product-visibility"
 
+const storefrontProductPayload = (product: any) => ({
+  ...product,
+  variants: Array.isArray(product.variants)
+    ? product.variants.filter((variant: any) => variant?.enabled !== false)
+    : product.variants,
+})
+
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const productId = (req.params.id ?? req.params.product_id) as string
   const query = req.query as { store_id?: string; store?: string }
@@ -38,7 +45,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   }
 
   const productWithShipping = {
-    ...product,
+    ...storefrontProductPayload(product),
     requires_shipping: resolveProductRequiresShipping(product as Record<string, unknown>),
   }
   const productWithRegions = await attachSupportedRegionsToProduct(req.scope, productWithShipping)

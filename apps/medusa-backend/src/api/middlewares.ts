@@ -39,6 +39,11 @@ export default defineMiddlewares({
     },
     {
       method: ["POST"],
+      matcher: "/admin/store-products/*/images",
+      bodyParser: { sizeLimit: "6mb" },
+    },
+    {
+      method: ["POST"],
       matcher: "/store/reviews/upload-image",
       bodyParser: { sizeLimit: "6mb" },
     },
