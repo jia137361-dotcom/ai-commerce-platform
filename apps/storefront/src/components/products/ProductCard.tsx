@@ -1,6 +1,5 @@
 import type { StoreProduct } from "../../lib/mock-data"
-import { buildAiDesignHref, buildStudioEditorHref } from "../../lib/buyer-design-handoff"
-import { useBuyerLocale } from "../../lib/locale"
+import { buildProductDetailHref } from "../../lib/storefront-links"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { StatusBadge } from "../ui/StatusBadge"
@@ -10,21 +9,13 @@ type ProductCardProps = {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
-  const { t } = useBuyerLocale()
-  const href = product.storeId
-    ? `/products/${encodeURIComponent(product.id)}?store=${encodeURIComponent(product.storeId)}`
-    : `/products/${encodeURIComponent(product.id)}`
-  const customizeHref = product.hasDesigner
-    ? (product.storeId
-        ? `${buildStudioEditorHref(product.id)}?store=${encodeURIComponent(product.storeId)}`
-        : buildStudioEditorHref(product.id))
-    : null
+  const href = buildProductDetailHref(product)
   const available = Boolean(product.isCartAddable && product.medusaVariantId)
   const rating = product.averageRating ? product.averageRating.toFixed(1) : null
 
   return (
     <Card as="article" className="buyer-shop-product-card">
-      <a className="buyer-shop-product-media" href={customizeHref || href} aria-label={`Customize ${product.title}`}>
+      <a className="buyer-shop-product-media" href={href} aria-label={`View ${product.title}`}>
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.title} loading="lazy" />
         ) : (
@@ -32,11 +23,7 @@ export function ProductCard({ product }: ProductCardProps) {
             Image unavailable
           </span>
         )}
-        {product.hasDesigner ? (
-          <StatusBadge tone="success" className="buyer-shop-product-diy-badge">
-            {t("customizeBadge")}
-          </StatusBadge>
-        ) : product.badge ? (
+        {product.badge ? (
           <StatusBadge tone="success">{product.badge}</StatusBadge>
         ) : null}
         {!available ? <StatusBadge tone="neutral">Unavailable</StatusBadge> : null}
@@ -56,22 +43,6 @@ export function ProductCard({ product }: ProductCardProps) {
           </span>
         ) : null}
         <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" />
-        {customizeHref ? (
-          <a className="buyer-shop-product-customize" href={customizeHref}>
-            {t("customizeLink")}
-          </a>
-        ) : null}
-        {product.hasDesigner ? (
-          <a
-            className="buyer-shop-product-customize"
-            href={buildAiDesignHref({
-              productId: product.id,
-              returnTo: customizeHref || undefined,
-            })}
-          >
-            {t("navAiDesign")}
-          </a>
-        ) : null}
       </div>
     </Card>
   )

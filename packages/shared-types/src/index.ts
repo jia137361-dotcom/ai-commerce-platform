@@ -22,9 +22,16 @@ export type ProductVariantRow = {
   medusa_variant_id?: string
   supplier_size_id?: string
   supplier_color_id?: string
+  option_type?: string
+  option_value?: string
   color: string
   size: string
   price: number
+  cost?: number
+  weight?: number | null
+  supplier_sku?: string | null
+  image_url?: string | null
+  enabled?: boolean
 }
 
 export type ProductRegionSummary = {
@@ -54,6 +61,8 @@ export type NormalizedProduct = {
   cost?: number | null
   tags?: string[]
   category_ids?: string[]
+  supplier_id?: string | null
+  basic_product_id?: string | null
   platform_product_id?: string | null
   supplier_product_id?: string | null
   supplier_variant_id?: string | null

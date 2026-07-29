@@ -24,6 +24,6 @@ describe("ShopHero", () => {
 
     expect(html).toContain("Banner fallback")
     expect(html).not.toContain("url(&quot;")
-    expect(html).toContain('href="/store#products"')
+    expect(html).toContain('href="/marketplace"')
   })
 })

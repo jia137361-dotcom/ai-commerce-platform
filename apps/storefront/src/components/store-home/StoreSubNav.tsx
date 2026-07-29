@@ -2,20 +2,21 @@ import { useBuyerLocale } from "../../lib/locale"
 
 type StoreSubNavProps = {
   className?: string
+  storeHref?: string
 }
 
 /** Shared main shortcuts — same on desktop and mobile top chrome. */
-export function StoreSubNav({ className }: StoreSubNavProps) {
+export function StoreSubNav({ className, storeHref = "/marketplace" }: StoreSubNavProps) {
   const { t } = useBuyerLocale()
+  const howItWorksHref = `${storeHref}${storeHref.includes("?") ? "&" : "?"}section=how-it-works`
 
   return (
     <nav className={["buyer-store-subnav", className].filter(Boolean).join(" ")} aria-label="Main navigation">
-      <a href="/store">Shop</a>
+      <a href={storeHref}>Shop</a>
       <a href="/ai-design">{t("navAiDesign")}</a>
       <a href="/studio">{t("navStudio")}</a>
-      <a href="/store#how-it-works">{t("navHowItWorks")}</a>
+      <a href={howItWorksHref}>{t("navHowItWorks")}</a>
       <a href="/saved">Saved</a>
-      <a href="/search">Search</a>
     </nav>
   )
 }

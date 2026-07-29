@@ -33,10 +33,11 @@ describe("ProductCard", () => {
     expect(html).not.toContain("undefined")
   })
 
-  it("shows customize badge and studio link for designable products", () => {
+  it("keeps designable products as normal storefront product cards", () => {
     const html = render({ ...product, hasDesigner: true })
-    expect(html).toContain("Customize")
-    expect(html).toContain('href="/design/prod_123"')
-    expect(html).toContain("/ai-design?productId=prod_123")
+    expect(html).toContain('href="/products/prod_123"')
+    expect(html).not.toContain("Customize")
+    expect(html).not.toContain('href="/design/prod_123"')
+    expect(html).not.toContain("/ai-design?productId=prod_123")
   })
 })

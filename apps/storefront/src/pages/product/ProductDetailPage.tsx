@@ -39,11 +39,50 @@ import { buildProductSignInHref } from "./product-auth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 import { buildStudioEditorHref } from "../../lib/buyer-design-handoff"
 import { pushBrowseHistory } from "../../lib/buyer-browse-history"
+import { buildProductDetailHref, buildProductStoreHref } from "../../lib/storefront-links"
 
 type ProductDetailPageProps = { productId: string; cartCount: number; onCartUpdated: (cart: StoreCart) => void }
 type Notice = { label: string; message: string }
 
 const fallbackSettings: BuyerStoreSettings = { storeId: "default_store", brandName: "Store", metadata: {} }
+const CLOTHING_KEYWORDS = [
+  "apparel",
+  "beach shorts",
+  "blouse",
+  "cap",
+  "clothing",
+  "dress",
+  "hoodie",
+  "jacket",
+  "pants",
+  "shirt",
+  "shorts",
+  "skirt",
+  "socks",
+  "sweater",
+  "sweatshirt",
+  "t-shirt",
+  "tee",
+  "underwear",
+  "vest",
+]
+const hasClothingKeyword = (value?: string | null) => {
+  const normalized = value?.toLowerCase() ?? ""
+  return CLOTHING_KEYWORDS.some((keyword) => normalized.includes(keyword))
+}
+const APPAREL_SIZES = new Set(["xs", "s", "m", "l", "xl", "xxl", "2xl", "3xl", "4xl", "5xl"])
+const shouldShowProductSizeGuide = (product: StoreProduct) => {
+  if (product.metadata?.show_size_guide === false) return false
+  if (product.metadata?.show_size_guide === true) return true
+  const categoryValues = [
+    product.category,
+    product.metadata?.category_level_1,
+    product.metadata?.category_level_2,
+    product.metadata?.product_type,
+  ].filter((value): value is string => typeof value === "string")
+  const hasApparelSize = (product.variants ?? []).some((variant) => APPAREL_SIZES.has((variant.size ?? "").trim().toLowerCase()))
+  return hasApparelSize && (hasClothingKeyword(product.title) || categoryValues.some(hasClothingKeyword))
+}
 
 export function ProductDetailPage({ productId, cartCount, onCartUpdated }: ProductDetailPageProps) {
   const auth = useBuyerAuth()
@@ -113,7 +152,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
         title: realProduct.title,
         imageUrl: realProduct.mockupImageUrl || realProduct.imageUrl,
         price: realProduct.numericPrice,
-        href: `/products/${encodeURIComponent(realProduct.id)}`,
+        href: buildProductDetailHref(realProduct),
       })
 
       if (auth.customer) {
@@ -150,16 +189,26 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     }
   }, [loadProduct, loadVersion])
 
-  const galleryImages = useMemo(
-    () => (product ? ([product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[]) : []),
-    [product]
-  )
   const variants = product?.variants ?? []
   const selectedVariant = product ? resolveSelectedProductVariant(product, selectedVariantId) : undefined
+  const galleryImages = useMemo(() => {
+    if (!product) return []
+    const selectedImage = selectedVariant?.imageUrl
+    return [
+      selectedImage,
+      ...(product.galleryImageUrls ?? []),
+      product.mockupImageUrl,
+      product.imageUrl,
+      product.designImageUrl,
+      ...variants.map((variant) => variant.imageUrl),
+    ].filter((url, index, list): url is string => Boolean(url) && list.indexOf(url) === index)
+  }, [product, selectedVariant?.imageUrl, variants])
   const purchaseState = product
     ? resolveProductPurchaseState(product, selectedVariant)
     : { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" as const }
   const designHref = product?.id ? buildStudioEditorHref(product.id) : undefined
+  const showSizeGuide = product ? shouldShowProductSizeGuide(product) : false
+  const storeHref = buildProductStoreHref(product, settings)
 
   const addToCart = async () => {
     if (!product || !selectedVariant?.id || !purchaseState.canAdd || adding) return
@@ -226,11 +275,11 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     <PageShell
       className="buyer-product-page"
       contentClassName="buyer-product-shell-content"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} storeHref={storeHref} />}
       footer={<StoreFooter />}
     >
       <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
-        <a href="/store">Store</a>
+        <a href={storeHref}>Store</a>
         <span>/</span>
         <span>{product?.title ?? "Product"}</span>
       </nav>
@@ -251,12 +300,13 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
           <ProductDetailPopups
             share={share}
             productTitle={product.title}
+            storeHref={storeHref}
             isFavorited={isFavorited}
             onToggleFavorite={() => void toggleFavorite()}
           />
-          <ProductDetailTabs active={activeTab} onChange={setActiveTab} />
+          <ProductDetailTabs active={activeTab} onChange={setActiveTab} showSizeGuide={showSizeGuide} />
           <section className="buyer-product-logistics-row">
-            <button type="button" onClick={() => document.getElementById("pdp-size")?.scrollIntoView({ behavior: "smooth" })}>
+            <button type="button" onClick={() => document.getElementById(showSizeGuide ? "pdp-size" : "pdp-package")?.scrollIntoView({ behavior: "smooth" })}>
               Shipping: 9–15 days · Production 3–4 days
             </button>
           </section>
@@ -282,6 +332,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
               designHref={designHref}
             />
           </section>
+          {showSizeGuide ? (
           <section id="pdp-size" className="buyer-product-size-guide">
             <h2>Size guide</h2>
             <table>
@@ -311,11 +362,12 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
               </tbody>
             </table>
           </section>
+          ) : null}
           <section id="pdp-package" className="buyer-product-package">
             <h2>Package</h2>
             <p>Production time: 3–4 business days. Shipping: 9–15 days.</p>
           </section>
-          <ProductStoreCard settings={settings} />
+          <ProductStoreCard settings={settings} storeHref={storeHref} />
           <div id="pdp-detail">
             <ProductDetailsSection product={product} />
           </div>

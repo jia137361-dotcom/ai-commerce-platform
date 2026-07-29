@@ -1048,7 +1048,7 @@ const normalizeSettings = (payload: ApiStoreSettings): BuyerStoreSettings => {
   const metadata = settings?.metadata ?? {}
   const metadataString = (key: string) => typeof metadata[key] === "string" && metadata[key].trim() ? metadata[key].trim() : undefined
   const gallery = metadata.gallery_urls
-  const brandName = settings?.brand_name ?? "Nespresso"
+  const brandName = settings?.brand_name ?? "Citigoo"
   const policies = resolveStorePolicyDisplay(metadata, brandName)
   const backendBase = config.backendUrl
   const galleryUrls = Array.isArray(gallery)

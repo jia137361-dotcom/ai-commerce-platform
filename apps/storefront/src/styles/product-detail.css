@@ -254,6 +254,15 @@
   font-size: 12px;
 }
 
+.buyer-product-split-options {
+  display: grid;
+  gap: 14px;
+}
+
+.buyer-product-split-options .buyer-ui-field {
+  margin: 0;
+}
+
 .buyer-product-price {
   display: block;
   margin: 18px 0 8px;

@@ -6,11 +6,12 @@ import { ProductSharePanel } from "./ProductSharePanel"
 type ProductDetailPopupsProps = {
   share?: BuyerShareInfo | null
   productTitle: string
+  storeHref: string
   onToggleFavorite?: () => void
   isFavorited?: boolean
 }
 
-export function ProductDetailPopups({ share, productTitle, onToggleFavorite, isFavorited = false }: ProductDetailPopupsProps) {
+export function ProductDetailPopups({ share, productTitle, storeHref, onToggleFavorite, isFavorited = false }: ProductDetailPopupsProps) {
   const [open, setOpen] = useState<"share" | "shipping" | "country" | "menu" | null>(null)
   const [shipRegion, setShipRegion] = useState("United States")
 
@@ -26,13 +27,10 @@ export function ProductDetailPopups({ share, productTitle, onToggleFavorite, isF
   return (
     <>
       <div className="buyer-product-toolbar">
-        <a href="/store" aria-label="Back">
+        <a href={storeHref} aria-label="Back to store">
           ←
         </a>
         <div className="buyer-product-toolbar-actions">
-          <button type="button" aria-label="Search" onClick={() => window.location.assign("/search")}>
-            ⌕
-          </button>
           {share ? (
             <button type="button" aria-label="Share" onClick={() => setOpen("share")}>
               ↗

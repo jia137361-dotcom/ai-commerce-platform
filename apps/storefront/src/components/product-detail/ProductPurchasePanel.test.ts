@@ -36,6 +36,30 @@ describe("ProductPurchasePanel", () => {
     expect(html).toContain("Sign in to add to cart")
   })
 
+  it("splits color and size selections for structured variants", () => {
+    const html = renderToStaticMarkup(createElement(ProductPurchasePanel, {
+      product,
+      variants: [
+        { id: "black_s", title: "Black / S", color: "Black", size: "S", isPurchasable: true },
+        { id: "black_m", title: "Black / M", color: "Black", size: "M", isPurchasable: true },
+        { id: "white_s", title: "White / S", color: "White", size: "S", isPurchasable: true },
+      ],
+      selectedVariantId: "black_m",
+      onVariantChange: () => undefined,
+      purchaseState: { canAdd: true, availabilityLabel: "Available", availabilityTone: "success" },
+      quantity: 1,
+      setQuantity: () => undefined,
+      adding: false,
+      onAddToCart: () => undefined,
+    }))
+
+    expect(html).toContain("Color")
+    expect(html).toContain("Black")
+    expect(html).toContain("White")
+    expect(html).toContain("Size")
+    expect(html).toContain('value="M" selected=""')
+  })
+
   it("shows one default option without implying multiple specifications", () => {
     const html = renderToStaticMarkup(createElement(ProductPurchasePanel, {
       product,

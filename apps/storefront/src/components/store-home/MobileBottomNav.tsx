@@ -3,10 +3,11 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 
 type MobileBottomNavProps = {
   cartCount: number
+  storeHref?: string
 }
 
 /** 页面分析 image85 底栏: Home / Cart / Message / Sign in */
-export function MobileBottomNav({ cartCount }: MobileBottomNavProps) {
+export function MobileBottomNav({ cartCount, storeHref = "/marketplace" }: MobileBottomNavProps) {
   const auth = useBuyerAuth()
   const [path, setPath] = useState(() => (typeof window !== "undefined" ? window.location.pathname : "/"))
 
@@ -29,7 +30,7 @@ export function MobileBottomNav({ cartCount }: MobileBottomNavProps) {
 
   return (
     <nav className="buyer-mobile-bottom-nav" aria-label="Mobile navigation">
-      <a className={isHome ? "active" : ""} href="/store">
+      <a className={isHome ? "active" : ""} href={storeHref}>
         <span className="buyer-mobile-bottom-icon" aria-hidden="true">
           ⌂
         </span>

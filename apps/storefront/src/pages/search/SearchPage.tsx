@@ -1,30 +1,27 @@
 /**
  * Search page — presentation only (页面分析 image86 + Filter image71).
- * Uses same fetchSupplierCatalog / ensureSupplierCatalogBlank as before.
+ * Uses published store products, not the raw supplier catalog.
  */
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { PageShell } from "../../components/layout/PageShell"
 import { FilterDrawer, type FilterState } from "../../components/store-home/FilterDrawer"
-import { MobileCatalogCard } from "../../components/store-home/MobileCatalogCard"
+import { ProductCard } from "../../components/products/ProductCard"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
-import {
-  ensureSupplierCatalogBlank,
-  fetchSupplierCatalog,
-  type SupplierCatalogItem,
-} from "../../lib/buyer-api"
-import { buildStudioEditorHref } from "../../lib/buyer-design-handoff"
-import { navigateBuyer } from "../../lib/buyer-navigate"
+import { fetchProducts } from "../../lib/buyer-api"
 import { clearSearchHistory, pushSearchHistory, readSearchHistory } from "../../lib/buyer-search-history"
-import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
+import { getScopedBuyerStoreId, setActiveBuyerStoreId } from "../../lib/buyer-store-context"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import type { StoreProduct } from "../../lib/mock-data"
 
 type SearchPageProps = { cartCount: number }
 
 export function SearchPage({ cartCount }: SearchPageProps) {
-  const { settings } = useBuyerPageSettings()
   const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "")
+  const storeFromQuery = new URLSearchParams(window.location.search).get("store_id") ?? new URLSearchParams(window.location.search).get("store")
+  const scopedStoreId = getScopedBuyerStoreId(storeFromQuery)
+  const { settings } = useBuyerPageSettings({ storeId: scopedStoreId })
   const [debouncedQuery, setDebouncedQuery] = useState(query)
-  const [items, setItems] = useState<SupplierCatalogItem[]>([])
+  const [items, setItems] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [history, setHistory] = useState<string[]>(() => readSearchHistory())
@@ -32,11 +29,9 @@ export function SearchPage({ cartCount }: SearchPageProps) {
   const [filters, setFilters] = useState<FilterState>({})
   const [filterOpen, setFilterOpen] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
-  const [openingId, setOpeningId] = useState<number | null>(null)
-
   useEffect(() => {
-    enterLegacyDefaultStoreContext()
-  }, [])
+    if (storeFromQuery) setActiveBuyerStoreId(storeFromQuery)
+  }, [storeFromQuery])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300)
@@ -46,9 +41,12 @@ export function SearchPage({ cartCount }: SearchPageProps) {
   const loadResults = useCallback(async (keyword: string, isActive: () => boolean) => {
     setLoading(true)
     setError(undefined)
-    const result = await fetchSupplierCatalog({ keyword, perPage: 48 })
+    const result = await fetchProducts()
     if (!isActive()) return
-    setItems(result.data.items)
+    const query = keyword.trim().toLowerCase()
+    setItems(query ? result.data.filter((item) =>
+      [item.title, item.description, item.category].some((value) => value?.toLowerCase().includes(query))
+    ) : result.data)
     setError(result.error)
     setLoading(false)
     if (keyword) {
@@ -68,6 +66,7 @@ export function SearchPage({ cartCount }: SearchPageProps) {
   useEffect(() => {
     const params = new URLSearchParams()
     if (debouncedQuery) params.set("q", debouncedQuery)
+    if (scopedStoreId) params.set("store_id", scopedStoreId)
     const next = params.toString() ? `/search?${params.toString()}` : "/search"
     if (`${window.location.pathname}${window.location.search}` !== next) {
       window.history.replaceState(window.history.state, "", next)
@@ -77,47 +76,21 @@ export function SearchPage({ cartCount }: SearchPageProps) {
   const sortedItems = useMemo(() => {
     let list = [...items]
     if (filters.minPrice != null) {
-      list = list.filter((item) => (item.estimatedRetailUsd ?? 0) >= filters.minPrice!)
+      list = list.filter((item) => (item.numericPrice ?? 0) >= filters.minPrice!)
     }
     if (filters.maxPrice != null) {
-      list = list.filter((item) => (item.estimatedRetailUsd ?? Number.POSITIVE_INFINITY) <= filters.maxPrice!)
+      list = list.filter((item) => (item.numericPrice ?? Number.POSITIVE_INFINITY) <= filters.maxPrice!)
     }
     return list.sort((left, right) => {
       if (sort === "price-asc") {
-        return (left.estimatedRetailUsd ?? Number.POSITIVE_INFINITY) - (right.estimatedRetailUsd ?? Number.POSITIVE_INFINITY)
+        return (left.numericPrice ?? Number.POSITIVE_INFINITY) - (right.numericPrice ?? Number.POSITIVE_INFINITY)
       }
       if (sort === "price-desc") {
-        return (right.estimatedRetailUsd ?? Number.NEGATIVE_INFINITY) - (left.estimatedRetailUsd ?? Number.NEGATIVE_INFINITY)
+        return (right.numericPrice ?? Number.NEGATIVE_INFINITY) - (left.numericPrice ?? Number.NEGATIVE_INFINITY)
       }
       return 0
     })
   }, [filters.maxPrice, filters.minPrice, items, sort])
-
-  const openDetail = async (item: SupplierCatalogItem) => {
-    if (openingId != null) return
-    setOpeningId(item.id)
-    try {
-      const ensured = await ensureSupplierCatalogBlank({ basicProductId: item.id })
-      navigateBuyer(`/products/${encodeURIComponent(ensured.productId)}`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setOpeningId(null)
-    }
-  }
-
-  const openDesign = async (item: SupplierCatalogItem) => {
-    if (openingId != null) return
-    setOpeningId(item.id)
-    try {
-      const ensured = await ensureSupplierCatalogBlank({ basicProductId: item.id })
-      navigateBuyer(buildStudioEditorHref(ensured.productId))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setOpeningId(null)
-    }
-  }
 
   const sortLabel =
     sort === "price-asc"
@@ -225,12 +198,9 @@ export function SearchPage({ cartCount }: SearchPageProps) {
         {!loading ? (
           <section className="buyer-mhome-grid" aria-label="Search results">
             {sortedItems.map((item) => (
-              <MobileCatalogCard
+              <ProductCard
                 key={item.id}
-                item={item}
-                opening={openingId === item.id}
-                onViewDetail={openDetail}
-                onDesignNow={openDesign}
+                product={item}
               />
             ))}
           </section>

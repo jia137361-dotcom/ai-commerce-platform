@@ -7,6 +7,7 @@ type ShopHeroProps = {
   announcement?: string
   description?: string
   studioHref?: string
+  shopHref?: string
 }
 
 export function ShopHero({
@@ -16,6 +17,7 @@ export function ShopHero({
   announcement,
   description,
   studioHref = "/studio",
+  shopHref = "/marketplace",
 }: ShopHeroProps) {
   const { t } = useBuyerLocale()
   const backgroundImage = imageUrl
@@ -40,7 +42,7 @@ export function ShopHero({
           <a className="buyer-ui-button buyer-ui-button--primary" href={studioHref}>
             {t("heroCtaStudio")}
           </a>
-          <a className="buyer-ui-button buyer-ui-button--ghost" href="/store#products">
+          <a className="buyer-ui-button buyer-ui-button--ghost" href={shopHref}>
             {t("heroCtaShop")}
           </a>
         </div>

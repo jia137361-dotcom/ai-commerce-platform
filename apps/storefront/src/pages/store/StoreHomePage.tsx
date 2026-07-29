@@ -2,38 +2,29 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { PageShell } from "../../components/layout/PageShell"
 import { SectionHeader } from "../../components/layout/SectionHeader"
 import { FilterDrawer, type FilterState } from "../../components/store-home/FilterDrawer"
-import { HowItWorksSection } from "../../components/store-home/HowItWorksSection"
-import { MobileCatalogCard } from "../../components/store-home/MobileCatalogCard"
-import { PromoBanner } from "../../components/store-home/PromoBanner"
-import { ShopBrowseControls } from "../../components/store-home/ShopBrowseControls"
 import { ShopHero } from "../../components/store-home/ShopHero"
 import { StoreAboutPanel } from "../../components/store-home/StoreAboutPanel"
-import { StoreCatalogResults } from "../../components/store-home/StoreCatalogResults"
 import { StoreIdentity } from "../../components/store-home/StoreIdentity"
-import { StoreReviewsPanel } from "../../components/store-home/StoreReviewsPanel"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
+import { ProductCard } from "../../components/products/ProductCard"
 import {
-  ensureSupplierCatalogBlank,
+  fetchMarketplaceStores,
   fetchMarketplaceStoreBySlug,
-  fetchStoreReviews,
+  fetchProductCategories,
+  fetchProducts,
   fetchStoreSettings,
-  fetchSupplierCatalog,
-  fetchSupplierCatalogCategories,
   setActiveBuyerStoreId,
-  type BuyerReviewsSummary,
+  type BuyerCategory,
   type BuyerStoreSettings,
-  type SupplierCatalogCategory,
-  type SupplierCatalogItem,
 } from "../../lib/buyer-api"
 import { readBrowseUrlState, syncBrowseUrlState } from "../../lib/buyer-browse-url"
-import { buildStudioEditorHref } from "../../lib/buyer-design-handoff"
-import { navigateBuyer } from "../../lib/buyer-navigate"
 import { enterLegacyDefaultStoreContext, getLegacyDefaultStoreId } from "../../lib/buyer-store-context"
 import { useBuyerLocale } from "../../lib/locale"
+import type { StoreProduct } from "../../lib/mock-data"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 
 type StoreHomePageProps = { cartCount: number; storeSlug?: string }
 type Notice = { key: string; message: string }
-type ShopSection = "items" | "reviews" | "about"
 
 const fallbackSettings: BuyerStoreSettings = {
   storeId: getLegacyDefaultStoreId(),
@@ -43,6 +34,22 @@ const fallbackSettings: BuyerStoreSettings = {
 }
 
 const CATALOG_PER_PAGE = 24
+const SHIP_TO_STORAGE_KEY = "citigoo:ship_to_country"
+
+type StoreSection = "items" | "about"
+
+const readInitialShipToCountry = () => {
+  if (typeof window === "undefined") return "us"
+  return window.localStorage.getItem(SHIP_TO_STORAGE_KEY)?.trim().toLowerCase() || "us"
+}
+
+const productShipsToCountry = (product: StoreProduct, countryCode: string) => {
+  const normalized = countryCode.trim().toLowerCase()
+  if (!normalized) return true
+  const regions = product.supportedRegions ?? []
+  if (!regions.length) return true
+  return regions.some((region) => region.country_codes.map((code) => code.toLowerCase()).includes(normalized))
+}
 
 function scrollToVisibleId(id: string) {
   window.requestAnimationFrame(() => {
@@ -52,7 +59,7 @@ function scrollToVisibleId(id: string) {
   })
 }
 
-function StoreFooter({ brandName }: { brandName: string }) {
+function StoreFooter({ brandName, storeHref }: { brandName: string; storeHref: string }) {
   const { t } = useBuyerLocale()
   const year = new Date().getFullYear()
   return (
@@ -63,10 +70,7 @@ function StoreFooter({ brandName }: { brandName: string }) {
       </section>
       <section>
         <h2>{t("navShop")}</h2>
-        <a href="/store">{t("heroCtaShop")}</a>
-        <a href="/ai-design">{t("navAiDesign")}</a>
-        <a href="/studio">{t("navStudio")}</a>
-        <a href="/store#how-it-works">{t("navHowItWorks")}</a>
+        <a href={storeHref}>{t("heroCtaShop")}</a>
         <a href="/saved">Saved</a>
         <a href="/cart">{t("navCart")}</a>
       </section>
@@ -80,8 +84,7 @@ function StoreFooter({ brandName }: { brandName: string }) {
         <h2>Help</h2>
         <a href="/help">Help Center</a>
         <a href="/about">About</a>
-        <a href="/store?tab=about">Shipping &amp; Returns</a>
-        <a href="/store?tab=reviews">Reviews</a>
+        <a href={`${storeHref}${storeHref.includes("?") ? "&" : "?"}tab=about`}>Shipping &amp; Returns</a>
         <a href="/terms">Terms</a>
         <a href="/privacy">Privacy</a>
         <a href="/cookies">Cookies</a>
@@ -98,8 +101,9 @@ function StoreFooter({ brandName }: { brandName: string }) {
 export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   const { t } = useBuyerLocale()
   const initialUrl = readBrowseUrlState()
+  const queryStoreId = initialUrl.storeId?.trim() || ""
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
-  const [items, setItems] = useState<SupplierCatalogItem[]>([])
+  const [items, setItems] = useState<StoreProduct[]>([])
   const [catalogTotal, setCatalogTotal] = useState(0)
   const [catalogPage, setCatalogPage] = useState(1)
   const [catalogLastPage, setCatalogLastPage] = useState(1)
@@ -111,18 +115,19 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   const [primaryTabId, setPrimaryTabId] = useState(
     initialUrl.category && initialUrl.category !== "all" ? initialUrl.category : "recommend"
   )
-  const [supplierCategories, setSupplierCategories] = useState<SupplierCatalogCategory[]>([])
+  const [supplierCategories, setSupplierCategories] = useState<BuyerCategory[]>([])
   const [query, setQuery] = useState(initialUrl.q ?? "")
   const [debouncedQuery, setDebouncedQuery] = useState(initialUrl.q ?? "")
   const [sort, setSort] = useState(initialUrl.sort ?? "recommended")
   const [filters, setFilters] = useState<FilterState>({})
   const [filterOpen, setFilterOpen] = useState(false)
   const [loadVersion, setLoadVersion] = useState(0)
-  const [openingId, setOpeningId] = useState<number | null>(null)
   const [storeReady, setStoreReady] = useState(false)
-  const [activeSection, setActiveSection] = useState<ShopSection>("items")
-  const [storeReviews, setStoreReviews] = useState<BuyerReviewsSummary | null>(null)
-  const [storeReviewsError, setStoreReviewsError] = useState<string>()
+  const [activeStoreId, setActiveStoreId] = useState(queryStoreId)
+  const [activeSection, setActiveSection] = useState<StoreSection>(
+    new URLSearchParams(window.location.search).get("tab") === "about" ? "about" : "items"
+  )
+  const [shipToCountry, setShipToCountry] = useState(readInitialShipToCountry)
 
   const activeCategoryId = useMemo(() => {
     if (primaryTabId !== "recommend") return primaryTabId
@@ -135,7 +140,6 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     } else {
       setPrimaryTabId(categoryId)
     }
-    setActiveSection("items")
   }, [])
 
   useEffect(() => {
@@ -144,26 +148,35 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   }, [query])
 
   useEffect(() => {
-    syncBrowseUrlState("/store", {
+    const pathname = storeSlug ? `/shops/${encodeURIComponent(storeSlug)}` : "/store"
+    syncBrowseUrlState(pathname, {
       q: debouncedQuery || undefined,
       category: activeCategoryId,
       sort,
+      storeId: activeStoreId || undefined,
     })
-  }, [activeCategoryId, debouncedQuery, sort])
+  }, [activeCategoryId, activeStoreId, debouncedQuery, sort, storeSlug])
+
+  const updateShipToCountry = useCallback((countryCode: string) => {
+    const normalized = countryCode.trim().toLowerCase() || "us"
+    setShipToCountry(normalized)
+    try {
+      window.localStorage.setItem(SHIP_TO_STORAGE_KEY, normalized)
+    } catch {
+      // Ignore storage errors in private browsing.
+    }
+  }, [])
 
   const loadShell = useCallback(async (isActive: () => boolean) => {
-    const [settingsResult, reviewsResult, categoriesResult] = await Promise.all([
+    const [settingsResult, categoriesResult] = await Promise.all([
       fetchStoreSettings(),
-      fetchStoreReviews(),
-      fetchSupplierCatalogCategories(),
+      fetchProductCategories(),
     ])
     if (!isActive()) return
     setSettings(settingsResult.data)
-    setStoreReviews(reviewsResult.data)
-    setStoreReviewsError(reviewsResult.error)
     setSupplierCategories(categoriesResult.data)
     setNotices(
-      [settingsResult, reviewsResult, categoriesResult]
+      [settingsResult, categoriesResult]
         .filter((result) => result.error)
         .map((result, index) => ({
           key: `${result.source}-${index}-${result.error}`,
@@ -178,29 +191,19 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
       if (append) setLoadingMore(true)
       else setCatalogLoading(true)
 
-      const categoryId =
-        activeCategoryId !== "all" && Number.isFinite(Number(activeCategoryId))
-          ? Number(activeCategoryId)
-          : null
-
-      const result = await fetchSupplierCatalog({
-        page,
-        perPage: CATALOG_PER_PAGE,
-        keyword: debouncedQuery || undefined,
-        categoryId,
-      })
+      const result = await fetchProducts()
 
       if (!isActive()) return
 
       setCatalogError(result.error)
-      setCatalogTotal(result.data.total)
-      setCatalogPage(result.data.page)
-      setCatalogLastPage(result.data.lastPage)
-      setItems((current) => (append ? [...current, ...result.data.items] : result.data.items))
+      setCatalogTotal(result.data.length)
+      setCatalogPage(page)
+      setCatalogLastPage(1)
+      setItems((current) => (append ? [...current, ...result.data] : result.data))
       setCatalogLoading(false)
       setLoadingMore(false)
     },
-    [activeCategoryId, debouncedQuery]
+    []
   )
 
   useEffect(() => {
@@ -208,7 +211,11 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     const boot = async () => {
       setLoading(true)
       setStoreReady(false)
-      if (storeSlug) {
+      const isLegacyDefaultQuery = queryStoreId === getLegacyDefaultStoreId()
+      if (queryStoreId && !isLegacyDefaultQuery) {
+        setActiveBuyerStoreId(queryStoreId)
+        setActiveStoreId(queryStoreId)
+      } else if (storeSlug) {
         const storeResult = await fetchMarketplaceStoreBySlug(storeSlug)
         if (!active) return
         if (!storeResult.data) {
@@ -217,8 +224,21 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           return
         }
         setActiveBuyerStoreId(storeResult.data.storeId)
+        setActiveStoreId(storeResult.data.storeId)
       } else {
-        enterLegacyDefaultStoreContext()
+        const storesResult = await fetchMarketplaceStores()
+        if (!active) return
+        const publicStore = storesResult.data.find((store) => store.productCount > 0)
+        if (publicStore) {
+          setActiveBuyerStoreId(publicStore.storeId)
+          setActiveStoreId(publicStore.storeId)
+        } else {
+          enterLegacyDefaultStoreContext()
+          setActiveStoreId(getLegacyDefaultStoreId())
+          if (storesResult.error) {
+            setNotices([{ key: "store-auto-select", message: storesResult.error }])
+          }
+        }
       }
       if (!active) return
       setStoreReady(true)
@@ -228,7 +248,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     return () => {
       active = false
     }
-  }, [loadShell, loadVersion, storeSlug])
+  }, [loadShell, loadVersion, queryStoreId, storeSlug])
 
   useEffect(() => {
     if (!storeReady) return
@@ -244,10 +264,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     const tab = new URLSearchParams(window.location.search).get("tab")
     if (!tab) return
     if (tab === "about") setActiveSection("about")
-    if (tab === "reviews") setActiveSection("reviews")
-    if (tab === "category" || tab === "items") setActiveSection("items")
-    const targetId = tab === "category" || tab === "items" ? "products" : tab
-    scrollToVisibleId(targetId)
+    scrollToVisibleId(tab === "about" ? "about" : "products")
   }, [loadVersion])
 
   useEffect(() => {
@@ -259,7 +276,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     scrollToHash()
     window.addEventListener("hashchange", scrollToHash)
     return () => window.removeEventListener("hashchange", scrollToHash)
-  }, [loading, catalogLoading, loadVersion, activeSection])
+  }, [loading, catalogLoading, loadVersion])
 
   const activeCategoryName = useMemo(() => {
     if (activeCategoryId === "all") return t("catalogTitle")
@@ -268,71 +285,52 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
 
   const sortedItems = useMemo(() => {
     let list = [...items]
+    if (activeCategoryId !== "all") {
+      list = list.filter((item) => item.categoryIds?.includes(activeCategoryId))
+    }
+    list = list.filter((item) => productShipsToCountry(item, shipToCountry))
+    if (debouncedQuery) {
+      const queryText = debouncedQuery.toLowerCase()
+      list = list.filter((item) =>
+        [item.title, item.description, item.category].some((value) => value?.toLowerCase().includes(queryText))
+      )
+    }
     if (filters.minPrice != null) {
-      list = list.filter((item) => (item.estimatedRetailUsd ?? 0) >= filters.minPrice!)
+      list = list.filter((item) => (item.numericPrice ?? 0) >= filters.minPrice!)
     }
     if (filters.maxPrice != null) {
-      list = list.filter((item) => (item.estimatedRetailUsd ?? Number.POSITIVE_INFINITY) <= filters.maxPrice!)
+      list = list.filter((item) => (item.numericPrice ?? Number.POSITIVE_INFINITY) <= filters.maxPrice!)
     }
     return list.sort((left, right) => {
       if (sort === "price-asc") {
-        return (left.estimatedRetailUsd ?? Number.POSITIVE_INFINITY) - (right.estimatedRetailUsd ?? Number.POSITIVE_INFINITY)
+        return (left.numericPrice ?? Number.POSITIVE_INFINITY) - (right.numericPrice ?? Number.POSITIVE_INFINITY)
       }
       if (sort === "price-desc") {
-        return (right.estimatedRetailUsd ?? Number.NEGATIVE_INFINITY) - (left.estimatedRetailUsd ?? Number.NEGATIVE_INFINITY)
+        return (right.numericPrice ?? Number.NEGATIVE_INFINITY) - (left.numericPrice ?? Number.NEGATIVE_INFINITY)
       }
-      if (sort === "name") return left.name.localeCompare(right.name)
+      if (sort === "name") return left.title.localeCompare(right.title)
       return 0
     })
-  }, [filters.maxPrice, filters.minPrice, items, sort])
+  }, [activeCategoryId, debouncedQuery, filters.maxPrice, filters.minPrice, items, shipToCountry, sort])
 
   const brand = settings.brandName?.trim() || "Store"
-  const heroImage = settings.bannerUrl
+  const storeHref = buildSettingsStoreHref(settings)
   const hasFilters = activeCategoryId !== "all" || Boolean(debouncedQuery) || Boolean(filters.minPrice || filters.maxPrice)
-
-  const openDetail = useCallback(
-    async (item: SupplierCatalogItem) => {
-      if (openingId != null) return
-      setOpeningId(item.id)
-      setCatalogError(undefined)
-      try {
-        const ensured = await ensureSupplierCatalogBlank({ basicProductId: item.id })
-        navigateBuyer(`/products/${encodeURIComponent(ensured.productId)}`)
-      } catch (error) {
-        setCatalogError(error instanceof Error ? error.message : String(error))
-      } finally {
-        setOpeningId(null)
-      }
-    },
-    [openingId]
-  )
-
-  const openDesign = useCallback(
-    async (item: SupplierCatalogItem) => {
-      if (openingId != null) return
-      setOpeningId(item.id)
-      setCatalogError(undefined)
-      try {
-        const ensured = await ensureSupplierCatalogBlank({ basicProductId: item.id })
-        navigateBuyer(buildStudioEditorHref(ensured.productId))
-      } catch (error) {
-        setCatalogError(error instanceof Error ? error.message : String(error))
-      } finally {
-        setOpeningId(null)
-      }
-    },
-    [openingId]
-  )
-
-  const renderHero = () => (
-    <ShopHero
-      brandName={brand}
-      imageUrl={heroImage}
-      isFallback={!settings.bannerUrl}
-      announcement={settings.announcement}
-      description={settings.description}
-      studioHref="/studio"
-    />
+  const productSearchControls = (
+    <form className="buyer-shop-inline-search" onSubmit={(event) => event.preventDefault()}>
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search this store"
+        aria-label="Search this store"
+      />
+      {query ? (
+        <button type="button" onClick={() => setQuery("")}>
+          Clear
+        </button>
+      ) : null}
+    </form>
   )
 
   return (
@@ -343,52 +341,29 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         <StoreTopBar
           settings={settings}
           cartCount={cartCount}
-          showMobileSearch
-          searchValue={query}
-          onSearchChange={setQuery}
-          onSearchSubmit={() => {
-            setDebouncedQuery(query.trim())
-            setActiveSection("items")
-          }}
+          shipToCountry={shipToCountry}
+          onShipToCountryChange={updateShipToCountry}
+          storeHref={storeHref}
         />
       }
-      footer={<StoreFooter brandName={brand} />}
+      footer={<StoreFooter brandName={brand} storeHref={storeHref} />}
     >
-      {/* —— Mobile: compact discovery chrome (no duplicate category rows) —— */}
       <div className="buyer-mhome-mobile-body">
-        {renderHero()}
+        <ShopHero
+          brandName={brand}
+          imageUrl={settings.bannerUrl}
+          isFallback={!settings.bannerUrl}
+          announcement={settings.announcement}
+          description={settings.description}
+          studioHref="/studio"
+          shopHref={`${storeHref}#products`}
+        />
         <StoreIdentity settings={settings} />
-        <PromoBanner />
-        <HowItWorksSection studioHref="/studio" />
-
-        <nav className="buyer-mhome-section-tabs" aria-label="Shop sections">
-          <button
-            type="button"
-            className={activeSection === "items" ? "active" : ""}
-            onClick={() => setActiveSection("items")}
-          >
-            {t("catalogAllItems")}
-          </button>
-          <button
-            type="button"
-            className={activeSection === "reviews" ? "active" : ""}
-            onClick={() => setActiveSection("reviews")}
-          >
-            Reviews
-          </button>
-          <button
-            type="button"
-            className={activeSection === "about" ? "active" : ""}
-            onClick={() => setActiveSection("about")}
-          >
-            About
-          </button>
-          {activeSection === "items" ? (
-            <button type="button" className="buyer-mhome-filter-chip" onClick={() => setFilterOpen(true)}>
-              Filters
-            </button>
-          ) : null}
+        <nav className="buyer-shop-tabs" aria-label="Store sections">
+          <button className={activeSection === "items" ? "active" : ""} type="button" onClick={() => setActiveSection("items")}>All items</button>
+          <button className={activeSection === "about" ? "active" : ""} type="button" onClick={() => setActiveSection("about")}>About</button>
         </nav>
+        {activeSection === "items" ? productSearchControls : null}
 
         {notices.length ? (
           <aside className="buyer-store-fallback" role="status">
@@ -398,80 +373,59 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           </aside>
         ) : null}
 
-        {activeSection === "items" ? (
-          <>
-            {catalogError ? (
-              <p className="buyer-mhome-error" role="alert">
-                {catalogError}
-              </p>
-            ) : null}
+        {activeSection === "items" && catalogError ? (
+          <p className="buyer-mhome-error" role="alert">
+            {catalogError}
+          </p>
+        ) : null}
 
-            {loading || catalogLoading ? <p className="buyer-mhome-loading">{t("catalogLoading")}</p> : null}
+        {activeSection === "items" && (loading || catalogLoading) ? <p className="buyer-mhome-loading">{t("catalogLoading")}</p> : null}
 
-            {!loading && !catalogLoading ? (
-              <section className="buyer-mhome-grid" id="products" aria-label="Products">
-                {sortedItems.map((item) => (
-                  <MobileCatalogCard
-                    key={item.id}
-                    item={item}
-                    opening={openingId === item.id}
-                    onViewDetail={openDetail}
-                    onDesignNow={openDesign}
-                  />
-                ))}
-              </section>
-            ) : null}
+        {activeSection === "items" && !loading && !catalogLoading ? (
+          <section className="buyer-mhome-grid" id="products" aria-label="Products">
+            {sortedItems.map((item) => (
+              <ProductCard key={item.id} product={item} />
+            ))}
+          </section>
+        ) : null}
 
-            {!loading && !catalogLoading && !sortedItems.length ? (
-              <p className="buyer-mhome-empty">{hasFilters ? t("catalogEmptyFiltered") : t("catalogEmpty")}</p>
-            ) : null}
+        {activeSection === "items" && !loading && !catalogLoading && !sortedItems.length ? (
+          <p className="buyer-mhome-empty">{hasFilters ? t("catalogEmptyFiltered") : t("catalogEmpty")}</p>
+        ) : null}
 
-            {catalogPage < catalogLastPage ? (
-              <div className="buyer-mhome-more">
-                <button
-                  type="button"
-                  disabled={loadingMore}
-                  onClick={() => void loadCatalog(catalogPage + 1, true, () => true)}
-                >
-                  {loadingMore ? t("catalogLoadingMore") : "See more"}
-                </button>
-              </div>
-            ) : null}
-
-            <p className="buyer-mhome-count">
-              {catalogTotal || sortedItems.length} items
-            </p>
-          </>
-        ) : activeSection === "reviews" ? (
-          <div id="reviews">
-            <StoreReviewsPanel summary={storeReviews} error={storeReviewsError} />
+        {activeSection === "items" && catalogPage < catalogLastPage ? (
+          <div className="buyer-mhome-more">
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={() => void loadCatalog(catalogPage + 1, true, () => true)}
+            >
+              {loadingMore ? t("catalogLoadingMore") : "See more"}
+            </button>
           </div>
-        ) : (
-          <div id="about">
-            <StoreAboutPanel settings={settings} />
-          </div>
-        )}
+        ) : null}
+
+        {activeSection === "items" ? <p className="buyer-mhome-count">
+          {catalogTotal || sortedItems.length} items
+        </p> : null}
+        {activeSection === "about" ? <StoreAboutPanel settings={settings} /> : null}
       </div>
 
-      {/* —— Desktop: store page capabilities on Temu chrome —— */}
       <div className="buyer-mhome-desktop-body">
-        {renderHero()}
-        <StoreIdentity settings={settings} />
-        <PromoBanner />
-        <HowItWorksSection studioHref="/studio" />
-
-        <ShopBrowseControls
-          categories={supplierCategories}
-          activeCategoryId={activeCategoryId}
-          onCategoryChange={setCategoryFromControls}
-          query={query}
-          onQueryChange={setQuery}
-          sort={sort}
-          onSortChange={setSort}
-          activeSection={activeSection}
-          onSectionChange={setActiveSection}
-          onOpenFilters={() => setFilterOpen(true)}
+        <ShopHero
+          brandName={brand}
+          imageUrl={settings.bannerUrl}
+          isFallback={!settings.bannerUrl}
+          announcement={settings.announcement}
+          description={settings.description}
+          studioHref="/studio"
+          shopHref={`${storeHref}#products`}
         />
+        <StoreIdentity settings={settings} />
+        <nav className="buyer-shop-tabs" aria-label="Store sections">
+          <button className={activeSection === "items" ? "active" : ""} type="button" onClick={() => setActiveSection("items")}>All items</button>
+          <button className={activeSection === "about" ? "active" : ""} type="button" onClick={() => setActiveSection("about")}>About</button>
+        </nav>
 
         {notices.length ? (
           <aside className="buyer-store-fallback" role="status" aria-label="Fallback data notice">
@@ -481,38 +435,30 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           </aside>
         ) : null}
 
-        {activeSection === "items" ? (
-          <section className="buyer-shop-products" id="products">
-            <SectionHeader
-              eyebrow={t("catalogEyebrow")}
-              title={activeCategoryName}
-              description={`${catalogTotal || sortedItems.length} ${t("catalogCount")}`}
-            />
-            <StoreCatalogResults
-              loading={loading || catalogLoading}
-              error={catalogError}
-              items={sortedItems}
-              hasFilters={hasFilters}
-              openingId={openingId}
-              onRetry={() => setLoadVersion((version) => version + 1)}
-              onViewDetail={openDetail}
-              onDesignNow={openDesign}
-              canLoadMore={catalogPage < catalogLastPage}
-              loadingMore={loadingMore}
-              onLoadMore={() => {
-                void loadCatalog(catalogPage + 1, true, () => true)
-              }}
-            />
-          </section>
-        ) : activeSection === "reviews" ? (
-          <div id="reviews">
-            <StoreReviewsPanel summary={storeReviews} error={storeReviewsError} />
-          </div>
-        ) : (
-          <div id="about">
-            <StoreAboutPanel settings={settings} />
-          </div>
-        )}
+        {activeSection === "items" ? <section className="buyer-shop-products" id="products">
+          <SectionHeader
+            eyebrow={t("catalogEyebrow")}
+            title={activeCategoryName}
+            description={`${sortedItems.length} ${t("catalogCount")} available for selected destination`}
+            actions={productSearchControls}
+          />
+          {loading || catalogLoading ? <p className="buyer-mhome-loading">{t("catalogLoading")}</p> : null}
+          {catalogError && !sortedItems.length ? (
+            <p className="buyer-mhome-error" role="alert">{catalogError}</p>
+          ) : null}
+          {!loading && !catalogLoading && sortedItems.length ? (
+            <section className="buyer-shop-product-grid" aria-label={t("catalogTitle")}>
+              {sortedItems.map((product) => (
+                <div key={product.id}>
+                  <ProductCard product={product} />
+                </div>
+              ))}
+            </section>
+          ) : null}
+          {!loading && !catalogLoading && !sortedItems.length && !catalogError ? (
+            <p className="buyer-mhome-empty">{hasFilters ? t("catalogEmptyFiltered") : t("catalogEmpty")}</p>
+          ) : null}
+        </section> : <StoreAboutPanel settings={settings} />}
       </div>
 
       <FilterDrawer

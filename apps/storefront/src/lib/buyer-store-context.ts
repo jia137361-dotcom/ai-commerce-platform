@@ -100,7 +100,8 @@ export const syncRouteStoreContext = (pathname: string) => {
     return
   }
 
-  // Single-store indie routes always keep the default store binding.
+  // Single-store indie routes keep the current store binding once a seller/store
+  // link has selected one. Cold starts fall back to the bootstrap default store.
   if (
     pathname === "/" ||
     pathname.startsWith("/store") ||
@@ -121,6 +122,7 @@ export const syncRouteStoreContext = (pathname: string) => {
     pathname.startsWith("/terms") ||
     pathname.startsWith("/privacy")
   ) {
+    if (runtimeStoreId) return
     enterLegacyDefaultStoreContext()
   }
 }

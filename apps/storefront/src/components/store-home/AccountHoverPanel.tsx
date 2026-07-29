@@ -16,7 +16,7 @@ export function AccountHoverPanel({ onClose }: AccountHoverPanelProps) {
     <div className="buyer-account-panel buyer-account-panel--mega" role="menu">
       <section className="buyer-account-panel-history">
         <header>
-          <a href="/store">Browsing history</a>
+          <a href="/marketplace">Browsing history</a>
         </header>
         {history.length ? (
           <ul>

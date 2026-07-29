@@ -1,6 +1,7 @@
 type ProductDetailTabsProps = {
   active: "item" | "size" | "package" | "review" | "detail" | "recommend"
   onChange: (tab: ProductDetailTabsProps["active"]) => void
+  showSizeGuide?: boolean
 }
 
 const TABS: Array<{ id: ProductDetailTabsProps["active"]; label: string }> = [
@@ -12,10 +13,11 @@ const TABS: Array<{ id: ProductDetailTabsProps["active"]; label: string }> = [
   { id: "recommend", label: "Recommend" },
 ]
 
-export function ProductDetailTabs({ active, onChange }: ProductDetailTabsProps) {
+export function ProductDetailTabs({ active, onChange, showSizeGuide = true }: ProductDetailTabsProps) {
+  const tabs = showSizeGuide ? TABS : TABS.filter((tab) => tab.id !== "size")
   return (
     <nav className="buyer-product-anchor-tabs" aria-label="Product sections">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"

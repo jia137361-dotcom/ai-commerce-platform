@@ -7,6 +7,9 @@ export type BuyerProductApiVariant = {
   supplier_variant_id?: string
   color?: string | null
   size?: string | null
+  option_type?: string | null
+  option_value?: string | null
+  image_url?: string | null
   title?: string | null
   inventory_quantity?: number | null
   stock?: number | null
@@ -23,6 +26,7 @@ export type BuyerProductApiInput = {
   category?: string | null
   category_name?: string | null
   image_url?: string | null
+  gallery_image_urls?: string[] | null
   mockup_image_url?: string | null
   design_image_url?: string | null
   print_file_url?: string | null
@@ -66,6 +70,14 @@ export const normalizeBuyerProductImage = (product: BuyerProductApiInput) =>
   product.images?.find((image) => image.url)?.url ??
   ""
 
+const normalizeBuyerProductGallery = (product: BuyerProductApiInput) => {
+  const urls = [
+    ...(Array.isArray(product.gallery_image_urls) ? product.gallery_image_urls : []),
+    ...(Array.isArray(product.metadata?.image_urls) ? product.metadata.image_urls : []),
+  ].filter((url): url is string => typeof url === "string" && url.trim().length > 0)
+  return urls.filter((url, index) => urls.indexOf(url) === index)
+}
+
 export const normalizeBuyerProductPrice = (product: BuyerProductApiInput) => {
   const value = product.price ?? product.variants?.flatMap((variant) => variant.prices ?? [])[0]?.amount
   const numeric = typeof value === "number" ? value : Number(value)
@@ -81,13 +93,20 @@ export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): Bu
     const manageInventory = variant.manage_inventory ?? undefined
     const allowBackorder = variant.allow_backorder ?? undefined
     const hasInventory = manageInventory === false || inventoryQuantity == null || inventoryQuantity > 0 || allowBackorder === true
+    const optionType = variant.option_type?.trim() || null
+    const optionValue = variant.option_value?.trim() || null
     return [{
       id,
-      title: variant.title?.trim() || [variant.color, variant.size].filter(Boolean).join(" / ") || `Option ${index + 1}`,
+      title: variant.title?.trim() || [optionValue, variant.color, variant.size].filter(Boolean).join(" / ") || `Option ${index + 1}`,
       inventoryQuantity,
       manageInventory,
       allowBackorder,
       isPurchasable: Boolean(product.is_cart_addable && hasInventory),
+      color: variant.color ?? null,
+      size: variant.size ?? null,
+      optionType,
+      optionValue,
+      imageUrl: variant.image_url ?? null,
     }]
   })
 
@@ -117,6 +136,7 @@ const formatSupportedRegions = (
 export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0): StoreProduct => {
   const numericPrice = normalizeBuyerProductPrice(product)
   const variants = normalizeBuyerProductVariants(product)
+  const galleryImageUrls = normalizeBuyerProductGallery(product)
 
   return {
     id: product.product_id ?? product.id ?? `backend-product-${index}`,
@@ -126,6 +146,7 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     price: formatPrice(numericPrice),
     numericPrice,
     imageUrl: normalizeBuyerProductImage(product),
+    galleryImageUrls,
     mockupImageUrl: product.mockup_image_url ?? undefined,
     designImageUrl: product.design_image_url ?? undefined,
     printFileUrl: product.print_file_url ?? undefined,
@@ -154,5 +175,6 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     storeId: product.store_id ?? undefined,
     storeName: product.store_name ?? undefined,
     storeSlug: product.store_slug ?? undefined,
+    metadata: product.metadata ?? null,
   }
 }

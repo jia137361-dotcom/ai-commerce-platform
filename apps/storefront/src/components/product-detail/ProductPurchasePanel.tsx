@@ -29,6 +29,18 @@ type ProductPurchasePanelProps = {
   designHref?: string
 }
 
+const uniqueOptionValues = (values: Array<string | null | undefined>) =>
+  values
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, list) => list.indexOf(value) === index)
+
+const optionValueLabel = (value: string | null | undefined, fallback: string) => value?.trim() || fallback
+const isDefaultOptionValue = (value: string | null | undefined) => {
+  const normalized = value?.trim().toLowerCase()
+  return !normalized || normalized === "default" || normalized === "default option"
+}
+
 export function ProductPurchasePanel({
   product,
   variants,
@@ -50,6 +62,27 @@ export function ProductPurchasePanel({
 }: ProductPurchasePanelProps) {
   const reviewCount = product.reviewCount ?? 0
   const editorHref = designHref ?? (product.id ? `/design/${encodeURIComponent(product.id)}` : undefined)
+  const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? variants[0]
+  const colorOptions = uniqueOptionValues(variants.map((variant) => variant.color))
+  const sizeOptionsForSelectedColor = uniqueOptionValues(
+    variants
+      .filter((variant) => !colorOptions.length || variant.color === selectedVariant?.color)
+      .map((variant) => variant.size)
+  )
+  const customOptionTypes = uniqueOptionValues(variants.map((variant) => variant.optionType))
+  const customOptionLabel = customOptionTypes.length === 1 ? customOptionTypes[0] : "Option"
+  const customOptionValues = uniqueOptionValues(variants.map((variant) => variant.optionValue))
+  const hasCustomOptions = customOptionValues.length > 0
+  const canSplitOptions = variants.length > 1 && (colorOptions.length > 1 || sizeOptionsForSelectedColor.length > 1)
+  const changeSplitOption = (next: { color?: string; size?: string }) => {
+    const currentColor = next.color ?? selectedVariant?.color ?? colorOptions[0]
+    const currentSize = next.size ?? selectedVariant?.size
+    const exact = variants.find((variant) => variant.color === currentColor && variant.size === currentSize)
+    const sameColor = variants.find((variant) => variant.color === currentColor)
+    const sameSize = variants.find((variant) => variant.size === currentSize)
+    const match = exact ?? sameColor ?? sameSize ?? variants[0]
+    if (match?.id) onVariantChange(match.id)
+  }
 
   return (
     <Card as="aside" className="buyer-product-purchase">
@@ -85,22 +118,64 @@ export function ProductPurchasePanel({
 
       <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" className="buyer-product-price" />
 
-      {variants.length > 1 ? (
-        <SelectField label="Size" value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>
+      {hasCustomOptions ? (
+        <SelectField label={customOptionLabel} value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>
           {variants.map((variant) => (
-            <option key={variant.id} value={variant.id}>
-              {variant.title}
+            <option key={variant.id} value={variant.id} disabled={variant.isPurchasable === false}>
+              {variant.optionValue || variant.title || "Default option"}
             </option>
           ))}
         </SelectField>
-      ) : variants.length === 1 ? (
+      ) : canSplitOptions ? (
+        <div className="buyer-product-split-options">
+          {colorOptions.length ? (
+            <SelectField
+              label="Color"
+              value={selectedVariant?.color ?? colorOptions[0] ?? ""}
+              onChange={(event) => changeSplitOption({ color: event.target.value })}
+            >
+              {colorOptions.map((color) => (
+                <option key={color} value={color}>
+                  {color}
+                </option>
+              ))}
+            </SelectField>
+          ) : null}
+          {sizeOptionsForSelectedColor.length ? (
+            <SelectField
+              label="Size"
+              value={selectedVariant?.size ?? sizeOptionsForSelectedColor[0] ?? ""}
+              onChange={(event) => changeSplitOption({ size: event.target.value })}
+            >
+              {sizeOptionsForSelectedColor.map((size) => {
+                const variantForSize = variants.find(
+                  (variant) => (!selectedVariant?.color || variant.color === selectedVariant.color) && variant.size === size
+                )
+                return (
+                  <option key={size} value={size} disabled={variantForSize?.isPurchasable === false}>
+                    {size}
+                  </option>
+                )
+              })}
+            </SelectField>
+          ) : null}
+        </div>
+      ) : variants.length > 1 ? (
+        <SelectField label="Option" value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>
+          {variants.map((variant) => (
+            <option key={variant.id} value={variant.id}>
+              {variant.title || [optionValueLabel(variant.color, ""), optionValueLabel(variant.size, "")].filter(Boolean).join(" / ")}
+            </option>
+          ))}
+        </SelectField>
+      ) : variants.length === 1 && !isDefaultOptionValue(variants[0].title) ? (
         <div className="buyer-product-option-unavailable">
-          <strong>Size</strong>
+          <strong>Option</strong>
           <span>{variants[0].title || "Default option"}</span>
         </div>
-      ) : (
+      ) : variants.length === 1 ? null : (
         <div className="buyer-product-option-unavailable">
-          <strong>Size</strong>
+          <strong>Option</strong>
           <span>Visual selector only — variant contract pending backend options.</span>
         </div>
       )}

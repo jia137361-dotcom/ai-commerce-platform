@@ -13,6 +13,7 @@ export type StoreProduct = {
   price: string
   numericPrice?: number
   imageUrl: string
+  galleryImageUrls?: string[]
   mockupImageUrl?: string
   designImageUrl?: string
   printFileUrl?: string
@@ -41,6 +42,7 @@ export type StoreProduct = {
   storeId?: string
   storeName?: string
   storeSlug?: string
+  metadata?: Record<string, unknown> | null
 }
 
 export type BuyerProductVariant = {
@@ -50,6 +52,11 @@ export type BuyerProductVariant = {
   manageInventory?: boolean
   allowBackorder?: boolean
   isPurchasable: boolean
+  color?: string | null
+  size?: string | null
+  optionType?: string | null
+  optionValue?: string | null
+  imageUrl?: string | null
 }
 
 export type CartLineItem = {
