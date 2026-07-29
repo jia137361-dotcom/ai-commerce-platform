@@ -20,7 +20,7 @@ export type BulkStoreProductResult = {
 type StoreCoreService = Pick<StoreCoreModuleService, "listProducts" | "updateProducts" | "deleteProducts">
 
 const MAX_BULK_PRODUCT_IDS = 50
-const PERMANENTLY_DELETABLE_STATUSES = new Set(["draft", "archived"])
+const PERMANENTLY_DELETABLE_STATUSES = new Set(["draft", "unpublished", "archived"])
 
 export const canPermanentlyDeleteProduct = (status?: string | null) =>
   PERMANENTLY_DELETABLE_STATUSES.has(String(status ?? "").toLowerCase())
@@ -108,7 +108,7 @@ export async function bulkStoreProductAction(
         product_id: productId,
         status: "failed",
         product_status: product.status,
-        message: "Only draft or archived products can be permanently deleted",
+        message: "Only draft, unpublished, or archived products can be permanently deleted",
       })
       continue
     }

@@ -230,7 +230,7 @@ export const deleteStoreProductByIdHandler = async (req: MedusaRequest, res: Med
         res,
         400,
         "VALIDATION_ERROR",
-        "Only draft or archived products can be permanently deleted"
+        "Only draft, unpublished, or archived products can be permanently deleted"
       )
     }
     return res.json({

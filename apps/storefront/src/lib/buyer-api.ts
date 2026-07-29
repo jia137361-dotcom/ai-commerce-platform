@@ -220,6 +220,7 @@ type ApiCartAddress = {
 type ApiCart = {
   id?: string
   cart_id?: string
+  completed_at?: string | null
   store_id?: string
   customer_id?: string | null
   email?: string
@@ -1192,6 +1193,7 @@ const normalizeCart = (cart: ApiCart): StoreCart => {
   const total = rawTotal ?? subtotal
   return {
     id: cart.cart_id ?? cart.id ?? "",
+    completedAt: cart.completed_at ?? null,
     regionId: cart.region_id,
     storeId: cart.store_id,
     email: cart.email,

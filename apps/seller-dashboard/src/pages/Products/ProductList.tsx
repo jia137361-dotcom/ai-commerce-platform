@@ -37,7 +37,9 @@ const isFailedProduct = (product: NormalizedProduct) => {
 }
 
 const canPermanentlyDelete = (product: NormalizedProduct) =>
-  product.status === "draft" || product.status === "archived"
+  product.status === "draft" ||
+  product.status === "unpublished" ||
+  product.status === "archived"
 
 export function ProductListPage() {
   const navigate = useNavigate()
@@ -503,7 +505,7 @@ export function ProductListPage() {
           </>
         }
       >
-        This draft or archived product will be permanently removed and cannot be restored.
+        This draft, unpublished, or archived product will be permanently removed and cannot be restored.
       </Modal>
 
       <Modal
@@ -529,7 +531,7 @@ export function ProductListPage() {
         }
       >
         {bulkAction === "delete"
-          ? "Only draft or archived products can be permanently deleted. Published items in the selection will be reported as failed."
+          ? "Only draft, unpublished, or archived products can be permanently deleted. Published items in the selection will be reported as failed."
           : "Selected products will be archived and hidden from your storefront. You can restore them later from the Archived tab."}
       </Modal>
     </div>

@@ -97,6 +97,7 @@ export type StoreCartShippingAddress = {
 
 export type StoreCart = {
   id: string
+  completedAt?: string | null
   regionId?: string
   storeId?: string
   email?: string

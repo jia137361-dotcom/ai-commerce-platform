@@ -1483,7 +1483,7 @@ export function EditDraftPage() {
             <Button type="button" variant="danger" onClick={() => setConfirmArchive(true)}>
               Archive
             </Button>
-            {product.status === "draft" ? (
+            {product.status === "draft" || product.status === "unpublished" ? (
               <Button type="button" variant="danger" onClick={() => setConfirmPermanentDelete(true)}>
                 Delete permanently
               </Button>

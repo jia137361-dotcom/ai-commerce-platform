@@ -19,7 +19,6 @@ import {
   fetchCart,
   fetchStoreSettings,
   getCartShippingOptions,
-  getBuyerCartStorageKey,
   getScopedBuyerStoreId,
   getStripePublishableKey,
   initializeCartPaymentSession,
@@ -50,6 +49,7 @@ import type { StoreCart } from "../../lib/mock-data"
 import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
 import { resolveCheckoutState } from "./checkout-state"
 import { getBuyerCartIdentity, resolveBuyerCartStorageId } from "../../lib/buyer-cart-storage"
+import { registerStoreCart, unregisterStoreCart } from "../../lib/buyer-platform-cart"
 import {
   markPlatformCheckoutOrderComplete,
   nextPendingPlatformCheckoutGroup,
@@ -649,7 +649,6 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       }
 
       const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
-      const cartStorageKey = getBuyerCartStorageKey(storeId, cartIdentity)
       const splitKey = `citigoo:${storeId}:split_checkout`
       const splitRaw = window.sessionStorage.getItem(splitKey)
       let split: { sourceCartId?: string; checkoutCartId?: string; selectedLineIds?: string[] } | null = null
@@ -687,13 +686,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
               selectedLineIds: failedLineIds,
             })
           )
-          window.localStorage.setItem(cartStorageKey, split.sourceCartId)
+          registerStoreCart(window.localStorage, cartIdentity, storeId, split.sourceCartId)
         } else {
-          window.localStorage.setItem(cartStorageKey, split.sourceCartId)
+          registerStoreCart(window.localStorage, cartIdentity, storeId, split.sourceCartId)
           window.sessionStorage.removeItem(splitKey)
         }
       } else {
-        window.localStorage.removeItem(cartStorageKey)
+        unregisterStoreCart(window.localStorage, cartIdentity, storeId)
       }
       window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
       if (platformCheckoutActive) {

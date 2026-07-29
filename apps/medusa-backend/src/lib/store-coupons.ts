@@ -591,8 +591,11 @@ export async function clearCouponFromCart(
     }
   }
 
-  const nextMeta = { ...cart.metadata }
-  delete nextMeta[CART_META_APPLIED_COUPON]
+  // Cart metadata updates are merged by Medusa, so omission does not remove an existing key.
+  const nextMeta = {
+    ...cart.metadata,
+    [CART_META_APPLIED_COUPON]: null,
+  }
   const cartModule = container.resolve(Modules.CART)
   await cartModule.updateCarts(input.cartId, { metadata: nextMeta })
 

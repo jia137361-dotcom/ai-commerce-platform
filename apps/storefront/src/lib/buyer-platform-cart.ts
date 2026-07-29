@@ -109,6 +109,7 @@ export const unregisterStoreCart = (storage: ReadWriteStorage, identity: string,
   const registry = discoverStoreCartRegistry(storage, identity)
   delete registry[storeId]
   writePlatformCartRegistry(storage, identity, registry)
+  storage.removeItem(getScopedBuyerCartStorageKey(storeId, identity))
 }
 
 const resolveStoreLabel = (
@@ -153,7 +154,7 @@ export async function fetchPlatformCart(
       if (!entry?.cartId) return
       try {
         const cart = await fetchCart(entry.cartId, { storeId })
-        if (!cart.items.length) {
+        if (cart.completedAt || !cart.items.length) {
           delete nextRegistry[storeId]
           storage.removeItem(getScopedBuyerCartStorageKey(storeId, identity))
           return

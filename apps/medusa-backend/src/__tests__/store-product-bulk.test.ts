@@ -45,25 +45,41 @@ describe("store-product-bulk", () => {
     })
   })
 
-  it("permanently deletes draft and archived products", async () => {
+  it("permanently deletes draft, unpublished, and archived products", async () => {
     const service = makeService()
     service.listProducts.mockResolvedValue([
       { id: "prod_1", status: "archived" },
       { id: "prod_2", status: "draft" },
-      { id: "prod_3", status: "published" },
+      { id: "prod_3", status: "unpublished" },
+      { id: "prod_4", status: "published" },
     ])
 
-    const result = await bulkStoreProductAction(service, "default_store", ["prod_1", "prod_2", "prod_3"], "delete")
+    const result = await bulkStoreProductAction(
+      service,
+      "default_store",
+      ["prod_1", "prod_2", "prod_3", "prod_4"],
+      "delete"
+    )
 
-    expect(result.succeeded).toBe(2)
+    expect(result.succeeded).toBe(3)
     expect(result.failed).toBe(1)
     expect(service.deleteProducts).toHaveBeenCalledWith("prod_1")
     expect(service.deleteProducts).toHaveBeenCalledWith("prod_2")
+    expect(service.deleteProducts).toHaveBeenCalledWith("prod_3")
   })
 
   it("permanently deletes a draft product", async () => {
     const service = makeService()
     service.listProducts.mockResolvedValue([{ id: "prod_1", status: "draft" }])
+
+    const result = await permanentlyDeleteArchivedStoreProduct(service, "default_store", "prod_1")
+    expect(result).toEqual({ ok: true, product_id: "prod_1" })
+    expect(service.deleteProducts).toHaveBeenCalledWith("prod_1")
+  })
+
+  it("permanently deletes an unpublished product", async () => {
+    const service = makeService()
+    service.listProducts.mockResolvedValue([{ id: "prod_1", status: "unpublished" }])
 
     const result = await permanentlyDeleteArchivedStoreProduct(service, "default_store", "prod_1")
     expect(result).toEqual({ ok: true, product_id: "prod_1" })

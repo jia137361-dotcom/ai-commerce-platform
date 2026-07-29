@@ -3,12 +3,13 @@ import {
   discoverStoreCartRegistry,
   parsePlatformLineKey,
   registerStoreCart,
+  unregisterStoreCart,
 } from "./buyer-platform-cart"
 
-describe("buyer-platform-cart", () => {
-  it("registers and discovers store carts by identity", () => {
-    const values = new Map<string, string>()
-    const storage = {
+const makeStorage = () => {
+  const values = new Map<string, string>()
+  return {
+    storage: {
       get length() {
         return values.size
       },
@@ -20,7 +21,13 @@ describe("buyer-platform-cart", () => {
       removeItem: (key: string) => {
         values.delete(key)
       },
-    }
+    },
+  }
+}
+
+describe("buyer-platform-cart", () => {
+  it("registers and discovers store carts by identity", () => {
+    const { storage } = makeStorage()
 
     registerStoreCart(storage, "guest:abc", "store_a", "cart_a", {
       storeName: "Store A",
@@ -31,6 +38,16 @@ describe("buyer-platform-cart", () => {
     const registry = discoverStoreCartRegistry(storage, "guest:abc")
     expect(registry.store_a).toMatchObject({ cartId: "cart_a", storeName: "Store A" })
     expect(registry.store_b).toMatchObject({ cartId: "cart_b" })
+  })
+
+  it("unregisters a completed store cart from both registry and scoped storage", () => {
+    const { storage } = makeStorage()
+    registerStoreCart(storage, "buyer:cus_1", "store_a", "cart_a")
+
+    unregisterStoreCart(storage, "buyer:cus_1", "store_a")
+
+    expect(discoverStoreCartRegistry(storage, "buyer:cus_1")).toEqual({})
+    expect(storage.getItem("citigoo:store_a:cart:buyer%3Acus_1")).toBeNull()
   })
 
   it("composes and parses platform line keys", () => {
