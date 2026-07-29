@@ -21,11 +21,21 @@ export const SHIP_FROM_COUNTRY_LABELS: Record<string, string> = {
   EU: "Europe",
 }
 
+const SHIP_FROM_COUNTRY_ALIASES: Record<string, string> = {
+  CHINA: "CN",
+  "UNITED STATES": "US",
+  USA: "US",
+  "UNITED KINGDOM": "GB",
+  UK: "GB",
+  AUSTRALIA: "AU",
+}
+
 export const normalizeShipFromCountryCode = (value: unknown): string | null => {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
   if (!trimmed) return null
-  return trimmed.toUpperCase()
+  const upper = trimmed.toUpperCase()
+  return SHIP_FROM_COUNTRY_ALIASES[upper] ?? upper
 }
 
 export const getShipFromCountryLabel = (code: unknown): string | null => {
