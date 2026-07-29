@@ -16,6 +16,7 @@ export type BuyerProductApiVariant = {
   manage_inventory?: boolean | null
   allow_backorder?: boolean | null
   prices?: Array<{ amount?: number }>
+  price?: number | string | null
 }
 
 export type BuyerProductApiInput = {
@@ -95,6 +96,8 @@ export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): Bu
     const hasInventory = manageInventory === false || inventoryQuantity == null || inventoryQuantity > 0 || allowBackorder === true
     const optionType = variant.option_type?.trim() || null
     const optionValue = variant.option_value?.trim() || null
+    const rawPrice = variant.price ?? variant.prices?.[0]?.amount
+    const numericPrice = typeof rawPrice === "number" ? rawPrice : Number(rawPrice)
     return [{
       id,
       title: variant.title?.trim() || [optionValue, variant.color, variant.size].filter(Boolean).join(" / ") || `Option ${index + 1}`,
@@ -107,6 +110,7 @@ export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): Bu
       optionType,
       optionValue,
       imageUrl: variant.image_url ?? null,
+      price: Number.isFinite(numericPrice) ? numericPrice : null,
     }]
   })
 

@@ -12,6 +12,8 @@ import {
 } from "../lib/buyer-api"
 import { BuyerAuthContext } from "./useBuyerAuth"
 import { clearBuyerAuthClientState } from "./buyer-auth-state"
+import { writeBuyerDisplayPreferences } from "../lib/buyer-display-preferences"
+import { readBuyerPreferencesFromMetadata } from "../lib/buyer-preferences"
 
 export function BuyerAuthProvider({ children }: { children: ReactNode }) {
   const [customer, setCustomer] = useState<BuyerCustomer | null>(null)
@@ -44,6 +46,12 @@ export function BuyerAuthProvider({ children }: { children: ReactNode }) {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!customer) return
+    const preferences = readBuyerPreferencesFromMetadata(customer.metadata)
+    writeBuyerDisplayPreferences(preferences)
+  }, [customer])
 
   const value = useMemo(
     () => ({

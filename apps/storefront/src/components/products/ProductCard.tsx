@@ -3,12 +3,14 @@ import { buildProductDetailHref } from "../../lib/storefront-links"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { StatusBadge } from "../ui/StatusBadge"
+import { convertDisplayAmount, useBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
 
 type ProductCardProps = {
   product: StoreProduct
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const { displayCurrencyCode } = useBuyerDisplayPreferences()
   const href = buildProductDetailHref(product)
   const available = Boolean(product.isCartAddable && product.medusaVariantId)
   const rating = product.averageRating ? product.averageRating.toFixed(1) : null
@@ -42,7 +44,11 @@ export function ProductCard({ product }: ProductCardProps) {
             Ships from {product.shipFromLabel}
           </span>
         ) : null}
-        <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" />
+        <MoneyText
+          amount={product.numericPrice == null ? null : convertDisplayAmount(product.numericPrice, "usd", displayCurrencyCode)}
+          currencyCode={displayCurrencyCode}
+          unavailableLabel="Price unavailable"
+        />
       </div>
     </Card>
   )

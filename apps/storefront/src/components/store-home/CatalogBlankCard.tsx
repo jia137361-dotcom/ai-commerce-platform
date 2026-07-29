@@ -3,6 +3,7 @@ import { useBuyerLocale } from "../../lib/locale"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { StatusBadge } from "../ui/StatusBadge"
+import { convertDisplayAmount, useBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
 
 type CatalogBlankCardProps = {
   item: SupplierCatalogItem
@@ -13,6 +14,7 @@ type CatalogBlankCardProps = {
 
 export function CatalogBlankCard({ item, opening = false, onViewDetail, onDesignNow }: CatalogBlankCardProps) {
   const { t } = useBuyerLocale()
+  const { displayCurrencyCode } = useBuyerDisplayPreferences()
   const categoryLabel = item.categories[0]?.enName || item.categories[0]?.name || item.code
 
   return (
@@ -56,7 +58,11 @@ export function CatalogBlankCard({ item, opening = false, onViewDetail, onDesign
         <div className="buyer-shop-product-meta">
           <span>{item.code}</span>
         </div>
-        <MoneyText amount={item.estimatedRetailUsd} currencyCode="USD" unavailableLabel={t("catalogPricePending")} />
+        <MoneyText
+          amount={item.estimatedRetailUsd == null ? null : convertDisplayAmount(item.estimatedRetailUsd, "usd", displayCurrencyCode)}
+          currencyCode={displayCurrencyCode}
+          unavailableLabel={t("catalogPricePending")}
+        />
         <button type="button" className="buyer-shop-product-customize" disabled={opening} onClick={() => onDesignNow(item)}>
           {opening ? t("catalogOpening") : "Design now"}
         </button>

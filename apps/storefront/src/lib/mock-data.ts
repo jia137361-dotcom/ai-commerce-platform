@@ -57,6 +57,7 @@ export type BuyerProductVariant = {
   optionType?: string | null
   optionValue?: string | null
   imageUrl?: string | null
+  price?: number | null
 }
 
 export type CartLineItem = {

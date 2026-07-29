@@ -22,6 +22,10 @@ import { enterLegacyDefaultStoreContext, getLegacyDefaultStoreId } from "../../l
 import { useBuyerLocale } from "../../lib/locale"
 import type { StoreProduct } from "../../lib/mock-data"
 import { buildSettingsStoreHref } from "../../lib/storefront-links"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { readBuyerPreferences, updateBuyerPreferences } from "../../lib/buyer-api"
+import { useBuyerDisplayPreferences, writeBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
+import { collectCategoryTreeIds, productMatchesCategory } from "./store-category-filter"
 
 type StoreHomePageProps = { cartCount: number; storeSlug?: string }
 type Notice = { key: string; message: string }
@@ -34,22 +38,7 @@ const fallbackSettings: BuyerStoreSettings = {
 }
 
 const CATALOG_PER_PAGE = 24
-const SHIP_TO_STORAGE_KEY = "citigoo:ship_to_country"
-
-type StoreSection = "items" | "about"
-
-const readInitialShipToCountry = () => {
-  if (typeof window === "undefined") return "us"
-  return window.localStorage.getItem(SHIP_TO_STORAGE_KEY)?.trim().toLowerCase() || "us"
-}
-
-const productShipsToCountry = (product: StoreProduct, countryCode: string) => {
-  const normalized = countryCode.trim().toLowerCase()
-  if (!normalized) return true
-  const regions = product.supportedRegions ?? []
-  if (!regions.length) return true
-  return regions.some((region) => region.country_codes.map((code) => code.toLowerCase()).includes(normalized))
-}
+type StoreSection = "items" | "categories" | "about"
 
 function scrollToVisibleId(id: string) {
   window.requestAnimationFrame(() => {
@@ -99,6 +88,8 @@ function StoreFooter({ brandName, storeHref }: { brandName: string; storeHref: s
 }
 
 export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
+  const auth = useBuyerAuth()
+  const displayPreferences = useBuyerDisplayPreferences()
   const { t } = useBuyerLocale()
   const initialUrl = readBrowseUrlState()
   const queryStoreId = initialUrl.storeId?.trim() || ""
@@ -125,9 +116,13 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   const [storeReady, setStoreReady] = useState(false)
   const [activeStoreId, setActiveStoreId] = useState(queryStoreId)
   const [activeSection, setActiveSection] = useState<StoreSection>(
-    new URLSearchParams(window.location.search).get("tab") === "about" ? "about" : "items"
+    new URLSearchParams(window.location.search).get("tab") === "about"
+      ? "about"
+      : initialUrl.category && initialUrl.category !== "all"
+        ? "categories"
+        : "items"
   )
-  const [shipToCountry, setShipToCountry] = useState(readInitialShipToCountry)
+  const [shipToCountry, setShipToCountry] = useState(displayPreferences.countryCode)
 
   const activeCategoryId = useMemo(() => {
     if (primaryTabId !== "recommend") return primaryTabId
@@ -160,12 +155,16 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   const updateShipToCountry = useCallback((countryCode: string) => {
     const normalized = countryCode.trim().toLowerCase() || "us"
     setShipToCountry(normalized)
-    try {
-      window.localStorage.setItem(SHIP_TO_STORAGE_KEY, normalized)
-    } catch {
-      // Ignore storage errors in private browsing.
-    }
-  }, [])
+    writeBuyerDisplayPreferences({ countryCode: normalized })
+    if (auth.customer) void updateBuyerPreferences({ countryCode: normalized }).then(() => auth.refreshCustomer())
+  }, [auth])
+
+  useEffect(() => {
+    const countryCode = auth.customer
+      ? readBuyerPreferences(auth.customer).countryCode
+      : displayPreferences.countryCode
+    setShipToCountry(countryCode)
+  }, [auth.customer, displayPreferences.countryCode])
 
   const loadShell = useCallback(async (isActive: () => boolean) => {
     const [settingsResult, categoriesResult] = await Promise.all([
@@ -191,7 +190,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
       if (append) setLoadingMore(true)
       else setCatalogLoading(true)
 
-      const result = await fetchProducts()
+      const result = await fetchProducts({ countryCode: shipToCountry })
 
       if (!isActive()) return
 
@@ -203,7 +202,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
       setCatalogLoading(false)
       setLoadingMore(false)
     },
-    []
+    [shipToCountry]
   )
 
   useEffect(() => {
@@ -286,9 +285,8 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
   const sortedItems = useMemo(() => {
     let list = [...items]
     if (activeCategoryId !== "all") {
-      list = list.filter((item) => item.categoryIds?.includes(activeCategoryId))
+      list = list.filter((item) => productMatchesCategory(item, supplierCategories, activeCategoryId))
     }
-    list = list.filter((item) => productShipsToCountry(item, shipToCountry))
     if (debouncedQuery) {
       const queryText = debouncedQuery.toLowerCase()
       list = list.filter((item) =>
@@ -311,7 +309,16 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
       if (sort === "name") return left.title.localeCompare(right.title)
       return 0
     })
-  }, [activeCategoryId, debouncedQuery, filters.maxPrice, filters.minPrice, items, shipToCountry, sort])
+  }, [activeCategoryId, debouncedQuery, filters.maxPrice, filters.minPrice, items, shipToCountry, sort, supplierCategories])
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const category of supplierCategories.filter((entry) => entry.id !== "all")) {
+      const descendants = collectCategoryTreeIds(supplierCategories, category.id)
+      counts.set(category.id, items.filter((item) => item.categoryIds?.some((id) => descendants.has(id))).length)
+    }
+    return counts
+  }, [items, supplierCategories])
 
   const brand = settings.brandName?.trim() || "Store"
   const storeHref = buildSettingsStoreHref(settings)
@@ -331,6 +338,27 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         </button>
       ) : null}
     </form>
+  )
+  const categorySidebar = (
+    <aside className="buyer-shop-category-sidebar" aria-label="Product categories">
+      <button
+        type="button"
+        className={activeCategoryId === "all" ? "active" : ""}
+        onClick={() => setCategoryFromControls("all")}
+      >
+        <span>All categories</span><small>{items.length}</small>
+      </button>
+      {supplierCategories.filter((category) => category.id !== "all").map((category) => (
+        <button
+          key={category.id}
+          type="button"
+          className={[activeCategoryId === category.id ? "active" : "", category.parentId ? "child" : ""].filter(Boolean).join(" ")}
+          onClick={() => setCategoryFromControls(category.id)}
+        >
+          <span>{category.name}</span><small>{categoryCounts.get(category.id) ?? 0}</small>
+        </button>
+      ))}
+    </aside>
   )
 
   return (
@@ -360,10 +388,11 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         />
         <StoreIdentity settings={settings} />
         <nav className="buyer-shop-tabs" aria-label="Store sections">
-          <button className={activeSection === "items" ? "active" : ""} type="button" onClick={() => setActiveSection("items")}>All items</button>
+          <button className={activeSection === "items" ? "active" : ""} type="button" onClick={() => { setActiveSection("items"); setCategoryFromControls("all") }}>All items</button>
+          <button className={activeSection === "categories" ? "active" : ""} type="button" onClick={() => setActiveSection("categories")}>Category</button>
           <button className={activeSection === "about" ? "active" : ""} type="button" onClick={() => setActiveSection("about")}>About</button>
         </nav>
-        {activeSection === "items" ? productSearchControls : null}
+        {activeSection !== "about" ? productSearchControls : null}
 
         {notices.length ? (
           <aside className="buyer-store-fallback" role="status">
@@ -373,27 +402,30 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           </aside>
         ) : null}
 
-        {activeSection === "items" && catalogError ? (
+        {activeSection !== "about" && catalogError ? (
           <p className="buyer-mhome-error" role="alert">
             {catalogError}
           </p>
         ) : null}
 
-        {activeSection === "items" && (loading || catalogLoading) ? <p className="buyer-mhome-loading">{t("catalogLoading")}</p> : null}
+        {activeSection !== "about" && (loading || catalogLoading) ? <p className="buyer-mhome-loading">{t("catalogLoading")}</p> : null}
 
-        {activeSection === "items" && !loading && !catalogLoading ? (
-          <section className="buyer-mhome-grid" id="products" aria-label="Products">
-            {sortedItems.map((item) => (
-              <ProductCard key={item.id} product={item} />
-            ))}
-          </section>
+        {activeSection !== "about" && !loading && !catalogLoading ? (
+          <div className={activeSection === "categories" ? "buyer-shop-category-layout active" : "buyer-shop-category-layout"}>
+            {activeSection === "categories" ? categorySidebar : null}
+            <section className="buyer-mhome-grid" id="products" aria-label="Products">
+              {sortedItems.map((item) => (
+                <ProductCard key={item.id} product={item} />
+              ))}
+            </section>
+          </div>
         ) : null}
 
-        {activeSection === "items" && !loading && !catalogLoading && !sortedItems.length ? (
+        {activeSection !== "about" && !loading && !catalogLoading && !sortedItems.length ? (
           <p className="buyer-mhome-empty">{hasFilters ? t("catalogEmptyFiltered") : t("catalogEmpty")}</p>
         ) : null}
 
-        {activeSection === "items" && catalogPage < catalogLastPage ? (
+        {activeSection !== "about" && catalogPage < catalogLastPage ? (
           <div className="buyer-mhome-more">
             <button
               type="button"
@@ -405,7 +437,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           </div>
         ) : null}
 
-        {activeSection === "items" ? <p className="buyer-mhome-count">
+        {activeSection !== "about" ? <p className="buyer-mhome-count">
           {catalogTotal || sortedItems.length} items
         </p> : null}
         {activeSection === "about" ? <StoreAboutPanel settings={settings} /> : null}
@@ -423,7 +455,8 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         />
         <StoreIdentity settings={settings} />
         <nav className="buyer-shop-tabs" aria-label="Store sections">
-          <button className={activeSection === "items" ? "active" : ""} type="button" onClick={() => setActiveSection("items")}>All items</button>
+          <button className={activeSection === "items" ? "active" : ""} type="button" onClick={() => { setActiveSection("items"); setCategoryFromControls("all") }}>All items</button>
+          <button className={activeSection === "categories" ? "active" : ""} type="button" onClick={() => setActiveSection("categories")}>Category</button>
           <button className={activeSection === "about" ? "active" : ""} type="button" onClick={() => setActiveSection("about")}>About</button>
         </nav>
 
@@ -435,29 +468,28 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           </aside>
         ) : null}
 
-        {activeSection === "items" ? <section className="buyer-shop-products" id="products">
+        {activeSection !== "about" ? <section className="buyer-shop-products" id="products">
           <SectionHeader
             eyebrow={t("catalogEyebrow")}
             title={activeCategoryName}
             description={`${sortedItems.length} ${t("catalogCount")} available for selected destination`}
             actions={productSearchControls}
           />
-          {loading || catalogLoading ? <p className="buyer-mhome-loading">{t("catalogLoading")}</p> : null}
-          {catalogError && !sortedItems.length ? (
-            <p className="buyer-mhome-error" role="alert">{catalogError}</p>
-          ) : null}
-          {!loading && !catalogLoading && sortedItems.length ? (
-            <section className="buyer-shop-product-grid" aria-label={t("catalogTitle")}>
-              {sortedItems.map((product) => (
-                <div key={product.id}>
-                  <ProductCard product={product} />
-                </div>
-              ))}
-            </section>
-          ) : null}
-          {!loading && !catalogLoading && !sortedItems.length && !catalogError ? (
-            <p className="buyer-mhome-empty">{hasFilters ? t("catalogEmptyFiltered") : t("catalogEmpty")}</p>
-          ) : null}
+          <div className={activeSection === "categories" ? "buyer-shop-category-layout active" : "buyer-shop-category-layout"}>
+            {activeSection === "categories" ? categorySidebar : null}
+            <div className="buyer-shop-category-results">
+              {loading || catalogLoading ? <p className="buyer-mhome-loading">{t("catalogLoading")}</p> : null}
+              {catalogError && !sortedItems.length ? <p className="buyer-mhome-error" role="alert">{catalogError}</p> : null}
+              {!loading && !catalogLoading && sortedItems.length ? (
+                <section className="buyer-shop-product-grid" aria-label={t("catalogTitle")}>
+                  {sortedItems.map((product) => <div key={product.id}><ProductCard product={product} /></div>)}
+                </section>
+              ) : null}
+              {!loading && !catalogLoading && !sortedItems.length && !catalogError ? (
+                <p className="buyer-mhome-empty">{hasFilters ? t("catalogEmptyFiltered") : t("catalogEmpty")}</p>
+              ) : null}
+            </div>
+          </div>
         </section> : <StoreAboutPanel settings={settings} />}
       </div>
 

@@ -18,6 +18,7 @@ export const SHIP_FROM_COUNTRY_LABELS: Record<string, string> = {
   MX: "Mexico",
   PL: "Poland",
   SG: "Singapore",
+  MY: "Malaysia",
   EU: "Europe",
 }
 

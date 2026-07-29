@@ -5,6 +5,8 @@ type MobileHomeHeaderProps = {
   shipToOptions?: Array<{ code: string; label: string }>
   stores?: Array<{ storeId: string; name: string; brandName: string; slug: string }>
   currentStoreId?: string
+  currentStoreHref?: string
+  currentStoreName?: string
   onStoreChange?: (storeId: string) => void
 }
 
@@ -15,6 +17,8 @@ export function MobileHomeHeader({
   shipToOptions = [],
   stores = [],
   currentStoreId = "",
+  currentStoreHref = "/marketplace",
+  currentStoreName = "All stores",
   onStoreChange,
 }: MobileHomeHeaderProps) {
   const brand = brandName?.trim() || "ciiverse"
@@ -37,8 +41,8 @@ export function MobileHomeHeader({
             ))}
           </select>
         </label>
-        <label className="buyer-mhome-store-select">
-          <span>Stores</span>
+        <div className="buyer-mhome-store-select">
+          <a href={currentStoreHref}><span>Stores</span> {currentStoreName}</a>
           <select
             aria-label="Choose store"
             value={currentStoreId}
@@ -51,7 +55,7 @@ export function MobileHomeHeader({
               </option>
             ))}
           </select>
-        </label>
+        </div>
         <a className="buyer-mhome-cart-link" href="/cart" aria-label="Cart">
           Cart
         </a>

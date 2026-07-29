@@ -18,6 +18,7 @@ import {
   normalizeProduct,
   sendError
 } from "../../../../_helpers/store-core"
+import { ensureCurrentStoreS2bCategoryIds } from "../../../../../lib/s2b-product-categories"
 
 function bridgeErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -106,6 +107,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     medusa_product_id: bridge.medusaProductId,
     medusa_variant_id: bridge.medusaVariantId,
   }
+  const categoryIds = await ensureCurrentStoreS2bCategoryIds(
+    storeCoreService,
+    currentStoreId,
+    product as Record<string, unknown>
+  )
+  if (categoryIds?.length) updateData.category_ids = categoryIds
   if (bridge.variantMappings?.length && Array.isArray(product.variants)) {
     const mappings = new Map(
       bridge.variantMappings.map((entry) => [entry.supplier_variant_id, entry.medusa_variant_id])

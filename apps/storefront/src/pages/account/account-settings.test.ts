@@ -8,7 +8,7 @@ import { customerAddressToInput } from "./account-settings-state"
 describe("buyer account settings", () => {
   it("reads account-scoped country and currency preferences", () => {
     expect(readBuyerPreferencesFromMetadata({ buyer_preferences: { country_code: "CN", currency_code: "EUR" } })).toEqual({ countryCode: "cn", currencyCode: "eur" })
-    expect(readBuyerPreferencesFromMetadata()).toEqual({ countryCode: "us", currencyCode: "usd" })
+    expect(readBuyerPreferencesFromMetadata()).toEqual({ countryCode: "us", currencyCode: "auto" })
   })
 
   it("preserves a saved address when opening it for editing", () => {

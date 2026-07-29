@@ -5,6 +5,8 @@ describe("checkout country and shipping mapping", () => {
     expect(CHECKOUT_COUNTRIES.find((country) => country.name === "China")?.code).toBe("cn")
     expect(CHECKOUT_COUNTRIES.find((country) => country.name === "United States")?.code).toBe("us")
     expect(isCheckoutCountryCode("GB")).toBe(true)
+    expect(CHECKOUT_COUNTRIES.find((country) => country.name === "Malaysia")?.code).toBe("my")
+    expect(CHECKOUT_COUNTRIES).toHaveLength(243)
     expect(isCheckoutCountryCode("xx")).toBe(false)
   })
 

@@ -8,6 +8,7 @@ import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { SelectField } from "../ui/SelectField"
 import { StatusBadge } from "../ui/StatusBadge"
+import { convertDisplayAmount, useBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
 
 type ProductPurchasePanelProps = {
   product: StoreProduct
@@ -60,9 +61,11 @@ export function ProductPurchasePanel({
   favoriteLoading = false,
   designHref,
 }: ProductPurchasePanelProps) {
+  const { displayCurrencyCode } = useBuyerDisplayPreferences()
   const reviewCount = product.reviewCount ?? 0
   const editorHref = designHref ?? (product.id ? `/design/${encodeURIComponent(product.id)}` : undefined)
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? variants[0]
+  const purchasePrice = selectedVariant?.price ?? product.numericPrice
   const colorOptions = uniqueOptionValues(variants.map((variant) => variant.color))
   const sizeOptionsForSelectedColor = uniqueOptionValues(
     variants
@@ -116,7 +119,12 @@ export function ProductPurchasePanel({
         )}
       </div>
 
-      <MoneyText amount={product.numericPrice} currencyCode="USD" unavailableLabel="Price unavailable" className="buyer-product-price" />
+      <MoneyText
+        amount={purchasePrice == null ? null : convertDisplayAmount(purchasePrice, "usd", displayCurrencyCode)}
+        currencyCode={displayCurrencyCode}
+        unavailableLabel="Price unavailable"
+        className="buyer-product-price"
+      />
 
       {hasCustomOptions ? (
         <SelectField label={customOptionLabel} value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>

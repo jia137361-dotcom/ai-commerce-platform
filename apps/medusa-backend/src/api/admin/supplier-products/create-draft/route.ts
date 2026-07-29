@@ -9,6 +9,8 @@ import { resolveCurrentStore } from "../../../../lib/store-context"
 import { convertCnyToUsd } from "../../../../lib/pricing"
 import { normalizeShipFromCountryCode } from "../../../../lib/ship-from-country"
 import { getBasicProduct } from "../../../../modules/suppliers/s2bdiy/s2bdiy-product"
+import { ensureS2bProductCategories } from "../../../../modules/suppliers/services/supplier-sync-service"
+import { listMarketRegionSummaries } from "../../../../lib/product-regions"
 
 type CreateDraftBody = {
   supplier_product_id: string
@@ -120,15 +122,32 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       }
     }
 
-    // Calculate retail price from S2BDIY CNY purchase price using the fixed 2.3x markup.
+    // Calculate each retail price from the matching S2BDIY SKU purchase price.
     const purchasePriceCny = Number(sp.purchase_price) || 0
-    const retailPriceUsd = priceFromCny(purchasePriceCny)
+    const variantCosts = (variants as any[])
+      .map((variant) => Number(variant.cost))
+      .filter((cost) => Number.isFinite(cost) && cost > 0)
+    const basePurchasePriceCny = variantCosts.length ? Math.min(...variantCosts) : purchasePriceCny
+    const retailPriceUsd = priceFromCny(basePurchasePriceCny)
     const colorImages = readColorImages(sp, supplierRaw)
     const allImages = Array.from(new Set([
       ...colorImages.flatMap((entry) => entry.images),
       readString(sp.product_show_master_image),
     ].filter((url): url is string => Boolean(url))))
     const categoryPath = readCategoryPath(sp, supplierRaw)
+    const supplierCategories = (Array.isArray(supplierRaw.categorys) ? supplierRaw.categorys : [])
+      .map(readRecord)
+      .flatMap((row) => {
+        const id = Number(row.id)
+        const name = readString(row.name)
+        if (!Number.isFinite(id) || !name) return []
+        return [{ id, name, en_name: readString(row.en_name) ?? undefined }]
+      })
+    const syncedCategoryIds = supplierCategories.length
+      ? await ensureS2bProductCategories(storeCoreService, storeId, supplierCategories)
+      : []
+    const regions = await listMarketRegionSummaries(req.scope)
+    const sellableCountryCodes = [...new Set(regions.flatMap((region) => region.country_codes))]
     const shipFromCountry = normalizeShipFromCountryCode(sp.produce_country) ?? normalizeShipFromCountryCode(sp.warehouse_name)
 
     // Build variant rows for mc_product
@@ -154,9 +173,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       status: "draft",
       source: "manual",
       price: retailPriceUsd,
-      cost: purchasePriceCny,
+      cost: basePurchasePriceCny,
       tags: [],
-      category_ids: body.category_ids ?? [],
+      category_ids: body.category_ids?.length ? body.category_ids : [...syncedCategoryIds].reverse(),
       supplier_id: sp.supplier_id,
       basic_product_id: basicProductId,
       platform_product_id: String(sp.supplier_product_id ?? ""),
@@ -169,14 +188,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         synced_from_supplier: true,
         import_source: "s2bdiy_supplier",
         supplier_name: sp.name,
-        purchase_price_cny: purchasePriceCny,
+        purchase_price_cny: basePurchasePriceCny,
         retail_price_usd: retailPriceUsd,
         category_level_1: categoryPath[0] ?? null,
         category_level_2: categoryPath[1] ?? null,
         product_type: sp.basic_product_en_name ?? sp.name ?? null,
         category_path: categoryPath,
         warehouse_region: sp.warehouse_name ?? sp.produce_country ?? shipFromCountry ?? null,
-        sellable_country_codes: shipFromCountry ? [shipFromCountry] : [],
+        sellable_country_codes: sellableCountryCodes,
         source_product_id: basicProductId,
         image_urls: allImages,
         s2b_color_images: colorImages,

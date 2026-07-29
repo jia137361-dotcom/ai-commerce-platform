@@ -6,6 +6,7 @@ import { resolveNativeBridgeForPublish } from "../../../../lib/native-product-br
 import { productNeedsCartBridgeBackfill, readRecord, readString } from "../../../../lib/product-cart-bridge"
 import { getMcProductById, getStoreCoreService, normalizeProduct } from "../../../_helpers/store-core"
 import { listImportedDrafts } from "../../../../lib/s2b-product-import/service"
+import { ensureCurrentStoreS2bCategoryIds } from "../../../../lib/s2b-product-categories"
 
 async function publishOne(req: MedusaRequest, productId: string, storeId: string) {
   const storeCore = getStoreCoreService(req)
@@ -50,6 +51,8 @@ async function publishOne(req: MedusaRequest, productId: string, storeId: string
       published_from_import_at: new Date().toISOString(),
     },
   }
+  const categoryIds = await ensureCurrentStoreS2bCategoryIds(storeCore, storeId, product as Record<string, unknown>)
+  if (categoryIds?.length) updateData.category_ids = categoryIds
 
   if (bridge.variantMappings?.length && Array.isArray(product.variants)) {
     const mappings = new Map(

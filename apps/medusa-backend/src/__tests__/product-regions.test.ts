@@ -3,9 +3,15 @@ import {
   mergeSupportedRegionIdsIntoMetadata,
   resolveProductSupportedRegionIds,
   resolveRegionIdForCountry,
+  S2B_SHIPPING_COUNTRY_CODES,
 } from "../lib/product-regions"
 
 describe("product-regions", () => {
+  it("includes all non-sanctioned S2B shipping destinations", () => {
+    expect(S2B_SHIPPING_COUNTRY_CODES).toHaveLength(243)
+    expect(S2B_SHIPPING_COUNTRY_CODES).toContain("my")
+    expect(S2B_SHIPPING_COUNTRY_CODES).not.toContain("ru")
+  })
   it("reads supported_region_ids from metadata", () => {
     expect(
       resolveProductSupportedRegionIds({

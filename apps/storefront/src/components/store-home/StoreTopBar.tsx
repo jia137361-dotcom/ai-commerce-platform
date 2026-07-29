@@ -10,6 +10,8 @@ import {
 import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { AccountHoverPanel } from "./AccountHoverPanel"
 import { MobileHomeHeader } from "./MobileHomeHeader"
+import { CHECKOUT_COUNTRIES } from "../../pages/checkout/checkout-countries"
+import { useBuyerDisplayPreferences, writeBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
 
 type StoreTopBarProps = {
   settings: BuyerStoreSettings
@@ -29,15 +31,7 @@ type StoreTopBarProps = {
   storeHref?: string
 }
 
-const SHIP_TO_OPTIONS = [
-  { code: "us", label: "USA" },
-  { code: "cn", label: "China" },
-  { code: "ca", label: "Canada" },
-  { code: "au", label: "Australia" },
-  { code: "gb", label: "UK" },
-  { code: "de", label: "Germany" },
-  { code: "jp", label: "Japan" },
-]
+const SHIP_TO_OPTIONS = CHECKOUT_COUNTRIES.map((country) => ({ code: country.code, label: country.name }))
 
 const CitigooLogo = () => (
   <span className="buyer-platform-logo">
@@ -58,11 +52,12 @@ export function StoreTopBar({
   activeCategoryId = "all",
   onCategoryChange,
   showCategoryRow = false,
-  shipToCountry = "us",
+  shipToCountry = "",
   onShipToCountryChange,
   storeHref,
 }: StoreTopBarProps) {
   const auth = useBuyerAuth()
+  const displayPreferences = useBuyerDisplayPreferences()
   const { locale, toggleLocale, t } = useBuyerLocale()
   const accountHref = auth.customer ? "/account" : "/account/sign-in"
   const brand = settings.brandName?.trim() || "Store"
@@ -92,10 +87,18 @@ export function StoreTopBar({
   }, [])
 
   const showMarketplaceNav = marketplaceMode && path.startsWith("/marketplace")
-  const shipTo = SHIP_TO_OPTIONS.find((option) => option.code === shipToCountry) ?? SHIP_TO_OPTIONS[0]
+  const resolvedShipToCountry = shipToCountry || displayPreferences.countryCode
+  const shipTo = SHIP_TO_OPTIONS.find((option) => option.code === resolvedShipToCountry) ?? SHIP_TO_OPTIONS[0]
   const selectedStoreValue =
     stores.find((store) => store.storeId === settings.storeId)?.storeId ??
     (marketplaceMode ? "marketplace" : "")
+  const selectedStore = stores.find((store) => store.storeId === selectedStoreValue)
+  const selectedStoreHref = selectedStore?.slug
+    ? `/shops/${encodeURIComponent(selectedStore.slug)}`
+    : selectedStoreValue === "marketplace"
+      ? "/marketplace"
+      : currentStoreHref
+  const selectedStoreName = selectedStore?.brandName || selectedStore?.name || (marketplaceMode ? "All stores" : brand)
   const searchTerm = searchValue ?? localSearch
   const handleSearchChange = (value: string) => {
     if (onSearchChange) onSearchChange(value)
@@ -132,6 +135,11 @@ export function StoreTopBar({
     window.location.assign(href)
   }
 
+  const updateShipTo = (countryCode: string) => {
+    writeBuyerDisplayPreferences({ countryCode })
+    onShipToCountryChange?.(countryCode)
+  }
+
   const categoryTabs =
     categories.length > 0
       ? [{ id: "all", label: "All" }, ...categories.slice(0, 8).map((c) => ({ id: String(c.id), label: c.enName || c.name }))]
@@ -165,10 +173,12 @@ export function StoreTopBar({
         <MobileHomeHeader
           brandName="Citigoo"
           shipToCountry={shipTo.code}
-          onShipToCountryChange={onShipToCountryChange}
+          onShipToCountryChange={updateShipTo}
           shipToOptions={SHIP_TO_OPTIONS}
           stores={stores}
           currentStoreId={selectedStoreValue}
+          currentStoreHref={selectedStoreHref}
+          currentStoreName={selectedStoreName}
           onStoreChange={openStore}
         />
         {showMobileSearch ? searchForm : null}
@@ -187,7 +197,7 @@ export function StoreTopBar({
               <select
                 aria-label="Ship to country"
                 value={shipTo.code}
-                onChange={(event) => onShipToCountryChange?.(event.target.value)}
+                onChange={(event) => updateShipTo(event.target.value)}
               >
                 {SHIP_TO_OPTIONS.map((option) => (
                   <option key={option.code} value={option.code}>{option.label}</option>
@@ -196,8 +206,11 @@ export function StoreTopBar({
             </div>
           </div>
 
-          <label className="buyer-store-selector">
-            <span>Stores</span>
+          <div className="buyer-store-selector">
+            <a href={selectedStoreHref} aria-label={`Open ${selectedStoreName} store`}>
+              <span>Stores</span>
+              <strong>{selectedStoreName}</strong>
+            </a>
             <select
               aria-label="Choose store"
               value={selectedStoreValue}
@@ -210,7 +223,7 @@ export function StoreTopBar({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
           <span className="buyer-store-topbar-spacer" aria-hidden="true" />
 

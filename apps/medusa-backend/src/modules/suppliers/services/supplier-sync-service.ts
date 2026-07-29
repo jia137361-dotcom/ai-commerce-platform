@@ -11,18 +11,23 @@ export type SyncContext = {
 async function ensureCategory(
   storeCoreService: StoreCoreModuleService,
   storeId: string,
-  s2bCategory: { id: number; name: string; en_name?: string }
+  s2bCategory: { id: number; name: string; en_name?: string },
+  level: number,
+  parentId: string | null
 ): Promise<string> {
   // Check if category already exists with this supplier_category_id
   const existing = (await storeCoreService.listProductCategories({
     store_id: storeId,
   } as any)) as any[]
 
-  const match = existing.find((c: any) => c.supplier_category_id === String(s2bCategory.id))
+  const match = existing.find((c: any) =>
+    c.supplier_category_id === String(s2bCategory.id) &&
+    (c.parent_id ?? null) === parentId
+  )
   if (match) return match.id
 
   const name = s2bCategory.en_name || s2bCategory.name || `Category ${s2bCategory.id}`
-  const slug = (s2bCategory.en_name || `cat-${s2bCategory.id}`)
+  const slug = `${parentId ?? "root"}-${s2bCategory.en_name || `cat-${s2bCategory.id}`}`
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 
   // Check by slug to avoid duplicates
@@ -32,7 +37,11 @@ async function ensureCategory(
     if (!bySlug.supplier_category_id) {
       await storeCoreService.updateProductCategories({
         selector: { id: bySlug.id },
-        data: { supplier_category_id: String(s2bCategory.id) } as any,
+        data: {
+          supplier_category_id: String(s2bCategory.id),
+          parent_id: parentId,
+          level,
+        } as any,
       })
     }
     return bySlug.id
@@ -43,6 +52,9 @@ async function ensureCategory(
     name,
     slug,
     description: s2bCategory.name !== name ? s2bCategory.name : null,
+    parent_id: parentId,
+    supplier_category_id: String(s2bCategory.id),
+    level,
   } as any)
 
   // Set supplier_category_id (column exists in DB but may not be in model)
@@ -56,6 +68,27 @@ async function ensureCategory(
   }
 
   return created.id
+}
+
+export async function ensureS2bProductCategories(
+  storeCoreService: StoreCoreModuleService,
+  storeId: string,
+  categories: Array<{ id: number; name: string; en_name?: string }>
+) {
+  const categoryIds: string[] = []
+  let parentId: string | null = null
+  for (let index = 0; index < categories.length; index += 1) {
+    const categoryId = await ensureCategory(
+      storeCoreService,
+      storeId,
+      categories[index],
+      index + 1,
+      parentId
+    )
+    categoryIds.push(categoryId)
+    parentId = categoryId
+  }
+  return categoryIds
 }
 
 export async function syncBasicProduct(
@@ -210,14 +243,7 @@ export async function syncBasicProduct(
   // Sync categories from S2BDIY
   const categoryIds: string[] = []
   if (data.categorys?.length && storeId) {
-    for (const s2bCat of data.categorys) {
-      try {
-        const catId = await ensureCategory(storeCoreService, storeId, s2bCat)
-        categoryIds.push(catId)
-      } catch {
-        // Skip category sync errors
-      }
-    }
+    categoryIds.push(...await ensureS2bProductCategories(storeCoreService, storeId, data.categorys))
   }
 
   return {

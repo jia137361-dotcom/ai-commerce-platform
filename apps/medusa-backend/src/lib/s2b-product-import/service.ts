@@ -3,7 +3,7 @@ import type StoreCoreModuleService from "../../modules/store-core/service"
 import { STORE_CORE_MODULE } from "../../modules/store-core"
 import { syncBasicProduct } from "../../modules/suppliers/services/supplier-sync-service"
 import { createMcProduct, normalizeProduct } from "../../api/_helpers/store-core"
-import { listMarketRegionSummaries, resolveRegionIdForCountry } from "../product-regions"
+import { listMarketRegionSummaries, resolveRegionIdForCountry, S2B_SHIPPING_COUNTRY_CODES } from "../product-regions"
 import { normalizeShipFromCountryCode } from "../ship-from-country"
 import { parseCsv, rowsToCsv, type S2bImportCsvRow } from "./csv"
 
@@ -25,12 +25,9 @@ export type S2bImportPreview = {
 }
 
 const DEFAULT_SUPPLIER_ID = "sup_s2bdiy"
-const DEFAULT_SELLABLE_COUNTRIES = ["US", "AU", "CA"]
+const DEFAULT_SELLABLE_COUNTRIES = S2B_SHIPPING_COUNTRY_CODES.map((code) => code.toUpperCase())
 const BLOCKED_COUNTRIES = new Set(["CU", "IR", "KP", "SY"])
-const KNOWN_COUNTRIES = new Set([
-  "US", "AU", "CA", "GB", "DE", "FR", "IT", "JP", "SG", "CN", "NZ", "ES", "NL", "SE",
-  "NO", "DK", "FI", "IE", "BE", "CH", "AT", "PT", "MX", "BR", "KR", "HK", "TW",
-])
+const KNOWN_COUNTRIES = new Set(DEFAULT_SELLABLE_COUNTRIES)
 const VALID_ACTIONS = new Set(["draft", "publish", "skip"])
 
 const clean = (value: unknown) => String(value ?? "").trim()

@@ -1264,9 +1264,12 @@ export const fetchProductCategories = async (): Promise<LoadResult<BuyerCategory
   }
 }
 
-export const fetchProducts = async (): Promise<LoadResult<StoreProduct[]>> => {
+export const fetchProducts = async (options?: { countryCode?: string }): Promise<LoadResult<StoreProduct[]>> => {
   try {
-    const payload = await apiFetch<ApiProducts>("/store/products")
+    const params = new URLSearchParams()
+    if (options?.countryCode?.trim()) params.set("country_code", options.countryCode.trim().toLowerCase())
+    const query = params.toString()
+    const payload = await apiFetch<ApiProducts>(`/store/products${query ? `?${query}` : ""}`)
     const products = (payload.products ?? []).map(normalizeBuyerProduct)
     return { data: products, source: "backend" }
   } catch (error) {

@@ -17,15 +17,19 @@ export type RegionSummary = {
   country_codes: string[]
 }
 
+const ISO_SHIPPING_COUNTRY_CODES = `af ax al dz as ad ao ai ag ar am aq aw au at az bs bh bd bb be bz bj bm bt bo bq ba bw bv br io vg bn bg bf bi cv kh cm ca ky cf td cl cn cx cc co km kr cg cd ck cr ci hr cw cy cz dk dj dm do ec eg sv gq er ee sz et fk fo fj fi fr gf pf tf ga gm ge de gh gi gr gl gd gp gu gt gg gn gw gy ht hm va hn hk hu is in id iq ie im il it jm jp je jo kz ke ki kw kg la lv lb ls lr ly li lt lu mo mg mw my mv ml mt mh mq mr mu yt mx fm md mc mn me ms ma mz mm na nr np nl nc nz ni ne ng nu nf mk mp no om pk pw ps pa pg py pe ph pn pl pt pr qa re ro rw bl sh kn lc mf pm vc ws sm st sa sn rs sc sl sg sx sk si sb so za gs ss es lk sd sr sj se ch tw tj tz th tl tg tk to tt tn tr tm tc tv ug ua ae gb um us vi uy uz vu ve vn wf eh ye zm zw`
+
+export const S2B_SHIPPING_COUNTRY_CODES = ISO_SHIPPING_COUNTRY_CODES.split(" ")
+
 export const MARKET_REGION_DEFINITIONS = [
   { name: "United States", currency_code: "usd", countries: ["us"] },
   { name: "China", currency_code: "cny", countries: ["cn"] },
   {
     name: "International",
     currency_code: "usd",
-    countries: ["gb", "de", "fr", "it", "ca", "au", "jp", "sg"],
+    countries: S2B_SHIPPING_COUNTRY_CODES.filter((code) => code !== "us" && code !== "cn"),
   },
-] as const
+]
 
 const readCountryCode = (country: RegionCountry) => {
   if (typeof country === "string") return country.trim().toLowerCase()

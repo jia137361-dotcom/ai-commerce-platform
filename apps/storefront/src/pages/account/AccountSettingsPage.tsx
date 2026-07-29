@@ -24,10 +24,12 @@ import {
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { CHECKOUT_COUNTRIES } from "../checkout/checkout-countries"
 import { customerAddressToInput } from "./account-settings-state"
+import { writeBuyerDisplayPreferences, type DisplayCurrencyCode } from "../../lib/buyer-display-preferences"
 
 export type AccountSettingsSlug = "addresses" | "payment-methods" | "country-region" | "currency" | "coupons" | "following"
 
 const currencies = [
+  { code: "auto", label: "Auto", symbol: "◎" },
   { code: "usd", label: "USD", symbol: "$" },
   { code: "eur", label: "EUR", symbol: "€" },
   { code: "gbp", label: "GBP", symbol: "£" },
@@ -36,6 +38,7 @@ const currencies = [
   { code: "aud", label: "AUD", symbol: "A$" },
   { code: "jpy", label: "JPY", symbol: "¥" },
   { code: "sgd", label: "SGD", symbol: "S$" },
+  { code: "myr", label: "MYR", symbol: "RM" },
 ]
 
 const emptyAddress: BuyerCustomerAddressInput = {
@@ -130,7 +133,11 @@ function PreferenceList({ kind }: { kind: "country" | "currency" }) {
   const save = async (code: string) => {
     setSelected(code); setSaving(true); setMessage(undefined)
     try {
-      await updateBuyerPreferences(kind === "country" ? { countryCode: code } : { currencyCode: code })
+      const update = kind === "country"
+        ? { countryCode: code }
+        : { currencyCode: code as DisplayCurrencyCode }
+      await updateBuyerPreferences(update)
+      writeBuyerDisplayPreferences(update)
       await auth.refreshCustomer()
       setMessage("Preference saved to your buyer account.")
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Unable to save preference.") }
@@ -139,7 +146,7 @@ function PreferenceList({ kind }: { kind: "country" | "currency" }) {
 
   return <SettingsFrame title={kind === "country" ? "Country & region" : "Currency"}>
     <div className="buyer-preference-list" aria-busy={saving}>{options.map((option) => <button key={option.code} type="button" className={selected === option.code ? "selected" : ""} onClick={() => void save(option.code)}><span>{option.label}</span><small>{option.symbol}</small>{selected === option.code ? <strong aria-label="Selected">✓</strong> : null}</button>)}</div>
-    <p className="buyer-account-setting-note">{kind === "country" ? "Used as the default country for new delivery addresses and checkout. Shipping availability still depends on the cart region." : "Saved as your display preference. Current cart prices and payment remain in the currency supplied by the store region; no exchange rate is invented."}</p>
+    <p className="buyer-account-setting-note">{kind === "country" ? "Used for product availability and as the default country for checkout." : "Auto follows your delivery country. Display conversion does not change the cart or payment currency."}</p>
     {message ? <p className={message.startsWith("Preference saved") ? "buyer-account-success" : "buyer-account-error"} role="status">{message}</p> : null}
   </SettingsFrame>
 }

@@ -2,7 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../lib/store-context"
 import { resolveProductRequiresShipping } from "../../../lib/product-shipping"
 import { attachSupportedRegionsToProducts } from "../../../lib/product-regions"
-import { isProductAvailableInRegion, listMarketRegionSummaries, resolveRegionIdForCountry } from "../../../lib/product-regions"
+import { ensureMarketRegions, isProductAvailableInRegion, resolveRegionIdForCountry } from "../../../lib/product-regions"
 import {
   getProductReviewSummaries,
   getStoreCoreService,
@@ -10,6 +10,7 @@ import {
 } from "../../_helpers/store-core"
 import { normalizeShipFromCountryCode } from "../../../lib/ship-from-country"
 import { isStorefrontProductVisible } from "../../../lib/storefront-product-visibility"
+import { S2B_SHIPPING_COUNTRY_CODES } from "../../../lib/product-regions"
 
 const storefrontProductPayload = (product: any) => ({
   ...product,
@@ -25,7 +26,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const countryCode = typeof req.query.country_code === "string" ? req.query.country_code.trim().toLowerCase() : ""
   let requestedRegionId = typeof req.query.region_id === "string" ? req.query.region_id.trim() : ""
   if (countryCode && !requestedRegionId) {
-    const regions = await listMarketRegionSummaries(req.scope)
+    const regions = await ensureMarketRegions(req.scope)
     requestedRegionId = resolveRegionIdForCountry(regions, countryCode) ?? ""
   }
 
@@ -56,7 +57,11 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const countries = Array.isArray(metadata.sellable_country_codes)
       ? metadata.sellable_country_codes.map((value) => String(value).trim().toLowerCase())
       : []
-    const countryAllowed = !countryCode || !countries.length || countries.includes(countryCode)
+    const isLegacyS2bSupplierProduct = metadata.import_source === "s2bdiy_supplier"
+    const countryAllowed = !countryCode ||
+      (isLegacyS2bSupplierProduct
+        ? S2B_SHIPPING_COUNTRY_CODES.includes(countryCode)
+        : !countries.length || countries.includes(countryCode))
     return (
       isStorefrontProductVisible(product as Record<string, unknown>) &&
       countryAllowed &&

@@ -20,6 +20,7 @@ import {
   parseOptionalNumber,
   sendError,
 } from "../../_helpers/store-core"
+import { ensureCurrentStoreS2bCategoryIds } from "../../../lib/s2b-product-categories"
 
 export const loadStoreProduct = async (
   storeCoreService: ReturnType<typeof getStoreCoreService>,
@@ -134,7 +135,15 @@ export const putStoreProductByIdHandler = async (req: MedusaRequest, res: Medusa
       store_id: storeId,
     })
     if (categories.length !== (data.category_ids as string[]).length) {
-      return sendError(res, 400, "VALIDATION_ERROR", "category_ids must belong to current store")
+      const repairedCategoryIds = await ensureCurrentStoreS2bCategoryIds(
+        storeCoreService,
+        storeId,
+        product as Record<string, unknown>
+      )
+      if (!repairedCategoryIds?.length) {
+        return sendError(res, 400, "VALIDATION_ERROR", "category_ids must belong to current store")
+      }
+      data.category_ids = repairedCategoryIds
     }
   }
 
