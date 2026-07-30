@@ -26,3 +26,13 @@ export const buildProductDetailHref = (product: StoreProduct) => {
   const query = params.toString()
   return `/products/${encodeURIComponent(product.id)}${query ? `?${query}` : ""}`
 }
+
+export const buildStoreMessagesHref = (storeId?: string | null, orderId?: string | null) => {
+  const params = new URLSearchParams()
+  const normalizedStoreId = storeId?.trim()
+  const normalizedOrderId = orderId?.trim()
+  if (normalizedStoreId) params.set("store_id", normalizedStoreId)
+  if (normalizedOrderId) params.set("orderId", normalizedOrderId)
+  const query = params.toString()
+  return `/account/messages${query ? `?${query}` : ""}`
+}

@@ -153,6 +153,9 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
         imageUrl: realProduct.mockupImageUrl || realProduct.imageUrl,
         price: realProduct.numericPrice,
         href: buildProductDetailHref(realProduct),
+      }, {
+        customerId: auth.customer?.id,
+        email: auth.customer?.email,
       })
 
       if (auth.customer) {

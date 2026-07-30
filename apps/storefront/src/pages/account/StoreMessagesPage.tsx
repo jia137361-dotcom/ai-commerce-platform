@@ -8,36 +8,57 @@ import { Card } from "../../components/ui/Card"
 import { ErrorState, LoadingState } from "../../components/ui/States"
 import {
   fetchBuyerStoreMessages,
+  getScopedBuyerStoreId,
   sendBuyerStoreMessage,
   type BuyerStoreMessage,
 } from "../../lib/buyer-api"
+import { buildStoreMessagesHref } from "../../lib/storefront-links"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type StoreMessagesPageProps = {
   cartCount: number
   orderId?: string
+  storeId?: string
 }
 
-export function StoreMessagesPage({ cartCount, orderId }: StoreMessagesPageProps) {
+const readStoreIdFromUrl = () => {
+  if (typeof window === "undefined") return undefined
+  return new URLSearchParams(window.location.search).get("store_id")?.trim() || undefined
+}
+
+export function StoreMessagesPage({ cartCount, orderId, storeId }: StoreMessagesPageProps) {
   const auth = useBuyerAuth()
-  const { settings, marketplaceMode } = useBuyerPageSettings()
+  const [requestedStoreId] = useState(() => storeId?.trim() || readStoreIdFromUrl() || getScopedBuyerStoreId())
+  const { settings, marketplaceMode } = useBuyerPageSettings({ storeId: requestedStoreId })
   const [messages, setMessages] = useState<BuyerStoreMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
+  const messageStoreId = settings.storeId?.trim() || requestedStoreId
 
   useEffect(() => {
     if (!auth.customer) {
       setLoading(false)
       return
     }
+    let active = true
     setLoading(true)
-    void fetchBuyerStoreMessages()
-      .then(setMessages)
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load messages"))
-      .finally(() => setLoading(false))
-  }, [auth.customer])
+    setError(undefined)
+    void fetchBuyerStoreMessages({ storeId: messageStoreId })
+      .then((next) => {
+        if (active) setMessages(next)
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Unable to load messages")
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [auth.customer?.id, messageStoreId])
 
   const submit = async () => {
     const body = draft.trim()
@@ -45,9 +66,9 @@ export function StoreMessagesPage({ cartCount, orderId }: StoreMessagesPageProps
     setSending(true)
     setError(undefined)
     try {
-      await sendBuyerStoreMessage({ body, orderId })
+      await sendBuyerStoreMessage({ body, orderId, storeId: messageStoreId })
       setDraft("")
-      const next = await fetchBuyerStoreMessages()
+      const next = await fetchBuyerStoreMessages({ storeId: messageStoreId })
       setMessages(next)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to send message")
@@ -74,7 +95,7 @@ export function StoreMessagesPage({ cartCount, orderId }: StoreMessagesPageProps
         <Card as="section" className="buyer-messages-auth">
           <h2>Sign in to message the seller</h2>
           <p>Your conversation history stays tied to your buyer account.</p>
-          <Button href={`/account/sign-in?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`}>
+          <Button href={`/account/sign-in?returnTo=${encodeURIComponent(buildStoreMessagesHref(messageStoreId, orderId))}`}>
             Sign in
           </Button>
         </Card>

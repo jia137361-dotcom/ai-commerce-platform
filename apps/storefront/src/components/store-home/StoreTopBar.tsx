@@ -7,8 +7,10 @@ import {
   type MarketplaceStore,
   type SupplierCatalogCategory,
 } from "../../lib/buyer-api"
-import { buildSettingsStoreHref } from "../../lib/storefront-links"
+import { buildSettingsStoreHref, buildStoreMessagesHref } from "../../lib/storefront-links"
 import { AccountHoverPanel } from "./AccountHoverPanel"
+import { BrowseHistoryPanel } from "./BrowseHistoryPanel"
+import { FeatureMenuPanel } from "./FeatureMenuPanel"
 import { MobileHomeHeader } from "./MobileHomeHeader"
 import { CHECKOUT_COUNTRIES } from "../../pages/checkout/checkout-countries"
 import { useBuyerDisplayPreferences, writeBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
@@ -65,6 +67,10 @@ export function StoreTopBar({
   const [localSearch, setLocalSearch] = useState("")
   const [stores, setStores] = useState<MarketplaceStore[]>([])
   const currentStoreHref = storeHref ?? buildSettingsStoreHref(settings)
+  const storeMessagesHref = buildStoreMessagesHref(settings.storeId)
+  const accountMessagesHref = auth.customer
+    ? storeMessagesHref
+    : `/account/sign-in?returnTo=${encodeURIComponent(storeMessagesHref)}`
 
   useEffect(() => {
     const sync = () => setPath(window.location.pathname)
@@ -228,22 +234,21 @@ export function StoreTopBar({
           <span className="buyer-store-topbar-spacer" aria-hidden="true" />
 
           <div className="buyer-store-actions buyer-store-actions--temu">
-            <div className="buyer-store-account buyer-store-account--dropdown">
-              <a href={accountHref} className="buyer-store-account-trigger">
-                <span className="buyer-store-avatar" aria-hidden="true">
-                  ◎
-                </span>
-                <div>
-                  <small>Orders &amp; Account</small>
-                  <strong>{auth.isLoading ? t("navMe") : auth.customer ? t("navMe") : t("signIn")}</strong>
-                </div>
+            <div className="buyer-store-account buyer-store-account--dropdown buyer-store-history">
+              <a href="/marketplace" className="buyer-store-icon-trigger" aria-label="Browsing history">
+                <span className="buyer-store-history-icon" aria-hidden="true" />
               </a>
-              <AccountHoverPanel />
+              <BrowseHistoryPanel />
             </div>
-            <a className="buyer-store-support" href="/help">
-              <span aria-hidden="true" />
-              <strong>Support</strong>
+            <a href={accountMessagesHref} className="buyer-store-icon-trigger buyer-store-message" aria-label={`Message ${brand}`}>
+              <span className="buyer-store-message-icon" aria-hidden="true" />
             </a>
+            <div className="buyer-store-account buyer-store-account--dropdown buyer-store-features">
+              <button className="buyer-store-icon-trigger" type="button" aria-label="Open feature menu">
+                <span className="buyer-store-feature-icon" aria-hidden="true" />
+              </button>
+              <FeatureMenuPanel />
+            </div>
             <button
               className="buyer-store-language"
               type="button"
@@ -257,6 +262,14 @@ export function StoreTopBar({
               <i aria-hidden="true" />
               <span>{cartCount}</span>
             </a>
+            <div className="buyer-store-account buyer-store-account--dropdown buyer-store-account--right">
+              <a href={accountHref} className="buyer-store-account-trigger" aria-label="Account menu">
+                <span className="buyer-store-avatar" aria-hidden="true">
+                  <span />
+                </span>
+              </a>
+              <AccountHoverPanel />
+            </div>
           </div>
         </div>
 

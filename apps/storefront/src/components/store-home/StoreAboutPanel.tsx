@@ -1,5 +1,6 @@
 import { useState } from "react"
 import type { BuyerStoreSettings } from "../../lib/buyer-api"
+import { buildStoreMessagesHref } from "../../lib/storefront-links"
 
 export type StoreInformationSection =
   | "shop-info"
@@ -89,6 +90,7 @@ export function StoreInformationContent({ section, settings }: { section: StoreI
 
 export function StoreAboutPanel({ settings }: { settings: BuyerStoreSettings }) {
   const [activeSection, setActiveSection] = useState<StoreInformationSection>("shop-info")
+  const messagesHref = buildStoreMessagesHref(settings.storeId)
 
   return (
     <section className="buyer-shop-about" id="about" aria-label="About this shop">
@@ -115,7 +117,7 @@ export function StoreAboutPanel({ settings }: { settings: BuyerStoreSettings }) 
           <span aria-hidden="true">?</span>
           <h3>Customer support</h3>
           {settings.supportEmail ? <a href={`mailto:${settings.supportEmail}`}>{settings.supportEmail}</a> : <p>Seller support email unavailable.</p>}
-          <a className="buyer-shop-support-action" href="/account/messages">Message the seller</a>
+          <a className="buyer-shop-support-action" href={messagesHref}>Message the seller</a>
           <small>Signed-in buyers can chat with the store team about orders and products.</small>
         </div>
       </aside>

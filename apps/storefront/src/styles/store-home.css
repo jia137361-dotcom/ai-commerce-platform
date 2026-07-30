@@ -116,28 +116,40 @@
 }
 
 .buyer-store-avatar {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #e8eef7;
-  border: 3px solid #cbd7e8;
-  color: #6b7f9d;
-  font-size: 20px;
-}
-
-.buyer-store-support {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.buyer-store-support span {
-  width: 19px;
-  height: 16px;
+  position: relative;
   display: inline-block;
-  border: 2px solid #111827;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+  color: #111827;
+}
+
+.buyer-store-avatar::before,
+.buyer-store-avatar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 2px solid currentColor;
+  background: transparent;
+}
+
+.buyer-store-avatar::before {
+  top: 8px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.buyer-store-avatar::after {
+  bottom: 8px;
+  width: 19px;
+  height: 10px;
+  border-radius: 999px 999px 6px 6px;
+  border-bottom: 0;
 }
 
 .buyer-store-language {
@@ -677,8 +689,7 @@
     gap: 12px;
   }
 
-  .buyer-store-account span:last-child,
-  .buyer-store-support strong {
+  .buyer-store-account span:last-child {
     display: none;
   }
 
@@ -722,8 +733,7 @@
     font-size: 12px;
   }
 
-  .buyer-store-language,
-  .buyer-store-support {
+  .buyer-store-language {
     display: none;
   }
 
@@ -2136,6 +2146,119 @@ button.buyer-shop-product-customize:disabled,
   display: grid;
 }
 
+.buyer-store-icon-trigger {
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+}
+
+.buyer-store-icon-trigger:hover,
+.buyer-store-account--dropdown:focus-within .buyer-store-icon-trigger {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.buyer-store-account-trigger {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.buyer-store-account-trigger:hover .buyer-store-avatar,
+.buyer-store-account--dropdown:focus-within .buyer-store-avatar {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.buyer-store-history-icon,
+.buyer-store-feature-icon,
+.buyer-store-message-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  position: relative;
+}
+
+.buyer-store-history-icon {
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.buyer-store-history-icon::before,
+.buyer-store-history-icon::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  width: 2px;
+  background: currentColor;
+  transform-origin: bottom center;
+}
+
+.buyer-store-history-icon::before {
+  height: 6px;
+}
+
+.buyer-store-history-icon::after {
+  height: 5px;
+  transform: rotate(48deg);
+}
+
+.buyer-store-feature-icon {
+  display: grid;
+  grid-template-columns: repeat(2, 7px);
+  grid-template-rows: repeat(2, 7px);
+  gap: 4px;
+}
+
+.buyer-store-feature-icon::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: currentColor;
+  box-shadow: 11px 0 0 currentColor, 0 11px 0 currentColor, 11px 11px 0 currentColor;
+}
+
+.buyer-store-message-icon {
+  border: 2px solid currentColor;
+  border-radius: 9px;
+}
+
+.buyer-store-message-icon::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 5px;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 5px 0 currentColor;
+}
+
+.buyer-store-message-icon::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  background: #fff;
+  transform: rotate(-28deg);
+}
+
 .buyer-account-panel {
   display: none;
   position: absolute;
@@ -2156,15 +2279,45 @@ button.buyer-shop-product-customize:disabled,
   gap: 4px;
 }
 
-.buyer-account-panel a {
-  display: block;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 650;
+.buyer-account-panel-links header,
+.buyer-account-panel-history header {
+  display: grid;
+  gap: 4px;
+  padding: 4px 8px 10px;
+  border-bottom: 1px solid #f2f4f7;
 }
 
-.buyer-account-panel a:hover {
+.buyer-account-panel-links header strong,
+.buyer-account-panel-history header strong {
+  font-size: 14px;
+  color: #111827;
+}
+
+.buyer-account-panel-links header span,
+.buyer-account-panel-history header span {
+  font-size: 12px;
+  color: #667085;
+  white-space: normal;
+}
+
+.buyer-account-panel a,
+.buyer-account-panel button {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 650;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.buyer-account-panel a:hover,
+.buyer-account-panel button:hover {
   background: #fff7ed;
 }
 
@@ -2453,8 +2606,7 @@ button.buyer-shop-product-customize:disabled,
 }
 
 .buyer-store-topbar--temu .buyer-store-ship strong,
-.buyer-store-topbar--temu .buyer-store-account strong,
-.buyer-store-topbar--temu .buyer-store-support strong {
+.buyer-store-topbar--temu .buyer-store-account strong {
   font-size: 15px;
 }
 
@@ -2572,8 +2724,7 @@ button.buyer-shop-product-customize:disabled,
   font-size: 14px;
 }
 
-.buyer-store-actions--temu .buyer-store-language,
-.buyer-store-actions--temu .buyer-store-support {
+.buyer-store-actions--temu .buyer-store-language {
   min-height: 40px;
   font-size: 14px;
   font-weight: 700;
@@ -2584,10 +2735,13 @@ button.buyer-shop-product-customize:disabled,
   min-height: 44px;
 }
 
-.buyer-account-panel--mega {
-  width: min(560px, 94vw);
-  grid-template-columns: 1.2fr 1fr;
-  gap: 12px;
+.buyer-account-panel--account,
+.buyer-account-panel--features {
+  width: min(280px, 92vw);
+}
+
+.buyer-account-panel--history {
+  width: min(420px, 92vw);
 }
 
 .buyer-account-panel-history ul {
@@ -2603,6 +2757,14 @@ button.buyer-shop-product-customize:disabled,
   grid-template-columns: 48px 1fr;
   gap: 8px;
   align-items: center;
+}
+
+.buyer-account-panel-history li a strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
 }
 
 .buyer-account-panel-history img,

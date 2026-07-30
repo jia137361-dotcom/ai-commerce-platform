@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { getScopedBuyerStoreId } from "../../lib/buyer-api"
+import { buildStoreMessagesHref } from "../../lib/storefront-links"
 
 type MobileBottomNavProps = {
   cartCount: number
@@ -22,7 +24,8 @@ export function MobileBottomNav({ cartCount, storeHref = "/marketplace" }: Mobil
   }, [])
 
   const accountHref = auth.customer ? "/account" : "/account/sign-in"
-  const messageHref = auth.customer ? "/account/messages" : "/help"
+  const scopedMessageHref = buildStoreMessagesHref(getScopedBuyerStoreId())
+  const messageHref = auth.customer ? scopedMessageHref : `/account/sign-in?returnTo=${encodeURIComponent(scopedMessageHref)}`
   const isHome = path === "/store" || path === "/" || path.startsWith("/shops/")
   const isCart = path.startsWith("/cart")
   const isMessage = path.startsWith("/account/messages") || path.startsWith("/help")

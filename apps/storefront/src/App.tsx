@@ -197,7 +197,8 @@ function App() {
     page = <AccountProfilePage cartCount={cartCount} />
   } else if (path.startsWith("/account/messages")) {
     const orderId = new URLSearchParams(window.location.search).get("orderId") ?? undefined
-    page = <StoreMessagesPage cartCount={cartCount} orderId={orderId} />
+    const storeId = new URLSearchParams(window.location.search).get("store_id") ?? undefined
+    page = <StoreMessagesPage cartCount={cartCount} orderId={orderId} storeId={storeId} />
   } else if (path.startsWith("/account/orders/") && path.endsWith("/tracking")) {
     page = <OrderTrackingPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
   } else if (path.startsWith("/account/orders/")) {

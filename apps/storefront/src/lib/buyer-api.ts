@@ -2874,21 +2874,29 @@ const normalizeStoreMessage = (message: {
   createdAt: message.created_at,
 })
 
-export const fetchBuyerStoreMessages = async () => {
-  const payload = await apiFetch<{ messages?: Array<Record<string, unknown>> }>("/store/messages")
+export const fetchBuyerStoreMessages = async (options?: { storeId?: string }) => {
+  const payload = await storeScopedFetch<{ messages?: Array<Record<string, unknown>> }>(
+    "/store/messages",
+    {},
+    { storeId: options?.storeId }
+  )
   return (payload.messages ?? []).map((message) =>
     normalizeStoreMessage(message as Parameters<typeof normalizeStoreMessage>[0])
   )
 }
 
-export const sendBuyerStoreMessage = async (input: { body: string; orderId?: string }) =>
-  apiFetch<{ message?: Record<string, unknown> }>("/store/messages", {
-    method: "POST",
-    body: JSON.stringify({
-      body: input.body,
-      order_id: input.orderId,
-    }),
-  })
+export const sendBuyerStoreMessage = async (input: { body: string; orderId?: string; storeId?: string }) =>
+  storeScopedFetch<{ message?: Record<string, unknown> }>(
+    "/store/messages",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        body: input.body,
+        order_id: input.orderId,
+      }),
+    },
+    { storeId: input.storeId }
+  )
 
 // ---- Designer SDK ----
 

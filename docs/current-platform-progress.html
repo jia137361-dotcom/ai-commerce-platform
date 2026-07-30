@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ciiverse 当前开发进度审计 - worktree 修正版</title>
+  <style>
+    :root{--bg:#0f172a;--card:#172033;--card2:#111827;--line:#334155;--text:#e5e7eb;--muted:#94a3b8;--done:#22c55e;--partial:#f59e0b;--work:#38bdf8;--runtime:#a78bfa;--backend:#818cf8;--blocked:#ef4444;--todo:#64748b;--unknown:#cbd5e1;--accent:#fb923c}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top left,rgba(251,146,60,.14),transparent 34%),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+    header,main{padding:28px clamp(16px,4vw,48px)}header{border-bottom:1px solid var(--line)}h1{margin:0;font-size:clamp(26px,4vw,44px);letter-spacing:0}h2{margin:0 0 14px;font-size:20px}h3{margin:0 0 8px;font-size:15px}p{margin:0 0 10px;color:var(--muted)}
+    section{margin-bottom:24px}.grid{display:grid;gap:14px}.cards{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.two{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+    .card{background:color-mix(in srgb,var(--card) 92%,black);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 14px 32px rgba(0,0,0,.18)}.warn{border-color:rgba(239,68,68,.65);background:rgba(127,29,29,.22)}
+    .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px 18px;font-size:13px;color:var(--muted)}.meta b{color:#fff}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
+    .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:12px;color:#dbeafe;background:#0b1220;white-space:nowrap}.dot{width:9px;height:9px;border-radius:999px;background:var(--unknown)}
+    .DONE .dot,.dot.DONE{background:var(--done)}.PARTIAL .dot,.dot.PARTIAL{background:var(--partial)}.WORKTREE_ONLY .dot,.dot.WORKTREE_ONLY{background:var(--work)}.RUNTIME_UNVERIFIED .dot,.dot.RUNTIME_UNVERIFIED{background:var(--runtime)}.BACKEND_ONLY .dot,.dot.BACKEND_ONLY{background:var(--backend)}.BLOCKED .dot,.dot.BLOCKED{background:var(--blocked)}.TODO .dot,.dot.TODO{background:var(--todo)}.UNKNOWN .dot,.dot.UNKNOWN{background:var(--unknown)}
+    .stat strong{display:block;font-size:30px;line-height:1}.progress{height:9px;border-radius:99px;background:#0b1220;border:1px solid #263244;overflow:hidden}.bar{height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--blocked),var(--partial),var(--done))}
+    .filters{display:grid;grid-template-columns:2fr repeat(3,minmax(150px,1fr));gap:10px;margin-bottom:12px}input,select{width:100%;border:1px solid var(--line);background:#0b1220;color:var(--text);border-radius:6px;padding:10px;font:inherit}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}table{width:100%;min-width:1280px;border-collapse:collapse;background:rgba(15,23,42,.55)}th,td{padding:10px 11px;border-bottom:1px solid #263244;vertical-align:top;font-size:12px}th{position:sticky;top:0;background:#111827;color:#e2e8f0;text-align:left}td{color:#cbd5e1}tr:hover td{background:rgba(148,163,184,.06)}
+    details summary{cursor:pointer;color:#bfdbfe}.path{display:inline-block;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#93c5fd;vertical-align:bottom}.flow{display:flex;flex-wrap:wrap;gap:8px}.node{flex:1 1 120px;min-width:120px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#101827}.node b{display:block;font-size:13px}.node small{color:var(--muted)}.arrow{align-self:center;color:#64748b}.issue,.change,.rec{border-left:3px solid var(--accent);padding:10px 12px;background:rgba(15,23,42,.72);border-radius:0 8px 8px 0;margin-bottom:10px}.countline{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    @media(max-width:780px){.filters{grid-template-columns:1fr}.arrow{display:none}table{min-width:980px}}
+  </style>
+</head>
+<body>
+  <header>
+    <p>worktree 修正版 · 以当前 working tree 代码为主要事实来源</p>
+    <h1>Ciiverse / ai-commerce-platform 当前开发进度审计</h1>
+    <div class="countline" id="hero"></div>
+  </header>
+  <main>
+    <section class="card warn">
+      <h2>关键修正</h2>
+      <p>上一版报告审计的是主目录 <span class="mono">/Users/Zhuanz/Downloads/ai-commerce-platform</span>，不是本次指定的 worktree。因此上一版对 Coupon、S2B CSV、Backend typecheck 等结论需要废弃。</p>
+      <p>本报告审计路径：<span class="mono">/Users/Zhuanz/Downloads/ai-commerce-platform/.worktrees/ciiverse_0714</span></p>
+    </section>
+
+    <section class="card">
+      <h2>1. 审计信息</h2>
+      <div class="meta" id="auditMeta"></div>
+    </section>
+
+    <section>
+      <h2>2. 总体进度</h2>
+      <div class="grid cards" id="stats"></div>
+      <div class="card" style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><h3>整体完成度</h3><strong id="overall">0%</strong></div>
+        <div class="progress"><div class="bar" id="overallBar"></div></div>
+        <p style="margin-top:10px">统计由 <span class="mono">features</span> 数组自动计算。新增状态：WORKTREE_ONLY 表示存在于未提交/未跟踪 working tree；RUNTIME_UNVERIFIED 表示静态代码存在但未做安全运行验证。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 模块进度</h2>
+      <div class="grid cards" id="modules"></div>
+    </section>
+
+    <section class="card">
+      <h2>4. 功能审计表</h2>
+      <div class="filters">
+        <input id="search" placeholder="搜索 feature / evidence / blocker..." />
+        <select id="module"><option value="">全部模块</option></select>
+        <select id="status"><option value="">全部状态</option></select>
+        <select id="priority"><option value="">全部优先级</option></select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Module</th><th>Feature</th><th>Requirement</th><th>Current implementation</th><th>Status</th><th>%</th><th>Confidence</th><th>Evidence</th><th>Migration / data</th><th>Runtime evidence</th><th>Blocker</th><th>Next action</th><th>Priority</th><th>Commit state</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="grid two">
+      <div class="card"><h2>5. Buyer 流程图</h2><div class="flow" id="buyerFlow"></div></div>
+      <div class="card"><h2>5. Seller / S2B 流程图</h2><div class="flow" id="sellerFlow"></div></div>
+    </section>
+
+    <section class="grid two">
+      <div class="card"><h2>6. 当前主要阻塞</h2><div id="blockers"></div></div>
+      <div class="card"><h2>7. 建议修正顺序</h2><div id="recs"></div></div>
+    </section>
+
+    <section class="card">
+      <h2>8. 新旧统计变化</h2>
+      <div id="changes"></div>
+    </section>
+  </main>
+
+  <script>
+    const audit = {
+      auditedPath: "/Users/Zhuanz/Downloads/ai-commerce-platform/.worktrees/ciiverse_0714",
+      branch: "codex/ciiverse-0714-web-fixes",
+      commit: "d3323e43e53d9db1a70b9ca1a256acaf936b5ac9",
+      commandOutput: "pwd => /Users/Zhuanz/Downloads/ai-commerce-platform/.worktrees/ciiverse_0714\\ngit branch --show-current => codex/ciiverse-0714-web-fixes\\ngit rev-parse HEAD => d3323e43e53d9db1a70b9ca1a256acaf936b5ac9\\ngit status -sb => ## codex/ciiverse-0714-web-fixes, 64 modified, 11 untracked",
+      workingTreeChangesCount: 75,
+      includesUncommittedCode: "Yes - 64 modified + 11 untracked; S2B CSV import/export files are untracked.",
+      nodeNpm: "安全验证使用当前 workspace npm/npx；未执行 migration/seed/build/真实支付/真实 S2B 下单。",
+      validation: [
+        "npx tsc --noEmit -p apps/medusa-backend/tsconfig.json --pretty false => PASS",
+        "npm --workspace apps/storefront run typecheck -- --pretty false => PASS",
+        "npm --workspace apps/seller-dashboard exec tsc -b --pretty false => PASS",
+        "未执行 db:migrate；当前 relation store_coupon does not exist 更符合 migration 未执行或 backend 连接错误数据库。"
+      ]
+    };
+
+    const labels = {
+      DONE:"Done", PARTIAL:"Partial", WORKTREE_ONLY:"Working tree only", RUNTIME_UNVERIFIED:"Runtime unverified",
+      BACKEND_ONLY:"Backend only", BLOCKED:"Blocked", TODO:"Todo", UNKNOWN:"Unknown"
+    };
+    const order = ["DONE","PARTIAL","WORKTREE_ONLY","RUNTIME_UNVERIFIED","BACKEND_ONLY","BLOCKED","TODO","UNKNOWN"];
+    const features = [
+      {module:"Audit",feature:"审计目录",requirement:"必须审计指定 worktree 和目标分支",current:"已在指定 worktree 执行 pwd/branch/commit/status。",status:"DONE",completion:100,confidence:"High",evidence:"pwd; git branch --show-current; git rev-parse HEAD; git status -sb",data:"n/a",runtime:"命令已执行",blocker:"无",next:"以后所有结论以该 worktree 为准。",priority:"P0",commit:"n/a"},
+      {module:"Coupon",feature:"Coupon module / model",requirement:"store_coupon、buyer_coupon 模型和 module",current:"模型、service、module、medusa-config 注册均存在。",status:"PARTIAL",completion:82,confidence:"High",evidence:"apps/medusa-backend/src/modules/store-coupons/models/store-coupon.ts; buyer-coupon.ts; service.ts; index.ts; apps/medusa-backend/medusa-config.ts",data:"Migration20260727000100.ts creates store_coupon and buyer_coupon",runtime:"Backend typecheck PASS; runtime DB still missing relation",blocker:"当前 DB 未建表或 backend 指向未迁移数据库。",next:"在正确 dev DB 执行 db:migrate，并确认 DATABASE_URL 指向运行中的 backend DB。",priority:"P0",commit:"Tracked in git"},
+      {module:"Coupon",feature:"Coupon migration/runtime DB",requirement:"运行时必须存在 store_coupon / buyer_coupon 表",current:"migration 文件存在；用户报告运行时报 relation \"store_coupon\" does not exist。",status:"BLOCKED",completion:45,confidence:"High",evidence:"apps/medusa-backend/src/modules/store-coupons/migrations/Migration20260727000100.ts",data:"create table if not exists store_coupon; buyer_coupon",runtime:"未执行 migration；错误指向 DB schema 未更新或 DB 连接错位",blocker:"migration 存在但未执行，或 backend 连接了旧/错误数据库。",next:"记录 DATABASE_URL 所在 DB，在非生产 dev DB 跑 migration 后再打开 /admin/store-coupons。",priority:"P0",commit:"Tracked in git"},
+      {module:"Coupon",feature:"Seller coupons UI/API",requirement:"卖家创建、列表、归档优惠券",current:"Seller /coupons 页面存在，调用 /admin/store-coupons 和 /admin/store-coupons/:id。",status:"PARTIAL",completion:72,confidence:"High",evidence:"apps/seller-dashboard/src/pages/Coupons/CouponsPage.tsx; apps/seller-dashboard/src/App.tsx; apps/medusa-backend/src/api/admin/store-coupons/route.ts; [id]/route.ts",data:"依赖 store_coupon 表",runtime:"Seller typecheck PASS; runtime blocked by missing table",blocker:"DB 未迁移时 Create/List coupon 会失败。",next:"migration 后做 seller create/list/archive smoke。",priority:"P0",commit:"Tracked in git"},
+      {module:"Coupon",feature:"Buyer coupon wallet/claim",requirement:"买家优惠券钱包、默认券、兑换码领取",current:"AccountCouponsPanel 已替换空状态，支持 All/Shopping/Expiring/Goods tabs 和 Claim code。",status:"PARTIAL",completion:70,confidence:"High",evidence:"apps/storefront/src/components/account/AccountCouponsPanel.tsx; apps/medusa-backend/src/api/store/customers/me/coupons/route.ts; claim/route.ts; apps/storefront/src/lib/buyer-api.ts",data:"buyer_coupon + store_coupon",runtime:"Storefront typecheck PASS; runtime blocked by missing table",blocker:"DB 未迁移时钱包加载/claim 会失败。",next:"migration 后登录买家打开 /account/coupons 验证默认券和兑换码。",priority:"P0",commit:"Tracked in git"},
+      {module:"Coupon",feature:"Checkout coupon selection",requirement:"结算页展示可用券、apply/clear、写入订单折扣",current:"CheckoutSummaryCard 使用 wallet coupons，/store/carts/:id/coupons 支持 preview/apply/clear，complete 写 coupon/plan discount metadata。",status:"PARTIAL",completion:68,confidence:"High",evidence:"apps/storefront/src/components/checkout/CheckoutSummaryCard.tsx; apps/storefront/src/pages/checkout/CheckoutPage.tsx; apps/medusa-backend/src/api/store/carts/[id]/coupons/route.ts; complete/route.ts; lib/store-coupons.ts",data:"cart/order metadata + buyer_coupon reservation/use",runtime:"typecheck PASS;未 test-mode runtime",blocker:"DB 表缺失时无法 apply；未跑 checkout runtime。",next:"migration 后跑 coupon preview/apply/complete 的安全测试。",priority:"P0",commit:"Tracked in git"},
+      {module:"Seller",feature:"Followers",requirement:"卖家查看店铺 followers",current:"Seller /followers 页面和 /admin/store-followers API 存在；Overview 读取 follower_count。",status:"PARTIAL",completion:66,confidence:"High",evidence:"apps/seller-dashboard/src/pages/Followers/FollowersPage.tsx; apps/seller-dashboard/src/App.tsx; apps/medusa-backend/src/api/admin/store-followers/route.ts; apps/medusa-backend/src/api/store/follow/route.ts",data:"当前基于 customer metadata/store engagement，不是独立 follower 表",runtime:"Seller/Backend typecheck PASS; runtime 未验证",blocker:"未跑真实 buyer follow -> seller list 验证。",next:"登录买家 follow 店铺后检查 /admin/store-followers。",priority:"P1",commit:"Tracked in git"},
+      {module:"Buyer",feature:"Plans / AI credits",requirement:"Plans 页面、AI credits、plan discount",current:"/plans 页面、AccountPlanCard、/store/customers/me/plan、AI generate 消耗 credit、checkout plan discount 均存在。",status:"PARTIAL",completion:64,confidence:"High",evidence:"apps/storefront/src/pages/account/PlansPage.tsx; components/account/AccountPlanCard.tsx; apps/medusa-backend/src/api/store/customers/me/plan/route.ts; lib/buyer-plan.ts; store/ai/generate/route.ts",data:"customer.metadata stores plan_id/credits; no subscription table",runtime:"typecheck PASS; no paid subscription runtime",blocker:"这是 demo metadata plan，不是 Stripe subscription/真实套餐收费。",next:"标明 demo plan；如要商业化，再接 subscription。",priority:"P2",commit:"Tracked in git"},
+      {module:"Payment",feature:"Stripe static integration",requirement:"Stripe provider、Payment Element、confirmPayment",current:"Stripe provider 由 env 注册，前端 Payment Element/confirmPayment 代码存在。",status:"RUNTIME_UNVERIFIED",completion:70,confidence:"High",evidence:"apps/medusa-backend/medusa-config.ts; apps/storefront/src/components/checkout/CheckoutPaymentPanel.tsx; StripePaymentForm.tsx; pages/checkout/checkout-payment.ts",data:"Medusa payment collection/session",runtime:"typecheck PASS;未进行 test-mode payment session/webhook 验证",blocker:"无法证明 Stripe session 创建、confirm、webhook 在当前 env 成功。",next:"在 test mode 用测试卡跑安全支付 smoke，禁止真实扣款。",priority:"P0",commit:"Tracked + modified working tree"},
+      {module:"Seller / S2B",feature:"S2B CSV export",requirement:"按商品/筛选导出 S2B CSV",current:"后端 export-csv route、CSV columns、Seller export UI 已加入，但文件未跟踪。",status:"WORKTREE_ONLY",completion:66,confidence:"High",evidence:"apps/medusa-backend/src/api/admin/s2b-product-import/export-csv/route.ts; apps/medusa-backend/src/lib/s2b-product-import/csv.ts; service.ts; apps/seller-dashboard/src/pages/Products/s2b-import/S2bImportWorkspace.tsx; api.ts",data:"CSV columns include title/description/category/type/price/region/country/images/publish_action",runtime:"typecheck PASS; 未运行 S2BDIY/export runtime",blocker:"实现存在于 untracked working tree，未提交；真实 supplier catalog export 未验证。",next:"确认文件纳入 commit，跑 export selected/export all filtered smoke。",priority:"P0",commit:"Untracked working tree"},
+      {module:"Seller / S2B",feature:"S2B CSV preview/import",requirement:"导入前预览校验，导入创建 Draft",current:"preview/import routes、CSV parser、Seller import tab 存在于 untracked working tree。",status:"WORKTREE_ONLY",completion:64,confidence:"High",evidence:"apps/medusa-backend/src/api/admin/s2b-product-import/preview/route.ts; import/route.ts; drafts/route.ts; lib/s2b-product-import/service.ts; seller s2b-import workspace",data:"创建 mc_product draft metadata import_source=s2bdiy_csv",runtime:"typecheck PASS; 未导入样例 CSV runtime",blocker:"未提交且未运行 DB/API smoke。",next:"用小 CSV 样例跑 preview -> import -> drafts。",priority:"P0",commit:"Untracked working tree"},
+      {module:"Seller / S2B",feature:"Imported draft publish",requirement:"按 product_ids 或 filters 选择性发布",current:"/admin/s2b-product-import/publish 支持 product_ids 或 filters，调用 native bridge 并写 variant medusa ids。",status:"WORKTREE_ONLY",completion:62,confidence:"High",evidence:"apps/medusa-backend/src/api/admin/s2b-product-import/publish/route.ts; seller publishImportedDrafts()",data:"mc_product.status/import_status/medusa_product_id/variant mapping",runtime:"typecheck PASS; 未跑 publish runtime",blocker:"未提交；真实 draft->publish->storefront 可见未验证。",next:"导入样例后发布单个 draft，再查 storefront list/detail/cart。",priority:"P0",commit:"Untracked working tree"},
+      {module:"Seller",feature:"Product publish existing flow",requirement:"普通/AI/S2B draft 发布到 storefront",current:"Product editor/list 调用 /admin/products/:id/publish；native bridge 多 variant 代码有大量 modified。",status:"PARTIAL",completion:72,confidence:"High",evidence:"apps/seller-dashboard/src/pages/Products/EditDraft.tsx; ProductList.tsx; apps/medusa-backend/src/lib/native-product-bridge.ts; native-product-variants.ts; storefront-product-visibility.ts",data:"mc_product.medusa_product_id/variants.medusa_variant_id",runtime:"typecheck PASS; 未做 runtime publish smoke",blocker:"大量 modified 未提交，需防止 publish 行为和 storefront 可见性回归。",next:"跑 storefront-product-visibility/native-product-variants tests 和手动 smoke。",priority:"P0",commit:"Modified working tree"},
+      {module:"Buyer",feature:"Categories/Search/Filter",requirement:"目标页面 Categories、Search、Filter",current:"worktree 中新增/修改 CategoriesPage、SearchPage、FilterDrawer、browse URL state。",status:"PARTIAL",completion:70,confidence:"High",evidence:"apps/storefront/src/pages/categories/CategoriesPage.tsx; pages/search/SearchPage.tsx; components/store-home/FilterDrawer.tsx; lib/buyer-browse-url.ts",data:"store/products query/category data",runtime:"Storefront typecheck PASS; runtime 未验证",blocker:"真实查询组合和 UI 设计还未逐屏验收。",next:"启动后验证 /categories /search 和 filter query。",priority:"P1",commit:"Modified working tree"},
+      {module:"Buyer",feature:"Product detail UI",requirement:"商品详情 popups/tabs/store card/purchase panel",current:"Product detail 多个组件 modified，新增 popup/tabs 目标 UI 改动。",status:"PARTIAL",completion:72,confidence:"High",evidence:"apps/storefront/src/components/product-detail/ProductDetailPopups.tsx; ProductDetailTabs.tsx; ProductPurchasePanel.tsx; ProductStoreCard.tsx; pages/product/ProductDetailPage.tsx",data:"store/products/:id + reviews",runtime:"Storefront typecheck PASS; runtime 未截图验收",blocker:"未做浏览器视觉检查和真实 variant/cart smoke。",next:"跑 product detail responsive smoke。",priority:"P1",commit:"Modified working tree"},
+      {module:"Backend",feature:"TypeScript validation",requirement:"安全验证 build readiness",current:"正确 worktree backend no-emit typecheck 通过。",status:"DONE",completion:100,confidence:"High",evidence:"npx tsc --noEmit -p apps/medusa-backend/tsconfig.json --pretty false",data:"n/a",runtime:"PASS",blocker:"无",next:"继续跑 focused tests。",priority:"P0",commit:"working tree included"},
+      {module:"Storefront",feature:"TypeScript validation",requirement:"Storefront typecheck",current:"Storefront typecheck 通过。",status:"DONE",completion:100,confidence:"High",evidence:"npm --workspace apps/storefront run typecheck -- --pretty false",data:"n/a",runtime:"PASS",blocker:"无",next:"后续跑 build/浏览器 smoke。",priority:"P1",commit:"working tree included"},
+      {module:"Seller",feature:"TypeScript validation",requirement:"Seller dashboard typecheck",current:"Seller dashboard typecheck 通过。",status:"DONE",completion:100,confidence:"High",evidence:"npm --workspace apps/seller-dashboard exec tsc -b --pretty false",data:"n/a",runtime:"PASS",blocker:"无",next:"后续跑 vitest/e2e。",priority:"P1",commit:"working tree included"},
+      {module:"Runtime",feature:"Database migration state",requirement:"代码和数据库 schema 一致",current:"代码需要 store_coupon/buyer_coupon；当前运行错误表示 DB 不一致。",status:"BLOCKED",completion:30,confidence:"High",evidence:"用户报错 relation store_coupon does not exist; migration file exists; module registered",data:"Migration20260727000100.ts",runtime:"未执行 db:migrate",blocker:"DB 未迁移或连接错库。",next:"先确认 DATABASE_URL，再在 dev DB 执行 migration。",priority:"P0",commit:"n/a"},
+      {module:"Runtime",feature:"Stripe runtime",requirement:"test-mode session/confirm/webhook",current:"静态代码存在但本次未运行。",status:"RUNTIME_UNVERIFIED",completion:45,confidence:"High",evidence:"StripePaymentForm/CheckoutPaymentPanel/medusa-config",data:"payment provider dynamic by env",runtime:"未做 test-mode 验证",blocker:"支付能力不能等同 Done。",next:"test-mode 安全支付 smoke。",priority:"P0",commit:"n/a"},
+      {module:"Runtime",feature:"S2BDIY runtime",requirement:"真实/沙箱 catalog/order 不下真实单",current:"S2B catalog/adapter/CSV 代码存在，但未进行凭据和 sandbox smoke。",status:"RUNTIME_UNVERIFIED",completion:45,confidence:"High",evidence:"modules/suppliers/s2bdiy/*; admin/supplier-catalog; s2b-product-import/*",data:"supplier_product/variant/print_spec/product draft",runtime:"未调用真实 S2BDIY",blocker:"不能证明供应商 catalog/export/order push 当前可用。",next:"只读 verify credentials/catalog，避免真实下单。",priority:"P0",commit:"mixed tracked + untracked"},
+      {module:"Scope",feature:"未提交代码",requirement:"审计必须包含 working tree",current:"本报告包含 75 条 working tree changes；S2B CSV 为 untracked。",status:"DONE",completion:100,confidence:"High",evidence:"git status -sb; git status --porcelain",data:"64 modified, 11 untracked",runtime:"命令已执行",blocker:"这些功能尚未 commit，丢失风险高。",next:"确认范围后分批 commit。",priority:"P0",commit:"working tree"}
+    ];
+
+    const buyerFlow=["Product","Design Now","Cart","Coupon wallet","Coupon apply","Shipping","Stripe","Order","Fulfillment","Tracking","Review/Refund"];
+    const sellerFlow=["S2B Catalog","Export CSV","Seller Edit","Preview","Import Draft","Category/Region/SKU","Selective Publish","Storefront"];
+    const flowStatus={"Product":"PARTIAL","Design Now":"PARTIAL","Cart":"PARTIAL","Coupon wallet":"BLOCKED","Coupon apply":"BLOCKED","Shipping":"PARTIAL","Stripe":"RUNTIME_UNVERIFIED","Order":"PARTIAL","Fulfillment":"PARTIAL","Tracking":"RUNTIME_UNVERIFIED","Review/Refund":"PARTIAL","S2B Catalog":"RUNTIME_UNVERIFIED","Export CSV":"WORKTREE_ONLY","Seller Edit":"WORKTREE_ONLY","Preview":"WORKTREE_ONLY","Import Draft":"WORKTREE_ONLY","Category/Region/SKU":"WORKTREE_ONLY","Selective Publish":"WORKTREE_ONLY","Storefront":"PARTIAL"};
+    const recs=[
+      ["P0","确认并迁移正确数据库","范围：apps/medusa-backend store-coupons migration；依赖：DATABASE_URL 确认；验收：/admin/store-coupons 不再报 relation store_coupon；风险：Medium"],
+      ["P0","把 S2B CSV untracked 文件纳入版本控制","范围：api/admin/s2b-product-import、lib/s2b-product-import、seller s2b-import；依赖：代码 review；验收：git status 不再显示这些文件未跟踪；风险：Medium"],
+      ["P0","Coupon runtime smoke","范围：seller create coupon、buyer claim、checkout apply/clear、complete redeem；依赖：DB migration；验收：订单 metadata 写入 coupon_discount_total；风险：High"],
+      ["P0","Stripe test-mode smoke","范围：checkout payment session、confirmPayment、webhook/payment captured；依赖：Stripe test env；验收：order paid + fulfillment waiting；风险：High"],
+      ["P1","S2B CSV sample smoke","范围：export selected -> preview -> import -> draft -> publish；依赖：S2BDIY sandbox/catalog；验收：variants/SKU/category/region 保留，storefront 可见；风险：High"]
+    ];
+    const changes=[
+      "旧报告审计目录错误：旧路径为主目录；新路径为 .worktrees/ciiverse_0714。",
+      "旧统计：Done 0 / Partial 61 / UI only 2 / Backend only 3 / Blocked 2 / Todo 14 / Unknown 4 / overall 47%。",
+      "新统计会自动计算；由于正确 worktree 中 Backend/Storefront/Seller typecheck 均通过，验证结论显著变好。",
+      "Coupon 从“模型/API 不存在”修正为：模型、module、API、seller UI、buyer UI、migration 均存在；当前 blocker 是 migration 未执行或连接错库。",
+      "S2B CSV 从 Todo 修正为 WORKTREE_ONLY：最近改动已经加入 export/import/preview/drafts/publish，但未跟踪、未提交、未 runtime 验证。",
+      "Stripe 从 Todo/Done 二分修正为 RUNTIME_UNVERIFIED：静态代码存在且 typecheck 通过，但没有 test-mode runtime 证据。"
+    ];
+    const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+    const pill=s=>`<span class="pill ${s}"><span class="dot ${s}"></span>${labels[s]||s}</span>`;
+    const details=s=>`<details><summary>查看证据</summary><div>${esc(s).split("; ").map(x=>`<span class="path" title="${esc(x)}">${esc(x)}</span>`).join("<br>")}</div></details>`;
+    function init(){
+      $("hero").innerHTML=[audit.branch,audit.commit.slice(0,8),`${audit.workingTreeChangesCount} working-tree changes`,"includes uncommitted code"].map(x=>`<span class="pill">${esc(x)}</span>`).join("");
+      $("auditMeta").innerHTML=Object.entries(audit).map(([k,v])=>`<div><b>${esc(k)}</b><br><span class="${k==='commandOutput'?'mono':''}">${Array.isArray(v)?v.map(esc).join("<br>"):esc(v)}</span></div>`).join("");
+      const counts=Object.fromEntries(order.map(s=>[s,0])); features.forEach(f=>counts[f.status]=(counts[f.status]||0)+1);
+      const overall=Math.round(features.reduce((a,f)=>a+f.completion,0)/features.length); $("overall").textContent=overall+"%"; $("overallBar").style.width=overall+"%";
+      $("stats").innerHTML=order.map(s=>`<div class="card stat ${s}"><strong>${counts[s]||0}</strong><span>${labels[s]}</span></div>`).join("");
+      const mods=[...new Set(features.map(f=>f.module))]; $("modules").innerHTML=mods.map(m=>{const fs=features.filter(f=>f.module===m),pct=Math.round(fs.reduce((a,f)=>a+f.completion,0)/fs.length),bad=fs.filter(f=>["BLOCKED","RUNTIME_UNVERIFIED","WORKTREE_ONLY"].includes(f.status)).length;return `<div class="card"><h3>${esc(m)}</h3><strong>${pct}%</strong><div class="progress"><div class="bar" style="width:${pct}%"></div></div><p style="margin-top:8px">${fs.length} 项 · ${bad} 项需验证/提交/修复</p></div>`}).join("");
+      $("module").innerHTML+=mods.sort().map(m=>`<option>${esc(m)}</option>`).join(""); $("status").innerHTML+=order.map(s=>`<option value="${s}">${labels[s]}</option>`).join(""); $("priority").innerHTML+=[...new Set(features.map(f=>f.priority))].sort().map(p=>`<option>${p}</option>`).join("");
+      ["search","module","status","priority"].forEach(id=>$(id).addEventListener("input",renderRows)); renderRows();
+      renderFlow("buyerFlow",buyerFlow); renderFlow("sellerFlow",sellerFlow);
+      $("blockers").innerHTML=features.filter(f=>f.priority==="P0"&&f.status!=="DONE").map(f=>`<div class="issue"><h3>${esc(f.module)} · ${esc(f.feature)} ${pill(f.status)}</h3><p>${esc(f.blocker)}</p><p><b>下一步：</b>${esc(f.next)}</p></div>`).join("");
+      $("recs").innerHTML=recs.map(r=>`<div class="rec"><h3>${r[0]} · ${esc(r[1])}</h3><p>${esc(r[2])}</p></div>`).join("");
+      $("changes").innerHTML=changes.map(c=>`<div class="change"><p>${esc(c)}</p></div>`).join("");
+    }
+    function renderRows(){const q=$("search").value.toLowerCase(),m=$("module").value,s=$("status").value,p=$("priority").value;const rows=features.filter(f=>(!q||Object.values(f).join(" ").toLowerCase().includes(q))&&(!m||f.module===m)&&(!s||f.status===s)&&(!p||f.priority===p));$("rows").innerHTML=rows.map(f=>`<tr><td>${esc(f.module)}</td><td><b>${esc(f.feature)}</b></td><td>${esc(f.requirement)}</td><td>${esc(f.current)}</td><td>${pill(f.status)}</td><td>${f.completion}%</td><td>${esc(f.confidence)}</td><td>${details(f.evidence)}</td><td>${esc(f.data)}</td><td>${esc(f.runtime)}</td><td>${esc(f.blocker)}</td><td>${esc(f.next)}</td><td>${esc(f.priority)}</td><td>${esc(f.commit)}</td></tr>`).join("")}
+    function renderFlow(id,names){$(id).innerHTML=names.map((n,i)=>`<div class="node ${flowStatus[n]}"><b>${esc(n)}</b><small>${labels[flowStatus[n]]}</small></div>${i<names.length-1?'<div class="arrow">→</div>':''}`).join("")}
+    init();
+  </script>
+</body>
+</html>

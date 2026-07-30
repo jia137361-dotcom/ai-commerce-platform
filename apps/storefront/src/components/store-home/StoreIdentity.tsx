@@ -3,6 +3,7 @@ import type { BuyerStoreSettings } from "../../lib/buyer-api"
 import { useStoreFollow } from "../../hooks/useStoreFollow"
 import { useBuyerLocale } from "../../lib/locale"
 import { buildShareChannels, buildShareText } from "../../lib/share-channels"
+import { buildStoreMessagesHref } from "../../lib/storefront-links"
 import { ShareChannelsPanel } from "../share/ShareChannelsPanel"
 import { Button } from "../ui/Button"
 import { useMemo, useState } from "react"
@@ -16,6 +17,7 @@ export function StoreIdentity({ settings }: { settings: BuyerStoreSettings }) {
     settings.followerCount ?? 0
   )
   const [shareOpen, setShareOpen] = useState(false)
+  const messagesHref = buildStoreMessagesHref(settings.storeId)
   const sharePayload = useMemo(() => {
     const pageUrl = window.location.href
     return {
@@ -74,7 +76,7 @@ export function StoreIdentity({ settings }: { settings: BuyerStoreSettings }) {
         </Button>
         <Button
           variant="secondary"
-          href={auth.customer ? "/account/messages" : `/account/sign-in?returnTo=${encodeURIComponent("/account/messages")}`}
+          href={auth.customer ? messagesHref : `/account/sign-in?returnTo=${encodeURIComponent(messagesHref)}`}
         >
           {t("message")}
         </Button>
