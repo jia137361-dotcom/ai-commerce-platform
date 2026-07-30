@@ -85,6 +85,8 @@ export async function syncBasicProduct(
     warehouse_name: data.warehouse_name ?? null,
     deliver_goods_text: data.deliver_goods_text ?? null,
     base_cost: Number(data.purchase_price) || 0,
+    // Keep the complete supplier response so English detail fields and all image
+    // URLs remain available without adding vendor-specific columns.
     raw_json: data.raw ?? (data as unknown as Record<string, unknown>),
   }
 

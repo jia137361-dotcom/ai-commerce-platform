@@ -28,6 +28,90 @@ export type BasicProductDetail = Record<string, unknown>
 export type QuickCreateInput = { size_id: number; color_id: number; basic_product_id: number; name: string; material_id: number | string; view_id: number; design_type?: number }
 export type QuickCreateResult = { product_id: number | string; product_name?: string; product_code?: string }
 
+export type S2bdiyEnglishProductInfo = {
+  english_name: string | null
+  english_description: string | null
+  english_material: string | null
+  english_technology: string | null
+  delivery_note: string | null
+  colors: Array<{ id: string; name: string }>
+  sizes: Array<{ id: string; name: string }>
+  views: Array<{ id: string; name: string }>
+  categories: Array<{ id: string; name: string }>
+  images: string[]
+  blank_design_images: string[]
+  produce_area: string | null
+  produce_country: string | null
+  warehouse: string | null
+  variants: Array<Record<string, unknown>>
+  print_areas: Array<Record<string, unknown>>
+}
+
+const englishText = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() ? value.trim() : null
+
+const englishName = (value: unknown): string | null => {
+  if (!value || typeof value !== "object") return null
+  const row = value as Record<string, unknown>
+  return englishText(row.en_name)
+}
+
+const imageUrl = (value: unknown): string | null => {
+  if (typeof value === "string" && /^https?:\/\//.test(value.trim())) return value.trim()
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>
+    return imageUrl(row.src ?? row.image_src ?? row.url)
+  }
+  return null
+}
+
+/** Convert a S2BDIY detail payload into the English-only UI contract. */
+export function normalizeS2bdiyEnglishProduct(
+  product: Record<string, unknown>
+): S2bdiyEnglishProductInfo {
+  const collectImages = (value: unknown): string[] => {
+    const result: string[] = []
+    const visit = (item: unknown) => {
+      if (Array.isArray(item)) return item.forEach(visit)
+      const url = imageUrl(item)
+      if (url && !result.includes(url)) result.push(url)
+      if (item && typeof item === "object") {
+        const row = item as Record<string, unknown>
+        if (row.images) visit(row.images)
+      }
+    }
+    visit(value)
+    return result
+  }
+  const list = (key: string) => Array.isArray(product[key]) ? product[key] : []
+  const mapNames = (key: string) => list(key).flatMap((item) => {
+    const id = item && typeof item === "object" ? (item as Record<string, unknown>).id : null
+    const name = englishName(item)
+    return id != null && name ? [{ id: String(id), name }] : []
+  })
+
+  return {
+    english_name: englishText(product.en_name),
+    english_description: englishText(product.en_desc),
+    english_material: englishText(product.en_product_material_text),
+    english_technology: englishText(product.en_product_technology_text),
+    delivery_note: englishText(product.deliver_goods_text),
+    colors: mapNames("colors"),
+    sizes: mapNames("sizes"),
+    views: mapNames("views"),
+    categories: mapNames("categorys"),
+    images: collectImages(product.product_show_images ?? product.product_show_master_image ?? product.view_image_src),
+    blank_design_images: collectImages(product.blank_design_images ?? product.blank_design_image),
+    // The API's *_text fields are localized Chinese in the current account;
+    // expose stable country/area codes instead of leaking localized text.
+    produce_area: englishText(product.produce_area),
+    produce_country: englishText(product.produce_country),
+    warehouse: englishText(product.warehouse_name),
+    variants: list("items").filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")),
+    print_areas: list("print_areas").filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")),
+  }
+}
+
 // ---- Client-based (Dev2 compat) ----
 export async function listBasicProducts(client: S2bdiyClient, query?: { page?: number; per_page?: number }): Promise<BasicProductDetail[]> {
   const data = await client.request<unknown>("/open/v1/basicProduct", { method: "GET", query: { page: query?.page ?? 1, per_page: query?.per_page ?? 20 } })

@@ -1,4 +1,4 @@
-import type { BuyerProductVariant, StoreProduct } from "./mock-data"
+import type { BuyerProductVariant, StoreProduct, SupplierProductDetails } from "./mock-data"
 
 export type BuyerProductApiVariant = {
   id?: string
@@ -57,6 +57,30 @@ export type BuyerProductApiInput = {
   store_id?: string | null
   store_name?: string | null
   store_slug?: string | null
+  supplier_details?: {
+    supplier_product_code?: string | null
+    purchase_price?: number | null
+    english?: {
+      english_name?: string | null
+      english_description?: string | null
+      english_material?: string | null
+      english_technology?: string | null
+      delivery_note?: string | null
+      colors?: Array<{ id: string; name: string }>
+      sizes?: Array<{ id: string; name: string }>
+      views?: Array<{ id: string; name: string }>
+      categories?: Array<{ id: string; name: string }>
+      images?: string[]
+      blank_design_images?: string[]
+      produce_area?: string | null
+      produce_country?: string | null
+      warehouse?: string | null
+      variants?: Array<Record<string, unknown>>
+      print_areas?: Array<Record<string, unknown>>
+    } | null
+    variants?: Array<Record<string, unknown>>
+    print_specs?: Array<Record<string, unknown>>
+  } | null
 }
 
 export const normalizeBuyerProductImage = (product: BuyerProductApiInput) =>
@@ -66,11 +90,16 @@ export const normalizeBuyerProductImage = (product: BuyerProductApiInput) =>
   product.images?.find((image) => image.url)?.url ??
   ""
 
-export const normalizeBuyerProductPrice = (product: BuyerProductApiInput) => {
+/**
+ * Read the product's display price in dollars.
+ * mc_product.price is stored as dollars (major units) in the database.
+ * No heuristic conversion needed — the backend owns the unit.
+ */
+export const normalizeBuyerProductPrice = (product: BuyerProductApiInput): number | undefined => {
   const value = product.price ?? product.variants?.flatMap((variant) => variant.prices ?? [])[0]?.amount
+  if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
-  if (!Number.isFinite(numeric)) return undefined
-  return numeric > 999 ? numeric / 100 : numeric
+  return Number.isFinite(numeric) ? numeric : undefined
 }
 
 export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): BuyerProductVariant[] => {
@@ -99,12 +128,17 @@ export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): Bu
   }]
 }
 
-const formatPrice = (amount?: number) => {
-  if (amount == null) return "Price unavailable"
-  return `${new Intl.NumberFormat("en-US", {
+/**
+ * Format a dollar amount for display.
+ * Uses Intl.NumberFormat which already includes the currency symbol.
+ * Returns "Price unavailable" for null/undefined.
+ */
+const formatPrice = (amount?: number): string => {
+  if (amount == null || !Number.isFinite(amount)) return "Price unavailable"
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-  }).format(amount)} USD`
+  }).format(amount)
 }
 
 const formatSupportedRegions = (
@@ -117,6 +151,23 @@ const formatSupportedRegions = (
 export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0): StoreProduct => {
   const numericPrice = normalizeBuyerProductPrice(product)
   const variants = normalizeBuyerProductVariants(product)
+  const english = product.supplier_details?.english
+  const supplierDetails: SupplierProductDetails | undefined = english
+    ? {
+        supplierProductCode: product.supplier_details?.supplier_product_code,
+        purchasePrice: product.supplier_details?.purchase_price,
+        englishName: english.english_name,
+        englishDescription: english.english_description,
+        englishMaterial: english.english_material,
+        englishTechnology: english.english_technology,
+        deliveryNote: english.delivery_note,
+        colors: english.colors ?? [], sizes: english.sizes ?? [], views: english.views ?? [], categories: english.categories ?? [],
+        images: english.images ?? [], blankDesignImages: english.blank_design_images ?? [],
+        produceArea: english.produce_area, produceCountry: english.produce_country, warehouse: english.warehouse,
+        variants: product.supplier_details?.variants ?? english.variants ?? [],
+        printSpecs: product.supplier_details?.print_specs ?? english.print_areas ?? [],
+      }
+    : undefined
 
   return {
     id: product.product_id ?? product.id ?? `backend-product-${index}`,
@@ -154,5 +205,6 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
     storeId: product.store_id ?? undefined,
     storeName: product.store_name ?? undefined,
     storeSlug: product.store_slug ?? undefined,
+    supplierDetails,
   }
 }

@@ -174,7 +174,8 @@ export function EditDraftPage() {
         ? p.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
         : []
     setSupportedRegionIds(savedRegionIds)
-    setShipFromCountry(p.ship_from_country ?? "")
+    const productWithSupplier = p as NormalizedProduct & { supplier_details?: { english?: { produce_country?: string | null } | null } | null }
+    setShipFromCountry(p.ship_from_country ?? productWithSupplier.supplier_details?.english?.produce_country ?? "")
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {
@@ -243,6 +244,27 @@ export function EditDraftPage() {
   const activePreviewUrl =
     previewOptions.find((option) => option.id === previewKey)?.url ??
     previewOptions[0]?.url
+
+  const supplierDetails = (product as (NormalizedProduct & { supplier_details?: {
+    supplier_product_code?: string | null
+    purchase_price?: number | null
+    english?: {
+      english_name?: string | null
+      english_description?: string | null
+      english_material?: string | null
+      english_technology?: string | null
+      delivery_note?: string | null
+      images?: string[]
+      blank_design_images?: string[]
+      colors?: Array<{ id: string; name: string }>
+      sizes?: Array<{ id: string; name: string }>
+      views?: Array<{ id: string; name: string }>
+      produce_country?: string | null
+      warehouse?: string | null
+    } | null
+    variants?: Array<Record<string, unknown>>
+    print_specs?: Array<Record<string, unknown>>
+  } }))?.supplier_details
 
   useEffect(() => {
     if (!previewOptions.length) return
@@ -682,7 +704,7 @@ export function EditDraftPage() {
           </div>
 
           {diyAssets.length ? (
-            <Card>
+          <Card>
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Production Files
               </p>
@@ -709,6 +731,28 @@ export function EditDraftPage() {
                   </a>
                 ))}
               </div>
+          </Card>
+
+          ) : null}
+
+          {supplierDetails?.english ? (
+            <Card>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Supplier information</p>
+              {supplierDetails.english.english_name ? <h2 className="text-lg font-semibold text-slate-900">{supplierDetails.english.english_name}</h2> : null}
+              {supplierDetails.english.english_description ? <p className="mt-2 text-sm text-slate-600">{supplierDetails.english.english_description}</p> : null}
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                {supplierDetails.supplier_product_code ? <div><dt className="text-slate-500">Supplier code</dt><dd>{supplierDetails.supplier_product_code}</dd></div> : null}
+                {supplierDetails.purchase_price != null ? <div><dt className="text-slate-500">Supplier cost</dt><dd>{supplierDetails.purchase_price} CNY</dd></div> : null}
+                {supplierDetails.english.english_material ? <div><dt className="text-slate-500">Material</dt><dd>{supplierDetails.english.english_material}</dd></div> : null}
+                {supplierDetails.english.english_technology ? <div><dt className="text-slate-500">Technology</dt><dd>{supplierDetails.english.english_technology}</dd></div> : null}
+                {supplierDetails.english.produce_country ? <div><dt className="text-slate-500">Production country</dt><dd>{supplierDetails.english.produce_country}</dd></div> : null}
+                {supplierDetails.english.warehouse ? <div><dt className="text-slate-500">Warehouse</dt><dd>{supplierDetails.english.warehouse}</dd></div> : null}
+                {supplierDetails.english.colors?.length ? <div><dt className="text-slate-500">Colors</dt><dd>{supplierDetails.english.colors.map((item) => item.name).join(", ")}</dd></div> : null}
+                {supplierDetails.english.sizes?.length ? <div><dt className="text-slate-500">Sizes</dt><dd>{supplierDetails.english.sizes.map((item) => item.name).join(", ")}</dd></div> : null}
+              {supplierDetails.english.views?.length ? <div><dt className="text-slate-500">Print views</dt><dd>{supplierDetails.english.views.map((item) => item.name).join(", ")}</dd></div> : null}
+                {supplierDetails.print_specs?.length ? <div><dt className="text-slate-500">Print areas</dt><dd>{supplierDetails.print_specs.map((item) => `${String(item.print_file_width ?? item.design_area_width ?? "?")} × ${String(item.print_file_height ?? item.design_area_height ?? "?")} px`).join(", ")}</dd></div> : null}
+              </dl>
+              {(supplierDetails.english.images?.length || supplierDetails.english.blank_design_images?.length) ? <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">{[...(supplierDetails.english.images ?? []), ...(supplierDetails.english.blank_design_images ?? [])].map((url, index) => <img key={`${url}-${index}`} src={url} alt={`Supplier image ${index + 1}`} className="aspect-square rounded object-cover" />)}</div> : null}
             </Card>
           ) : null}
           </>

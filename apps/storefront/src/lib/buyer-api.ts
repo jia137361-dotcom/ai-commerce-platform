@@ -891,22 +891,31 @@ const storeScopedFetch = async <T>(
   return (text ? JSON.parse(text) : undefined) as T
 }
 
-export const formatBuyerMoney = (value: number | undefined, currency = "USD") => {
-  const amount = Number.isFinite(value) ? (value as number) : 0
+/**
+ * Format a dollar amount for display.
+ * Returns "Price unavailable" for null/undefined/NaN instead of "$0.00".
+ */
+export const formatBuyerMoney = (value: number | undefined | null, currency = "USD"): string => {
+  if (value == null || !Number.isFinite(value)) return "Price unavailable"
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
-  }).format(amount)
+  }).format(value)
 }
 
-const readNumber = (value: number | string | null | undefined) => {
+/**
+ * Read a dollar amount from API response.
+ * No heuristic conversion — the backend is responsible for sending major units (dollars).
+ * Returns undefined for null/undefined/NaN.
+ */
+const readNumber = (value: number | string | null | undefined): number | undefined => {
   if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
+  return Number.isFinite(numeric) ? numeric : undefined
 }
 
-/** Medusa cart / payment amounts are stored in minor units (cents). */
-const fromCartMinorUnits = (value: number | string | null | undefined) => {
+/** Medusa cart / payment amounts are stored in minor units (cents). Convert to dollars. */
+const fromCartMinorUnits = (value: number | string | null | undefined): number | undefined => {
   if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? numeric / 100 : undefined
@@ -2195,7 +2204,13 @@ const normalizeRefundCapability = (
   }
 }
 
-const readOrderMoneyMajor = (value: number | string | null | undefined) => {
+/**
+ * Read a dollar amount from order detail API response.
+ * The backend (buyer-order-totals.ts) already converts cents→dollars via minorMoneyToMajor.
+ * This function just validates and normalizes the value.
+ * Returns null for null/undefined/NaN.
+ */
+const readOrderMoneyMajor = (value: number | string | null | undefined): number | null => {
   if (value == null || value === "") return null
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? numeric : null

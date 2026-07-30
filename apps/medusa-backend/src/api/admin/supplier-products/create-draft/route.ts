@@ -7,6 +7,7 @@ import {
 } from "../../../_helpers/store-core"
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import { calculateRetailPriceUsd } from "../../../../lib/pricing"
+import { resolveSupplierShipFromCountry } from "../../../../lib/supplier-shipping-country"
 
 type CreateDraftBody = {
   supplier_product_id: string
@@ -75,6 +76,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       supplier_product_id: String(sp.id),
       image_url: sp.product_show_master_image,
       mockup_image_url: sp.product_show_master_image,
+      ship_from_country: resolveSupplierShipFromCountry(null, sp),
       variants: variantRows,
       metadata: {
         synced_from_supplier: true,

@@ -151,7 +151,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   }, [loadProduct, loadVersion])
 
   const galleryImages = useMemo(
-    () => (product ? ([product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[]) : []),
+    () => (product ? ([...(product.supplierDetails?.images ?? []), ...(product.supplierDetails?.blankDesignImages ?? []), product.mockupImageUrl, product.imageUrl, product.designImageUrl].filter(Boolean) as string[]) : []),
     [product]
   )
   const variants = product?.variants ?? []

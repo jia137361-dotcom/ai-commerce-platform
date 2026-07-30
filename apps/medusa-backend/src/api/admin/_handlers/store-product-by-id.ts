@@ -16,6 +16,7 @@ import { permanentlyDeleteStoreProduct } from "../../../lib/store-product-bulk"
 import {
   getMcProductById,
   getStoreCoreService,
+  loadSupplierProductPresentation,
   normalizeProduct,
   parseOptionalNumber,
   sendError,
@@ -50,13 +51,15 @@ export const getStoreProductByIdHandler = async (req: MedusaRequest, res: Medusa
   }
 
   const productWithRegions = await attachSupportedRegionsToProduct(req.scope, product)
+  const supplier_details = await loadSupplierProductPresentation(storeCoreService, product.supplier_product_id)
 
   return res.json({
     product_id: product.id,
     store_id: product.store_id,
-    product: {
-      ...normalizeProduct(productWithRegions),
-      supported_regions: productWithRegions.supported_regions,
+      product: {
+        ...normalizeProduct(productWithRegions),
+        supported_regions: productWithRegions.supported_regions,
+        supplier_details,
     },
   })
 }

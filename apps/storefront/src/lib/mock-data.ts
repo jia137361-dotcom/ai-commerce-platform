@@ -41,6 +41,28 @@ export type StoreProduct = {
   storeId?: string
   storeName?: string
   storeSlug?: string
+  supplierDetails?: SupplierProductDetails
+}
+
+export type SupplierProductDetails = {
+  supplierProductCode?: string | null
+  purchasePrice?: number | null
+  englishName?: string | null
+  englishDescription?: string | null
+  englishMaterial?: string | null
+  englishTechnology?: string | null
+  deliveryNote?: string | null
+  colors: Array<{ id: string; name: string }>
+  sizes: Array<{ id: string; name: string }>
+  views: Array<{ id: string; name: string }>
+  categories: Array<{ id: string; name: string }>
+  images: string[]
+  blankDesignImages: string[]
+  produceArea?: string | null
+  produceCountry?: string | null
+  warehouse?: string | null
+  variants: Array<Record<string, unknown>>
+  printSpecs: Array<Record<string, unknown>>
 }
 
 export type BuyerProductVariant = {
