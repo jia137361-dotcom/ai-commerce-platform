@@ -32,9 +32,9 @@ describe("buyer account components", () => {
       loading: false,
       onSubmit: async () => undefined,
     }))
-    expect(html.match(/Not provided/g)?.length).toBeGreaterThanOrEqual(4)
-    expect(html).toContain("Address")
-    expect(html).toContain("editing are unavailable")
+    expect(html.match(/Not provided/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(html).toContain("Delivery addresses")
+    expect(html).toContain("Manage saved addresses")
   })
 
   it("renders a clear sign-in error state", () => {
@@ -57,5 +57,29 @@ describe("buyer account components", () => {
     expect(html).toContain("Registration failed")
     expect(html).toContain("An account already exists.")
     expect(html).toContain('role="alert"')
+  })
+
+  it("register only asks for email and password", () => {
+    const html = renderToStaticMarkup(createElement(RegisterForm, {
+      loading: false,
+      onSubmit: async () => undefined,
+    }))
+    expect(html).toContain("Email")
+    expect(html).toContain("Password")
+    expect(html).toContain("Terms of Use")
+    expect(html).toContain("Privacy Policy")
+    expect(html).not.toContain("First name")
+    expect(html).not.toContain("Last name")
+    expect(html).not.toContain("Phone")
+  })
+
+  it("sign-in shows forgot password and disabled social auth", () => {
+    const html = renderToStaticMarkup(createElement(SignInForm, {
+      loading: false,
+      onSubmit: async () => undefined,
+    }))
+    expect(html).toContain('href="/account/forgot-password"')
+    expect(html).toContain("Or continue with other ways")
+    expect(html).toContain("disabled")
   })
 })

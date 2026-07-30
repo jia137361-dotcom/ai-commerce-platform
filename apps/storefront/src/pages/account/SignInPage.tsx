@@ -5,19 +5,26 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { safeReturnTo } from "./account-utils"
 import { Card } from "../../components/ui/Card"
+import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
 
 export function SignInPage({ cartCount }: { cartCount: number }) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const params = new URLSearchParams(window.location.search)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const [error, setError] = useState<string | undefined>(params.get("expired") === "1" ? "Your session expired. Sign in again to continue." : undefined)
   const auth = useBuyerAuth()
 
   const submit = async (email: string, password: string) => {
     setLoading(true)
     setError(undefined)
     try {
-      await auth.signIn({ email, password })
-      window.location.assign(safeReturnTo())
+      const customer = await auth.signIn({ email, password })
+      const returnTo = safeReturnTo()
+      if (!isBuyerEmailVerified(customer.metadata)) {
+        window.location.assign(`/account/verify-email?returnTo=${encodeURIComponent(returnTo)}`)
+        return
+      }
+      window.location.assign(returnTo)
     } catch {
       setError("Unable to sign in with those credentials.")
     } finally {

@@ -9,6 +9,9 @@ import { AccountHomePage } from "./pages/account/AccountHomePage"
 import { AccountProfilePage } from "./pages/account/AccountProfilePage"
 import { RegisterPage } from "./pages/account/RegisterPage"
 import { SignInPage } from "./pages/account/SignInPage"
+import { ForgotPasswordPage } from "./pages/account/ForgotPasswordPage"
+import { ResetPasswordPage } from "./pages/account/ResetPasswordPage"
+import { VerifyEmailPage } from "./pages/account/VerifyEmailPage"
 import { AccountSettingPlaceholderPage } from "./pages/account/AccountSettingPlaceholderPage"
 import { findAccountSettingPlaceholder } from "./pages/account/account-setting-placeholders"
 import { AccountSettingsPage, type AccountSettingsSlug } from "./pages/account/AccountSettingsPage"
@@ -171,6 +174,12 @@ function App() {
     page = <SignInPage cartCount={cartCount} />
   } else if (path.startsWith("/account/register")) {
     page = <RegisterPage cartCount={cartCount} />
+  } else if (path.startsWith("/account/verify-email")) {
+    page = <VerifyEmailPage cartCount={cartCount} />
+  } else if (path.startsWith("/account/forgot-password")) {
+    page = <ForgotPasswordPage cartCount={cartCount} />
+  } else if (path.startsWith("/account/reset-password")) {
+    page = <ResetPasswordPage cartCount={cartCount} />
   } else if (
     (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[]).some(
       (slug) => path === `/account/${slug}`

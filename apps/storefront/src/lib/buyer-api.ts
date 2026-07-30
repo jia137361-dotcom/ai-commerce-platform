@@ -588,13 +588,20 @@ export type BuyerCustomer = {
 export type BuyerRegisterInput = {
   email: string
   password: string
-  firstName?: string
-  lastName?: string
-  phone?: string
 }
 
 export type BuyerSignInInput = {
   email: string
+  password: string
+}
+
+export type BuyerPasswordResetRequest = {
+  email: string
+}
+
+export type BuyerPasswordResetConfirm = {
+  email: string
+  code: string
   password: string
 }
 
@@ -2305,49 +2312,52 @@ export const getCurrentCustomer = async () => {
 }
 
 export const signInCustomer = async (input: BuyerSignInInput) => {
-  const payload = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
-    method: "POST",
-    body: JSON.stringify({
-      email: input.email.trim().toLowerCase(),
-      password: input.password,
-    }),
-  })
-  if (!payload.token) throw new Error("Authentication succeeded without a token.")
-  await createCustomerSession(payload.token)
-  const customer = await getCurrentCustomer()
-  if (!customer) throw new Error("Unable to load customer after sign in.")
-  return customer
+  try {
+    const payload = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
+      method: "POST",
+      body: JSON.stringify({
+        email: input.email.trim().toLowerCase(),
+        password: input.password,
+      }),
+    })
+    if (!payload.token) throw new Error("Authentication succeeded without a token.")
+    await createCustomerSession(payload.token)
+    const customer = await getCurrentCustomer()
+    if (!customer) throw new Error("Unable to load customer after sign in.")
+    return customer
+  } catch {
+    throw new Error("The email or password is incorrect.")
+  }
 }
 
 export const registerCustomer = async (input: BuyerRegisterInput) => {
   const email = input.email.trim().toLowerCase()
-  const auth = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass/register", {
-    method: "POST",
-    body: JSON.stringify({
-      email,
-      password: input.password,
-    }),
-  })
-  if (!auth.token) throw new Error("Registration succeeded without an auth token.")
-  const payload = await apiFetch<ApiCustomerResponse>("/store/customers", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${auth.token}`,
-    },
-    body: JSON.stringify({
-      email,
-      first_name: input.firstName?.trim() || undefined,
-      last_name: input.lastName?.trim() || undefined,
-      phone: input.phone?.trim() || undefined,
-    }),
-  })
-  const signedIn = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
-    method: "POST",
-    body: JSON.stringify({ email, password: input.password }),
-  })
-  if (!signedIn.token) throw new Error("Customer was created but session authentication did not return a token.")
-  await createCustomerSession(signedIn.token)
-  return normalizeCustomer(payload.customer) ?? getCurrentCustomer()
+  try {
+    const auth = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass/register", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        password: input.password,
+      }),
+    })
+    if (!auth.token) throw new Error("Registration succeeded without an auth token.")
+    const payload = await apiFetch<ApiCustomerResponse>("/store/customers", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${auth.token}`,
+      },
+      body: JSON.stringify({ email }),
+    })
+    const signedIn = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
+      method: "POST",
+      body: JSON.stringify({ email, password: input.password }),
+    })
+    if (!signedIn.token) throw new Error("Customer was created but session authentication did not return a token.")
+    await createCustomerSession(signedIn.token)
+    return normalizeCustomer(payload.customer) ?? getCurrentCustomer()
+  } catch {
+    throw new Error("We couldn't create that account. Check the email and password, or sign in if you already have an account.")
+  }
 }
 
 export const updateCustomerProfile = async (input: BuyerProfileUpdateInput) => {
@@ -2542,6 +2552,29 @@ export const confirmBuyerEmailVerification = async (code: string) => {
       body: JSON.stringify({ action: "confirm", code }),
     }
   )
+  return payload
+}
+
+export const requestBuyerPasswordReset = async (input: BuyerPasswordResetRequest) => {
+  const payload = await apiFetch<{ sent?: boolean; message?: string; dev_code?: string; expires_at?: string }>(
+    "/store/customers/password-reset",
+    {
+      method: "POST",
+      body: JSON.stringify({ email: input.email.trim().toLowerCase() }),
+    }
+  )
+  return payload
+}
+
+export const confirmBuyerPasswordReset = async (input: BuyerPasswordResetConfirm) => {
+  const payload = await apiFetch<{ reset?: boolean; email?: string }>("/store/customers/password-reset", {
+    method: "PUT",
+    body: JSON.stringify({
+      email: input.email.trim().toLowerCase(),
+      code: input.code.trim(),
+      password: input.password,
+    }),
+  })
   return payload
 }
 

@@ -5,6 +5,7 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { safeReturnTo } from "./account-utils"
 import { Card } from "../../components/ui/Card"
+import { sendBuyerEmailVerification } from "../../lib/buyer-api"
 
 export function RegisterPage({ cartCount }: { cartCount: number }) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
@@ -12,12 +13,14 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
   const [error, setError] = useState<string | undefined>()
   const auth = useBuyerAuth()
 
-  const submit = async (input: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => {
+  const submit = async (input: { email: string; password: string }) => {
     setLoading(true)
     setError(undefined)
     try {
       await auth.register(input)
-      window.location.assign(safeReturnTo())
+      await sendBuyerEmailVerification().catch(() => undefined)
+      const returnTo = safeReturnTo("/account")
+      window.location.assign(`/account/verify-email?returnTo=${encodeURIComponent(returnTo)}`)
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : "Unable to create account.")
     } finally {
@@ -31,7 +34,7 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
         <section className="buyer-account-auth-intro">
           <p>Buyer account</p>
           <h1>Create your account</h1>
-          <span>Register to keep your profile, orders, and buyer-specific cart separate from other accounts.</span>
+          <span>Register with email and password. Add your name and phone later from Profile.</span>
         </section>
         <Card as="section" className="buyer-account-auth-card">
         <div className="buyer-account-auth-tabs">

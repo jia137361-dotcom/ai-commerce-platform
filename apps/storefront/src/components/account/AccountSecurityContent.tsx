@@ -26,7 +26,6 @@ export function AccountSecurityContent({ customer, onCustomerUpdated }: AccountS
   const [verificationMessage, setVerificationMessage] = useState<string>()
   const [verificationLoading, setVerificationLoading] = useState(false)
   const [verified, setVerified] = useState(isBuyerEmailVerified(customer.metadata))
-  const [devCodeHint, setDevCodeHint] = useState<string>()
 
   useEffect(() => {
     setVerified(isBuyerEmailVerified(customer.metadata))
@@ -59,13 +58,11 @@ export function AccountSecurityContent({ customer, onCustomerUpdated }: AccountS
   const sendVerification = async () => {
     setVerificationLoading(true)
     setVerificationMessage(undefined)
-    setDevCodeHint(undefined)
     try {
       const result = await sendBuyerEmailVerification()
       setVerificationMessage(`Verification code sent to ${result.email ?? customer.email}.`)
-      if (result.dev_code) setDevCodeHint(`Local dev code: ${result.dev_code}`)
-    } catch (error) {
-      setVerificationMessage(error instanceof Error ? error.message : "Unable to send verification code.")
+    } catch {
+      setVerificationMessage("Unable to send verification code. Please wait and try again.")
     } finally {
       setVerificationLoading(false)
     }
@@ -81,8 +78,8 @@ export function AccountSecurityContent({ customer, onCustomerUpdated }: AccountS
       setVerificationCode("")
       setVerificationMessage("Email verified successfully.")
       onCustomerUpdated?.()
-    } catch (error) {
-      setVerificationMessage(error instanceof Error ? error.message : "Unable to verify email.")
+    } catch {
+      setVerificationMessage("Verification code is invalid or expired. Request a new code and try again.")
     } finally {
       setVerificationLoading(false)
     }
@@ -115,7 +112,6 @@ export function AccountSecurityContent({ customer, onCustomerUpdated }: AccountS
             <Button type="button" loading={verificationLoading} onClick={() => void sendVerification()}>
               Send verification code
             </Button>
-            {devCodeHint ? <p className="buyer-account-setting-note">{devCodeHint}</p> : null}
             <form onSubmit={(event) => void confirmVerification(event)}>
               <FormField
                 label="Verification code"
