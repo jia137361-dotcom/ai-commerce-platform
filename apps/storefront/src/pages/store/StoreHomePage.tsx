@@ -40,6 +40,17 @@ const fallbackSettings: BuyerStoreSettings = {
 const CATALOG_PER_PAGE = 24
 type StoreSection = "items" | "categories" | "about"
 
+const toUserFacingStoreMessage = (message?: string) => {
+  if (!message) return "Some store information is temporarily unavailable. Please refresh."
+  if (/store not found/i.test(message)) {
+    return "We couldn't load that store. Please choose another store or refresh."
+  }
+  if (/unable to reach|failed to fetch|network|backend|http\s+\d+/i.test(message)) {
+    return "Some store information is temporarily unavailable. Please refresh."
+  }
+  return "Some store information is temporarily unavailable. Please refresh."
+}
+
 function scrollToVisibleId(id: string) {
   window.requestAnimationFrame(() => {
     const nodes = Array.from(document.querySelectorAll(`#${CSS.escape(id)}`)) as HTMLElement[]
@@ -179,7 +190,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         .filter((result) => result.error)
         .map((result, index) => ({
           key: `${result.source}-${index}-${result.error}`,
-          message: `${result.source === "mock" ? "Mock data" : "Static UI"} fallback: ${result.error}`,
+          message: toUserFacingStoreMessage(result.error),
         }))
     )
     setLoading(false)
@@ -194,7 +205,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
 
       if (!isActive()) return
 
-      setCatalogError(result.error)
+      setCatalogError(result.error ? toUserFacingStoreMessage(result.error) : undefined)
       setCatalogTotal(result.data.length)
       setCatalogPage(page)
       setCatalogLastPage(1)
@@ -219,7 +230,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         if (!active) return
         if (!storeResult.data) {
           setLoading(false)
-          setNotices([{ key: "store-missing", message: storeResult.error ?? "Store not found" }])
+          setNotices([{ key: "store-missing", message: toUserFacingStoreMessage(storeResult.error ?? "Store not found") }])
           return
         }
         setActiveBuyerStoreId(storeResult.data.storeId)
@@ -227,15 +238,15 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
       } else {
         const storesResult = await fetchMarketplaceStores()
         if (!active) return
-        const publicStore = storesResult.data.find((store) => store.productCount > 0)
-        if (publicStore) {
-          setActiveBuyerStoreId(publicStore.storeId)
-          setActiveStoreId(publicStore.storeId)
+        const selectedStore = storesResult.data.find((store) => store.productCount > 0) ?? storesResult.data[0]
+        if (selectedStore) {
+          setActiveBuyerStoreId(selectedStore.storeId)
+          setActiveStoreId(selectedStore.storeId)
         } else {
           enterLegacyDefaultStoreContext()
           setActiveStoreId(getLegacyDefaultStoreId())
           if (storesResult.error) {
-            setNotices([{ key: "store-auto-select", message: storesResult.error }])
+            setNotices([{ key: "store-auto-select", message: toUserFacingStoreMessage(storesResult.error) }])
           }
         }
       }
