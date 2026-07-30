@@ -1,6 +1,6 @@
 import type { MouseEventHandler, ReactNode } from "react"
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost"
+export type ButtonVariant = "primary" | "secondary" | "outline" | "danger" | "ghost"
 
 type ButtonProps = {
   children: ReactNode
@@ -9,6 +9,7 @@ type ButtonProps = {
   type?: "button" | "submit" | "reset"
   disabled?: boolean
   loading?: boolean
+  fullWidth?: boolean
   className?: string
   onClick?: MouseEventHandler<HTMLButtonElement>
   ariaLabel?: string
@@ -22,15 +23,21 @@ export function Button({
   type = "button",
   disabled = false,
   loading = false,
+  fullWidth = false,
   className = "",
   onClick,
   ariaLabel,
   title,
 }: ButtonProps) {
-  const classes = ["buyer-ui-button", `buyer-ui-button--${variant}`, className]
+  const classes = ["buyer-ui-button", `buyer-ui-button--${variant}`, fullWidth ? "buyer-ui-button--full" : "", className]
     .filter(Boolean)
     .join(" ")
-  const content = loading ? <><span className="buyer-ui-button-spinner" aria-hidden="true" />{children}</> : children
+  const content = loading ? (
+    <>
+      <span className="buyer-ui-button-spinner" aria-hidden="true" />
+      {children}
+    </>
+  ) : children
 
   if (href) {
     return (

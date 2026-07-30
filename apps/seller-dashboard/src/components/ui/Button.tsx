@@ -1,8 +1,10 @@
 import { cn } from "../../lib/cn"
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "outline" | "ghost" | "danger"
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger"
   size?: "sm" | "md" | "lg"
+  loading?: boolean
+  fullWidth?: boolean
 }
 
 export function Button({
@@ -10,26 +12,33 @@ export function Button({
   size = "md",
   className,
   disabled,
+  loading = false,
+  fullWidth = false,
   children,
   ...props
 }: ButtonProps) {
+  const isDisabled = disabled || loading
   return (
     <button
       type="button"
-      disabled={disabled}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-lg)] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color-mix(in_srgb,var(--color-focus)_34%,transparent)] disabled:cursor-not-allowed disabled:opacity-55",
         size === "sm" && "px-3 py-1.5 text-sm",
         size === "md" && "px-4 py-2 text-sm",
         size === "lg" && "px-6 py-3 text-base",
-        variant === "primary" && "bg-brand text-white hover:bg-brand-dark",
-        variant === "outline" && "border border-slate-200 bg-white text-slate-700 hover:border-brand hover:text-brand",
-        variant === "ghost" && "text-slate-600 hover:bg-slate-100",
-        variant === "danger" && "border border-red-200 text-red-600 hover:bg-red-50",
+        fullWidth && "w-full",
+        variant === "primary" && "bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-active)]",
+        variant === "secondary" && "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-muted)]",
+        variant === "outline" && "border border-[var(--color-primary)] bg-transparent text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]",
+        variant === "ghost" && "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text-primary)]",
+        variant === "danger" && "border border-red-200 text-[var(--color-danger)] hover:bg-red-50",
         className
       )}
       {...props}
     >
+      {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" /> : null}
       {children}
     </button>
   )

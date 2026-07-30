@@ -5,13 +5,16 @@ const VARIANTS: Record<string, string> = {
   paid: "bg-emerald-50 text-emerald-700",
   delivered: "bg-emerald-50 text-emerald-700",
   draft: "bg-slate-100 text-slate-600",
-  running: "bg-brand-light text-brand",
+  running: "bg-orange-50 text-[var(--color-primary)]",
   queued: "bg-amber-50 text-amber-700",
   failed: "bg-red-50 text-red-600",
   refunded: "bg-red-50 text-red-600",
   cancelled: "bg-red-50 text-red-600",
   unpublished: "bg-slate-100 text-slate-500",
   archived: "bg-slate-100 text-slate-500",
+  active: "bg-emerald-50 text-emerald-700",
+  exclusive: "bg-orange-50 text-[var(--color-primary)]",
+  default: "bg-slate-100 text-slate-600",
 }
 
 export function Badge({ label, className }: { label: string; className?: string }) {
@@ -19,7 +22,7 @@ export function Badge({ label, className }: { label: string; className?: string 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
+        "inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-0.5 text-xs font-semibold uppercase",
         VARIANTS[key] ?? "bg-slate-100 text-slate-600",
         className
       )}

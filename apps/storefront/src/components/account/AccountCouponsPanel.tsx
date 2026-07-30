@@ -6,8 +6,9 @@ import {
 } from "../../lib/buyer-api"
 import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
-import { LoadingState } from "../ui/States"
+import { EmptyState, ErrorState, LoadingState } from "../ui/States"
 import { Modal } from "../ui/Modal"
+import { FormField } from "../ui/FormField"
 
 const TABS = [
   { id: "all", label: "All" },
@@ -38,9 +39,9 @@ export function AccountCouponsPanel() {
     setError(undefined)
     try {
       setCoupons(await fetchMyCoupons(nextBucket))
-    } catch (reason) {
+    } catch {
       setCoupons([])
-      setError(reason instanceof Error ? reason.message : "Unable to load coupons")
+      setError("We couldn't load your coupons. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -63,8 +64,8 @@ export function AccountCouponsPanel() {
       await claimCouponByCode(claimCode.trim())
       setClaimCode("")
       await load(bucket)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to claim coupon")
+    } catch {
+      setError("We couldn't claim that coupon. Check the code and try again.")
     } finally {
       setClaiming(false)
     }
@@ -86,13 +87,15 @@ export function AccountCouponsPanel() {
           void submitClaim()
         }}
       >
-        <input
+        <FormField
+          className="buyer-coupons-code-field"
+          label="Coupon code"
           value={claimCode}
           onChange={(event) => setClaimCode(event.target.value)}
           placeholder="Enter coupon code"
-          aria-label="Coupon code"
+          autoComplete="off"
         />
-        <Button type="submit" loading={claiming}>
+        <Button type="submit" loading={claiming} disabled={!claimCode.trim()}>
           Claim
         </Button>
       </form>
@@ -113,14 +116,22 @@ export function AccountCouponsPanel() {
       </div>
 
       {loading ? <LoadingState label="Loading coupons..." /> : null}
-      {error ? <p className="buyer-account-error">{error}</p> : null}
+      {error && !loading ? (
+        <ErrorState
+          className="buyer-coupons-feedback"
+          title="Coupon action needs attention"
+          message={error}
+          action={{ label: "Retry", onClick: () => void load(bucket) }}
+        />
+      ) : null}
 
       {!loading && !available.length ? (
-        <div className="buyer-account-empty-state">
-          <span aria-hidden="true">%</span>
-          <h2>No coupons available</h2>
-          <p>Store vouchers from ciiverse will appear here after you claim them.</p>
-        </div>
+        <EmptyState
+          className="buyer-coupons-empty"
+          title="No coupons available"
+          message="Store vouchers from ciiverse will appear here after you claim them."
+          icon={<span aria-hidden="true">%</span>}
+        />
       ) : null}
 
       <div className="buyer-coupons-list">
@@ -144,7 +155,7 @@ export function AccountCouponsPanel() {
               <p>{formatExpiry(coupon.expiresAt)}</p>
               <p>{coupon.scopeLabel}</p>
             </div>
-            <Button href="/checkout" variant="secondary">
+            <Button href="/checkout" variant="outline">
               Use
             </Button>
           </article>

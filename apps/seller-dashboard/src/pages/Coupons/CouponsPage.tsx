@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
+import { Badge } from "../../components/ui/Badge"
+import { Button } from "../../components/ui/Button"
+import { Card } from "../../components/ui/Card"
+import { EmptyState, ErrorState, LoadingState } from "../../components/ui/EmptyState"
+import { Input } from "../../components/ui/Input"
 import { apiFetch } from "../../lib/api-client"
 
 type AdminCoupon = {
@@ -30,10 +35,11 @@ export function CouponsPage() {
   const [error, setError] = useState<string>()
   const [copiedCode, setCopiedCode] = useState<string>()
 
-  const { data, isLoading } = useQuery({
+  const couponsQuery = useQuery({
     queryKey: ["store-coupons"],
     queryFn: () => apiFetch<{ coupons: AdminCoupon[] }>("/admin/store-coupons"),
   })
+  const { data, isLoading } = couponsQuery
 
   const createCoupon = useMutation({
     mutationFn: () =>
@@ -55,8 +61,8 @@ export function CouponsPage() {
       setError(undefined)
       void queryClient.invalidateQueries({ queryKey: ["store-coupons"] })
     },
-    onError: (reason) => {
-      setError(reason instanceof Error ? reason.message : "Unable to create coupon")
+    onError: () => {
+      setError("We couldn't create that coupon. Check the fields and try again.")
     },
   })
 
@@ -67,6 +73,9 @@ export function CouponsPage() {
         body: JSON.stringify({ status: "archived" }),
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["store-coupons"] }),
+    onError: () => {
+      setError("We couldn't archive that coupon. Please try again.")
+    },
   })
 
   const copyCode = async (value: string) => {
@@ -75,7 +84,7 @@ export function CouponsPage() {
       setCopiedCode(value)
       window.setTimeout(() => setCopiedCode((current) => (current === value ? undefined : current)), 2000)
     } catch {
-      setError(`Unable to copy code ${value}`)
+      setError("We couldn't copy the coupon code. Please copy it manually.")
     }
   }
 
@@ -84,14 +93,14 @@ export function CouponsPage() {
   return (
     <div className="space-y-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Coupons</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">Coupons</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Issue store vouchers for ciiverse buyers. Defaults: $1 no threshold, and $2 off when over $10.
         </p>
       </header>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-        <h2 className="font-semibold text-slate-900">How coupons reach buyers</h2>
+      <Card className="bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-primary)] shadow-none">
+        <h2 className="font-semibold text-[var(--color-text-primary)]">How coupons reach buyers</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li>
             <strong>Default coupons</strong> (platform seeds): auto-added to a buyer wallet when they open{" "}
@@ -103,119 +112,125 @@ export function CouponsPage() {
             checkout.
           </li>
         </ul>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold">Create exclusive coupon</h2>
+      <Card>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text-primary)]">Create exclusive coupon</h2>
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="text-sm">
-            Title
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="$5 off when over $50"
-            />
-          </label>
-          <label className="text-sm">
-            Code (optional)
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
-              placeholder="SUMMER5"
-            />
-          </label>
-          <label className="text-sm">
-            Discount amount (USD)
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={discountAmount}
-              onChange={(event) => setDiscountAmount(event.target.value)}
-              type="number"
-              min="0.01"
-              step="0.01"
-            />
-          </label>
-          <label className="text-sm">
-            Min subtotal (0 = no threshold)
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={minSubtotal}
-              onChange={(event) => setMinSubtotal(event.target.value)}
-              type="number"
-              min="0"
-              step="0.01"
-            />
-          </label>
-          <label className="text-sm">
-            Grant quantity per claim
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={grantQuantity}
-              onChange={(event) => setGrantQuantity(event.target.value)}
-              type="number"
-              min="1"
-            />
-          </label>
+          <Input
+            label="Title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="$5 off when over $50"
+            required
+          />
+          <Input
+            label="Code"
+            description="Optional. Leave blank to generate one."
+            value={code}
+            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            placeholder="SUMMER5"
+            autoComplete="off"
+          />
+          <Input
+            label="Discount amount (USD)"
+            value={discountAmount}
+            onChange={(event) => setDiscountAmount(event.target.value)}
+            type="number"
+            min="0.01"
+            step="0.01"
+            required
+          />
+          <Input
+            label="Min subtotal"
+            description="Use 0 for no threshold."
+            value={minSubtotal}
+            onChange={(event) => setMinSubtotal(event.target.value)}
+            type="number"
+            min="0"
+            step="0.01"
+          />
+          <Input
+            label="Grant quantity per claim"
+            value={grantQuantity}
+            onChange={(event) => setGrantQuantity(event.target.value)}
+            type="number"
+            min="1"
+            required
+          />
         </div>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-        <button
-          type="button"
-          className="mt-4 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60"
+        {error ? <p className="mt-3 text-sm font-medium text-[var(--color-danger)]">{error}</p> : null}
+        <Button
+          className="mt-5"
           disabled={!title.trim() || createCoupon.isPending}
+          loading={createCoupon.isPending}
           onClick={() => createCoupon.mutate()}
         >
-          {createCoupon.isPending ? "Creating…" : "Create coupon"}
-        </button>
-      </section>
+          Create coupon
+        </Button>
+      </Card>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold">Issued coupons</h2>
-        {isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
-        <div className="overflow-x-auto">
+      <Card>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text-primary)]">Issued coupons</h2>
+        {isLoading ? <LoadingState label="Loading issued coupons..." /> : null}
+        {couponsQuery.isError && !isLoading ? (
+          <ErrorState
+            title="Coupons could not load"
+            description="Please retry the request."
+            actionLabel="Retry"
+            onAction={() => void couponsQuery.refetch()}
+          />
+        ) : null}
+        {!isLoading && !couponsQuery.isError && !coupons.length ? (
+          <EmptyState title="No coupons yet" description="Create an exclusive coupon to share a claim code with buyers." />
+        ) : null}
+        {!isLoading && !couponsQuery.isError && coupons.length ? (
+        <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)]">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b text-slate-500">
+            <thead className="border-b border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text-secondary)]">
               <tr>
-                <th className="py-2 pr-3">Code</th>
-                <th className="py-2 pr-3">Offer</th>
-                <th className="py-2 pr-3">Status</th>
-                <th className="py-2 pr-3">Claims</th>
-                <th className="py-2 pr-3">Actions</th>
+                <th className="px-4 py-3">Code</th>
+                <th className="px-4 py-3">Offer</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Claims</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {coupons.map((coupon) => (
-                <tr key={coupon.id} className="border-b border-slate-100">
-                  <td className="py-3 pr-3 font-mono text-xs">{coupon.code}</td>
-                  <td className="py-3 pr-3">
-                    <div className="font-medium">{coupon.title}</div>
-                    <div className="text-slate-500">
+                <tr key={coupon.id} className="border-b border-[var(--color-border)] last:border-0">
+                  <td className="px-4 py-3 font-mono text-xs text-[var(--color-text-primary)]">{coupon.code}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-[var(--color-text-primary)]">{coupon.title}</div>
+                    <div className="mt-1 text-[var(--color-text-secondary)]">
                       {coupon.amount_label} · {coupon.condition_label}
                       {coupon.is_default ? " · default" : " · exclusive (share code)"}
                     </div>
                   </td>
-                  <td className="py-3 pr-3">{coupon.active ? "Active" : coupon.status}</td>
-                  <td className="py-3 pr-3">{coupon.claim_count}</td>
-                  <td className="py-3 pr-3">
+                  <td className="px-4 py-3">
+                    <Badge label={coupon.active ? "active" : coupon.status} />
+                  </td>
+                  <td className="px-4 py-3 text-[var(--color-text-primary)]">{coupon.claim_count}</td>
+                  <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-3">
                       {!coupon.is_default ? (
-                        <button
-                          type="button"
-                          className="text-slate-700 hover:underline"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => void copyCode(coupon.code)}
                         >
                           {copiedCode === coupon.code ? "Copied" : "Copy code"}
-                        </button>
+                        </Button>
                       ) : null}
                       {coupon.status === "active" && !coupon.is_default ? (
-                        <button
-                          type="button"
-                          className="text-orange-600 hover:underline"
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={archiveCoupon.isPending}
                           onClick={() => archiveCoupon.mutate(coupon.id)}
                         >
                           Archive
-                        </button>
+                        </Button>
                       ) : coupon.is_default ? (
                         "—"
                       ) : null}
@@ -226,7 +241,8 @@ export function CouponsPage() {
             </tbody>
           </table>
         </div>
-      </section>
+        ) : null}
+      </Card>
     </div>
   )
 }
