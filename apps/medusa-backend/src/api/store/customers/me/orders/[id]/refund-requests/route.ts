@@ -1,5 +1,6 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
+import { assertBuyerEmailVerified } from "../../../../../../../lib/buyer-auth-access"
 import { loadCancellationContext } from "../../../../../../../lib/order-cancellation"
 import {
   evaluateRefundRequestEligibility,
@@ -143,6 +144,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       (req.body ?? {}) as { reason?: unknown; note?: unknown }
     )
     const { orderId, order, authCustomerId } = await loadOwnedOrder(req)
+    if (!(await assertBuyerEmailVerified(req, res, authCustomerId))) return
     const storeId = resolveCurrentStore(req).store_id
     const service = req.scope.resolve(BUYER_REFUND_REQUESTS_MODULE) as RefundRequestService
     const existingRequests = await listOrderRequests(service, {

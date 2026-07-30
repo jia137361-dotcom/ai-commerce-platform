@@ -1,4 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { assertBuyerEmailVerified } from "../../../../../../lib/buyer-auth-access"
 import { resolveCustomerId } from "../../../../../../lib/customer-session"
 import { resolveCurrentStore } from "../../../../../../lib/store-context"
 import {
@@ -18,6 +19,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       error: { code: "UNAUTHORIZED", message: "Customer session is required" },
     })
   }
+  if (!(await assertBuyerEmailVerified(req, res, customerId))) return
 
   try {
     const { store_id: storeId } = resolveCurrentStore(req)

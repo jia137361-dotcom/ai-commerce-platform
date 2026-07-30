@@ -1,4 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { assertBuyerEmailVerified } from "../../../../../lib/buyer-auth-access"
 import {
   createCustomerPaymentMethodSetupIntent,
   listCustomerPaymentMethodRecords,
@@ -30,6 +31,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   if (!customerId) {
     return res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Customer session is required" } })
   }
+  if (!(await assertBuyerEmailVerified(req, res, customerId))) return
 
   try {
     const setup = await createCustomerPaymentMethodSetupIntent(req.scope, customerId)

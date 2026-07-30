@@ -1,5 +1,6 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
+import { assertBuyerEmailVerified } from "../../../../../lib/buyer-auth-access"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
 import { readOrderStoreId } from "../../../../../lib/order-store-context"
 import {
@@ -32,6 +33,10 @@ type CreateReviewBody = {
   content?: unknown
   customer_name?: unknown
   image_urls?: unknown
+}
+
+type AuthenticatedRequest = MedusaRequest & {
+  auth_context?: { actor_id?: string }
 }
 
 const parseDisplayId = (value: unknown): number | null => {
@@ -125,6 +130,9 @@ export const POST = async (
   req: MedusaRequest<CreateReviewBody>,
   res: MedusaResponse
 ) => {
+  const customerId = (req as AuthenticatedRequest).auth_context?.actor_id
+  if (customerId && !(await assertBuyerEmailVerified(req, res, customerId))) return
+
   const productId = (req.params.id ?? req.params.product_id) as string
   const { store_id: storeId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)

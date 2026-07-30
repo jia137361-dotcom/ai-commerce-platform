@@ -145,3 +145,50 @@ export async function sendNewsletterWelcome(input: {
     html,
   })
 }
+
+const baseEmailShell = (content: string) => `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#202636;background:#ffffff">
+  <div style="border:1px solid #dfe3e8;border-radius:12px;padding:28px">
+    <p style="margin:0 0 18px;color:#ff5a14;font-weight:800;letter-spacing:.08em;text-transform:uppercase">CiiVerse</p>
+    ${content}
+  </div>
+  <p style="color:#677083;font-size:12px;line-height:1.6;margin:18px 0 0">You received this email because someone requested account access for this address. If this wasn't you, you can safely ignore it.</p>
+</body>
+</html>`
+
+export async function sendBuyerEmailVerificationCode(input: {
+  to: string
+  code: string
+  expiresInMinutes: number
+}): Promise<EmailResult> {
+  return sendEmail({
+    to: input.to,
+    subject: "Verify your CiiVerse email",
+    html: baseEmailShell(`
+      <h1 style="margin:0 0 12px;color:#202636;font-size:28px;line-height:1.2">Verify your email</h1>
+      <p style="margin:0 0 20px;color:#4b5563;line-height:1.6">Enter this 6-digit code to finish setting up your buyer account.</p>
+      <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#202636;background:#f7f8fa;border-radius:10px;padding:18px 20px;text-align:center">${input.code}</div>
+      <p style="margin:20px 0 0;color:#677083;line-height:1.6">This code expires in ${input.expiresInMinutes} minutes.</p>
+    `),
+  })
+}
+
+export async function sendBuyerPasswordResetCode(input: {
+  to: string
+  code: string
+  expiresInMinutes: number
+}): Promise<EmailResult> {
+  return sendEmail({
+    to: input.to,
+    subject: "Reset your CiiVerse password",
+    html: baseEmailShell(`
+      <h1 style="margin:0 0 12px;color:#202636;font-size:28px;line-height:1.2">Reset your password</h1>
+      <p style="margin:0 0 20px;color:#4b5563;line-height:1.6">Use this 6-digit code to choose a new password for your buyer account.</p>
+      <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#202636;background:#f7f8fa;border-radius:10px;padding:18px 20px;text-align:center">${input.code}</div>
+      <p style="margin:20px 0 0;color:#677083;line-height:1.6">This code expires in ${input.expiresInMinutes} minutes. Old reset codes are invalidated after a successful reset.</p>
+    `),
+  })
+}

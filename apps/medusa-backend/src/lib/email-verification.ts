@@ -1,11 +1,23 @@
-import { createHash, randomInt } from "node:crypto"
+import { createHash, randomInt, timingSafeEqual } from "node:crypto"
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
-
-const OTP_TTL_MS = 15 * 60 * 1000
+import {
+  BUYER_AUTH_POLICY,
+  authCodePepper,
+  evaluateMetadataRateLimit,
+} from "./buyer-auth-policy"
+import { sendBuyerEmailVerificationCode } from "./email"
 
 const hashCode = (email: string, code: string) =>
-  createHash("sha256").update(`${email.trim().toLowerCase()}:${code}`).digest("hex")
+  createHash("sha256")
+    .update(`${authCodePepper()}:${email.trim().toLowerCase()}:${code}`)
+    .digest("hex")
+
+const secureCompare = (left: string, right: string) => {
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer)
+}
 
 export const isEmailVerified = (metadata?: Record<string, unknown> | null) =>
   typeof metadata?.email_verified_at === "string" && metadata.email_verified_at.length > 0
@@ -27,19 +39,41 @@ export async function sendCustomerEmailVerification(
   }
 
   const code = String(randomInt(100000, 1000000))
-  const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString()
+  const nowMs = Date.now()
+  const expiresAt = new Date(nowMs + BUYER_AUTH_POLICY.verificationCodeTtlMs).toISOString()
+  const previousMetadata = customer.metadata ?? {}
+  const limit = evaluateMetadataRateLimit(
+    previousMetadata,
+    {
+      lastSentAt: "email_verification_last_sent_at",
+      windowStartedAt: "email_verification_window_started_at",
+      windowCount: "email_verification_window_count",
+    },
+    BUYER_AUTH_POLICY.maxVerificationSendsPerWindow,
+    nowMs
+  )
+
+  if (!limit.allowed) {
+    const seconds = Math.max(1, Math.ceil((limit.retryAfterMs ?? BUYER_AUTH_POLICY.resendCooldownMs) / 1000))
+    throw new Error(`Please wait ${seconds} seconds before requesting another verification code.`)
+  }
+
   const metadata = {
-    ...(customer.metadata ?? {}),
+    ...previousMetadata,
     email_verification_code_hash: hashCode(email, code),
     email_verification_expires_at: expiresAt,
     email_verification_sent_to: email,
+    email_verification_last_sent_at: new Date(nowMs).toISOString(),
+    email_verification_window_started_at: limit.windowStart,
+    email_verification_window_count: limit.count,
   }
 
   await customerModule.updateCustomers(customerId, { metadata })
-
-  if (process.env.NODE_ENV !== "production") {
-    console.info(`[email-verification] code=${code} email=${email} customer_id=${customerId}`)
-  }
+  await sendBuyerEmailVerificationCode({
+    to: email,
+    code,
+    expiresInMinutes: Math.max(1, Math.round(BUYER_AUTH_POLICY.verificationCodeTtlMs / 60_000)),
+  })
 
   return {
     email,
@@ -84,7 +118,7 @@ export async function confirmCustomerEmailVerification(
   if (sentTo !== email) {
     throw new Error("Verification code does not match the current account email.")
   }
-  if (hashCode(email, normalizedCode) !== expectedHash) {
+  if (!secureCompare(hashCode(email, normalizedCode), expectedHash)) {
     throw new Error("Verification code is incorrect.")
   }
 
@@ -95,6 +129,7 @@ export async function confirmCustomerEmailVerification(
     email_verification_code_hash: null,
     email_verification_expires_at: null,
     email_verification_sent_to: null,
+    email_verification_used_at: verifiedAt,
   }
 
   await customerModule.updateCustomers(customerId, { metadata: nextMetadata })
