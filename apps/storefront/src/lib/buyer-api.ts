@@ -2206,7 +2206,8 @@ const normalizeRefundCapability = (
 
 /**
  * Read a dollar amount from order detail API response.
- * The backend already converts cents to dollars before returning order totals.
+ * The backend (buyer-order-totals.ts) already converts cents→dollars via minorMoneyToMajor.
+ * This function just validates and normalizes the value.
  * Returns null for null/undefined/NaN.
  */
 const readOrderMoneyMajor = (value: number | string | null | undefined): number | null => {

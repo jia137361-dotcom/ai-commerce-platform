@@ -9,6 +9,7 @@ import {
   getShipFromCountryLabel,
   normalizeShipFromCountryCode,
 } from "../../lib/ship-from-country"
+import { normalizeS2bdiyEnglishProduct } from "../../modules/suppliers/s2bdiy/s2bdiy-product"
 
 export type ProductStatus = "draft" | "published" | "unpublished" | "archived"
 export type ProductSource = "manual" | "ai"
@@ -177,6 +178,9 @@ export const normalizeSupplierProduct = (supplierProduct: any) => ({
   deliver_goods_text: supplierProduct.deliver_goods_text,
   status: supplierProduct.status,
   raw_json: supplierProduct.raw_json ?? {},
+  english: supplierProduct.supplier_id === "sup_s2bdiy"
+    ? normalizeS2bdiyEnglishProduct((supplierProduct.raw_json ?? {}) as Record<string, unknown>)
+    : null,
   created_at: supplierProduct.created_at,
   updated_at: supplierProduct.updated_at
 })
@@ -231,6 +235,25 @@ export const normalizeSupplierPrintSpec = (spec: any) => ({
   created_at: spec.created_at,
   updated_at: spec.updated_at
 })
+
+export const loadSupplierProductPresentation = async (
+  storeCoreService: ReturnType<typeof getStoreCoreService>,
+  supplierProductId?: string | null,
+) => {
+  if (!supplierProductId) return null
+  const products = await storeCoreService.listSupplierProducts({ id: supplierProductId })
+  const supplierProduct = products[0]
+  if (!supplierProduct) return null
+  const [variants, printSpecs] = await Promise.all([
+    storeCoreService.listSupplierProductVariants({ supplier_product_id: supplierProduct.id }),
+    storeCoreService.listSupplierPrintSpecs({ supplier_product_id: supplierProduct.id, status: "active" }),
+  ])
+  return {
+    ...normalizeSupplierProduct(supplierProduct),
+    variants: variants.map(normalizeSupplierProductVariant),
+    print_specs: printSpecs.map(normalizeSupplierPrintSpec),
+  }
+}
 
 export const normalizePlatformDesignTemplate = (template: any) => ({
   template_id: template.id,

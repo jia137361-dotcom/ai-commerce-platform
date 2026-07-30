@@ -31,7 +31,15 @@ export type SellerPayoutResult = {
   error?: string | null
 }
 
-const readMinorAmount = (amount: number) => {
+/**
+ * Ensure an amount is in minor units (cents) for Stripe payout.
+ * If the amount is already > 999, assume it's in cents (already minor).
+ * Otherwise treat as dollars and convert to cents.
+ *
+ * NOTE: This heuristic is preserved for backward compatibility with existing
+ * payout records. New code should use explicit unit conversion.
+ */
+const readMinorAmount = (amount: number): number => {
   if (!Number.isFinite(amount) || amount <= 0) return 0
   return amount > 999 ? Math.round(amount) : Math.round(amount * 100)
 }
