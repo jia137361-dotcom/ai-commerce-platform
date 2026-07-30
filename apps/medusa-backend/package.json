@@ -13,6 +13,8 @@
     "platform:ops:bootstrap": "medusa exec ./src/scripts/platform-ops-bootstrap.ts",
     "dev:accounts:bootstrap": "medusa exec ./src/scripts/dev-accounts-bootstrap.ts",
     "dev:accounts:verify": "node ./src/scripts/dev-accounts-verify.mjs",
+    "email:auth-smoke": "ts-node ./src/scripts/test-auth-email.ts",
+    "auth:inspect-buyer": "medusa exec ./src/scripts/inspect-buyer-auth-account.ts",
     "ai-studio:bootstrap": "medusa exec ./src/scripts/ai-studio-supplier-bootstrap.ts",
     "s2bdiy:verify": "node ./scripts/s2bdiy-verify-credentials.mjs",
     "s2bdiy:backfill-buyer-materials": "medusa exec ./src/scripts/backfill-buyer-ai-materials.ts",
