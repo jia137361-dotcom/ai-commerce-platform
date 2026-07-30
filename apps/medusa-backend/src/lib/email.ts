@@ -18,6 +18,7 @@ async function sendEmail(input: {
   to: string
   subject: string
   html: string
+  idempotencyKey?: string
 }): Promise<EmailResult> {
   const client = getResendClient()
   if (!client) {
@@ -163,6 +164,7 @@ export async function sendBuyerEmailVerificationCode(input: {
   to: string
   code: string
   expiresInMinutes: number
+  idempotencyKey?: string
 }): Promise<EmailResult> {
   return sendEmail({
     to: input.to,

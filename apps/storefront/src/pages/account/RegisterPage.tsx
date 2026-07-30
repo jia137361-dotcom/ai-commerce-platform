@@ -5,7 +5,6 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { safeReturnTo } from "./account-utils"
 import { Card } from "../../components/ui/Card"
-import { sendBuyerEmailVerification } from "../../lib/buyer-api"
 
 export function RegisterPage({ cartCount }: { cartCount: number }) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
@@ -18,7 +17,6 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
     setError(undefined)
     try {
       await auth.register(input)
-      await sendBuyerEmailVerification().catch(() => undefined)
       const returnTo = safeReturnTo("/account")
       window.location.assign(`/account/verify-email?returnTo=${encodeURIComponent(returnTo)}`)
     } catch (registerError) {

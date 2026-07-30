@@ -8,6 +8,17 @@ export const BUYER_AUTH_POLICY = {
   maxPasswordResetSendsPerWindow: Number(process.env.BUYER_PASSWORD_RESET_MAX_PER_HOUR || 5),
 }
 
+export type AuthEmailDeliveryMode = "local" | "resend"
+
+export const getAuthEmailDeliveryMode = (): AuthEmailDeliveryMode => {
+  const rawMode = (process.env.AUTH_EMAIL_DELIVERY_MODE || "").trim().toLowerCase()
+  if (rawMode === "resend" || rawMode === "local") return rawMode
+  return process.env.NODE_ENV === "production" ? "resend" : "local"
+}
+
+export const isAuthDevCodeEnabled = () =>
+  process.env.NODE_ENV !== "production" && process.env.AUTH_DEV_CODE_ENABLED === "true"
+
 export const normalizeBuyerEmail = (value: unknown) =>
   typeof value === "string" ? value.trim().toLowerCase() : ""
 

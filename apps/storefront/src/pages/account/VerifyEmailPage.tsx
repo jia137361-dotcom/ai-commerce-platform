@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useReducer, useRef, useState, type FormEvent } from "react"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { AccountAuthLayout } from "../../components/account/AccountAuthLayout"
 import { AccountAuthRequired } from "../../components/account/AccountAuthRequired"
@@ -14,20 +14,20 @@ import {
 import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { safeReturnTo } from "./account-utils"
+import { reduceVerifyEmailUiState } from "./verify-email-state"
 
 const RESEND_COOLDOWN_SECONDS = 60
 
 export function VerifyEmailPage({ cartCount }: { cartCount: number }) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
   const auth = useBuyerAuth()
-  const [code, setCode] = useState("")
+  const [ui, dispatchUi] = useReducer(reduceVerifyEmailUiState, { code: "" })
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
-  const [message, setMessage] = useState<string>()
-  const [error, setError] = useState<string>()
   const [cooldown, setCooldown] = useState(0)
   const [verified, setVerified] = useState(false)
   const [autoSent, setAutoSent] = useState(false)
+  const requestSeq = useRef(0)
   const returnTo = safeReturnTo("/account")
 
   useEffect(() => {
@@ -54,37 +54,45 @@ export function VerifyEmailPage({ cartCount }: { cartCount: number }) {
   }, [cooldown])
 
   const sendCode = async () => {
+    const requestId = requestSeq.current + 1
+    requestSeq.current = requestId
     setSending(true)
-    setError(undefined)
+    dispatchUi({ type: "send_start" })
     try {
       const result = await sendBuyerEmailVerification()
-      setMessage(`Verification code sent to ${result.email ?? auth.customer?.email ?? "your email"}.`)
+      if (requestSeq.current !== requestId) return
+      dispatchUi({ type: "send_success", email: result.email ?? auth.customer?.email ?? "your email" })
       setCooldown(RESEND_COOLDOWN_SECONDS)
     } catch {
-      setError("We couldn't send a verification code. Please try again later.")
+      if (requestSeq.current !== requestId) return
+      dispatchUi({ type: "send_failure" })
     } finally {
-      setSending(false)
+      if (requestSeq.current === requestId) setSending(false)
     }
   }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (!/^\d{6}$/.test(code.trim())) {
-      setError("Enter the 6-digit verification code.")
+    if (!/^\d{6}$/.test(ui.code.trim())) {
+      dispatchUi({ type: "verify_validation_error", message: "Enter the 6-digit verification code." })
       return
     }
+    const requestId = requestSeq.current + 1
+    requestSeq.current = requestId
     setLoading(true)
-    setError(undefined)
+    dispatchUi({ type: "verify_start" })
     try {
-      await confirmBuyerEmailVerification(code.trim())
+      await confirmBuyerEmailVerification(ui.code.trim())
       await auth.refreshCustomer()
+      if (requestSeq.current !== requestId) return
       setVerified(true)
-      setMessage("Email verified successfully.")
+      dispatchUi({ type: "verify_success" })
       window.setTimeout(() => window.location.assign(returnTo), 600)
     } catch {
-      setError("Verification code is invalid or expired. Request a new code and try again.")
+      if (requestSeq.current !== requestId) return
+      dispatchUi({ type: "verify_failure" })
     } finally {
-      setLoading(false)
+      if (requestSeq.current === requestId) setLoading(false)
     }
   }
 
@@ -106,19 +114,20 @@ export function VerifyEmailPage({ cartCount }: { cartCount: number }) {
             </>
           ) : (
             <form className="buyer-account-form buyer-auth-mobile-form" onSubmit={(event) => void submit(event)}>
-              {error ? <ErrorState className="buyer-account-inline-error" title="Verification failed" message={error} /> : null}
-              {message ? <p className="buyer-account-success" role="status">{message}</p> : null}
+              {ui.error ? <ErrorState className="buyer-account-inline-error" title="Verification failed" message={ui.error} /> : null}
+              {ui.message ? <p className="buyer-account-success" role="status">{ui.message}</p> : null}
               <FormField
                 label="Verification code"
                 required
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                maxLength={6}
+                value={ui.code}
+                onChange={(event) => dispatchUi({ type: "code_change", value: event.target.value })}
                 placeholder="6-digit code"
               />
-              <Button type="submit" loading={loading} fullWidth>Verify email</Button>
-              <Button type="button" variant="secondary" disabled={sending || cooldown > 0} onClick={() => void sendCode()} fullWidth>
+              <Button type="submit" loading={loading} disabled={sending || ui.code.trim().length !== 6} fullWidth>Verify email</Button>
+              <Button type="button" variant="secondary" disabled={sending || loading || cooldown > 0} onClick={() => void sendCode()} fullWidth>
                 {cooldown > 0 ? `Resend in ${cooldown}s` : sending ? "Sending..." : "Resend code"}
               </Button>
               <div className="buyer-auth-row">

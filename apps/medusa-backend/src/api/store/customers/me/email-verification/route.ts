@@ -37,6 +37,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         sent: true,
         email: result.email,
         expires_at: result.expiresAt,
+        generation_id: result.generationId,
         ...(result.devCode ? { dev_code: result.devCode } : {}),
       })
     }
@@ -52,6 +53,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to process email verification"
-    return res.status(400).json({ error: { code: "EMAIL_VERIFICATION_ERROR", message } })
+    const status = message.includes("couldn't send") ? 503 : 400
+    return res.status(status).json({ error: { code: "EMAIL_VERIFICATION_ERROR", message } })
   }
 }

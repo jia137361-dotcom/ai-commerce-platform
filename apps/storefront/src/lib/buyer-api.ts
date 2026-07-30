@@ -2534,7 +2534,7 @@ export const fetchBuyerEmailVerificationStatus = async (): Promise<BuyerEmailVer
 }
 
 export const sendBuyerEmailVerification = async () => {
-  const payload = await apiFetch<{ sent?: boolean; email?: string; expires_at?: string; dev_code?: string }>(
+  const payload = await apiFetch<{ sent?: boolean; email?: string; expires_at?: string; dev_code?: string; generation_id?: string }>(
     "/store/customers/me/email-verification",
     {
       method: "POST",
