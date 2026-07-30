@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { GET as getCustomerOrders } from "../api/store/customers/me/orders/route"
@@ -133,6 +134,16 @@ const createReq = ({
 }
 
 describe("GET /store/customers/me/orders", () => {
+  it("uses a static customer session import that resolves in Medusa runtime", () => {
+    const source = readFileSync(
+      require.resolve("../api/store/customers/me/orders/route"),
+      "utf8"
+    )
+
+    expect(source).toContain('from "../../../../../lib/customer-session"')
+    expect(source).not.toContain("customer-session.js")
+  })
+
   it("requires authenticated customer session", async () => {
     const { req } = createReq({ authCustomerId: null })
     const res = createRes()

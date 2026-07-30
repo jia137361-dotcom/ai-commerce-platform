@@ -2,6 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
 import { readOrderStoreId } from "../../../../../lib/order-store-context"
+import { assertActiveCustomer } from "../../../../../lib/customer-session"
 import { STORE_CORE_MODULE } from "../../../../../modules/store-core"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../../modules/buyer-refund-requests"
 import { matchesBuyerOrderBucket } from "../../../../../lib/customer-order-buckets"
@@ -326,7 +327,6 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       return res.status(401).json({ error: "Customer session is required" })
     }
 
-    const { assertActiveCustomer } = await import("../../../../../lib/customer-session.js")
     if (!(await assertActiveCustomer(req, res, customerId))) return
 
     const limit = readPositiveInt(req.query?.limit, 20, 100)
