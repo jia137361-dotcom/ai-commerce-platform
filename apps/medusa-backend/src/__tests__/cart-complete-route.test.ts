@@ -9,6 +9,7 @@ const mockSeedFulfillmentOrderIfMissing = jest.fn()
 const mockSyncFulfillmentPayloadFromOrder = jest.fn()
 const mockMarkOrderPaidAndFulfillmentWaiting = jest.fn()
 const mockSyncPaidIfPaymentAlreadyCaptured = jest.fn()
+const mockResolvePaymentMethodLabelFromClientSecret = jest.fn()
 
 jest.mock("@medusajs/medusa/core-flows", () => ({
   completeCartWorkflow: jest.fn(() => ({ run: mockCompleteRun })),
@@ -33,6 +34,10 @@ jest.mock("../lib/sync-fulfillment-line-items", () => ({
 
 jest.mock("../lib/sync-cart-line-item-shipping", () => ({
   syncCartLineItemShippingRequirements: jest.fn().mockResolvedValue(false),
+}))
+
+jest.mock("../lib/stripe-payment-method-label", () => ({
+  resolvePaymentMethodLabelFromClientSecret: (...args: unknown[]) => mockResolvePaymentMethodLabelFromClientSecret(...args),
 }))
 
 jest.mock("../lib/s2bdiy/push-s2b-order", () => ({
@@ -80,6 +85,8 @@ const createReq = ({
   shippingAddress = null,
   shippingMethods = [],
   paymentProviderId,
+  listedOrders = [],
+  orderMetadata = {},
 }: {
   authCustomerId?: string | null
   cartCustomerId?: string | null
@@ -89,6 +96,8 @@ const createReq = ({
   shippingAddress?: Record<string, unknown> | null
   shippingMethods?: Array<Record<string, unknown>>
   paymentProviderId?: string
+  listedOrders?: Array<Record<string, unknown>>
+  orderMetadata?: Record<string, unknown>
 } = {}) => {
   let order = {
     id: "order_1",
@@ -96,7 +105,7 @@ const createReq = ({
     email: "buyer@example.com",
     currency_code: "usd",
     total: 2500,
-    metadata: {},
+    metadata: orderMetadata,
   }
   const cartModule = {
     retrieveCart: jest.fn(async () => ({
@@ -111,6 +120,7 @@ const createReq = ({
   }
   const orderModule = {
     retrieveOrder: jest.fn(async () => order),
+    listOrders: jest.fn(async () => listedOrders),
     updateOrders: jest.fn(async (_id: string, patch: Partial<typeof order>) => {
       if (!persistCustomerUpdate && "customer_id" in patch) {
         return order
@@ -157,6 +167,7 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     jest.clearAllMocks()
     mockCompleteRun.mockResolvedValue({ result: { id: "order_1" } })
     mockFindCartPaymentSession.mockResolvedValue(null)
+    mockResolvePaymentMethodLabelFromClientSecret.mockResolvedValue(null)
   })
 
   it("rejects authenticated complete when cart is not bound to current customer", async () => {
@@ -179,7 +190,10 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     expect(mockSetOrderPostCompletePendingMetadata).toHaveBeenCalledWith(expect.anything(), "order_1", "default_store")
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.body).toMatchObject({
+      status: "completed",
+      cart_id: "cart_1",
       order_id: "order_1",
+      already_completed: false,
       store_id: "default_store",
       cart_customer_id: "cus_a",
       order_customer_id: "cus_a",
@@ -194,9 +208,117 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
 
     expect(orderModule.updateOrders).toHaveBeenCalledWith("order_1", { customer_id: "cus_a" })
     expect(res.body).toMatchObject({
+      status: "completed",
+      cart_id: "cart_1",
       order_id: "order_1",
+      already_completed: false,
       cart_customer_id: "cus_a",
       order_customer_id: "cus_a",
+    })
+  })
+
+  it("returns the original order id when the same cart is completed again", async () => {
+    const { req } = createReq({
+      listedOrders: [{
+        id: "order_1",
+        customer_id: "cus_a",
+        email: "buyer@example.com",
+        metadata: {
+          store_id: "default_store",
+          checkout_cart_id: "cart_1",
+          payment_status: "paid",
+          mc_fulfillment_status: "waiting",
+        },
+      }],
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      status: "completed",
+      cart_id: "cart_1",
+      order_id: "order_1",
+      already_completed: true,
+      payment_status: "paid",
+      fulfillment_status: "waiting",
+    })
+  })
+
+  it("does not return success when the workflow rejects an unpaid cart", async () => {
+    mockCompleteRun.mockRejectedValueOnce(new Error("Payment session is not authorized"))
+    const { req } = createReq()
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.body).toMatchObject({
+      error: {
+        code: "CART_COMPLETE_ERROR",
+        message: "Payment session is not authorized",
+      },
+    })
+  })
+
+  it("returns the original order when a retry repeats after the first response was lost", async () => {
+    const { req } = createReq({
+      listedOrders: [{
+        id: "order_1",
+        customer_id: "cus_a",
+        email: "buyer@example.com",
+        metadata: {
+          store_id: "default_store",
+          checkout_cart_id: "cart_1",
+        },
+      }],
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      status: "completed",
+      order_id: "order_1",
+      already_completed: true,
+    })
+  })
+
+  it("preserves existing metadata when adding a Stripe payment method label", async () => {
+    mockFindCartPaymentSession.mockResolvedValue({
+      provider_id: "pp_stripe_stripe",
+      status: "pending",
+      data: { client_secret: "pi_test_secret_123" },
+    })
+    mockResolvePaymentMethodLabelFromClientSecret.mockResolvedValue("VISA ···· 4242")
+    const { req, orderModule } = createReq({
+      paymentProviderId: "pp_stripe_stripe",
+      orderMetadata: {
+        store_id: "default_store",
+        payment_status: "pending",
+        mc_fulfillment_status: "none",
+      },
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(orderModule.updateOrders).toHaveBeenCalledWith("order_1", {
+      metadata: expect.objectContaining({
+        store_id: "default_store",
+        payment_status: "pending",
+        mc_fulfillment_status: "none",
+        checkout_cart_id: "cart_1",
+        payment_method_label: "VISA ···· 4242",
+      }),
+    })
+    expect(res.body).toMatchObject({
+      status: "completed",
+      order_id: "order_1",
+      payment_method_label: "VISA ···· 4242",
     })
   })
 

@@ -68,11 +68,78 @@ type CompleteCart = CartWithPaymentCollection & {
 type CompleteOrder = {
   id: string
   customer_id?: string | null
+  email?: string | null
   metadata?: Record<string, unknown> | null
 }
 
 const readAuthCustomerId = (req: MedusaRequest) =>
   (req as AuthenticatedRequest).auth_context?.actor_id
+
+const ORDER_META_CHECKOUT_CART_ID = "checkout_cart_id"
+
+const isAlreadyCompletedError = (message: string) =>
+  /already.*complet|cart.*complet/i.test(message)
+
+const listCandidateOrdersForCart = async (
+  orderModule: {
+    listOrders?: (filters: Record<string, unknown>, config?: Record<string, unknown>) => Promise<CompleteOrder[]>
+  },
+  cart: CompleteCart
+): Promise<CompleteOrder[]> => {
+  if (!orderModule.listOrders) return []
+  const filters: Record<string, unknown> = {}
+  if (cart.customer_id) {
+    filters.customer_id = cart.customer_id
+  } else if (cart.email) {
+    filters.email = cart.email
+  } else {
+    return []
+  }
+
+  return orderModule.listOrders(filters, {
+    select: ["id", "customer_id", "email", "metadata"],
+    order: { created_at: "DESC" },
+    take: 100,
+  })
+}
+
+const findCompletedOrderForCart = async (
+  orderModule: {
+    listOrders?: (filters: Record<string, unknown>, config?: Record<string, unknown>) => Promise<CompleteOrder[]>
+  },
+  cart: CompleteCart,
+  storeId: string,
+  cartId: string
+) => {
+  const candidates = await listCandidateOrdersForCart(orderModule, cart)
+  return candidates.find((order) => {
+    const metadata = order.metadata ?? {}
+    return metadata[ORDER_META_CHECKOUT_CART_ID] === cartId && readOrderStoreId(order) === storeId
+  }) ?? null
+}
+
+const buildCompleteResponse = (input: {
+  order: CompleteOrder
+  cart: CompleteCart
+  cartId: string
+  storeId: string
+  providerId: string
+  paymentMethodLabel: string | null
+  alreadyCompleted: boolean
+}) => ({
+  status: "completed",
+  cart_id: input.cartId,
+  order_id: input.order.id,
+  already_completed: input.alreadyCompleted,
+  store_id: input.storeId,
+  cart_customer_id: input.cart.customer_id ?? null,
+  order_customer_id: input.order.customer_id ?? null,
+  payment_provider_id: input.providerId,
+  payment_method_label: input.paymentMethodLabel,
+  payment_status: (input.order.metadata as Record<string, unknown> | null)?.payment_status ?? null,
+  fulfillment_status: readOrderFulfillmentStatusMeta(input.order.metadata as Record<string, unknown> | null),
+  order: input.order,
+})
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
@@ -93,6 +160,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const providerId = body.payment_provider_id?.trim() || DEFAULT_PAYMENT_PROVIDER
 
     const cartModule = req.scope.resolve(Modules.CART)
+    const orderModule = req.scope.resolve(Modules.ORDER)
     let cart = (await cartModule.retrieveCart(cartId, {
       relations: ["items", "shipping_address", "shipping_methods"],
     })) as CompleteCart
@@ -164,6 +232,19 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     let paymentMethodLabel: string | null = null
+    const alreadyCompletedOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
+    if (alreadyCompletedOrder) {
+      return res.status(200).json(buildCompleteResponse({
+        order: alreadyCompletedOrder,
+        cart,
+        cartId,
+        storeId,
+        providerId,
+        paymentMethodLabel,
+        alreadyCompleted: true,
+      }))
+    }
+
     if (isStripeProvider(providerId)) {
       const stripeSession = await findCartPaymentSession(req.scope, cartId, providerId)
       const clientSecret = stripeSession?.data?.client_secret
@@ -184,12 +265,30 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       await ensureCartPaymentReady(req.scope, cartId, providerId)
     }
 
-    const { result } = await completeCartWorkflow(req.scope).run({
-      input: { id: cartId },
-    })
+    let result: { id?: string }
+    try {
+      const workflowResult = await completeCartWorkflow(req.scope).run({
+        input: { id: cartId },
+      })
+      result = workflowResult.result as { id?: string }
+    } catch (workflowError) {
+      const existingOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
+      const message = readWorkflowErrorMessage(workflowError)
+      if (existingOrder && isAlreadyCompletedError(message)) {
+        return res.status(200).json(buildCompleteResponse({
+          order: existingOrder,
+          cart,
+          cartId,
+          storeId,
+          providerId,
+          paymentMethodLabel,
+          alreadyCompleted: true,
+        }))
+      }
+      throw workflowError
+    }
 
     const orderId = result.id as string
-    const orderModule = req.scope.resolve(Modules.ORDER)
     let completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
 
     if (cart.customer_id) {
@@ -225,6 +324,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
     await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
+    completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+    await orderModule.updateOrders(orderId, {
+      metadata: {
+        ...(completedOrder.metadata ?? {}),
+        [ORDER_META_CHECKOUT_CART_ID]: cartId,
+      },
+    } as never)
+    completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
     try {
       const discount = await redeemAppliedCouponOnOrder(req.scope, {
         cartId,
@@ -266,12 +373,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         platform_checkout_index: body.platform_checkout_index,
         platform_checkout_count: body.platform_checkout_count,
       })
+      completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
     }
     if (paymentMethodLabel) {
       const existingMeta = (completedOrder.metadata ?? {}) as Record<string, unknown>
       await orderModule.updateOrders(orderId, {
         metadata: { ...existingMeta, payment_method_label: paymentMethodLabel },
       } as never)
+      completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
     }
     await seedFulfillmentOrderIfMissing(req.scope, {
       orderId,
@@ -313,17 +422,15 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       })
     }
 
-    res.status(200).json({
-      order_id: order.id,
-      store_id: storeId,
-      cart_customer_id: cart.customer_id ?? null,
-      order_customer_id: (order as CompleteOrder).customer_id ?? null,
-      payment_provider_id: providerId,
-      payment_method_label: paymentMethodLabel,
-      payment_status: (order.metadata as Record<string, unknown> | null)?.payment_status ?? null,
-      fulfillment_status: readOrderFulfillmentStatusMeta(order.metadata as Record<string, unknown> | null),
-      order,
-    })
+    res.status(200).json(buildCompleteResponse({
+      order: order as CompleteOrder,
+      cart,
+      cartId,
+      storeId,
+      providerId,
+      paymentMethodLabel,
+      alreadyCompleted: false,
+    }))
   } catch (error: unknown) {
     if (error instanceof CartStoreAccessError) {
       return res.status(403).json({
