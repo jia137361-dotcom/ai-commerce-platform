@@ -21,6 +21,7 @@ import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { SearchPage } from "./pages/search/SearchPage"
 import { SavedPage } from "./pages/saved/SavedPage"
 import { CategoriesPage } from "./pages/categories/CategoriesPage"
+import { TrendsPage } from "./pages/trends/TrendsPage"
 import { DesignerPage } from "./pages/design/DesignerPage"
 import { AiDesignPage } from "./pages/ai-design/AiDesignPage"
 import { MyDesignsPage } from "./pages/my-designs/MyDesignsPage"
@@ -145,6 +146,8 @@ function App() {
     page = <AiDesignPage cartCount={cartCount} productIdFromPath={productId} />
   } else if (path.startsWith("/categories")) {
     page = <CategoriesPage cartCount={cartCount} />
+  } else if (path.startsWith("/trends")) {
+    page = <TrendsPage cartCount={cartCount} />
   } else if (path.startsWith("/search")) {
     page = <SearchPage cartCount={cartCount} />
   } else if (path.startsWith("/saved")) {

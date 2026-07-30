@@ -43,6 +43,8 @@ const fallbackSettings: BuyerStoreSettings = {
 }
 
 const CATALOG_PER_PAGE = 24
+const CATALOG_UNAVAILABLE_MESSAGE = "The live catalog is temporarily unavailable. Please try again shortly."
+const STORE_DATA_UNAVAILABLE_MESSAGE = "Some store information is temporarily unavailable."
 
 function scrollToVisibleId(id: string) {
   window.requestAnimationFrame(() => {
@@ -163,12 +165,9 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
     setStoreReviewsError(reviewsResult.error)
     setSupplierCategories(categoriesResult.data)
     setNotices(
-      [settingsResult, reviewsResult, categoriesResult]
-        .filter((result) => result.error)
-        .map((result, index) => ({
-          key: `${result.source}-${index}-${result.error}`,
-          message: `${result.source === "mock" ? "Mock data" : "Static UI"} fallback: ${result.error}`,
-        }))
+      [settingsResult, reviewsResult, categoriesResult].some((result) => result.error)
+        ? [{ key: "store-data-unavailable", message: STORE_DATA_UNAVAILABLE_MESSAGE }]
+        : []
     )
     setLoading(false)
   }, [])
@@ -402,7 +401,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           <>
             {catalogError ? (
               <p className="buyer-mhome-error" role="alert">
-                {catalogError}
+                {CATALOG_UNAVAILABLE_MESSAGE}
               </p>
             ) : null}
 
@@ -490,7 +489,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
             />
             <StoreCatalogResults
               loading={loading || catalogLoading}
-              error={catalogError}
+              error={catalogError ? CATALOG_UNAVAILABLE_MESSAGE : undefined}
               items={sortedItems}
               hasFilters={hasFilters}
               openingId={openingId}

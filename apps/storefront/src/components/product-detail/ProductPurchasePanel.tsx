@@ -49,7 +49,7 @@ export function ProductPurchasePanel({
   designHref,
 }: ProductPurchasePanelProps) {
   const reviewCount = product.reviewCount ?? 0
-  const editorHref = designHref ?? (product.id ? `/design/${encodeURIComponent(product.id)}` : undefined)
+  const editorHref = designHref
 
   return (
     <Card as="aside" className="buyer-product-purchase">

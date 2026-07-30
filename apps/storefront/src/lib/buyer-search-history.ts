@@ -28,3 +28,15 @@ export function clearSearchHistory() {
   if (typeof window === "undefined") return
   window.localStorage.removeItem(HISTORY_KEY)
 }
+
+export function removeSearchHistory(term: string): string[] {
+  if (typeof window === "undefined") return []
+  const normalized = term.trim().toLowerCase()
+  const next = readSearchHistory().filter((item) => item.trim().toLowerCase() !== normalized)
+  if (next.length) {
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+  } else {
+    window.localStorage.removeItem(HISTORY_KEY)
+  }
+  return next
+}

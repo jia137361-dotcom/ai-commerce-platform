@@ -159,7 +159,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const purchaseState = product
     ? resolveProductPurchaseState(product, selectedVariant)
     : { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" as const }
-  const designHref = product?.id ? buildStudioEditorHref(product.id) : undefined
+  const designHref = product?.id && product.hasDesigner ? buildStudioEditorHref(product.id) : undefined
 
   const addToCart = async () => {
     if (!product || !selectedVariant?.id || !purchaseState.canAdd || adding) return
@@ -236,11 +236,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       </nav>
       {notices.length ? (
         <aside className="buyer-product-api-notices" role="status">
-          {notices.map((notice) => (
-            <p key={`${notice.label}-${notice.message}`}>
-              {notice.label} fallback: {notice.message}
-            </p>
-          ))}
+          <p>Some product information is temporarily unavailable.</p>
         </aside>
       ) : null}
 

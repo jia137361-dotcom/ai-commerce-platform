@@ -50,4 +50,19 @@ describe("ProductPurchasePanel", () => {
     }))
     expect(html.match(/Default option/g)).toHaveLength(1)
   })
+
+  it("does not invent a Studio link when the product has no designer contract", () => {
+    const html = renderToStaticMarkup(createElement(ProductPurchasePanel, {
+      product,
+      variants: [],
+      purchaseState: { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" },
+      quantity: 1,
+      setQuantity: () => undefined,
+      adding: false,
+      onAddToCart: () => undefined,
+    }))
+
+    expect(html).not.toContain("Design now")
+    expect(html).not.toContain(`/design/${product.id}`)
+  })
 })
