@@ -111,13 +111,13 @@ export function StoreTopBar({
             <span className="buyer-store-logo-text">{brand}</span>
           </a>
 
-          <div className="buyer-store-ship" aria-label="Ship to">
+          <a className="buyer-store-ship" href="/account/country-region" aria-label="Change shipping country or region">
             <span aria-hidden="true">📍</span>
             <div>
               <small>Ship to</small>
               <strong>United States</strong>
             </div>
-          </div>
+          </a>
 
           <a className="buyer-store-categories-trigger" href="/categories">
             Categories
@@ -148,19 +148,49 @@ export function StoreTopBar({
               </a>
               <AccountHoverPanel />
             </div>
-            <a className="buyer-store-support" href="/help">
-              <span aria-hidden="true" />
-              <strong>Support</strong>
-            </a>
-            <button
-              className="buyer-store-language"
-              type="button"
-              aria-label={`Switch language to ${t("localeAlt")}`}
-              onClick={toggleLocale}
-            >
-              <span aria-hidden="true" />
-              {locale === "en" ? "EN" : "中文"}
-            </button>
+            <div className="buyer-store-header-menu">
+              <a className="buyer-store-support" href="/help">
+                <span aria-hidden="true" />
+                <strong>Support</strong>
+              </a>
+              <nav className="buyer-store-header-popover buyer-store-support-popover" aria-label="Support">
+                <a href="/help">Support center</a>
+                <a href="/help#after-sales">After-sales service</a>
+                <a href="/account/messages">Chat with Ciiverse</a>
+                <a href="/privacy">Privacy policy</a>
+                <a href="/terms">Terms of use</a>
+              </nav>
+            </div>
+            <div className="buyer-store-header-menu">
+              <button
+                className="buyer-store-language"
+                type="button"
+                aria-label="Language, currency, and shipping preferences"
+              >
+                <span aria-hidden="true" />
+                {locale === "en" ? "EN" : "中文"}
+              </button>
+              <div className="buyer-store-header-popover buyer-store-preferences-popover">
+                <section>
+                  <strong>Language</strong>
+                  <button type="button" onClick={toggleLocale}>
+                    <span>{locale === "en" ? "English" : "中文"}</span>
+                    <small>Change</small>
+                  </button>
+                </section>
+                <section>
+                  <strong>Currency</strong>
+                  <a href="/account/currency">
+                    <span>USD: $</span>
+                    <small>Change</small>
+                  </a>
+                </section>
+                <p>You are shopping and shipping to United States.</p>
+                <a className="buyer-store-preferences-change" href="/account/country-region">
+                  Change country/region
+                </a>
+              </div>
+            </div>
             <a className="buyer-store-cart" href="/cart" aria-label={`${t("navCart")} (${cartCount})`}>
               <i aria-hidden="true" />
               <span>{cartCount}</span>

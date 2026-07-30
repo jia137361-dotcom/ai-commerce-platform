@@ -14,7 +14,12 @@ import {
 } from "../../lib/buyer-api"
 import { buildStudioEditorHref } from "../../lib/buyer-design-handoff"
 import { navigateBuyer } from "../../lib/buyer-navigate"
-import { clearSearchHistory, pushSearchHistory, readSearchHistory } from "../../lib/buyer-search-history"
+import {
+  clearSearchHistory,
+  pushSearchHistory,
+  readSearchHistory,
+  removeSearchHistory,
+} from "../../lib/buyer-search-history"
 import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
@@ -93,6 +98,16 @@ export function SearchPage({ cartCount }: SearchPageProps) {
     })
   }, [filters.maxPrice, filters.minPrice, items, sort])
 
+  const activeFilterCount = [
+    filters.minPrice,
+    filters.maxPrice,
+    filters.shipsFrom,
+    filters.color,
+    filters.material,
+    filters.size,
+    filters.occasion,
+  ].filter((value) => value !== undefined && value !== "").length
+
   const openDetail = async (item: SupplierCatalogItem) => {
     if (openingId != null) return
     setOpeningId(item.id)
@@ -148,7 +163,7 @@ export function SearchPage({ cartCount }: SearchPageProps) {
       <div className="buyer-search-mobile-body">
         <div className="buyer-search-filter-chips" aria-label="Filters">
           <button type="button" onClick={() => setFilterOpen(true)}>
-            Filters
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
           </button>
           <button type="button" className={sortOpen ? "active" : ""} onClick={() => setSortOpen((v) => !v)}>
             {sortLabel} ▾
@@ -206,14 +221,47 @@ export function SearchPage({ cartCount }: SearchPageProps) {
             <ul>
               {history.map((term) => (
                 <li key={term}>
-                  <button type="button" onClick={() => setQuery(term)}>
+                  <button
+                    type="button"
+                    className="buyer-search-history-term"
+                    onClick={() => {
+                      setQuery(term)
+                      setDebouncedQuery(term)
+                    }}
+                  >
                     {term}
+                  </button>
+                  <button
+                    type="button"
+                    className="buyer-search-history-remove"
+                    aria-label={`Remove ${term} from recent searches`}
+                    onClick={() => setHistory(removeSearchHistory(term))}
+                  >
+                    ×
                   </button>
                 </li>
               ))}
             </ul>
           </section>
         ) : null}
+
+        <header className="buyer-search-results-header">
+          <div>
+            <p>{debouncedQuery ? `Results for “${debouncedQuery}”` : "Discover products"}</p>
+            <strong>{sortedItems.length} items</strong>
+          </div>
+          {debouncedQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("")
+                setDebouncedQuery("")
+              }}
+            >
+              Clear search
+            </button>
+          ) : null}
+        </header>
 
         {error ? (
           <p className="buyer-mhome-error" role="alert">

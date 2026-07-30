@@ -8,7 +8,7 @@ import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { ProductCard } from "../../components/products/ProductCard"
-import { fetchFavoriteProducts, fetchProducts } from "../../lib/buyer-api"
+import { fetchFavoriteProducts, fetchProducts, toggleProductFavorite } from "../../lib/buyer-api"
 import type { StoreProduct } from "../../lib/mock-data"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { buildProductSignInHref } from "../product/product-auth"
@@ -24,6 +24,10 @@ export function SavedPage({ cartCount }: SavedPageProps) {
   >([])
   const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [managing, setManaging] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [removing, setRemoving] = useState(false)
+  const [manageError, setManageError] = useState<string>()
 
   useEffect(() => {
     enterLegacyDefaultStoreContext()
@@ -33,11 +37,15 @@ export function SavedPage({ cartCount }: SavedPageProps) {
     let active = true
     const load = async () => {
       setLoading(true)
+      const productsPromise = fetchProducts()
       if (!auth.customer) {
+        const productsResult = await productsPromise
+        if (!active) return
+        setRecommendations(productsResult.data.slice(0, 8))
         setLoading(false)
         return
       }
-      const [favResult, productsResult] = await Promise.all([fetchFavoriteProducts(), fetchProducts()])
+      const [favResult, productsResult] = await Promise.all([fetchFavoriteProducts(), productsPromise])
       if (!active) return
       setFavorites(favResult.favorites ?? [])
       setRecommendations(productsResult.data.slice(0, 8))
@@ -49,6 +57,32 @@ export function SavedPage({ cartCount }: SavedPageProps) {
     }
   }, [auth.customer?.id])
 
+  const toggleSelected = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const removeSelected = async () => {
+    if (!selectedIds.size || removing) return
+    setRemoving(true)
+    setManageError(undefined)
+    const ids = Array.from(selectedIds)
+    try {
+      await Promise.all(ids.map((id) => toggleProductFavorite(id, true)))
+      setFavorites((current) => current.filter((item) => !selectedIds.has(item.id)))
+      setSelectedIds(new Set())
+      setManaging(false)
+    } catch (error) {
+      setManageError(error instanceof Error ? error.message : "Unable to remove saved products.")
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   return (
     <PageShell
       className="buyer-store-page buyer-saved-page"
@@ -58,8 +92,40 @@ export function SavedPage({ cartCount }: SavedPageProps) {
     >
       <header className="buyer-saved-header">
         <h1>My Saved ({favorites.length})</h1>
-        <span className="buyer-saved-manage">Manage</span>
+        {auth.customer && favorites.length ? (
+          <button
+            type="button"
+            className="buyer-saved-manage"
+            onClick={() => {
+              setManaging((value) => !value)
+              setSelectedIds(new Set())
+              setManageError(undefined)
+            }}
+          >
+            {managing ? "Done" : "Manage"}
+          </button>
+        ) : null}
       </header>
+
+      {managing ? (
+        <div className="buyer-saved-manage-bar">
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedIds(
+                selectedIds.size === favorites.length ? new Set() : new Set(favorites.map((item) => item.id))
+              )
+            }
+          >
+            {selectedIds.size === favorites.length ? "Clear selection" : "Select all"}
+          </button>
+          <span>{selectedIds.size} selected</span>
+          <button type="button" className="danger" disabled={!selectedIds.size || removing} onClick={() => void removeSelected()}>
+            {removing ? "Removing…" : "Remove"}
+          </button>
+        </div>
+      ) : null}
+      {manageError ? <p className="buyer-saved-manage-error" role="alert">{manageError}</p> : null}
 
       {!auth.customer && !auth.isLoading ? (
         <section className="buyer-saved-empty">
@@ -74,7 +140,17 @@ export function SavedPage({ cartCount }: SavedPageProps) {
         favorites.length ? (
           <ul className="buyer-saved-list">
             {favorites.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} className={managing ? "managing" : ""}>
+                {managing ? (
+                  <label className="buyer-saved-select">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelected(item.id)}
+                    />
+                    <span className="sr-only">Select {item.title}</span>
+                  </label>
+                ) : null}
                 <a href={`/products/${encodeURIComponent(item.id)}`} className="buyer-saved-row">
                   {item.image_url ? <img src={item.image_url} alt="" /> : <span className="buyer-saved-thumb-fallback" />}
                   <div className="buyer-saved-copy">

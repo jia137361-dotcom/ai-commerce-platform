@@ -40,6 +40,18 @@ export function AccountHoverPanel({ onClose }: AccountHoverPanelProps) {
         <a href="/ai-design" onClick={onClose}>
           AI design
         </a>
+        <a href="/ai-design#ai-materials" onClick={onClose}>
+          Materials library
+        </a>
+        <a href="/studio" onClick={onClose}>
+          Product selection
+        </a>
+        <a href="/my-designs" onClick={onClose}>
+          Design center
+        </a>
+        <a href="/trends" onClick={onClose}>
+          Trends
+        </a>
         <a href="/saved" onClick={onClose}>
           My Saved
         </a>
@@ -49,16 +61,25 @@ export function AccountHoverPanel({ onClose }: AccountHoverPanelProps) {
         <a href="/account/addresses" onClick={onClose}>
           Addresses
         </a>
-        <a href="/account" onClick={onClose}>
+        <a href="/account/security" onClick={onClose}>
           Account security
         </a>
-        <a href="/help" onClick={onClose}>
+        <a href="/account/messages" onClick={onClose}>
           Notifications
         </a>
         {auth.customer ? (
-          <a href="/account" onClick={onClose}>
-            {t("navMe")}
-          </a>
+          <>
+            <a href="/account" onClick={onClose}>
+              {t("navMe")}
+            </a>
+            <button
+              type="button"
+              className="buyer-account-panel-signout"
+              onClick={() => void auth.signOut().then(() => window.location.assign("/store"))}
+            >
+              Log out
+            </button>
+          </>
         ) : (
           <a href={signInHref} onClick={onClose}>
             {t("signIn")}

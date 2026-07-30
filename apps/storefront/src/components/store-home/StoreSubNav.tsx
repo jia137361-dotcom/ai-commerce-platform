@@ -11,6 +11,7 @@ export function StoreSubNav({ className }: StoreSubNavProps) {
   return (
     <nav className={["buyer-store-subnav", className].filter(Boolean).join(" ")} aria-label="Main navigation">
       <a href="/store">Shop</a>
+      <a href="/trends">Trends</a>
       <a href="/ai-design">{t("navAiDesign")}</a>
       <a href="/studio">{t("navStudio")}</a>
       <a href="/store#how-it-works">{t("navHowItWorks")}</a>
