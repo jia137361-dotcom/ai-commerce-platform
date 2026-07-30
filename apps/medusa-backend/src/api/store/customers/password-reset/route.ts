@@ -6,12 +6,21 @@ import {
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   const body = (req.body ?? {}) as { email?: unknown }
-  const result = await requestBuyerPasswordReset(req.scope, body.email)
-  return res.json({
-    sent: true,
-    message: result.message,
-    ...(result.devCode ? { dev_code: result.devCode, expires_at: result.expiresAt } : {}),
-  })
+  try {
+    const result = await requestBuyerPasswordReset(req.scope, body.email)
+    return res.json({
+      sent: true,
+      message: result.message,
+      ...(result.devCode ? { dev_code: result.devCode, expires_at: result.expiresAt } : {}),
+    })
+  } catch {
+    return res.status(503).json({
+      error: {
+        code: "EMAIL_DELIVERY_ERROR",
+        message: "We couldn't send the email right now. Please try again.",
+      },
+    })
+  }
 }
 
 export const PUT = async (req: MedusaRequest, res: MedusaResponse) => {

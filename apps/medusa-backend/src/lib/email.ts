@@ -182,6 +182,7 @@ export async function sendBuyerPasswordResetCode(input: {
   to: string
   code: string
   expiresInMinutes: number
+  idempotencyKey?: string
 }): Promise<EmailResult> {
   return sendEmail({
     to: input.to,

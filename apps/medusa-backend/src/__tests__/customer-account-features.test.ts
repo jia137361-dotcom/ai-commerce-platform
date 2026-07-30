@@ -254,6 +254,12 @@ describe("email-verification", () => {
 })
 
 describe("buyer password reset", () => {
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV, NODE_ENV: "test", AUTH_DEV_CODE_ENABLED: "true" }
+    mockedSendVerificationCode.mockResolvedValue({ success: true, id: "email_1" })
+    mockedSendPasswordResetCode.mockResolvedValue({ success: true, id: "email_2" })
+  })
+
   const makeContainer = (customer?: { id: string; email: string; metadata?: Record<string, unknown> }) => {
     let current = customer ? { ...customer, metadata: { ...(customer.metadata ?? {}) } } : null
     const customerModule = {
@@ -290,6 +296,11 @@ describe("buyer password reset", () => {
   it("resets password with a valid code and invalidates the token", async () => {
     const { container, authModule, getCustomer } = makeContainer({ id: "cus_1", email: "buyer@example.com" })
     const requested = await requestBuyerPasswordReset(container as never, "buyer@example.com")
+    expect(mockedSendPasswordResetCode).toHaveBeenCalledWith(expect.objectContaining({
+      to: "buyer@example.com",
+      code: expect.stringMatching(/^\d{6}$/),
+      idempotencyKey: expect.any(String),
+    }))
     const result = await confirmBuyerPasswordReset(container as never, {
       email: "buyer@example.com",
       code: requested.devCode,
@@ -336,6 +347,18 @@ describe("buyer password reset", () => {
       code: requested.devCode,
       password: "new-password",
     })).rejects.toThrow("already been used")
+  })
+
+  it("rolls back reset metadata when email delivery fails so the buyer can retry", async () => {
+    const { container, getCustomer } = makeContainer({ id: "cus_1", email: "buyer@example.com" })
+    mockedSendPasswordResetCode.mockResolvedValueOnce({ success: false, error: "provider rejected" })
+    await expect(requestBuyerPasswordReset(container as never, "buyer@example.com")).rejects.toThrow("couldn't send")
+    expect(getCustomer()?.metadata?.password_reset_code_hash).toBeUndefined()
+
+    mockedSendPasswordResetCode.mockResolvedValueOnce({ success: true, id: "email_retry" })
+    await expect(requestBuyerPasswordReset(container as never, "buyer@example.com")).resolves.toEqual(expect.objectContaining({
+      sent: true,
+    }))
   })
 })
 

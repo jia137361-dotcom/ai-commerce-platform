@@ -5,6 +5,7 @@ import {
   BUYER_AUTH_POLICY,
   authCodePepper,
   evaluateMetadataRateLimit,
+  isAuthDevCodeEnabled,
   isValidBuyerEmail,
   isValidBuyerPassword,
   normalizeBuyerEmail,
@@ -31,6 +32,13 @@ type AuthModule = {
   updateProvider: (provider: string, data: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>
 }
 
+export type BuyerPasswordResetRequestResult = {
+  sent: true
+  message: string
+  expiresAt?: string
+  devCode?: string
+}
+
 const hashResetCode = (email: string, code: string) =>
   createHash("sha256")
     .update(`${authCodePepper()}:password-reset:${email.trim().toLowerCase()}:${code}`)
@@ -48,7 +56,10 @@ async function findCustomerByEmail(container: MedusaContainer, email: string) {
   return customers[0] ?? null
 }
 
-export async function requestBuyerPasswordReset(container: MedusaContainer, rawEmail: unknown) {
+export async function requestBuyerPasswordReset(
+  container: MedusaContainer,
+  rawEmail: unknown
+): Promise<BuyerPasswordResetRequestResult> {
   const email = normalizeBuyerEmail(rawEmail)
   if (!isValidBuyerEmail(email)) {
     return { sent: true, message: RESET_NEUTRAL_MESSAGE }
@@ -79,30 +90,36 @@ export async function requestBuyerPasswordReset(container: MedusaContainer, rawE
   }
 
   const expiresAt = new Date(nowMs + BUYER_AUTH_POLICY.resetCodeTtlMs).toISOString()
-  await customerModule.updateCustomers(customer.id, {
-    metadata: {
-      ...previousMetadata,
-      password_reset_code_hash: hashResetCode(email, code),
-      password_reset_expires_at: expiresAt,
-      password_reset_sent_to: email,
-      password_reset_used_at: null,
-      password_reset_last_sent_at: new Date(nowMs).toISOString(),
-      password_reset_window_started_at: limit.windowStart,
-      password_reset_window_count: limit.count,
-    },
-  })
+  const nextMetadata = {
+    ...previousMetadata,
+    password_reset_code_hash: hashResetCode(email, code),
+    password_reset_expires_at: expiresAt,
+    password_reset_sent_to: email,
+    password_reset_used_at: null,
+    password_reset_last_sent_at: new Date(nowMs).toISOString(),
+    password_reset_window_started_at: limit.windowStart,
+    password_reset_window_count: limit.count,
+  }
+  await customerModule.updateCustomers(customer.id, { metadata: nextMetadata })
 
-  await sendBuyerPasswordResetCode({
+  const emailResult = await sendBuyerPasswordResetCode({
     to: email,
     code,
     expiresInMinutes: Math.max(1, Math.round(BUYER_AUTH_POLICY.resetCodeTtlMs / 60_000)),
+    idempotencyKey: createHash("sha256")
+      .update(`buyer-password-reset:${customer.id}:${email}:${expiresAt}`)
+      .digest("hex"),
   })
+  if (!emailResult.success) {
+    await customerModule.updateCustomers(customer.id, { metadata: previousMetadata })
+    throw new Error("We couldn't send the email right now. Please try again.")
+  }
 
   return {
     sent: true,
     message: RESET_NEUTRAL_MESSAGE,
-    devCode: process.env.NODE_ENV !== "production" ? code : undefined,
     expiresAt,
+    ...(isAuthDevCodeEnabled() ? { devCode: code } : {}),
   }
 }
 

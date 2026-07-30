@@ -262,6 +262,17 @@
   color: #047857;
 }
 
+.buyer-account-dev-code {
+  margin: 0;
+  border: 1px solid #fed7aa;
+  border-radius: 4px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .buyer-account-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);

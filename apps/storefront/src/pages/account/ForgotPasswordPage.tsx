@@ -14,6 +14,7 @@ export function ForgotPasswordPage({ cartCount }: { cartCount: number }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   const [sent, setSent] = useState(false)
+  const [devCode, setDevCode] = useState<string>()
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -23,11 +24,15 @@ export function ForgotPasswordPage({ cartCount }: { cartCount: number }) {
     }
     setLoading(true)
     setError(undefined)
+    setDevCode(undefined)
     try {
-      await requestBuyerPasswordReset({ email })
+      const response = await requestBuyerPasswordReset({ email })
+      if (import.meta.env.DEV && response.dev_code) {
+        setDevCode(response.dev_code)
+      }
       setSent(true)
     } catch {
-      setSent(true)
+      setError("We couldn't send the email right now. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -42,6 +47,11 @@ export function ForgotPasswordPage({ cartCount }: { cartCount: number }) {
         {sent ? (
           <div className="buyer-account-form buyer-auth-mobile-form">
             <p className="buyer-account-success" role="status">If an account exists for that email, a reset code has been sent.</p>
+            {devCode ? (
+              <p className="buyer-account-dev-code" role="status">
+                Development reset code: <strong>{devCode}</strong>
+              </p>
+            ) : null}
             <Button href={`/account/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`} fullWidth>Enter reset code</Button>
             <Button href="/account/sign-in" variant="secondary" fullWidth>Back to sign in</Button>
           </div>
