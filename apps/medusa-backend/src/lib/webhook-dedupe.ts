@@ -16,9 +16,28 @@ export async function tryRegisterWebhookDedupe(
   if (existing.length > 0) {
     return false
   }
-  await svc.createProcessedWebhookEvents({
-    dedupe_key: dedupeKey,
-    event_kind: eventKind,
-  })
-  return true
+  try {
+    await svc.createProcessedWebhookEvents({
+      dedupe_key: dedupeKey,
+      event_kind: eventKind,
+    })
+    return true
+  } catch (error) {
+    // The unique index is the concurrency boundary; another instance may win
+    // between the read and insert above.
+    if (/unique|duplicate/i.test(error instanceof Error ? error.message : String(error))) return false
+    throw error
+  }
+}
+
+export async function releaseWebhookDedupe(
+  container: MedusaContainer,
+  dedupeKey: string
+): Promise<void> {
+  const svc = container.resolve(WEBHOOK_EVENTS_MODULE) as WebhookEventsModuleService & {
+    deleteProcessedWebhookEvents: (ids: string | string[]) => Promise<unknown>
+  }
+  const existing = await svc.listProcessedWebhookEvents({ dedupe_key: [dedupeKey] })
+  const ids = existing.map((event) => event.id).filter((id): id is string => typeof id === "string")
+  if (ids.length) await svc.deleteProcessedWebhookEvents(ids)
 }

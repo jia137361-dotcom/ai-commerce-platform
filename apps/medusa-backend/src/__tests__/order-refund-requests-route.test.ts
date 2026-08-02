@@ -1,8 +1,21 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { GET, POST } from "../api/store/customers/me/orders/[id]/refund-requests/route"
+import { POST as POST_ACTION } from "../api/store/customers/me/orders/[id]/refund-requests/[request_id]/route"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../modules/buyer-refund-requests"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
+
+const mockExecuteApprovedRefund = jest.fn()
+
+jest.mock("../lib/buyer-auth-access", () => ({
+  assertBuyerEmailVerified: jest.fn(async () => true),
+}))
+
+jest.mock("../lib/refund-execution", () => ({
+  executeApprovedRefund: (...args: unknown[]) => mockExecuteApprovedRefund(...args),
+}))
 
 type MockRes = MedusaResponse & {
   statusCode?: number
@@ -41,6 +54,20 @@ const capturedOrder = {
     payment_sessions: [{ status: "captured" }],
   }],
   fulfillments: [],
+}
+
+const paypalCapturedOrder = {
+  ...capturedOrder,
+  id: "order_paypal_4400",
+  customer_id: "cus_paypal",
+  total: 4400,
+  metadata: { ...capturedOrder.metadata, store_id: "paypal_store", payment_status: "paid" },
+  payment_collections: [{
+    ...capturedOrder.payment_collections[0],
+    id: "pay_col_paypal",
+    captured_amount: 4400,
+    payments: [{ id: "pay_paypal", provider_id: "pp_paypal_paypal", status: "captured", captured_at: "2026-08-01T00:00:00.000Z", captures: [{ amount: 4400, captured_at: "2026-08-01T00:00:00.000Z" }] }],
+  }],
 }
 
 const authorizedOrder = {
@@ -83,23 +110,35 @@ const createReq = ({
   body = { reason: "Ordered by mistake" },
   order = capturedOrder as Record<string, unknown>,
   existingRequests = [] as Record<string, unknown>[],
+  graphOrders,
+  createError,
 }: {
   authCustomerId?: string | null
   headers?: Record<string, string>
   body?: Record<string, unknown>
   order?: Record<string, unknown>
   existingRequests?: Record<string, unknown>[]
+  graphOrders?: Record<string, unknown>[]
+  createError?: Error
 } = {}) => {
   const orderModule = { retrieveOrder: jest.fn(async () => order) }
-  const query = { graph: jest.fn(async () => ({ data: [order] })) }
+  const query = { graph: jest.fn(async () => ({ data: graphOrders ?? [order] })) }
   const refundService = {
     listBuyerRefundRequests: jest.fn(async () => existingRequests),
-    createBuyerRefundRequests: jest.fn(async (input: Record<string, unknown>) => ({
+    createBuyerRefundRequests: jest.fn(async (input: Record<string, unknown>) => {
+      if (createError) throw createError
+      return {
+        ...requestRecord,
+        ...input,
+        id: "brr_created",
+        created_at: requestRecord.created_at,
+        updated_at: requestRecord.updated_at,
+      }
+    }),
+    updateBuyerRefundRequests: jest.fn(async (input: Record<string, unknown>) => ({
       ...requestRecord,
+      ...(existingRequests[0] ?? {}),
       ...input,
-      id: "brr_created",
-      created_at: requestRecord.created_at,
-      updated_at: requestRecord.updated_at,
     })),
   }
   const fulfillmentService = { listFulfillmentOrders: jest.fn(async () => []) }
@@ -118,10 +157,23 @@ const createReq = ({
       }),
     },
   } as unknown as MedusaRequest
+  req.params = { id: String(order.id ?? "order_1"), request_id: "brr_1" } as never
   return { req, refundService }
 }
 
 describe("buyer refund request routes", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockExecuteApprovedRefund.mockImplementation(async (input: { refundRequestId: string; amount: number }) => ({
+      ...requestRecord,
+      id: input.refundRequestId,
+      requested_amount: input.amount,
+      eligible_amount: input.amount,
+      approved_amount: input.amount,
+      status: "refunded",
+    }))
+  })
+
   it("rejects unauthenticated POST", async () => {
     const { req, refundService } = createReq({ authCustomerId: null })
     const res = createRes()
@@ -130,7 +182,110 @@ describe("buyer refund request routes", () => {
     expect(refundService.createBuyerRefundRequests).not.toHaveBeenCalled()
   })
 
-  it("creates a pending full-order request for own captured order", async () => {
+  it("resolves the authenticated owner through the customer-scoped query graph", async () => {
+    const { req, refundService } = createReq()
+    const res = createRes()
+    await POST(req, res)
+    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY) as unknown as { graph: jest.Mock }
+    expect(query.graph).toHaveBeenCalledWith(expect.objectContaining({
+      entity: "order",
+      filters: { id: "order_1", customer_id: "cus_a" },
+    }))
+    expect(refundService.createBuyerRefundRequests).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses the same owner/store-scoped resolver for GET and POST", async () => {
+    const { req } = createReq()
+    const getRes = createRes()
+    await GET(req, getRes)
+    expect(getRes.status).toHaveBeenCalledWith(200)
+    const postRes = createRes()
+    await POST(req, postRes)
+    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY) as unknown as { graph: jest.Mock }
+    expect(query.graph).toHaveBeenCalledWith(expect.objectContaining({
+      filters: { id: "order_1", customer_id: "cus_a" },
+    }))
+    expect(postRes.status).toHaveBeenCalledWith(201)
+  })
+
+  it("does not fall back to retrieveOrder when the query graph resolves the owner", async () => {
+    const { req } = createReq()
+    const orderModule = req.scope.resolve(Modules.ORDER) as unknown as { retrieveOrder: jest.Mock }
+    orderModule.retrieveOrder.mockRejectedValue(new Error("order module relation lookup failed"))
+    const res = createRes()
+    await POST(req, res)
+    expect(res.status).toHaveBeenCalledWith(201)
+    expect(orderModule.retrieveOrder).not.toHaveBeenCalled()
+  })
+
+  it("returns opaque not-found for a different authenticated customer", async () => {
+    const { req, refundService } = createReq({ authCustomerId: "cus_b", graphOrders: [] })
+    const res = createRes()
+    await POST(req, res)
+    expect(res.status).toHaveBeenCalledWith(404)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_NOT_FOUND" } })
+    expect(refundService.createBuyerRefundRequests).not.toHaveBeenCalled()
+  })
+
+  it("returns opaque not-found for the right customer in another business store", async () => {
+    const { req, refundService } = createReq({
+      order: { ...capturedOrder, metadata: { ...capturedOrder.metadata, store_id: "other_store" } },
+    })
+    const res = createRes()
+    await POST(req, res)
+    expect(res.status).toHaveBeenCalledWith(404)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_NOT_FOUND" } })
+    expect(refundService.createBuyerRefundRequests).not.toHaveBeenCalled()
+  })
+
+  it("does not create a refund request when the ownership lookup misses", async () => {
+    const { req, refundService } = createReq({ graphOrders: [] })
+    const res = createRes()
+    await POST(req, res)
+    expect(res.status).toHaveBeenCalledWith(404)
+    expect(refundService.createBuyerRefundRequests).not.toHaveBeenCalled()
+    expect(mockExecuteApprovedRefund).not.toHaveBeenCalled()
+  })
+
+  it("keeps missing payment context distinct from order not found", async () => {
+    const { req, refundService } = createReq({
+      order: { ...capturedOrder, total: null, payment_collections: [] },
+    })
+    const res = createRes()
+    await POST(req, res)
+    expect(res.status).toHaveBeenCalledWith(409)
+    expect(res.body).not.toMatchObject({ error: { code: "ORDER_NOT_FOUND" } })
+    expect(refundService.createBuyerRefundRequests).not.toHaveBeenCalled()
+  })
+
+  it("keeps an insert failure distinct from order not found", async () => {
+    const { req, refundService } = createReq({
+      createError: new Error("database relation was not found during insert"),
+    })
+    const res = createRes()
+    await POST(req, res)
+    expect(res.status).toHaveBeenCalledWith(500)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_REFUND_REQUEST_ERROR" } })
+    expect(refundService.createBuyerRefundRequests).toHaveBeenCalledTimes(1)
+    expect(mockExecuteApprovedRefund).not.toHaveBeenCalled()
+  })
+
+  it("resolves a captured 4400 PayPal order for its authenticated owner", async () => {
+    const { req, refundService } = createReq({
+      authCustomerId: "cus_paypal",
+      headers: { "x-publishable-api-key": "pk_test", "x-store-id": "paypal_store" },
+      order: paypalCapturedOrder,
+    })
+    const res = createRes()
+    await POST(req, res)
+    expect(res.status).toHaveBeenCalledWith(201)
+    expect(refundService.createBuyerRefundRequests).toHaveBeenCalledWith(expect.objectContaining({
+      requested_amount: 4400,
+      payment_provider_id: "pp_paypal_paypal",
+    }))
+  })
+
+  it("auto-refunds an eligible full-order request before production", async () => {
     const { req, refundService } = createReq()
     const res = createRes()
     await POST(req, res)
@@ -141,13 +296,14 @@ describe("buyer refund request routes", () => {
       store_id: "default_store",
       currency_code: "usd",
       requested_amount: 2125,
-      status: "pending",
+      status: "auto_review",
       provider_status: "not_connected",
       metadata: { scope: "full_order" },
     }))
     expect(res.body).toMatchObject({
-      refund_request: { status: "pending", requested_amount: 2125, currency_code: "usd" },
+      refund_request: { status: "refunded", requested_amount: 2125, currency_code: "usd" },
     })
+    expect(mockExecuteApprovedRefund).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(res.body)).not.toContain("must-not-leak")
   })
 
@@ -179,19 +335,19 @@ describe("buyer refund request routes", () => {
     expect(res.body).toMatchObject({ error: { code: "ORDER_CANCELLED" } })
   })
 
-  it("rejects another customer", async () => {
+  it("does not reveal an order to another customer", async () => {
     const { req } = createReq({ authCustomerId: "cus_b" })
     const res = createRes()
     await POST(req, res)
-    expect(res.status).toHaveBeenCalledWith(403)
-    expect(res.body).toMatchObject({ error: { code: "ORDER_ACCESS_DENIED" } })
+    expect(res.status).toHaveBeenCalledWith(404)
+    expect(res.body).toMatchObject({ error: { code: "ORDER_NOT_FOUND" } })
   })
 
-  it("rejects another store", async () => {
+  it("does not reveal an order through another store", async () => {
     const { req } = createReq({ order: { ...capturedOrder, metadata: { ...capturedOrder.metadata, store_id: "other_store" } } })
     const res = createRes()
     await POST(req, res)
-    expect(res.status).toHaveBeenCalledWith(403)
+    expect(res.status).toHaveBeenCalledWith(404)
   })
 
   it("rejects duplicate open requests", async () => {
@@ -255,7 +411,7 @@ describe("buyer refund request routes", () => {
 
     expect(res.status).toHaveBeenCalledWith(201)
     expect(refundService.createBuyerRefundRequests).toHaveBeenCalledWith(
-      expect.objectContaining({ requested_amount: 2250, currency_code: "eur", status: "pending" })
+      expect.objectContaining({ requested_amount: 2250, currency_code: "eur", status: "auto_review" })
     )
   })
 
@@ -348,5 +504,72 @@ describe("buyer refund request routes", () => {
     )
     expect(res.body).toMatchObject({ refund_requests: [{ id: "brr_1", status: "pending" }] })
     expect(JSON.stringify(res.body)).not.toContain("must-not-leak")
+  })
+})
+
+describe("buyer refund request actions", () => {
+  it("cancels a reviewable request owned by the current buyer", async () => {
+    const { req, refundService } = createReq({ existingRequests: [{ ...requestRecord, status: "manual_review" }] })
+    req.body = { action: "cancel" } as never
+    const res = createRes()
+
+    await POST_ACTION(req, res)
+
+    expect(refundService.updateBuyerRefundRequests).toHaveBeenCalledWith({ id: "brr_1", status: "cancelled" })
+    expect(res.body).toMatchObject({ refund_request: { status: "cancelled" } })
+  })
+
+  it("rejects cancellation after provider processing starts", async () => {
+    const { req, refundService } = createReq({ existingRequests: [{ ...requestRecord, status: "refund_processing" }] })
+    req.body = { action: "cancel" } as never
+    const res = createRes()
+
+    await POST_ACTION(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(409)
+    expect(refundService.updateBuyerRefundRequests).not.toHaveBeenCalled()
+  })
+
+  it("accepts additional information only when requested by the seller", async () => {
+    const { req, refundService } = createReq({ existingRequests: [{ ...requestRecord, status: "awaiting_information" }] })
+    req.body = { action: "provide_information", note: "Photo and package details supplied." } as never
+    const res = createRes()
+
+    await POST_ACTION(req, res)
+
+    expect(refundService.updateBuyerRefundRequests).toHaveBeenCalledWith(expect.objectContaining({
+      id: "brr_1",
+      status: "manual_review",
+      note: "Photo and package details supplied.",
+    }))
+  })
+
+  it("does not expose another buyer's refund request", async () => {
+    const { req, refundService } = createReq({ authCustomerId: "cus_b", existingRequests: [requestRecord] })
+    req.body = { action: "cancel" } as never
+    const res = createRes()
+
+    await POST_ACTION(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(refundService.updateBuyerRefundRequests).not.toHaveBeenCalled()
+  })
+})
+
+describe("buyer refund request monetary schema", () => {
+  it("migrates every raw BigNumber companion required by refund request insertion", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "src/modules/buyer-refund-requests/migrations/Migration20260802000300.ts"
+      ),
+      "utf8"
+    )
+
+    expect(migration).toContain('"raw_requested_amount" jsonb null')
+    expect(migration).toContain('"raw_eligible_amount" jsonb null')
+    expect(migration).toContain('"raw_approved_amount" jsonb null')
+    expect(migration).toContain('alter column "raw_requested_amount" set not null')
+    expect(migration).toContain("'precision', 20")
   })
 })

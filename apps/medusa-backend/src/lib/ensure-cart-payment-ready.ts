@@ -17,6 +17,8 @@ export type PaymentSessionRow = {
   id?: string
   status?: string
   provider_id?: string
+  amount?: unknown
+  currency_code?: string
   data?: Record<string, unknown> | null
 }
 
@@ -41,7 +43,7 @@ export async function listPaymentSessions(
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = (await query.graph({
     entity: "payment_session",
-    fields: ["id", "status", "provider_id", "data"],
+    fields: ["id", "status", "provider_id", "amount", "currency_code", "data"],
     filters: { payment_collection_id: paymentCollectionId },
   })) as { data: PaymentSessionRow[] }
 
@@ -77,37 +79,62 @@ function hasProcessableSessionForProvider(
 export async function ensureCartPaymentReady(
   container: MedusaContainer,
   cartId: string,
-  providerId: string
+  providerId: string,
+  existingProviderPaymentId?: string
 ): Promise<void> {
-  const cartModule = container.resolve(Modules.CART)
-
-  let paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
-
-  if (!paymentCollectionId) {
-    await createPaymentCollectionForCartWorkflow(container).run({
-      input: { cart_id: cartId },
-    })
-    paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
+  const lockingModule = container.resolve(Modules.LOCKING) as {
+    execute: <T>(key: string, job: () => Promise<T>, options?: { timeout?: number }) => Promise<T>
   }
 
-  if (!paymentCollectionId) {
-    throw new Error("Failed to create payment collection for cart")
-  }
+  return lockingModule.execute(
+    `checkout-payment-session:${cartId}:${providerId}`,
+    async () => {
+      const cartModule = container.resolve(Modules.CART)
 
-  const sessions = await listPaymentSessions(container, paymentCollectionId)
-  if (hasProcessableSessionForProvider(sessions, providerId)) {
-    return
-  }
+      let paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
 
-  const cart = await cartModule.retrieveCart(cartId)
-  await createPaymentSessionsWorkflow(container).run({
-    input: {
-      payment_collection_id: paymentCollectionId,
-      provider_id: providerId,
-      customer_id: cart.customer_id ?? undefined,
-      context: {},
+      if (!paymentCollectionId) {
+        await createPaymentCollectionForCartWorkflow(container).run({
+          input: { cart_id: cartId },
+        })
+        paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
+      }
+
+      if (!paymentCollectionId) {
+        throw new Error("Failed to create payment collection for cart")
+      }
+
+      const sessions = await listPaymentSessions(container, paymentCollectionId)
+      if (hasProcessableSessionForProvider(sessions, providerId)) {
+        return
+      }
+
+      const cart = await cartModule.retrieveCart(cartId)
+      await createPaymentSessionsWorkflow(container).run({
+        input: {
+          payment_collection_id: paymentCollectionId,
+          provider_id: providerId,
+          // PayPal Checkout does not use Medusa account holders. Passing a
+          // customer here makes the generic workflow attempt to create one;
+          // Stripe still receives the customer context as before.
+          customer_id: providerId === "pp_paypal_paypal" ? undefined : cart.customer_id ?? undefined,
+          // If Medusa lost only the session row, let the provider reuse the
+          // existing external payment instead of creating a second one.
+          data:
+            providerId === "pp_paypal_paypal" && existingProviderPaymentId
+              ? { paypal_order_id: existingProviderPaymentId }
+              : undefined,
+          context: {},
+        },
+      })
+
+      // PayPal's Medusa-session/attempt metadata is attached by the payment
+      // recovery route after it has selected the one active checkout attempt.
+      // Doing it here as well races provider switches and can target a session
+      // that Medusa has just removed.
     },
-  })
+    { timeout: 30 }
+  )
 }
 
 export type CartWithPaymentCollection = CartDTO & {

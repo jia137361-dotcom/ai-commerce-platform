@@ -18,6 +18,31 @@ const stripePaymentProviders =
       ]
     : []
 
+const paypalPaymentProviders =
+  process.env.PAYPAL_CLIENT_ID &&
+  process.env.PAYPAL_CLIENT_SECRET &&
+  process.env.PAYPAL_ENVIRONMENT === "sandbox"
+    ? [
+        {
+          resolve: "./src/modules/paypal",
+          id: "paypal",
+          options: {
+            clientId: process.env.PAYPAL_CLIENT_ID,
+            clientSecret: process.env.PAYPAL_CLIENT_SECRET,
+            environment: "sandbox",
+            webhookId: process.env.PAYPAL_WEBHOOK_ID,
+            brandName: process.env.PAYPAL_BRAND_NAME || "CiiVerse",
+            returnUrl:
+              process.env.PAYPAL_RETURN_URL ||
+              `${process.env.STOREFRONT_URL || "http://127.0.0.1:5174"}/checkout?paypal_return=1`,
+            cancelUrl:
+              process.env.PAYPAL_CANCEL_URL ||
+              `${process.env.STOREFRONT_URL || "http://127.0.0.1:5174"}/checkout?paypal_cancel=1`,
+          },
+        },
+      ]
+    : []
+
 const disableAdmin = process.env.MEDUSA_ADMIN_DISABLE === "true"
 const databaseSslDisabled = process.env.DATABASE_SSL === "false"
 
@@ -63,9 +88,24 @@ export default defineConfig({
       resolve: "./src/modules/store-coupons"
     },
     {
+      resolve: "./src/modules/checkout-payment-attempts"
+    },
+    {
+      resolve: "@medusajs/medusa/locking",
+      options: {
+        providers: [
+          {
+            resolve: "@medusajs/locking-postgres",
+            id: "postgres",
+            is_default: true,
+          },
+        ],
+      },
+    },
+    {
       resolve: "@medusajs/medusa/payment",
       options: {
-        providers: stripePaymentProviders,
+        providers: [...stripePaymentProviders, ...paypalPaymentProviders],
       },
     },
   ]

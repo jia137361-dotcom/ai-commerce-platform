@@ -28,7 +28,9 @@ export type BuyerRefundRequestRecord = {
   store_id?: string
   currency_code?: string
   requested_amount?: unknown
+  eligible_amount?: unknown
   approved_amount?: unknown
+  requested_items?: unknown
   reason?: string
   note?: string | null
   status?: string
@@ -42,6 +44,15 @@ export type BuyerRefundRequestRecord = {
   processed_at?: string | Date | null
   failed_at?: string | Date | null
   failure_reason?: string | null
+  policy_result?: string | null
+  decision_type?: string | null
+  decision_reason?: string | null
+  reviewed_by?: string | null
+  production_status_snapshot?: string | null
+  latest_production_status?: string | null
+  idempotency_key?: string | null
+  attempt_count?: number | null
+  last_provider_error_code?: string | null
   metadata?: Record<string, unknown> | null
   created_at?: string | Date
   updated_at?: string | Date
@@ -49,8 +60,24 @@ export type BuyerRefundRequestRecord = {
 
 export const OPEN_REFUND_REQUEST_STATUSES = new Set([
   "pending",
+  "requested",
+  "auto_review",
+  "manual_review",
+  "awaiting_information",
   "approved",
   "processing",
+  "refund_processing",
+  "refund_pending",
+])
+
+const FINANCIALLY_RESERVED_REFUND_STATUSES = new Set([
+  "approved",
+  "processing",
+  "refund_processing",
+  "refund_pending",
+  "partially_refunded",
+  "refunded",
+  "processed",
 ])
 
 const normalizeStatus = (value: unknown) =>
@@ -348,11 +375,25 @@ export function evaluateRefundRequestEligibility(
     )
   }
 
+  const reservedAmount = input.existingRequests.reduce((sum, request) => {
+    if (!FINANCIALLY_RESERVED_REFUND_STATUSES.has(normalizeStatus(request.status))) return sum
+    const amount = readNumber(request.approved_amount) || readNumber(request.requested_amount)
+    return sum + Math.max(0, amount)
+  }, 0)
+  const remainingAmount = Math.max(0, amountResolution.amount - reservedAmount)
+  if (!(remainingAmount > 0)) {
+    return denied(
+      "ORDER_ALREADY_REFUNDED",
+      "No refundable balance remains for this order.",
+      amountResolution.currencyCode
+    )
+  }
+
   return {
     allowed: true,
     code: null,
     message: null,
-    requestedAmount: amountResolution.amount,
+    requestedAmount: remainingAmount,
     currencyCode: amountResolution.currencyCode,
   }
 }
@@ -398,8 +439,11 @@ export const serializeBuyerRefundRequest = (request: BuyerRefundRequestRecord) =
   reason: request.reason ?? "",
   note: request.note ?? null,
   requested_amount: readNumber(request.requested_amount),
+  eligible_amount:
+    request.eligible_amount == null ? null : readNumber(request.eligible_amount),
   approved_amount:
     request.approved_amount == null ? null : readNumber(request.approved_amount),
+  requested_items: request.requested_items ?? null,
   currency_code: request.currency_code ?? null,
   payment_provider_id: request.payment_provider_id ?? null,
   external_refund_id: request.external_refund_id ?? null,
@@ -408,6 +452,14 @@ export const serializeBuyerRefundRequest = (request: BuyerRefundRequestRecord) =
   processed_at: request.processed_at ?? null,
   failed_at: request.failed_at ?? null,
   failure_reason: request.failure_reason ?? null,
+  policy_result: request.policy_result ?? null,
+  decision_type: request.decision_type ?? null,
+  decision_reason: request.decision_reason ?? null,
+  reviewed_by: request.reviewed_by ?? null,
+  production_status_snapshot: request.production_status_snapshot ?? null,
+  latest_production_status: request.latest_production_status ?? null,
+  attempt_count: request.attempt_count ?? 0,
+  last_provider_error_code: request.last_provider_error_code ?? null,
   created_at: request.created_at ?? null,
   updated_at: request.updated_at ?? null,
 })

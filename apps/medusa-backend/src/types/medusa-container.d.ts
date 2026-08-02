@@ -19,6 +19,9 @@ declare module "@medusajs/core-flows" {
   export const refreshPaymentSessionsWorkflow: any
   export const authorizePaymentSessionWorkflow: any
   export const refundPaymentWorkflow: any
+  export const refundPaymentsWorkflow: any
+  export const processPaymentWorkflow: any
+  export const deletePaymentSessionsWorkflow: any
   export const createFulfillmentWorkflow: any
   export const cancelFulfillmentWorkflow: any
   export const deliveryOrderWorkflow: any

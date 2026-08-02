@@ -25,6 +25,8 @@ type PaymentRefund = {
 
 type PaymentRecord = {
   id?: string
+  provider_id?: string
+  data?: Record<string, unknown> | null
   status?: unknown
   amount?: unknown
   raw_amount?: unknown
@@ -392,6 +394,8 @@ const loadOrderFromGraph = async (
       "payment_collections.captured_amount",
       "payment_collections.raw_captured_amount",
       "payment_collections.payments.id",
+      "payment_collections.payments.provider_id",
+      "payment_collections.payments.data",
       "payment_collections.payments.status",
       "payment_collections.payments.amount",
       "payment_collections.payments.raw_amount",
