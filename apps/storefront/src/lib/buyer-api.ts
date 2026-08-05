@@ -801,7 +801,9 @@ const isPlaceholderValue = (value: string) =>
   !value || value.includes("replace_me") || value.includes("<") || value.includes(">")
 
 const config = {
-  backendUrl: readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
+  backendUrl: import.meta.env.DEV && typeof window !== "undefined" && window.location.port === "5174"
+    ? window.location.origin
+    : readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
   publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
   aiWorkerPublicBase: (() => {
     const explicit = readEnv("VITE_AI_WORKER_PUBLIC_BASE_URL", readEnv("NEXT_PUBLIC_AI_WORKER_PUBLIC_BASE_URL"))
@@ -3433,4 +3435,102 @@ export const fetchFavoriteProducts = async (): Promise<FavoriteListResult> => {
   } catch {
     return { favorites: [], count: 0 }
   }
+}
+
+// ─── Custom Editor APIs (proxy to S2BDIY, token stays server-side) ───
+
+/**
+ * Upload a design image to S2BDIY via our backend proxy.
+ * Returns material_id for use in quickCreate.
+ */
+export const uploadDesignMaterial = async (imageBase64: string): Promise<{
+  material_id: number
+  material_url: string | null
+  name: string
+}> => {
+  const payload = await apiFetch<{
+    material_id: number
+    material_url: string | null
+    name: string
+  }>("/store/design-sessions/material-upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_base64: imageBase64 }),
+  })
+  return payload
+}
+
+/**
+ * Create a designed product on S2BDIY via our backend proxy.
+ * Returns s2b_product_id.
+ */
+export const quickCreateDesign = async (input: {
+  basicProductId: number | string
+  sizeId: number | string
+  colorId: number | string
+  materialId: number | string
+  viewId?: number | string
+  designType?: number
+  name?: string
+}): Promise<{
+  s2b_product_id: number | string
+  product_name?: string
+  product_code?: string
+}> => {
+  const payload = await apiFetch<{
+    s2b_product_id: number | string
+    product_name?: string
+    product_code?: string
+  }>("/store/design-sessions/quick-create", {
+    method: "POST",
+    body: JSON.stringify({
+      basic_product_id: input.basicProductId,
+      size_id: input.sizeId,
+      color_id: input.colorId,
+      name: input.name ?? "Custom Design",
+      views: [
+        {
+          view_id: input.viewId ?? 1,
+          objects: [
+            {
+              type: "image",
+              material_id: input.materialId,
+              design_type: input.designType ?? 1,
+            },
+          ],
+        },
+      ],
+    }),
+  })
+  return payload
+}
+
+/**
+ * Get designed product detail (mockup URLs) from S2BDIY via our backend proxy.
+ */
+export const fetchS2bProductDetail = async (s2bProductId: number | string): Promise<{
+  product_id: number | string
+  product_name: string | null
+  mockup_urls: string[]
+  variants: Array<{
+    id: number
+    size_id: number
+    color_id: number
+    size_name: string
+    color_name: string
+  }>
+}> => {
+  const payload = await apiFetch<{
+    product_id: number | string
+    product_name: string | null
+    mockup_urls: string[]
+    variants: Array<{
+      id: number
+      size_id: number
+      color_id: number
+      size_name: string
+      color_name: string
+    }>
+  }>(`/store/design-sessions/product-detail/${encodeURIComponent(String(s2bProductId))}`)
+  return payload
 }
