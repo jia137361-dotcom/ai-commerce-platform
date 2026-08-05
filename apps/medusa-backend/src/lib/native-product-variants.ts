@@ -1,4 +1,5 @@
 import { readString } from "./product-cart-bridge"
+import { readSkuPrice } from "./product-sku"
 
 export type StoreCoreVariantRow = {
   supplier_variant_id: string
@@ -25,7 +26,7 @@ export function readStoreCoreVariantRows(
     if (!supplierVariantId || seen.has(supplierVariantId)) return []
     seen.add(supplierVariantId)
 
-    const rawPrice = Number(row.price)
+    const rawPrice = Number(readSkuPrice(row as any, fallbackPrice))
     const rawStock = Number(row.stock)
     return [{
       supplier_variant_id: supplierVariantId,

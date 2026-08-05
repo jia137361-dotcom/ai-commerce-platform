@@ -19,12 +19,29 @@ export type FulfillmentStatus = (typeof FulfillmentStatuses)[number]
 
 export type ProductVariantRow = {
   supplier_variant_id: string
+  supplier_external_variant_id?: string
+  supplier_variant_record_id?: string
   medusa_variant_id?: string
   supplier_size_id?: string
   supplier_color_id?: string
   color: string
   size: string
   price: number
+  sku?: string
+  cost?: number
+  weight?: number
+  length?: number
+  width?: number
+  height?: number
+  platform_sku?: string
+  supplier_sku?: string
+  supplier_product_id?: string
+  basic_product_id?: string
+  warehouse_name?: string | null
+  ship_from_country?: string | null
+  print_spec_ids?: string[]
+  price_override?: number | null
+  enabled?: boolean
 }
 
 export type ProductRegionSummary = {
@@ -109,4 +126,4 @@ export type StoreSettings = {
   metadata: Record<string, unknown>
 }
 
-export * from "./store-policy-presets"
+export * from "./store-policy-presets.js"

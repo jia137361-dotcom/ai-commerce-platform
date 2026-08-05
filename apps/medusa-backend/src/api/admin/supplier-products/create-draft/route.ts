@@ -51,10 +51,17 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     // Build variant rows for mc_product
     const variantRows = (variants as any[]).map((v: any) => ({
       supplier_variant_id: v.id,
+      supplier_external_variant_id: v.supplier_variant_id,
+      sku: v.sku ?? v.supplier_variant_code,
       supplier_size_id: v.supplier_size_id,
       supplier_color_id: v.supplier_color_id,
       color: v.color_name ?? v.color ?? "Default",
       size: v.size_name ?? v.size ?? "Default",
+      cost: Number(v.cost) || 0,
+      weight: v.weight,
+      length: v.length,
+      width: v.width,
+      height: v.height,
       price: retailPriceUsd,
       stock: 50,
     }))
@@ -62,8 +69,8 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     // Create mc_product draft
     const product = await createMcProduct(storeCoreService, {
       store_id: storeId,
-      title: String(sp.name ?? `Product ${basicProductId}`),
-      description: "",
+      title: String(sp.basic_product_en_name ?? sp.name ?? `Product ${basicProductId}`),
+      description: String(sp.en_desc ?? ""),
       status: "draft",
       source: "manual",
       price: retailPriceUsd,
@@ -83,6 +90,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         supplier_name: sp.name,
         purchase_price_cny: purchasePriceCny,
         retail_price_usd: retailPriceUsd,
+        supplier_details: sp.raw_json ?? {},
       },
     })
 

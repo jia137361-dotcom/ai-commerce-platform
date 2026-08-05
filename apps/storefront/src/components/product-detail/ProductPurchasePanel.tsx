@@ -22,6 +22,7 @@ type ProductPurchasePanelProps = {
   requiresSignIn?: boolean
   addNotice?: { tone: "success" | "error"; message: string }
   onAddToCart: () => void
+  onBuyNow: () => void
   share?: BuyerShareInfo | null
   isFavorited?: boolean
   onToggleFavorite?: () => void
@@ -42,6 +43,7 @@ export function ProductPurchasePanel({
   requiresSignIn = false,
   addNotice,
   onAddToCart,
+  onBuyNow,
   share,
   isFavorited = false,
   onToggleFavorite,
@@ -139,6 +141,15 @@ export function ProductPurchasePanel({
         onClick={onAddToCart}
       >
         {authLoading ? "Checking account..." : adding ? "Adding..." : requiresSignIn ? "Sign in to add to cart" : "Add to cart"}
+      </Button>
+      <Button
+        className="buyer-product-add-button"
+        variant="primary"
+        loading={adding || authLoading}
+        disabled={!purchaseState.canAdd || adding || authLoading}
+        onClick={onBuyNow}
+      >
+        {authLoading ? "Checking account..." : adding ? "Preparing checkout..." : requiresSignIn ? "Sign in to buy now" : "Buy now"}
       </Button>
 
       <div className="buyer-product-action-buttons">

@@ -158,7 +158,10 @@ describe("PUT /store/carts/:cart_id/address", () => {
       email: "buyer@example.com",
       shipping_address: expect.objectContaining({ country_code: "cn" }),
     })
-    const fallbackPayload = cartModule.updateCarts.mock.calls[0][1]
+    const calls = cartModule.updateCarts.mock.calls as unknown as Array<[string, Record<string, any>]>
+    const fallbackCall = calls[0]
+    expect(fallbackCall).toBeDefined()
+    const fallbackPayload = fallbackCall![1]
     expect(fallbackPayload).not.toHaveProperty("billing_address")
     expect(fallbackPayload.shipping_address).toMatchObject({
       first_name: "Buyer",

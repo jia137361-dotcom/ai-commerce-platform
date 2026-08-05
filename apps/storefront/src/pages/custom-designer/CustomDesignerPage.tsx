@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Canvas, FabricImage, Rect } from "fabric"
+import { Canvas, FabricImage, Rect, Textbox } from "fabric"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { StoreFooter } from "../../components/layout/StoreFooter"
@@ -28,21 +28,22 @@ import {
   type DesignCompleteResult,
 } from "../../lib/buyer-api"
 import { buildAiDesignHref } from "../../lib/buyer-design-handoff"
-import { getBuyerDesignGuestKey } from "../../lib/buyer-my-designs"
+import { getBuyerDesignGuestKey, upsertBuyerDesignDraft } from "../../lib/buyer-my-designs"
 import { navigateBuyer } from "../../lib/buyer-navigate"
 import { useBuyerLocale } from "../../lib/locale"
 import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 
-type CustomDesignerPageProps = {
+type Props = {
   productId: string
   cartCount: number
   onCartUpdated: (cart: any) => void
 }
 
 type DesignOption = { id: number; name: string }
+type Status = "loading" | "config-error" | "unsupported" | "ready" | "uploading" | "saving" | "saved" | "error"
 
-export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: CustomDesignerPageProps) {
+export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Props) {
   const { t } = useBuyerLocale()
   const auth = useBuyerAuth()
   const customerId = auth.customer?.id ?? null
@@ -53,14 +54,16 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
   const fabricRef = useRef<Canvas | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [status, setStatus] = useState<"loading" | "ready" | "uploading" | "saving" | "saved" | "error">("loading")
+  const [status, setStatus] = useState<Status>("loading")
   const [errorMessage, setErrorMessage] = useState("")
   const [config, setConfig] = useState<DesignConfig | null>(null)
   const [basicProduct, setBasicProduct] = useState<{
     name: string
+    enName: string
     sizes: DesignOption[]
     colors: DesignOption[]
     views: DesignOption[]
+    purchasePrice: number
   } | null>(null)
 
   const [selectedSizeId, setSelectedSizeId] = useState<number | null>(null)
@@ -71,6 +74,12 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
   const [materialUrl, setMaterialUrl] = useState<string | null>(null)
   const [mockupUrls, setMockupUrls] = useState<string[]>([])
   const [savedResult, setSavedResult] = useState<DesignCompleteResult | null>(null)
+  const [canvasReady, setCanvasReady] = useState(false)
+
+  const designGuestKeyRef = useRef(designGuestKey())
+  useEffect(() => {
+    designGuestKeyRef.current = designGuestKey()
+  }, [customerId])
 
   // Load product config + basic product details
   useEffect(() => {
@@ -84,38 +93,72 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
         setConfig(cfg)
         if (cfg.viewId != null) setSelectedViewId(Number(cfg.viewId))
 
-        // Fetch basic product detail for sizes/colors
-        const basicResp = await fetch(
-          `/store/products/${productId}/basic-product-detail`
-        ).then((r) => r.json()).catch(() => null)
+        // Fetch basic product detail from S2BDIY via our proxy
+        const basicResp = await fetch(`/store/products/${productId}/basic-product-detail`)
+        let sizes: DesignOption[] = []
+        let colors: DesignOption[] = []
+        let views: DesignOption[] = []
+        let name = "Product"
+        let enName = ""
+        let purchasePrice = 0
+
+        if (basicResp.ok) {
+          const basic = await basicResp.json()
+          name = basic.name ?? basic.en_name ?? "Product"
+          enName = basic.en_name ?? ""
+          purchasePrice = Number(basic.purchase_price) || 0
+
+          if (Array.isArray(basic.sizes)) {
+            sizes = basic.sizes.map((s: any) => ({
+              id: Number(s.id),
+              name: s.en_name ?? s.name ?? `Size ${s.id}`,
+            })).filter((s: DesignOption) => Number.isFinite(s.id))
+          }
+          if (Array.isArray(basic.colors)) {
+            colors = basic.colors.map((c: any) => ({
+              id: Number(c.id),
+              name: c.en_name ?? c.name ?? `Color ${c.id}`,
+            })).filter((c: DesignOption) => Number.isFinite(c.id))
+          }
+          if (Array.isArray(basic.views)) {
+            views = basic.views.map((v: any) => ({
+              id: Number(v.id),
+              name: v.en_name ?? v.name ?? `View ${v.id}`,
+            })).filter((v: DesignOption) => Number.isFinite(v.id))
+          }
+        }
+
+        // Fallback: if no data from API, use common POD values
+        if (!sizes.length) {
+          sizes = [
+            { id: 20, name: "S" }, { id: 21, name: "M" }, { id: 22, name: "L" },
+            { id: 23, name: "XL" }, { id: 24, name: "XXL" },
+          ]
+        }
+        if (!colors.length) {
+          colors = [
+            { id: 5, name: "Black" }, { id: 6, name: "White" },
+            { id: 7, name: "Red" }, { id: 9, name: "Blue" },
+          ]
+        }
+        if (!views.length) {
+          views = [{ id: 1, name: "Front" }]
+        }
 
         if (active) {
-          // Use design config data
-          setBasicProduct({
-            name: "Product",
-            sizes: [
-              { id: 20, name: "S" },
-              { id: 21, name: "M" },
-              { id: 22, name: "L" },
-              { id: 23, name: "XL" },
-              { id: 24, name: "XXL" },
-            ],
-            colors: [
-              { id: 5, name: "Black" },
-              { id: 6, name: "White" },
-              { id: 7, name: "Red" },
-              { id: 9, name: "Blue" },
-            ],
-            views: [{ id: 1, name: "Front" }],
-          })
-          setSelectedSizeId(21) // M
-          setSelectedColorId(5) // Black
+          setBasicProduct({ name, enName, sizes, colors, views, purchasePrice })
+          setSelectedSizeId(sizes[1]?.id ?? sizes[0]?.id ?? null)
+          setSelectedColorId(colors[0]?.id ?? null)
           setStatus("ready")
         }
-      } catch (error) {
+      } catch (error: any) {
         if (!active) return
-        setErrorMessage(error instanceof Error ? error.message : "Failed to load")
-        setStatus("error")
+        if (error?.message?.includes("does not support")) {
+          setStatus("unsupported")
+        } else {
+          setErrorMessage(error instanceof Error ? error.message : "Failed to load designer")
+          setStatus("config-error")
+        }
       }
     })()
 
@@ -126,35 +169,53 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
 
   // Initialize Fabric.js canvas
   useEffect(() => {
-    if (status !== "ready" || !canvasRef.current) return
+    if (status !== "ready" || !canvasRef.current || canvasReady) return
 
     const canvas = new Canvas(canvasRef.current, {
       width: 500,
       height: 600,
-      backgroundColor: "#f8f8f8",
+      backgroundColor: "#f9fafb",
     })
 
-    // Add print area guide
+    // Print area guide
     const guide = new Rect({
       left: 100,
       top: 100,
       width: 300,
       height: 400,
-      fill: "transparent",
-      stroke: "#999",
-      strokeDashArray: [5, 5],
+      fill: "rgba(59,130,246,0.03)",
+      stroke: "#3b82f6",
+      strokeDashArray: [6, 4],
+      strokeWidth: 1,
       selectable: false,
       evented: false,
+      excludeFromExport: true,
     })
     canvas.add(guide)
 
+    // Print area label
+    const label = new Textbox("Print Area", {
+      left: 100,
+      top: 72,
+      fontSize: 11,
+      fill: "#3b82f6",
+      selectable: false,
+      evented: false,
+      excludeFromExport: true,
+      width: 300,
+      textAlign: "left",
+    })
+    canvas.add(label)
+
     fabricRef.current = canvas
+    setCanvasReady(true)
 
     return () => {
       canvas.dispose()
       fabricRef.current = null
+      setCanvasReady(false)
     }
-  }, [status])
+  }, [status, canvasReady])
 
   // Handle image upload
   const handleImageUpload = useCallback(
@@ -166,7 +227,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
       setErrorMessage("")
 
       try {
-        // Add image to canvas
+        // Load image into canvas
         const img = await FabricImage.fromURL(
           URL.createObjectURL(file),
           { crossOrigin: "anonymous" }
@@ -175,23 +236,25 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
         // Scale to fit print area
         const maxWidth = 280
         const maxHeight = 380
-        const scale = Math.min(maxWidth / img.width!, maxHeight / img.height!)
+        const scale = Math.min(maxWidth / (img.width ?? 1), maxHeight / (img.height ?? 1), 1)
         img.scale(scale)
 
         // Center in print area
         img.set({
-          left: 100 + (300 - img.width! * scale) / 2,
-          top: 100 + (400 - img.height! * scale) / 2,
+          left: 100 + (300 - (img.width ?? 0) * scale) / 2,
+          top: 100 + (400 - (img.height ?? 0) * scale) / 2,
           cornerStyle: "circle",
-          cornerSize: 8,
+          cornerSize: 10,
           transparentCorners: false,
+          borderColor: "#3b82f6",
+          cornerColor: "#3b82f6",
         })
 
         canvas.add(img)
         canvas.setActiveObject(img)
         canvas.renderAll()
 
-        // Upload to S2BDIY (via proxy)
+        // Upload to S2BDIY via proxy
         const reader = new FileReader()
         reader.onload = async () => {
           const base64 = reader.result as string
@@ -233,7 +296,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
         materialId,
         viewId: selectedViewId ?? 1,
         designType: config.designType ?? 1,
-        name: "Custom Design",
+        name: basicProduct?.enName || basicProduct?.name || "Custom Design",
       })
 
       // Step 2: Get mockup URLs
@@ -249,22 +312,55 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
         mockupUrl: productDetail.mockup_urls[0] ?? null,
         saveAs: "draft",
         blankProductId: productId,
-        guestKey: designGuestKey(),
+        guestKey: designGuestKeyRef.current,
       })
 
       setSavedResult(result)
       setStatus("saved")
+
+      // Persist to My Designs
+      upsertBuyerDesignDraft(
+        {
+          mcProductId: result.mcProductId,
+          variantId: result.variantId,
+          title: result.title,
+          mockupUrl: productDetail.mockup_urls[0] ?? null,
+          price: result.price,
+          s2bProductId: String(quickResult.s2b_product_id),
+          basicProductId: String(config.basicProductId),
+          blankProductId: productId,
+          status: "draft",
+          sizeId: String(selectedSizeId),
+          colorId: String(selectedColorId),
+          sizeName: basicProduct?.sizes.find((s) => s.id === selectedSizeId)?.name,
+          colorName: basicProduct?.colors.find((c) => c.id === selectedColorId)?.name,
+        },
+        customerId
+      )
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Save failed")
       setStatus("error")
     }
-  }, [config, materialId, selectedSizeId, selectedColorId, selectedViewId, productId, designGuestKey])
+  }, [config, materialId, selectedSizeId, selectedColorId, selectedViewId, productId, basicProduct, customerId])
 
   // Place order
   const handlePlaceOrder = useCallback(async () => {
     if (!savedResult?.variantId) return
     navigateBuyer(`/checkout`)
   }, [savedResult])
+
+  const handleRetry = () => {
+    setStatus("loading")
+    setErrorMessage("")
+    setConfig(null)
+    setBasicProduct(null)
+    setSavedResult(null)
+    setMaterialId(null)
+    setMockupUrls([])
+  }
+
+  const selectedSizeName = basicProduct?.sizes.find((s) => s.id === selectedSizeId)?.name ?? ""
+  const selectedColorName = basicProduct?.colors.find((c) => c.id === selectedColorId)?.name ?? ""
 
   return (
     <PageShell
@@ -280,23 +376,32 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
         <span>Custom Designer</span>
       </nav>
 
-      <div className="designer-handoff-bar">
-        <a href={buildAiDesignHref({ productId, returnTo: `/design/${productId}` })} className="designer-ai-design-link">
-          <strong>{t("designerAiCta")}</strong>
-          <span>{t("designerAiCtaHint")}</span>
-        </a>
-      </div>
+      {basicProduct && (
+        <div className="designer-product-header">
+          <h2>{basicProduct.enName || basicProduct.name}</h2>
+          <a href={buildAiDesignHref({ productId, returnTo: `/design/${productId}` })} className="designer-ai-link">
+            {t("designerAiCta")} →
+          </a>
+        </div>
+      )}
 
       {status === "loading" && (
         <div className="designer-status">
+          <div className="designer-spinner" />
           <p>Loading designer…</p>
         </div>
       )}
 
-      {status === "error" && (
+      {status === "config-error" && (
         <div className="designer-status">
           <p className="designer-error">{errorMessage || "Unable to load designer"}</p>
-          <Button onClick={() => window.location.reload()}>Try again</Button>
+          <Button onClick={handleRetry}>Try again</Button>
+        </div>
+      )}
+
+      {status === "unsupported" && (
+        <div className="designer-status">
+          <p>This product does not support online design.</p>
         </div>
       )}
 
@@ -308,35 +413,41 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
               <canvas ref={canvasRef} className="designer-canvas" />
             </div>
             <div className="designer-canvas-tools">
-              <Button onClick={() => fileInputRef.current?.click()} disabled={status === "uploading"}>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={status === "uploading"}
+                variant="secondary"
+              >
                 {status === "uploading" ? "Uploading…" : "Upload Design"}
               </Button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
                 style={{ display: "none" }}
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) void handleImageUpload(file)
+                  e.target.value = ""
                 }}
               />
-              {materialUrl && (
-                <span className="designer-material-status">✓ Image uploaded</span>
+              {materialId && (
+                <span className="designer-material-status">✓ Image ready</span>
               )}
+              <span className="designer-hint">PNG, JPG, SVG up to 50MB</span>
             </div>
           </div>
 
-          {/* Right: Options + Preview */}
+          {/* Right: Options + Actions */}
           <div className="designer-options-panel">
-            <Card>
+            <Card className="designer-option-card">
               <h3>Size</h3>
               <div className="designer-option-grid">
                 {basicProduct?.sizes.map((size) => (
                   <button
                     key={size.id}
                     type="button"
-                    className={selectedSizeId === size.id ? "active" : ""}
+                    className={`designer-option-btn ${selectedSizeId === size.id ? "active" : ""}`}
                     onClick={() => setSelectedSizeId(size.id)}
                   >
                     {size.name}
@@ -345,14 +456,14 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
               </div>
             </Card>
 
-            <Card>
+            <Card className="designer-option-card">
               <h3>Color</h3>
               <div className="designer-option-grid">
                 {basicProduct?.colors.map((color) => (
                   <button
                     key={color.id}
                     type="button"
-                    className={selectedColorId === color.id ? "active" : ""}
+                    className={`designer-option-btn ${selectedColorId === color.id ? "active" : ""}`}
                     onClick={() => setSelectedColorId(color.id)}
                   >
                     {color.name}
@@ -369,22 +480,38 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Cust
               {status === "saving" ? "Saving…" : "Save Design"}
             </Button>
 
+            {errorMessage && ["error", "ready"].includes(status) && (
+              <p className="designer-inline-error" role="alert">{errorMessage}</p>
+            )}
+
             {status === "saved" && savedResult && (
               <div className="designer-saved-panel">
                 <h3>✓ Design Saved</h3>
                 {mockupUrls.length > 0 && (
                   <div className="designer-mockup-grid">
                     {mockupUrls.slice(0, 4).map((url, i) => (
-                      <img key={i} src={url} alt={`Mockup ${i + 1}`} />
+                      <img key={i} src={url} alt={`Preview ${i + 1}`} loading="lazy" />
                     ))}
                   </div>
                 )}
-                <p className="designer-order-price">
-                  ${savedResult.price?.toFixed(2) ?? "29.99"}
-                </p>
+                <dl className="designer-summary">
+                  {selectedSizeName && <div><dt>Size</dt><dd>{selectedSizeName}</dd></div>}
+                  {selectedColorName && <div><dt>Color</dt><dd>{selectedColorName}</dd></div>}
+                  {savedResult.price != null && <div><dt>Price</dt><dd>${savedResult.price.toFixed(2)}</dd></div>}
+                </dl>
                 <Button onClick={() => void handlePlaceOrder()} className="designer-order-btn">
                   Place Order
                 </Button>
+                <div className="designer-secondary-actions">
+                  <a href="/my-designs">View My Designs</a>
+                  <button
+                    type="button"
+                    className="designer-link-btn"
+                    onClick={handleRetry}
+                  >
+                    New Design
+                  </button>
+                </div>
               </div>
             )}
           </div>

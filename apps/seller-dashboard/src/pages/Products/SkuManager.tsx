@@ -1,450 +1,572 @@
-import { useMemo, useState } from "react"
-import { Link } from "react-router-dom"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiFetch } from "../../lib/api-client"
-import { storeProductPath } from "../../lib/store-product-api"
-import { PageHeader } from "../../components/PageHeader"
-import { useToast } from "../../components/ToastProvider"
-import { Badge } from "../../components/ui/Badge"
-import { Button } from "../../components/ui/Button"
-import { Card } from "../../components/ui/Card"
-import { Input, Label } from "../../components/ui/Input"
-import { Modal } from "../../components/ui/Modal"
-import { EmptyState, TableSkeleton } from "../../components/ui/EmptyState"
-import { Pagination } from "../../components/ui/Pagination"
-import type { NormalizedProduct, ProductVariantRow } from "@ai-commerce/shared-types"
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "../../lib/api-client";
+import { PageHeader } from "../../components/PageHeader";
+import { useToast } from "../../components/ToastProvider";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { Input, Label } from "../../components/ui/Input";
+import { Modal } from "../../components/ui/Modal";
+import { EmptyState, TableSkeleton } from "../../components/ui/EmptyState";
+import { Pagination } from "../../components/ui/Pagination";
+import type { NormalizedProduct } from "@ai-commerce/shared-types";
 
-type SkuRow = ProductVariantRow & {
-  sku: string
-  enabled: boolean
-}
+type Sku = {
+  sku_id: string;
+  product_id: string;
+  product_title: string;
+  product_status: string;
+  image_url?: string | null;
+  supplier_name?: string | null;
+  supplier_product_id?: string | null;
+  supplier_external_product_id?: string | null;
+  supplier_variant_id: string;
+  supplier_external_variant_id?: string | null;
+  platform_sku: string;
+  supplier_sku?: string | null;
+  color?: string | null;
+  size?: string | null;
+  weight?: number | null;
+  length?: number | null;
+  width?: number | null;
+  height?: number | null;
+  cost?: number | null;
+  default_price?: number | null;
+  price_override?: number | null;
+  final_price?: number | null;
+  enabled: boolean;
+  warehouse_name?: string | null;
+  ship_from_country?: string | null;
+  print_specs?: Array<Record<string, unknown>>;
+};
 
-const buildSku = (color: string, size: string, index: number) =>
-  `${color.slice(0, 2).toUpperCase()}-${size.slice(0, 3).toUpperCase()}-${String(index + 1).padStart(3, "0")}`
-
-const toSkuRows = (variants: ProductVariantRow[] | undefined): SkuRow[] => {
-  if (!Array.isArray(variants)) return []
-  return variants.map((v, index) => ({
-    ...v,
-    sku: v.sku ?? buildSku(v.color, v.size, index),
-    enabled: true,
-  }))
-}
+type SkuResponse = {
+  count: number;
+  skus: Sku[];
+  limit: number;
+  offset: number;
+};
+type View = "catalog" | "skus";
+const supplierCost = (value?: number | null) =>
+  value == null ? "—" : `CNY ¥${Number(value).toFixed(2)}`;
+const money = (value?: number | null) =>
+  value == null ? "—" : `$${Number(value).toFixed(2)}`;
 
 export function SkuManagerPage() {
-  const queryClient = useQueryClient()
-  const toast = useToast()
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
-  const [productSearch, setProductSearch] = useState("")
-  const [productPage, setProductPage] = useState(0)
-  const [bulkPrice, setBulkPrice] = useState("")
-  const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set())
-  const [editingCell, setEditingCell] = useState<{ sku: string; field: "price" } | null>(null)
-  const [editValue, setEditValue] = useState("")
-  const [showBulkModal, setShowBulkModal] = useState(false)
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [view, setView] = useState<View>("catalog");
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
+  const [catalogPage, setCatalogPage] = useState(0);
+  const [productId, setProductId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkPrice, setBulkPrice] = useState("");
+  const [detail, setDetail] = useState<Sku | null>(null);
 
-  const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ["sku-products", productPage, productSearch],
-    queryFn: () => {
-      const params = new URLSearchParams({ limit: "20", offset: String(productPage * 20), status: "published" })
-      if (productSearch) params.set("q", productSearch)
-      return apiFetch<{ products: NormalizedProduct[]; count: number }>(
-        `/admin/store-products?${params}`
-      )
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams({
+      limit: "50",
+      offset: String(page * 50),
+    });
+    if (q.trim()) params.set("q", q.trim());
+    if (productId) params.set("product_id", productId);
+    return params.toString();
+  }, [page, productId, q]);
+  const skuQuery = useQuery({
+    queryKey: ["global-skus", queryString],
+    queryFn: () => apiFetch<SkuResponse>(`/admin/skus?${queryString}`),
+  });
+  const catalogQuery = useQuery({
+    queryKey: ["sku-catalog", q, catalogPage],
+    queryFn: () =>
+      apiFetch<{ products: NormalizedProduct[]; count: number }>(
+        `/admin/store-products?${new URLSearchParams({ limit: "50", offset: String(catalogPage * 50), status: "all", ...(q.trim() ? { q: q.trim() } : {}) })}`,
+      ),
+  });
+  const skus = skuQuery.data?.skus ?? [];
+  const products = catalogQuery.data?.products ?? [];
+
+  const save = useMutation({
+    mutationFn: (input: {
+      product_id: string;
+      updates: Array<{
+        supplier_variant_id: string;
+        price_override?: number | null;
+        enabled?: boolean;
+      }>;
+    }) =>
+      apiFetch("/admin/skus", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["global-skus"] });
+      queryClient.invalidateQueries({ queryKey: ["sku-catalog"] });
+      toast.push("SKU settings saved", "success");
     },
-  })
+    onError: (error: unknown) =>
+      toast.push(
+        error instanceof Error ? error.message : "Could not save SKU settings",
+        "error",
+      ),
+  });
 
-  const products = productsData?.products ?? []
-  const productCount = productsData?.count ?? 0
-
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.product_id === selectedProductId) ?? null,
-    [products, selectedProductId]
-  )
-
-  const { data: detailData, isLoading: detailLoading } = useQuery({
-    queryKey: ["sku-product-detail", selectedProductId],
-    enabled: Boolean(selectedProductId),
-    queryFn: () => apiFetch<{ product: NormalizedProduct }>(storeProductPath(selectedProductId!)),
-    refetchOnMount: "always",
-  })
-
-  const product = detailData?.product ?? selectedProduct
-  const variants = product?.variants ?? []
-  const skuRows = useMemo(() => toSkuRows(variants), [variants])
-
-  const colors = useMemo(() => Array.from(new Set(skuRows.map((r) => r.color))), [skuRows])
-  const sizes = useMemo(() => Array.from(new Set(skuRows.map((r) => r.size))), [skuRows])
-
-  const matrix = useMemo(() => {
-    const map = new Map<string, SkuRow>()
-    skuRows.forEach((row) => map.set(`${row.color}::${row.size}`, row))
-    return map
-  }, [skuRows])
-
-  const toggleSku = (sku: string) => {
-    setSelectedSkus((prev) => {
-      const next = new Set(prev)
-      if (next.has(sku)) next.delete(sku)
-      else next.add(sku)
-      return next
-    })
-  }
-
-  const toggleAll = () => {
-    if (selectedSkus.size === skuRows.length) setSelectedSkus(new Set())
-    else setSelectedSkus(new Set(skuRows.map((r) => r.sku)))
-  }
-
-  const startEdit = (sku: string, field: "price", value: number) => {
-    setEditingCell({ sku, field })
-    setEditValue(String(value))
-  }
-
-  const commitEdit = () => {
-    if (!editingCell) return
-    const num = Number(editValue)
-    if (!Number.isFinite(num) || num < 0) {
-      toast.push("Enter a valid number", "error")
-      return
-    }
-    setEditingCell(null)
-  }
-
-  const applyBulk = (field: "price", value: string) => {
-    const num = Number(value)
-    if (!Number.isFinite(num) || num < 0) {
-      toast.push("Enter a valid number", "error")
-      return
-    }
-    if (selectedSkus.size === 0) {
-      toast.push("Select at least one SKU first", "error")
-      return
-    }
-    toast.push(`Updated ${field} for ${selectedSkus.size} SKU(s). Reload to see changes.`, "success")
-    setShowBulkModal(false)
-  }
-
-  const saveMutation = useMutation({
-    mutationFn: () =>
-      apiFetch(storeProductPath(selectedProductId!), {
-        method: "PUT",
-        body: JSON.stringify({
-          variants: skuRows.map((r) => ({
-            supplier_variant_id: r.supplier_variant_id,
-            medusa_variant_id: r.medusa_variant_id,
-            supplier_size_id: r.supplier_size_id,
-            supplier_color_id: r.supplier_color_id,
-            color: r.color,
-            size: r.size,
-            price: r.price,
+  const toggle = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const updateSku = (
+    sku: Sku,
+    update: { price_override?: number | null; enabled?: boolean },
+  ) =>
+    save.mutate({
+      product_id: sku.product_id,
+      updates: [{ supplier_variant_id: sku.supplier_variant_id, ...update }],
+    });
+  const runBulk = (mode: "price" | "clear" | "enable" | "disable") => {
+    const chosen = skus.filter((sku) => selected.has(sku.sku_id));
+    if (!chosen.length) return toast.push("Select at least one SKU", "error");
+    const price = Number(bulkPrice);
+    if (mode === "price" && (!Number.isFinite(price) || price <= 0))
+      return toast.push("Enter a price greater than zero", "error");
+    const grouped = new Map<string, Sku[]>();
+    chosen.forEach((sku) =>
+      grouped.set(sku.product_id, [
+        ...(grouped.get(sku.product_id) ?? []),
+        sku,
+      ]),
+    );
+    Promise.all(
+      [...grouped.entries()].map(([id, rows]) =>
+        save.mutateAsync({
+          product_id: id,
+          updates: rows.map((sku) => ({
+            supplier_variant_id: sku.supplier_variant_id,
+            ...(mode === "price" ? { price_override: price } : {}),
+            ...(mode === "clear" ? { price_override: null } : {}),
+            ...(mode === "enable" ? { enabled: true } : {}),
+            ...(mode === "disable" ? { enabled: false } : {}),
           })),
         }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sku-product-detail", selectedProductId] })
-      toast.push("SKU data saved", "success")
-    },
-    onError: (err: unknown) => {
-      toast.push(err instanceof Error ? err.message : "Save failed", "error")
-    },
-  })
+      ),
+    )
+      .then(() => {
+        setSelected(new Set());
+        setBulkOpen(false);
+      })
+      .catch(() => undefined);
+  };
+
+  const selectProduct = (id: string) => {
+    setProductId(id);
+    setView("skus");
+    setPage(0);
+    setSelected(new Set());
+  };
 
   return (
     <div>
       <PageHeader
-        title="SKU Manager"
-        description="Manage supplier-linked variant prices and color/size matrix across all products"
+        title="SKU Management"
+        description="Platform SKU → product → S2BDIY variant → warehouse → cost and fulfillment mapping"
       />
-
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        {/* Product selector sidebar */}
-        <Card className="h-fit">
-          <div className="border-b px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">Published Products</p>
-            <p className="text-xs text-slate-500">Select a published product to manage its SKUs</p>
-          </div>
-          <div className="p-3">
-            <Input
-              placeholder="Search products…"
-              value={productSearch}
-              onChange={(e) => { setProductSearch(e.target.value); setProductPage(0) }}
-            />
-          </div>
-          <div className="max-h-[60vh] overflow-y-auto border-t">
-            {productsLoading ? (
-              <div className="p-4"><TableSkeleton /></div>
-            ) : products.length === 0 ? (
-              <p className="p-4 text-sm text-slate-500">No published products. Publish a product first to manage its SKUs.</p>
-            ) : (
-              <ul>
-                {products.map((p) => (
-                  <li key={p.product_id}>
-                    <button
-                      type="button"
-                      className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-slate-50 ${
-                        selectedProductId === p.product_id ? "bg-brand/5 border-l-2 border-brand" : ""
-                      }`}
-                      onClick={() => { setSelectedProductId(p.product_id); setSelectedSkus(new Set()) }}
-                    >
-                      <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-slate-100">
-                        {p.mockup_image_url || p.image_url ? (
-                          <img src={p.mockup_image_url || p.image_url || undefined} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="flex h-full w-full items-center justify-center text-xs text-slate-400">IMG</span>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-slate-900">{p.title}</p>
-                        <p className="text-xs text-slate-500">
-                          {(p.variants?.length ?? 0)} SKUs · {p.is_cart_addable ? "Cart enabled" : "Cart disabled"}
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {productCount > 20 ? (
-            <div className="border-t p-2">
-              <Pagination
-                offset={productPage * 20}
-                limit={20}
-                count={productCount}
-                onPageChange={(o) => setProductPage(o / 20)}
-                label={`${products.length} of ${productCount}`}
-              />
-            </div>
+      <Card className="mb-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant={view === "catalog" ? "primary" : "outline"}
+            onClick={() => {
+              setView("catalog");
+              setProductId(null);
+            }}
+          >
+            Product Catalog
+          </Button>
+          <Button
+            variant={view === "skus" ? "primary" : "outline"}
+            onClick={() => setView("skus")}
+          >
+            All SKUs
+          </Button>
+          <Input
+            className="min-w-[260px] flex-1"
+            placeholder="Search product, platform SKU, supplier SKU or ID"
+            value={q}
+            onChange={(event) => {
+              setQ(event.target.value);
+              setPage(0);
+            }}
+          />
+          {productId ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setProductId(null);
+                setPage(0);
+              }}
+            >
+              Clear product filter
+            </Button>
           ) : null}
-        </Card>
+        </div>
+      </Card>
 
-        {/* SKU detail area */}
-        <div>
-          {!selectedProductId ? (
-            <Card className="flex flex-col items-center justify-center py-16 text-center">
-              <span className="text-4xl">📦</span>
-              <p className="mt-4 text-lg font-semibold text-slate-900">Select a product</p>
-              <p className="mt-1 text-sm text-slate-500">
-                Choose a product from the left to view and edit its SKUs.
-              </p>
-              <Link to="/products" className="mt-4">
-                <Button variant="outline">Go to Products</Button>
-              </Link>
-            </Card>
-          ) : detailLoading ? (
-            <Card><div className="p-6"><TableSkeleton /></div></Card>
-          ) : skuRows.length === 0 ? (
-            <Card>
-              <EmptyState
-                title="No variants"
-                description={selectedProduct?.title ? `"${selectedProduct.title}" has no color/size variants yet.` : "This product has no variants."}
-                actionLabel="Edit Product"
-                onAction={() => { window.location.href = `/products/${selectedProductId}/edit` }}
-              />
-            </Card>
+      {view === "catalog" ? (
+        <Card className="overflow-hidden p-0">
+          <div className="border-b px-5 py-4">
+            <p className="font-semibold text-slate-900">
+              Supplier product catalog
+            </p>
+            <p className="text-sm text-slate-500">
+              All imported products, including drafts. Select a product to
+              manage its real supplier SKUs.
+            </p>
+          </div>
+          {catalogQuery.isLoading ? (
+            <div className="p-6">
+              <TableSkeleton />
+            </div>
+          ) : products.length === 0 ? (
+            <EmptyState
+              title="No products found"
+              description="Try a different search term."
+            />
           ) : (
-            <>
-              <Card className="mb-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    {product?.mockup_image_url || product?.image_url ? (
+            <div className="divide-y">
+              {products.map((product) => (
+                <button
+                  type="button"
+                  key={product.product_id}
+                  onClick={() => selectProduct(product.product_id)}
+                  className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-slate-50"
+                >
+                  <div className="h-14 w-14 overflow-hidden rounded bg-slate-100">
+                    {product.image_url || product.mockup_image_url ? (
                       <img
-                        src={product?.mockup_image_url || product?.image_url || undefined}
+                        src={
+                          product.image_url || product.mockup_image_url || ""
+                        }
                         alt=""
-                        className="h-12 w-12 rounded-lg object-cover"
+                        className="h-full w-full object-cover"
                       />
                     ) : null}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900">{product?.title}</p>
-                        <Badge label={product?.status ?? "published"} />
-                        {product?.is_cart_addable === false ? (
-                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Cart disabled</span>
-                        ) : null}
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        ID: {product?.product_id?.slice(-8).toUpperCase()} · {skuRows.length} SKUs · {colors.length} colors · {sizes.length} sizes
-                        {product?.ship_from_country ? ` · Ships from ${product.ship_from_country}` : ""}
-                      </p>
-                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Link to={`/products/${selectedProductId}/edit`}>
-                      <Button variant="outline" size="sm">Edit Product</Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={selectedSkus.size === 0}
-                      onClick={() => setShowBulkModal(true)}
-                    >
-                      Bulk Edit{selectedSkus.size ? ` (${selectedSkus.size})` : ""}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={toggleAll}>
-                      {selectedSkus.size === skuRows.length ? "Deselect All" : "Select All"}
-                    </Button>
-                    <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-                      {saveMutation.isPending ? "Saving…" : "Save"}
-                    </Button>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">
+                      {product.title}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      S2BDIY ·{" "}
+                      {product.ship_from_label ||
+                        product.ship_from_country ||
+                        "Warehouse not provided"}{" "}
+                      · {product.variants?.length ?? 0} SKUs
+                    </p>
                   </div>
-                </div>
-              </Card>
-
-              <Card className="overflow-x-auto p-0">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 w-10">
+                  <Badge label={product.status} />
+                  <span className="text-sm text-brand">Manage SKUs →</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="border-t px-5 py-3">
+            <Pagination
+              offset={catalogPage * 50}
+              limit={50}
+              count={catalogQuery.data?.count ?? 0}
+              onPageChange={(offset) => setCatalogPage(offset / 50)}
+              label={`${products.length} of ${catalogQuery.data?.count ?? 0} products`}
+            />
+          </div>
+        </Card>
+      ) : (
+        <>
+          <Card className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-slate-900">
+                {productId ? "Product SKU detail" : "All supplier SKUs"}
+              </p>
+              <p className="text-sm text-slate-500">
+                Supplier costs are read-only. Published SKU changes immediately
+                affect purchase availability.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              disabled={!selected.size}
+              onClick={() => setBulkOpen(true)}
+            >
+              Bulk actions{selected.size ? ` (${selected.size})` : ""}
+            </Button>
+          </Card>
+          <Card className="overflow-x-auto p-0">
+            {skuQuery.isLoading ? (
+              <div className="p-6">
+                <TableSkeleton />
+              </div>
+            ) : skus.length === 0 ? (
+              <EmptyState
+                title="No SKUs found"
+                description="No supplier SKU matches this filter."
+              />
+            ) : (
+              <table className="min-w-[1500px] w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={
+                          skus.length > 0 && selected.size === skus.length
+                        }
+                        onChange={() =>
+                          setSelected(
+                            selected.size === skus.length
+                              ? new Set()
+                              : new Set(skus.map((sku) => sku.sku_id)),
+                          )
+                        }
+                      />
+                    </th>
+                    <th className="px-4 py-3">Platform SKU</th>
+                    <th className="px-4 py-3">Product</th>
+                    <th className="px-4 py-3">Provider mapping</th>
+                    <th className="px-4 py-3">Color / Size</th>
+                    <th className="px-4 py-3">Warehouse</th>
+                    <th className="px-4 py-3 text-right">Weight</th>
+                    <th className="px-4 py-3 text-right">Cost</th>
+                    <th className="px-4 py-3 text-right">Default</th>
+                    <th className="px-4 py-3 text-right">Override</th>
+                    <th className="px-4 py-3 text-right">Final</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {skus.map((sku) => (
+                    <tr key={sku.sku_id} className="border-t border-slate-100">
+                      <td className="px-4 py-3">
                         <input
                           type="checkbox"
-                          aria-label="Select all SKUs"
-                          checked={selectedSkus.size === skuRows.length && skuRows.length > 0}
-                          onChange={toggleAll}
+                          checked={selected.has(sku.sku_id)}
+                          onChange={() => toggle(sku.sku_id)}
                         />
-                      </th>
-                      <th className="px-4 py-3">SKU</th>
-                      <th className="px-4 py-3">Color</th>
-                      <th className="px-4 py-3">Size</th>
-                      <th className="px-4 py-3 text-right">Price</th>
-                      <th className="px-4 py-3 text-right">Cost</th>
-                      <th className="px-4 py-3 text-center">Status</th>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {sku.platform_sku}
+                        <br />
+                        <span className="text-slate-400">
+                          {sku.supplier_sku || "No supplier SKU"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="max-w-[220px] truncate text-left font-medium text-brand"
+                          onClick={() => selectProduct(sku.product_id)}
+                        >
+                          {sku.product_title}
+                        </button>
+                        <br />
+                        <span className="text-xs text-slate-400">
+                          {sku.product_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        S2BDIY
+                        <br />
+                        P:{" "}
+                        {sku.supplier_external_product_id ||
+                          sku.supplier_product_id ||
+                          "—"}
+                        <br />
+                        V:{" "}
+                        {sku.supplier_external_variant_id ||
+                          sku.supplier_variant_id}
+                      </td>
+                      <td className="px-4 py-3">
+                        {sku.color || "—"} / {sku.size || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {sku.warehouse_name ||
+                          sku.ship_from_country ||
+                          "Not provided"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {sku.weight ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-500">
+                        {supplierCost(sku.cost)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {money(sku.default_price)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          className="text-brand"
+                          onClick={() => setDetail(sku)}
+                        >
+                          {money(sku.price_override)}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold">
+                        {money(sku.final_price)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateSku(sku, { enabled: !sku.enabled })
+                          }
+                        >
+                          <Badge label={sku.enabled ? "Enabled" : "Disabled"} />
+                        </button>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDetail(sku)}
+                        >
+                          Details
+                        </Button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {skuRows.map((row) => {
-                      const checked = selectedSkus.has(row.sku)
-                      return (
-                        <tr key={row.sku} className={`border-t border-slate-100 ${checked ? "bg-brand/5" : ""}`}>
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              aria-label={`Select ${row.sku}`}
-                              checked={checked}
-                              onChange={() => toggleSku(row.sku)}
-                            />
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.sku}</td>
-                          <td className="px-4 py-3">
-                            <span className="inline-flex items-center gap-2">
-                              <span className="h-3 w-3 rounded-full border border-slate-200 bg-slate-100" />
-                              {row.color}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 font-medium">{row.size}</td>
-                          <td className="px-4 py-3 text-right">
-                            {editingCell?.sku === row.sku && editingCell.field === "price" ? (
-                              <div className="flex justify-end gap-1">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min={0}
-                                  className="w-24"
-                                  value={editValue}
-                                  autoFocus
-                                  onChange={(e) => setEditValue(e.target.value)}
-                                  onBlur={commitEdit}
-                                  onKeyDown={(e) => { if (e.key === "Enter") commitEdit() }}
-                                />
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                className="font-medium text-slate-900 hover:text-brand"
-                                onClick={() => startEdit(row.sku, "price", row.price)}
-                              >
-                                ${row.price.toFixed(2)}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right text-slate-500">
-                            {product?.cost != null ? `$${Number(product.cost).toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                              {row.enabled ? "Active" : "Disabled"}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </Card>
-
-              {colors.length > 0 && sizes.length > 0 && (
-                <Card className="mt-4">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Price Matrix</p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-xs text-slate-400">
-                          <th className="px-3 py-2">Color \ Size</th>
-                          {sizes.map((size) => (
-                            <th key={size} className="px-3 py-2 text-center">{size}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {colors.map((color) => (
-                          <tr key={color} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-medium">{color}</td>
-                            {sizes.map((size) => {
-                              const row = matrix.get(`${color}::${size}`)
-                              return (
-                                <td key={size} className="px-3 py-2 text-center">
-                                  {row ? (
-                                    <button
-                                      type="button"
-                                      className="text-xs text-slate-600 hover:text-brand"
-                                      onClick={() => { setSelectedProductId(product!.product_id); startEdit(row.sku, "price", row.price) }}
-                                    >
-                                      ${row.price.toFixed(2)}
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs text-slate-300">—</span>
-                                  )}
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+          <Pagination
+            offset={page * 50}
+            limit={50}
+            count={skuQuery.data?.count ?? 0}
+            onPageChange={(offset) => {
+              setPage(offset / 50);
+              setSelected(new Set());
+            }}
+            label={`${skus.length} of ${skuQuery.data?.count ?? 0} SKUs`}
+          />
+        </>
+      )}
 
       <Modal
-        open={showBulkModal}
-        title="Bulk Edit SKUs"
-        onClose={() => setShowBulkModal(false)}
-        footer={<Button variant="outline" onClick={() => setShowBulkModal(false)}>Close</Button>}
+        open={bulkOpen}
+        title="Bulk SKU actions"
+        onClose={() => setBulkOpen(false)}
+        footer={
+          <Button variant="outline" onClick={() => setBulkOpen(false)}>
+            Close
+          </Button>
+        }
       >
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Apply to <strong>{selectedSkus.size}</strong> selected SKU{selectedSkus.size === 1 ? "" : "s"}.
+            Apply an action to {selected.size} selected SKU
+            {selected.size === 1 ? "" : "s"}.
           </p>
           <div>
-            <Label>Set Price</Label>
-            <div className="mt-1 flex gap-2">
+            <Label>SKU override price (USD)</Label>
+            <div className="mt-2 flex gap-2">
               <Input
                 type="number"
+                min="0.01"
                 step="0.01"
-                min={0}
-                placeholder="Enter new price"
                 value={bulkPrice}
-                onChange={(e) => setBulkPrice(e.target.value)}
+                onChange={(event) => setBulkPrice(event.target.value)}
               />
-              <Button variant="outline" onClick={() => applyBulk("price", bulkPrice)}>Apply</Button>
+              <Button onClick={() => runBulk("price")}>Set override</Button>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => runBulk("clear")}>
+              Clear override
+            </Button>
+            <Button variant="outline" onClick={() => runBulk("enable")}>
+              Enable SKU
+            </Button>
+            <Button variant="outline" onClick={() => runBulk("disable")}>
+              Disable SKU
+            </Button>
           </div>
         </div>
       </Modal>
+      <Modal
+        open={Boolean(detail)}
+        title="SKU fulfillment mapping"
+        onClose={() => setDetail(null)}
+        footer={
+          <Button variant="outline" onClick={() => setDetail(null)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-3 text-sm">
+          {detail ? (
+            <>
+              <p>
+                <strong>Platform SKU:</strong> {detail.platform_sku}
+              </p>
+              <p>
+                <strong>Supplier:</strong> S2BDIY · Product{" "}
+                {detail.supplier_external_product_id ||
+                  detail.supplier_product_id}{" "}
+                · Variant{" "}
+                {detail.supplier_external_variant_id ||
+                  detail.supplier_variant_id}
+              </p>
+              <p>
+                <strong>Warehouse / ship from:</strong>{" "}
+                {detail.warehouse_name ||
+                  detail.ship_from_country ||
+                  "Not provided by supplier"}
+              </p>
+              <p>
+                <strong>Dimensions:</strong> {detail.weight ?? "—"} weight ·{" "}
+                {detail.length ?? "—"} × {detail.width ?? "—"} ×{" "}
+                {detail.height ?? "—"}
+              </p>
+              <p>
+                <strong>Cost:</strong> {supplierCost(detail.cost)} (read-only)
+              </p>
+              <div>
+                <Label>Override price</Label>
+                <div className="mt-2 flex gap-2">
+                  <Input
+                    type="number"
+                    defaultValue={detail.price_override ?? ""}
+                    placeholder="Use product default"
+                    onChange={(event) => setBulkPrice(event.target.value)}
+                  />
+                  <Button
+                    onClick={() => {
+                      const value = bulkPrice === "" ? null : Number(bulkPrice);
+                      if (
+                        value !== null &&
+                        (!Number.isFinite(value) || value <= 0)
+                      )
+                        return toast.push(
+                          "Enter a price greater than zero",
+                          "error",
+                        );
+                      updateSku(detail, { price_override: value });
+                      setDetail(null);
+                    }}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+              <p>
+                <strong>Print specs:</strong> {detail.print_specs?.length ?? 0}{" "}
+                mapped print view(s)
+              </p>
+            </>
+          ) : null}
+        </div>
+      </Modal>
     </div>
-  )
+  );
 }

@@ -22,7 +22,7 @@ import { SearchPage } from "./pages/search/SearchPage"
 import { SavedPage } from "./pages/saved/SavedPage"
 import { CategoriesPage } from "./pages/categories/CategoriesPage"
 import { TrendsPage } from "./pages/trends/TrendsPage"
-import { DesignerPage } from "./pages/design/DesignerPage"
+import { CustomDesignerPage } from "./pages/custom-designer/CustomDesignerPage"
 import { AiDesignPage } from "./pages/ai-design/AiDesignPage"
 import { MyDesignsPage } from "./pages/my-designs/MyDesignsPage"
 import { StudioLandingPage } from "./pages/studio/StudioLandingPage"
@@ -127,7 +127,7 @@ function App() {
 
   if (path.startsWith("/design/")) {
     page = (
-      <DesignerPage
+      <CustomDesignerPage
         productId={decodeURIComponent(path.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}

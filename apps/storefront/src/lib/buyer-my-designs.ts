@@ -16,6 +16,10 @@ export type BuyerDesignDraft = {
   blankProductId?: string | null
   status: "draft" | "ready" | "pending"
   savedAt: string
+  sizeId?: string | null
+  colorId?: string | null
+  sizeName?: string | null
+  colorName?: string | null
 }
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">
@@ -99,13 +103,17 @@ export const upsertBuyerDesignDraft = (
     mcProductId: draft.mcProductId,
     variantId: draft.variantId ?? null,
     title: draft.title,
-    mockupUrl: draft.mockupUrl,
-    price: draft.price,
-    s2bProductId: draft.s2bProductId,
-    basicProductId: draft.basicProductId,
-    blankProductId: draft.blankProductId,
+    mockupUrl: draft.mockupUrl ?? null,
+    price: draft.price ?? null,
+    s2bProductId: draft.s2bProductId ?? null,
+    basicProductId: draft.basicProductId ?? null,
+    blankProductId: draft.blankProductId ?? null,
     status: draft.status,
     savedAt: new Date().toISOString(),
+    sizeId: draft.sizeId ?? null,
+    colorId: draft.colorId ?? null,
+    sizeName: draft.sizeName ?? null,
+    colorName: draft.colorName ?? null,
   }
   const identity = getBuyerDesignIdentity(customerId, store)
   const key = designsStorageKey(identity)

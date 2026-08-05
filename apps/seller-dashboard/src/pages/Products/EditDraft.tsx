@@ -274,7 +274,8 @@ export function EditDraftPage() {
   }, [product?.product_id, product?.metadata?.gallery, previewKey, previewOptions.length])
 
   useEffect(() => {
-    if (!regionData?.regions.length || supportedRegionIds.length) return
+    const regions = Array.isArray(regionData?.regions) ? regionData.regions : []
+    if (!regions.length || supportedRegionIds.length) return
     if (!product) return
     const savedRegionIds = Array.isArray(product.supported_region_ids)
       ? product.supported_region_ids
@@ -282,7 +283,7 @@ export function EditDraftPage() {
         ? product.metadata.supported_region_ids.filter((id): id is string => typeof id === "string")
         : []
     if (!savedRegionIds.length) {
-      setSupportedRegionIds(regionData.regions.map((region) => region.region_id))
+      setSupportedRegionIds(regions.map((region) => region.region_id))
     }
   }, [product, regionData, supportedRegionIds.length])
 
@@ -553,6 +554,9 @@ export function EditDraftPage() {
         <div className="flex gap-2">
           {!isArchived ? (
             <>
+              <Link to={`/products/${product.product_id}/skus`}>
+                <Button variant="outline" type="button">Manage SKUs</Button>
+              </Link>
               {!isDraft ? (
                 <Button variant="outline" type="button" onClick={openPreview}>
                   Preview
@@ -928,7 +932,7 @@ export function EditDraftPage() {
                 Failed to load regions
                 {regionsFetchError instanceof Error ? `: ${regionsFetchError.message}` : "."}
               </p>
-            ) : regionData?.regions.length ? (
+            ) : Array.isArray(regionData?.regions) && regionData.regions.length ? (
               <div className="mt-4 grid gap-2">
                 {regionData.regions.map((region) => {
                   const checked = supportedRegionIds.includes(region.region_id)
