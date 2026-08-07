@@ -194,14 +194,24 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     return () => { active = false }
   }, [productId])
 
+  // Stable refs for values used inside the canvas init effect, so we don't need
+  // them in the dependency array (the canvas should only be created once).
+  const productImagesRef = useRef(productImages)
+  const printAreaRef = useRef(printArea)
+  const selectedColorIdRef = useRef(selectedColorId)
+  productImagesRef.current = productImages
+  printAreaRef.current = printArea
+  selectedColorIdRef.current = selectedColorId
+
   // ─── Init canvas ───
   useEffect(() => {
     if (status !== "ready" || !canvasRef.current || canvasReady) return
     const canvas = new Canvas(canvasRef.current, { width: 500, height: 620, backgroundColor: "#f8f8f8" })
 
-    // Product background image
-    const bgImg = productImages.find((img) => img.colorId === selectedColorId)?.src ||
-                  productImages[0]?.src || ""
+    // Product background image (read from ref so we always get the latest value)
+    const imgs = productImagesRef.current
+    const bgImg = imgs.find((img) => img.colorId === selectedColorIdRef.current)?.src ||
+                  imgs[0]?.src || ""
     if (bgImg) {
       FabricImage.fromURL(bgImg, { crossOrigin: "anonymous" }).then((img) => {
         if (!fabricRef.current) return
@@ -213,8 +223,9 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     }
 
     // Print area guide
+    const pa = printAreaRef.current
     const guide = new Rect({
-      left: printArea.x, top: printArea.y, width: printArea.w, height: printArea.h,
+      left: pa.x, top: pa.y, width: pa.w, height: pa.h,
       fill: "rgba(255,255,255,0.15)", stroke: "#3b82f6", strokeDashArray: [6, 4],
       strokeWidth: 1.5, selectable: false, evented: false, excludeFromExport: true, name: "guide",
     })
@@ -239,21 +250,29 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     saveHistory()
 
     return () => { canvas.dispose(); fabricRef.current = null; setCanvasReady(false) }
-  }, [status, canvasReady]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Canvas is intentionally created only once when status becomes ready.
+    // Latest values are read from refs inside the effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, canvasReady])
 
-  // Update background image when color changes
+  // Update background image when color changes.
+  // Uses refs to avoid re-running on every parent render (fixes infinite loop).
+  const lastAppliedColorSrcRef = useRef<string>("")
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !canvasReady) return
-    const src = productImages.find((img) => img.colorId === selectedColorId)?.src || productImages[0]?.src || ""
-    if (!src) return
+    const imgs = productImagesRef.current
+    const src = imgs.find((img) => img.colorId === selectedColorId)?.src || imgs[0]?.src || ""
+    if (!src || src === lastAppliedColorSrcRef.current) return
+    lastAppliedColorSrcRef.current = src
     FabricImage.fromURL(src, { crossOrigin: "anonymous" }).then((img) => {
+      if (!fabricRef.current) return
       img.scaleToWidth(500)
       img.set({ left: 0, top: 0, selectable: false, evented: false })
       canvas.backgroundImage = img
       canvas.renderAll()
     }).catch(() => {})
-  }, [selectedColorId, canvasReady, productImages])
+  }, [selectedColorId, canvasReady])
 
   // ─── Image upload ───
   const handleImageUpload = useCallback(async (file: File) => {
@@ -318,7 +337,12 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
 
   const toggleLayer = useCallback((layerId: string) => {
     const layer = layers.find((l) => l.id === layerId)
-    if (layer) { layer.object.visible = !layer.object.visible; fabricRef.current?.renderAll(); setLayers([...layers]) }
+    if (!layer) return
+    layer.object.visible = !layer.object.visible
+    fabricRef.current?.renderAll()
+    // Create a new array only when visibility actually changes so dependents
+    // don't re-run on every render.
+    setLayers((prev) => prev.map((l) => l.id === layerId ? { ...l, visible: layer.object.visible } : l))
   }, [layers])
 
   const deleteLayer = useCallback((layerId: string) => {
