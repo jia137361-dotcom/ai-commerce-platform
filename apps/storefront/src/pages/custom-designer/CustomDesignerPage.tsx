@@ -1,6 +1,9 @@
 /**
  * Full-featured custom product designer — S2D-equivalent, no branding.
- * All hooks are ordered: useCallback BEFORE useEffect that uses them.
+ *
+ * Key design: canvas init uses a REF (not state) to track whether the
+ * canvas has been created. This avoids the infinite-loop that occurs when
+ * a useEffect both depends on and sets the same state variable.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -26,7 +29,7 @@ type ToolType = "select" | "text" | "rect" | "circle" | "triangle" | "line"
 interface LayerItem { id: string; name: string; visible: boolean; object: FabricObject }
 
 const FONTS = ["Arial","Times New Roman","Courier New","Georgia","Verdana","Impact","Comic Sans MS","Trebuchet MS"]
-const COLORS = ["#000000","#ffffff","#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#8b5cf6","#ec4899","#6b7280","#14b8a6","#f59e0b"]
+const COLORS = ["#000000","#ffffff","#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#8b5cf6","#ec4899","#6b7280","#14b8a6","f59e0b"]
 
 export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Props) {
   const { t } = useBuyerLocale()
@@ -39,11 +42,12 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
   const fileInputRef = useRef<HTMLInputElement>(null)
   const historyRef = useRef<string[]>([])
   const historyIndexRef = useRef(-1)
+  // Use a REF (not state) to track canvas init — prevents infinite loop
+  const canvasInitializedRef = useRef(false)
 
   const [status, setStatus] = useState<Status>("loading")
   const [errorMessage, setErrorMessage] = useState("")
   const [demoMode, setDemoMode] = useState(false)
-  const [canvasReady, setCanvasReady] = useState(false)
 
   const [basicProductId, setBasicProductId] = useState("")
   const [productImages, setProductImages] = useState<Array<{ colorId: number; colorName: string; tone: string; src: string }>>([])
@@ -72,7 +76,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
   const guestKeyRef = useRef(customerId ? undefined : getBuyerDesignGuestKey())
   useEffect(() => { guestKeyRef.current = customerId ? undefined : getBuyerDesignGuestKey() }, [customerId])
 
-  // ─── Refs for latest values (avoids stale closures in canvas events) ───
+  // Refs for latest values (avoids stale closures in canvas event handlers)
   const syncLayersRef = useRef<() => void>(() => {})
   const saveHistoryRef = useRef<() => void>(() => {})
   const productImagesRef = useRef(productImages)
@@ -80,12 +84,12 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
   productImagesRef.current = productImages
   printAreaRef.current = printArea
 
-  // ─── syncLayers: reads canvas, updates layers state ───
+  // ─── syncLayers ───
   const syncLayers = useCallback(() => {
     const canvas = fabricRef.current
     if (!canvas) return
     const objs = canvas.getObjects().filter((o) => !o.excludeFromExport)
-    const items: LayerItem[] = objs.reverse().map((o, i) => ({
+    setLayers(objs.reverse().map((o, i) => ({
       id: (o as any).name || `layer_${i}`,
       name: o.type === "textbox" ? `Text: ${(o as Textbox).text?.slice(0, 15) || "Empty"}` :
             o.type === "image" ? `Image ${i + 1}` :
@@ -95,8 +99,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
             o.type === "line" ? `Line ${i + 1}` : `${o.type} ${i + 1}`,
       visible: o.visible !== false,
       object: o,
-    }))
-    setLayers(items)
+    })))
   }, [])
   syncLayersRef.current = syncLayers
 
@@ -160,9 +163,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
                 }
               }
             }
-            setProductImages(imgs)
-            setDemoMode(false)
-            setStatus("ready")
+            setProductImages(imgs); setDemoMode(false); setStatus("ready")
             return
           }
         }
@@ -176,17 +177,19 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       setSizes([{id:20,name:"S"},{id:21,name:"M"},{id:22,name:"L"},{id:23,name:"XL"}])
       setColors([{id:5,name:"Black"},{id:6,name:"White"},{id:7,name:"Red"},{id:9,name:"Navy"}])
       setViews([{id:1,name:"Front"},{id:2,name:"Back"}])
-      setSelectedSizeId(21); setSelectedColorId(5)
-      setStatus("ready")
+      setSelectedSizeId(21); setSelectedColorId(5); setStatus("ready")
     })()
     return () => { active = false }
   }, [productId])
 
-  // ─── Init canvas (runs once when status=ready) ───
+  // ─── Init canvas — runs ONCE when status becomes "ready" ───
   useEffect(() => {
-    if (status !== "ready" || !canvasRef.current || canvasReady) return
+    if (status !== "ready" || !canvasRef.current || canvasInitializedRef.current) return
+    canvasInitializedRef.current = true
+
     const canvas = new Canvas(canvasRef.current, { width: 500, height: 620, backgroundColor: "#f8f8f8" })
 
+    // Background image
     const bgImg = productImagesRef.current.find((img) => img.colorId === selectedColorId)?.src || productImagesRef.current[0]?.src || ""
     if (bgImg) {
       FabricImage.fromURL(bgImg, { crossOrigin: "anonymous" }).then((img) => {
@@ -196,9 +199,15 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       }).catch(() => {})
     }
 
+    // Print area guide
     const pa = printAreaRef.current
-    canvas.add(new Rect({ left: pa.x, top: pa.y, width: pa.w, height: pa.h, fill: "rgba(255,255,255,0.15)", stroke: "#3b82f6", strokeDashArray: [6, 4], strokeWidth: 1.5, selectable: false, evented: false, excludeFromExport: true, name: "guide" }))
+    canvas.add(new Rect({
+      left: pa.x, top: pa.y, width: pa.w, height: pa.h,
+      fill: "rgba(255,255,255,0.15)", stroke: "#3b82f6", strokeDashArray: [6, 4],
+      strokeWidth: 1.5, selectable: false, evented: false, excludeFromExport: true, name: "guide",
+    }))
 
+    // Event handlers use refs (no stale closures)
     canvas.on("object:added", () => { syncLayersRef.current(); saveHistoryRef.current() })
     canvas.on("object:modified", () => { syncLayersRef.current(); saveHistoryRef.current() })
     canvas.on("object:removed", () => { syncLayersRef.current(); saveHistoryRef.current() })
@@ -206,19 +215,22 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     canvas.on("selection:updated", (e) => { if (e.selected?.[0]) setSelectedLayerId((e.selected[0] as any).name || null) })
 
     fabricRef.current = canvas
-    setCanvasReady(true)
     saveHistoryRef.current()
 
-    return () => { canvas.dispose(); fabricRef.current = null; setCanvasReady(false) }
-    // Only depends on status and canvasReady — canvas is created once
+    return () => {
+      canvas.dispose()
+      fabricRef.current = null
+      canvasInitializedRef.current = false
+    }
+    // Only runs when status changes to "ready" — never re-runs due to other state changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, canvasReady])
+  }, [status])
 
   // ─── Update background on color change ───
   const lastBgSrcRef = useRef("")
   useEffect(() => {
     const canvas = fabricRef.current
-    if (!canvas || !canvasReady) return
+    if (!canvas) return
     const src = productImagesRef.current.find((img) => img.colorId === selectedColorId)?.src || productImagesRef.current[0]?.src || ""
     if (!src || src === lastBgSrcRef.current) return
     lastBgSrcRef.current = src
@@ -227,7 +239,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       img.scaleToWidth(500); img.set({ left: 0, top: 0, selectable: false, evented: false })
       canvas.backgroundImage = img; canvas.renderAll()
     }).catch(() => {})
-  }, [selectedColorId, canvasReady])
+  }, [selectedColorId])
 
   // ─── Image upload ───
   const handleImageUpload = useCallback(async (file: File) => {
@@ -239,7 +251,13 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       const pa = printAreaRef.current
       const scale = Math.min((pa.w * 0.85) / (img.width ?? 1), (pa.h * 0.85) / (img.height ?? 1), 1)
       img.scale(scale)
-      img.set({ name: `img_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, left: pa.x + (pa.w - (img.width ?? 0) * scale) / 2, top: pa.y + (pa.h - (img.height ?? 0) * scale) / 2, cornerStyle: "circle", cornerSize: 10, transparentCorners: false, borderColor: "#3b82f6", cornerColor: "#3b82f6" })
+      img.set({
+        name: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        left: pa.x + (pa.w - (img.width ?? 0) * scale) / 2,
+        top: pa.y + (pa.h - (img.height ?? 0) * scale) / 2,
+        cornerStyle: "circle", cornerSize: 10, transparentCorners: false,
+        borderColor: "#3b82f6", cornerColor: "#3b82f6",
+      })
       canvas.add(img); canvas.setActiveObject(img); canvas.renderAll()
 
       if (demoMode) { setMaterialId(Math.floor(Math.random() * 90000) + 10000); return }
@@ -257,7 +275,13 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     const canvas = fabricRef.current
     if (!canvas) return
     const pa = printAreaRef.current
-    const text = new Textbox("Your text here", { name: `text_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, left: pa.x + 30, top: pa.y + 30, width: pa.w - 60, fontSize, fontFamily, fill: activeColor, cornerStyle: "circle" as const, cornerSize: 8, transparentCorners: false, borderColor: "#3b82f6", cornerColor: "#3b82f6", editable: true })
+    const text = new Textbox("Your text here", {
+      name: `text_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      left: pa.x + 30, top: pa.y + 30, width: pa.w - 60,
+      fontSize, fontFamily, fill: activeColor,
+      cornerStyle: "circle" as const, cornerSize: 8, transparentCorners: false,
+      borderColor: "#3b82f6", cornerColor: "#3b82f6", editable: true,
+    })
     canvas.add(text); canvas.setActiveObject(text); canvas.renderAll()
   }, [printArea, fontSize, fontFamily, activeColor])
 
@@ -265,7 +289,13 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     const canvas = fabricRef.current
     if (!canvas) return
     let obj: FabricObject
-    const o = { name: `${type}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, left: printAreaRef.current.x + 60, top: printAreaRef.current.y + 60, fill: type === "line" ? "transparent" : activeColor, stroke: activeColor, strokeWidth: type === "line" ? 3 : 2, cornerStyle: "circle" as const, cornerSize: 8, transparentCorners: false, borderColor: "#3b82f6", cornerColor: "#3b82f6" }
+    const o = {
+      name: `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      left: printAreaRef.current.x + 60, top: printAreaRef.current.y + 60,
+      fill: type === "line" ? "transparent" : activeColor, stroke: activeColor,
+      strokeWidth: type === "line" ? 3 : 2, cornerStyle: "circle" as const,
+      cornerSize: 8, transparentCorners: false, borderColor: "#3b82f6", cornerColor: "#3b82f6",
+    }
     switch (type) {
       case "rect": obj = new Rect({ ...o, width: 120, height: 80 }); break
       case "circle": obj = new Circle({ ...o, radius: 50 }); break
@@ -302,17 +332,39 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       await new Promise((r) => setTimeout(r, 1200))
       const matching = productImages.filter((img) => img.colorId === selectedColorId).map((img) => img.src).slice(0, 2)
       setMockupUrls(matching.length > 0 ? matching : ["https://placehold.co/400x400/3b82f6/fff?text=Front"])
-      setSavedResult({ mcProductId: `demo_${Date.now()}`, variantId: `var_${selectedSizeId}_${selectedColorId}`, title: "Custom Design", mockupUrl: null, price: 29.99, s2bProductId: null, basicProductId: null, blankProductId: productId, status: "draft", saveAs: "draft", editorPath: `/design/${productId}`, sizes, colors, variants: [], selectedSizeId, selectedColorId })
+      setSavedResult({
+        mcProductId: `demo_${Date.now()}`, variantId: `var_${selectedSizeId}_${selectedColorId}`,
+        title: "Custom Design", mockupUrl: null, price: 29.99,
+        s2bProductId: null, basicProductId: null, blankProductId: productId,
+        status: "draft", saveAs: "draft", editorPath: `/design/${productId}`,
+        sizes, colors, variants: [], selectedSizeId, selectedColorId,
+      })
       setStatus("saved"); return
     }
     try {
       if (!basicProductId || !materialId) throw new Error("Missing data")
-      const quick = await quickCreateDesign({ basicProductId, sizeId: selectedSizeId, colorId: selectedColorId, materialId, viewId: selectedViewId, designType: 1, name: "Custom Design" })
+      const quick = await quickCreateDesign({
+        basicProductId, sizeId: selectedSizeId, colorId: selectedColorId,
+        materialId, viewId: selectedViewId, designType: 1, name: "Custom Design",
+      })
       const detail = await fetchS2bProductDetail(quick.s2b_product_id)
       setMockupUrls(detail.mockup_urls)
-      const result = await completeDesignSession({ s2bProductId: quick.s2b_product_id, basicProductId, sizeId: selectedSizeId, colorId: selectedColorId, mockupUrl: detail.mockup_urls[0] ?? null, saveAs: "draft", blankProductId: productId, guestKey: guestKeyRef.current })
+      const result = await completeDesignSession({
+        s2bProductId: quick.s2b_product_id, basicProductId,
+        sizeId: selectedSizeId, colorId: selectedColorId,
+        mockupUrl: detail.mockup_urls[0] ?? null, saveAs: "draft",
+        blankProductId: productId, guestKey: guestKeyRef.current,
+      })
       setSavedResult(result); setStatus("saved")
-      upsertBuyerDesignDraft({ mcProductId: result.mcProductId, variantId: result.variantId, title: result.title, mockupUrl: detail.mockup_urls[0] ?? null, price: result.price, s2bProductId: String(quick.s2b_product_id), basicProductId, blankProductId: productId, status: "draft", sizeId: String(selectedSizeId), colorId: String(selectedColorId), sizeName: sizes.find((s) => s.id === selectedSizeId)?.name, colorName: colors.find((c) => c.id === selectedColorId)?.name }, customerId)
+      upsertBuyerDesignDraft({
+        mcProductId: result.mcProductId, variantId: result.variantId,
+        title: result.title, mockupUrl: detail.mockup_urls[0] ?? null,
+        price: result.price, s2bProductId: String(quick.s2b_product_id),
+        basicProductId, blankProductId: productId, status: "draft",
+        sizeId: String(selectedSizeId), colorId: String(selectedColorId),
+        sizeName: sizes.find((s) => s.id === selectedSizeId)?.name,
+        colorName: colors.find((c) => c.id === selectedColorId)?.name,
+      }, customerId)
     } catch (e) { setErrorMessage(e instanceof Error ? e.message : "Save failed"); setStatus("error") }
   }, [basicProductId, materialId, selectedSizeId, selectedColorId, selectedViewId, productId, sizes, colors, customerId, demoMode, productImages])
 
@@ -330,7 +382,11 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       <div className="designer-product-header">
         <div>
           <h2>{productInfo.enName || "Design Your Product"}</h2>
-          <p className="designer-product-desc">{productInfo.material && `Material: ${productInfo.material}`}{productInfo.technology && ` | Print: ${productInfo.technology}`}{productInfo.delivery && ` | Delivery: ${productInfo.delivery}`}</p>
+          <p className="designer-product-desc">
+            {productInfo.material && `Material: ${productInfo.material}`}
+            {productInfo.technology && ` | Print: ${productInfo.technology}`}
+            {productInfo.delivery && ` | Delivery: ${productInfo.delivery}`}
+          </p>
         </div>
         <div className="designer-header-actions">
           {demoMode && <span className="designer-demo-badge">Demo</span>}
@@ -339,8 +395,6 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       </div>
 
       {status === "loading" && <div className="designer-status"><div className="designer-spinner" /><p>Loading…</p></div>}
-
-      {status === "loading" && <div className="designer-status"><div className="designer-spinner" /><p>Loading designer…</p></div>}
 
       {(status === "ready" || status === "saving" || status === "saved") && (
         <div className="designer-workspace">
