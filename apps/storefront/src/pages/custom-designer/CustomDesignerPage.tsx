@@ -83,33 +83,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
   const guestKeyRef = useRef(customerId ? undefined : getBuyerDesignGuestKey())
   useEffect(() => { guestKeyRef.current = customerId ? undefined : getBuyerDesignGuestKey() }, [customerId])
 
-  // ─── History ───
-  const saveHistory = useCallback(() => {
-    const canvas = fabricRef.current
-    if (!canvas) return
-    const json = JSON.stringify(canvas.toJSON())
-    const hist = historyRef.current.slice(0, historyIndexRef.current + 1)
-    hist.push(json)
-    if (hist.length > 50) hist.shift()
-    historyRef.current = hist
-    historyIndexRef.current = hist.length - 1
-  }, [])
-
-  const undo = useCallback(() => {
-    const canvas = fabricRef.current
-    if (!canvas || historyIndexRef.current <= 0) return
-    historyIndexRef.current--
-    canvas.loadFromJSON(historyRef.current[historyIndexRef.current]).then(() => { canvas.renderAll(); syncLayers() })
-  }, [])
-
-  const redo = useCallback(() => {
-    const canvas = fabricRef.current
-    if (!canvas || historyIndexRef.current >= historyRef.current.length - 1) return
-    historyIndexRef.current++
-    canvas.loadFromJSON(historyRef.current[historyIndexRef.current]).then(() => { canvas.renderAll(); syncLayers() })
-  }, [])
-
-  // ─── Sync layers ───
+  // ─── Sync layers (defined first for undo/redo) ───
   const syncLayers = useCallback(() => {
     const canvas = fabricRef.current
     if (!canvas) return
@@ -126,6 +100,38 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       object: o,
     })))
   }, [])
+
+  // ─── History ───
+  const saveHistory = useCallback(() => {
+    const canvas = fabricRef.current
+    if (!canvas) return
+    const json = JSON.stringify(canvas.toJSON())
+    const hist = historyRef.current.slice(0, historyIndexRef.current + 1)
+    hist.push(json)
+    if (hist.length > 50) hist.shift()
+    historyRef.current = hist
+    historyIndexRef.current = hist.length - 1
+  }, [])
+
+  const undo = useCallback(() => {
+    const canvas = fabricRef.current
+    if (!canvas || historyIndexRef.current <= 0) return
+    historyIndexRef.current--
+    canvas.loadFromJSON(historyRef.current[historyIndexRef.current]).then(() => {
+      canvas.renderAll()
+      syncLayers()
+    })
+  }, [syncLayers])
+
+  const redo = useCallback(() => {
+    const canvas = fabricRef.current
+    if (!canvas || historyIndexRef.current >= historyRef.current.length - 1) return
+    historyIndexRef.current++
+    canvas.loadFromJSON(historyRef.current[historyIndexRef.current]).then(() => {
+      canvas.renderAll()
+      syncLayers()
+    })
+  }, [syncLayers])
 
   // ─── Load product ───
   useEffect(() => {
@@ -217,6 +223,16 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     canvas.on("object:added", () => { syncLayers(); saveHistory() })
     canvas.on("object:modified", () => { syncLayers(); saveHistory() })
     canvas.on("object:removed", () => { syncLayers(); saveHistory() })
+    canvas.on("selection:created", (e) => {
+      if (e.selected?.[0]) {
+        setSelectedLayerId((e.selected[0] as any).name || null)
+      }
+    })
+    canvas.on("selection:updated", (e) => {
+      if (e.selected?.[0]) {
+        setSelectedLayerId((e.selected[0] as any).name || null)
+      }
+    })
 
     fabricRef.current = canvas
     setCanvasReady(true)
@@ -249,7 +265,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       const scale = Math.min((printArea.w * 0.85) / (img.width ?? 1), (printArea.h * 0.85) / (img.height ?? 1), 1)
       img.scale(scale)
       img.set({
-        name: `img_${Date.now()}`,
+        name: `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         left: printArea.x + (printArea.w - (img.width ?? 0) * scale) / 2,
         top: printArea.y + (printArea.h - (img.height ?? 0) * scale) / 2,
         cornerStyle: "circle", cornerSize: 10, transparentCorners: false,
@@ -265,14 +281,14 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       }
       reader.readAsDataURL(file)
     } catch (e) { setErrorMessage(e instanceof Error ? e.message : "Failed") }
-  }, [printArea, demoMode])
+  }, [printArea, demoMode, uploadDesignMaterial])
 
   // ─── Tools ───
   const addText = useCallback(() => {
     const canvas = fabricRef.current
     if (!canvas) return
     const text = new Textbox("Your text here", {
-      name: `text_${Date.now()}`, left: printArea.x + 30, top: printArea.y + 30,
+      name: `text_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, left: printArea.x + 30, top: printArea.y + 30,
       width: printArea.w - 60, fontSize, fontFamily, fill: activeColor,
       cornerStyle: "circle" as const, cornerSize: 8, transparentCorners: false,
       borderColor: "#3b82f6", cornerColor: "#3b82f6", editable: true,
@@ -285,7 +301,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
     if (!canvas) return
     let obj: FabricObject
     const o = {
-      name: `${type}_${Date.now()}`, left: printArea.x + 60, top: printArea.y + 60,
+      name: `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, left: printArea.x + 60, top: printArea.y + 60,
       fill: type === "line" ? "transparent" : activeColor, stroke: activeColor,
       strokeWidth: type === "line" ? 3 : 2, cornerStyle: "circle" as const,
       cornerSize: 8, transparentCorners: false, borderColor: "#3b82f6", cornerColor: "#3b82f6",
