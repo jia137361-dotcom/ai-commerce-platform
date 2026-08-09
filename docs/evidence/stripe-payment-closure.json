@@ -1,0 +1,51 @@
+{
+  "provider": "pp_stripe_stripe",
+  "mode": "test",
+  "cart_id": "cart_01KYWNRTYEYEE7PT6NP57E58MG",
+  "payment_collection_id": "pay_col_01KYWNRW4GSE0WDQ37DF34T446",
+  "payment_session_id": "payses_01KYWNS4E4NZ70T6Y8P4APAYTN",
+  "payment_intent_id": "pi_3TzKqhRz4711Gbmd1TEuQo00",
+  "payment_intent_status": "succeeded",
+  "order_id": "order_01KYWNSNKJCXVX3HKVT4KZ201V",
+  "buyer_order_visible": true,
+  "seller_order_visible": true,
+  "fulfillment_order_id": "01KYWNSQ0ASSWP3VGRZR162VCA",
+  "fulfillment_status": "waiting",
+  "fulfillment_row_count": 1,
+  "captured_payment_sync": {
+    "payment_count": 1,
+    "payment_provider": "pp_stripe_stripe",
+    "captured_at_present": true,
+    "capture_row_count": 1,
+    "capture_amount": 4400,
+    "payment_session_id": "payses_01KYWNS4E4NZ70T6Y8P4APAYTN",
+    "payment_collection_id_matches_fulfillment": true,
+    "fulfillment_status_after_sync": "waiting"
+  },
+  "duplicate_event_result": "covered_by_payment-captured-sync_unit_test",
+  "recovery_result": {
+    "duplicate_complete_reused_order": true,
+    "duplicate_complete_reused_payment_intent": true,
+    "duplicate_complete_reused_payment_session": true
+  },
+  "failure_cases": {
+    "existing_metadata_paid_pending_capture_repair": "covered_by_sync-order-paid-fulfillment_unit_test",
+    "multiple_fulfillment_rows_fail_closed": "covered_by_sync-order-paid-fulfillment_unit_test",
+    "invalid_stripe_webhook_signature": "covered_by_stripe-webhook-route_unit_test",
+    "declined_stripe_test_payment": {
+      "mode": "test",
+      "payment_intent_id": "pi_3TzKvTRz4711Gbmd07EWY1C4",
+      "result": "card_declined",
+      "decline_code": "generic_decline"
+    },
+    "three_ds_required_stripe_test_payment": {
+      "mode": "test",
+      "payment_intent_id": "pi_3TzKvTRz4711Gbmd1Gvb3Bku",
+      "status": "requires_action",
+      "next_action_type": "redirect_to_url",
+      "cart_completed": false
+    }
+  },
+  "closure_claimed": true,
+  "timestamp": "2026-07-31T18:08:21.913Z"
+}

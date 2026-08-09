@@ -4,6 +4,9 @@ Date: 2026-08-01
 
 Scope: operational readiness for buyer checkout payments. Seller payout and Stripe Connect settlement are separate domains.
 
+For branch-specific setup, verified evidence boundaries, Cloudflare wallet testing,
+and current backend tunnel requirements, see [PAYMENT_HANDOFF.md](PAYMENT_HANDOFF.md).
+
 ## Gates
 
 | Gate | Status | Notes |
