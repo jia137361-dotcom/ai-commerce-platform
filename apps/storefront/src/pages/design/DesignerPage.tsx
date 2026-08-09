@@ -9,6 +9,7 @@ import {
   addCartLineItem,
   createCart,
   fetchStoreSettings,
+  getMyOrders,
   getBuyerCartStorageKey,
   getScopedBuyerStoreId,
   setActiveBuyerStoreId,
@@ -17,6 +18,7 @@ import {
   type DesignCompleteResult,
 } from "../../lib/buyer-api"
 import { buildAiDesignHref } from "../../lib/buyer-design-handoff"
+import { isReservedCheckoutCartId } from "../../lib/buyer-checkout-reservations"
 import {
   getBuyerDesignGuestKey,
   removeBuyerDesignDraft,
@@ -450,6 +452,10 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
         createCart: () => createCart({ storeId: settings.storeId }),
         addLineItem: (cartId, variantId, qty) =>
           addCartLineItem(cartId, variantId, qty, { storeId: settings.storeId }),
+        isCartReservedForCheckout: async (cartId) => {
+          const unpaid = await getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 }).catch(() => null)
+          return isReservedCheckoutCartId(unpaid?.orders ?? [], cartId)
+        },
       })
       onCartUpdated(result)
       if (savedResult) {
@@ -502,6 +508,10 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
         createCart: () => createCart({ storeId: settings.storeId }),
         addLineItem: (cartId, variantId, qty) =>
           addCartLineItem(cartId, variantId, qty, { storeId: settings.storeId }),
+        isCartReservedForCheckout: async (cartId) => {
+          const unpaid = await getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 }).catch(() => null)
+          return isReservedCheckoutCartId(unpaid?.orders ?? [], cartId)
+        },
       })
       onCartUpdated(result)
       setAddNotice({ tone: "success", message: t("designerAddedToCart") })

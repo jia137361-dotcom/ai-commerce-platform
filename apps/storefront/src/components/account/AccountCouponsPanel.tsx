@@ -136,29 +136,34 @@ export function AccountCouponsPanel() {
 
       <div className="buyer-coupons-list">
         {available.map((coupon) => (
-          <article key={coupon.walletId ?? coupon.couponId} className="buyer-coupon-card">
-            <button
-              type="button"
-              className="buyer-coupon-card-value"
-              onClick={() => setDetail(coupon)}
-              aria-label={`Open details for ${coupon.title}`}
-            >
-              <strong>{coupon.amountLabel}</strong>
-              <span>{coupon.conditionLabel}</span>
-            </button>
-            <div className="buyer-coupon-card-body">
+          <section key={coupon.walletId ?? coupon.couponId} className="buyer-coupon-entry">
+            <header className="buyer-coupon-store-row">
+              <span aria-hidden="true">{coupon.storeName.slice(0, 1).toUpperCase()}</span>
               <strong>{coupon.storeName}</strong>
-              <p>
-                {coupon.quantity} voucher{coupon.quantity === 1 ? "" : "s"} ·{" "}
-                {coupon.couponType === "shopping" ? "Shopping" : "Goods voucher"}
-              </p>
-              <p>{formatExpiry(coupon.expiresAt)}</p>
-              <p>{coupon.scopeLabel}</p>
-            </div>
-            <Button href="/checkout" variant="outline">
-              Use
-            </Button>
-          </article>
+              <small>
+                {coupon.quantity} voucher{coupon.quantity === 1 ? "" : "s"}
+              </small>
+            </header>
+            <article className="buyer-coupon-card">
+              <button
+                type="button"
+                className="buyer-coupon-card-value"
+                onClick={() => setDetail(coupon)}
+                aria-label={`Open details for ${coupon.title}`}
+              >
+                <strong>{coupon.amountLabel}</strong>
+                <span>{coupon.conditionLabel}</span>
+              </button>
+              <div className="buyer-coupon-card-body">
+                <strong>{coupon.couponType === "shopping" ? "Shopping voucher" : "Goods voucher"}</strong>
+                <p>{formatExpiry(coupon.expiresAt)}</p>
+                <p>{coupon.scopeLabel}</p>
+              </div>
+              <Button href="/checkout" variant="danger">
+                Use
+              </Button>
+            </article>
+          </section>
         ))}
       </div>
 

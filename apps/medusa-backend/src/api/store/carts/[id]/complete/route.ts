@@ -26,11 +26,26 @@ import { resolvePaymentMethodLabelFromClientSecret } from "../../../../../lib/st
 import { applyPlatformCheckoutMetadata } from "../../../../../lib/marketplace/platform-checkout"
 import { publishBuyerDesignsFromOrder } from "../../../../../lib/publish-buyer-designs-from-order"
 import {
+  formatPaymentAttemptError,
+  isPayPalProviderId,
+  isStripeProviderId,
+  normalizePayPalOrderStatus,
+  normalizeStripePaymentIntentStatus,
+  readActiveCheckoutPaymentAttempt,
+  readPayPalOrderId,
+  readPayPalCaptureStatus,
+  readStripePaymentIntentForAttempt,
+  type CheckoutPaymentAttemptRecord,
+} from "../../../../../lib/checkout-payment-attempts"
+import { CHECKOUT_PAYMENT_ATTEMPTS_MODULE } from "../../../../../modules/checkout-payment-attempts"
+import type CheckoutPaymentAttemptsModuleService from "../../../../../modules/checkout-payment-attempts/service"
+import {
   ORDER_META_APPLIED_COUPON,
   ORDER_META_COUPON_DISCOUNT,
   ORDER_META_PLAN_DISCOUNT,
   redeemAppliedCouponOnOrder,
 } from "../../../../../lib/store-coupons"
+import { getConfiguredPayPalClient } from "../../../../../modules/paypal/client"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
@@ -141,6 +156,73 @@ const buildCompleteResponse = (input: {
   order: input.order,
 })
 
+type AttemptService = CheckoutPaymentAttemptsModuleService & {
+  updateCheckoutPaymentAttempts: (input: Record<string, unknown>) => Promise<CheckoutPaymentAttemptRecord[] | CheckoutPaymentAttemptRecord>
+}
+
+const updateCheckoutPaymentAttempt = async (
+  req: MedusaRequest,
+  input: {
+    cartId: string
+    storeId: string
+    status: string
+    orderId?: string | null
+    error?: unknown
+  }
+) => {
+  try {
+    const attempt = await readActiveCheckoutPaymentAttempt(req.scope, {
+      cartId: input.cartId,
+      storeId: input.storeId,
+    })
+    if (!attempt) return
+    const service = req.scope.resolve(CHECKOUT_PAYMENT_ATTEMPTS_MODULE) as AttemptService
+    await service.updateCheckoutPaymentAttempts({
+      id: attempt.id,
+      status: input.status,
+      completed_order_id: input.orderId ?? attempt.completed_order_id ?? null,
+      last_error: input.error ? formatPaymentAttemptError(input.error) : null,
+    })
+  } catch (error) {
+    console.warn("[checkout-complete] unable to update payment attempt", formatPaymentAttemptError(error))
+  }
+}
+
+const providerPaymentWasSuccessful = async (
+  req: MedusaRequest,
+  cartId: string,
+  storeId: string,
+  providerId: string
+) => {
+  let attempt: CheckoutPaymentAttemptRecord | null = null
+  try {
+    attempt = await readActiveCheckoutPaymentAttempt(req.scope, { cartId, storeId })
+    const session = await findCartPaymentSession(req.scope, cartId, providerId)
+    if (isStripeProviderId(providerId)) {
+      const intent = await readStripePaymentIntentForAttempt(req.scope, attempt ?? {
+        id: "",
+        cart_id: cartId,
+        store_id: storeId,
+        provider_id: providerId,
+      }, session)
+      return normalizeStripePaymentIntentStatus(intent?.status) === "payment_succeeded"
+    }
+    if (isPayPalProviderId(providerId)) {
+      const paypalOrderId = attempt?.provider_payment_id ?? readPayPalOrderId(session)
+      const client = getConfiguredPayPalClient()
+      if (!paypalOrderId || !client) return false
+      const order = await client.retrieveOrder(paypalOrderId)
+      return normalizePayPalOrderStatus(order.status, readPayPalCaptureStatus(order)) === "payment_succeeded"
+    }
+  } catch (error) {
+    console.warn("[checkout-complete] unable to verify provider status after complete failure", {
+      provider_id: providerId,
+      message: formatPaymentAttemptError(error),
+    })
+  }
+  return attempt?.status === "payment_succeeded" || attempt?.status === "order_completion_failed"
+}
+
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const headerError = validateCheckoutBridgeHeaders(req)
@@ -234,6 +316,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     let paymentMethodLabel: string | null = null
     const alreadyCompletedOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
     if (alreadyCompletedOrder) {
+      await updateCheckoutPaymentAttempt(req, {
+        cartId,
+        storeId,
+        status: "completed",
+        orderId: alreadyCompletedOrder.id,
+      })
       return res.status(200).json(buildCompleteResponse({
         order: alreadyCompletedOrder,
         cart,
@@ -275,6 +363,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       const existingOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
       const message = readWorkflowErrorMessage(workflowError)
       if (existingOrder && isAlreadyCompletedError(message)) {
+        await updateCheckoutPaymentAttempt(req, {
+          cartId,
+          storeId,
+          status: "completed",
+          orderId: existingOrder.id,
+        })
         return res.status(200).json(buildCompleteResponse({
           order: existingOrder,
           cart,
@@ -284,6 +378,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           paymentMethodLabel,
           alreadyCompleted: true,
         }))
+      }
+      if (await providerPaymentWasSuccessful(req, cartId, storeId, providerId)) {
+        await updateCheckoutPaymentAttempt(req, {
+          cartId,
+          storeId,
+          status: "order_completion_failed",
+          error: workflowError,
+        })
       }
       throw workflowError
     }
@@ -421,6 +523,13 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         order_store_id: readOrderStoreId(order),
       })
     }
+
+    await updateCheckoutPaymentAttempt(req, {
+      cartId,
+      storeId,
+      status: "completed",
+      orderId,
+    })
 
     res.status(200).json(buildCompleteResponse({
       order: order as CompleteOrder,

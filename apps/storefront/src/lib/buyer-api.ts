@@ -6,6 +6,7 @@ import { readBuyerPreferencesFromMetadata, type BuyerPreferences } from "./buyer
 import { buildShareChannels, buildShareText } from "./share-channels"
 import { resolveStoreAssetUrl } from "./store-media-url"
 import { toEnglishCategoryLabel } from "./supplier-category-label"
+import { readPayPalOrderId } from "./paypal-payment-session"
 import {
   getBuyerStoreId,
   getDefaultBuyerStoreId,
@@ -238,20 +239,87 @@ type ApiPaymentSession = {
   id?: string
   provider_id?: string
   status?: string
+  client_secret?: string
+  clientSecret?: string
   data?: Record<string, unknown> | null
 }
 type ApiPaymentCollection = {
   id?: string
   payment_sessions?: ApiPaymentSession[]
 }
-type ApiPaymentCollectionResponse = { payment_collection?: ApiPaymentCollection }
+type ApiPaymentCollectionResponse = {
+  payment_collection?: ApiPaymentCollection
+  payment_session?: ApiPaymentSession
+  payment_sessions?: ApiPaymentSession[]
+}
+type ApiPaymentAttempt = {
+  id?: string
+  cart_id?: string | null
+  store_id?: string | null
+  customer_id?: string | null
+  provider_id?: string | null
+  payment_collection_id?: string | null
+  payment_session_id?: string | null
+  provider_payment_id?: string | null
+  completed_order_id?: string | null
+  status?: string
+  expires_at?: string | null
+  last_error?: string | null
+  recovery_action?: BuyerPaymentAttempt["recoveryAction"]
+}
+type ApiPaymentRecoveryResponse = {
+  cart_id?: string
+  status?: string
+  payment_attempt?: ApiPaymentAttempt
+  payment_session?: ApiPaymentSession | null
+  order_id?: string | null
+  payment_intent_status?: string | null
+}
 
-export type BuyerPaymentProvider = { id: string; isStripe: boolean }
+export type BuyerPaymentProvider = { id: string; isStripe: boolean; isPayPal?: boolean }
 export type BuyerPaymentSession = {
   id: string
   providerId: string
   status?: string
   clientSecret?: string
+  paypalOrderId?: string
+  paypalStatus?: string
+}
+export type BuyerPaymentAttemptStatus =
+  | "created"
+  | "awaiting_payment"
+  | "requires_action"
+  | "payment_failed"
+  | "payment_processing"
+  | "payment_succeeded"
+  | "order_completion_failed"
+  | "completed"
+  | "expired"
+  | "cancelled"
+
+export type BuyerPaymentAttempt = {
+  id: string
+  cartId: string | null
+  storeId: string | null
+  customerId: string | null
+  providerId: string | null
+  paymentCollectionId: string | null
+  paymentSessionId: string | null
+  providerPaymentId: string | null
+  completedOrderId: string | null
+  status: BuyerPaymentAttemptStatus | string
+  expiresAt: string | null
+  lastError: string | null
+  recoveryAction: "confirm_payment" | "complete_order" | "wait" | "completed"
+}
+
+export type BuyerPaymentRecovery = {
+  cartId: string
+  status: BuyerPaymentAttemptStatus | string
+  paymentAttempt: BuyerPaymentAttempt
+  paymentSession: BuyerPaymentSession | null
+  orderId: string | null
+  paymentIntentStatus: string | null
 }
 
 type ApiCartMutation = ApiCart & {
@@ -453,13 +521,18 @@ type ApiRefundRequest = {
   reason?: string
   note?: string | null
   requested_amount?: number
+  eligible_amount?: number | null
   approved_amount?: number | null
+  requested_items?: unknown
   currency_code?: string | null
   payment_provider_id?: string | null
   external_refund_id?: string | null
   provider_status?: string | null
   created_at?: string | null
   updated_at?: string | null
+  policy_result?: string | null
+  production_status_snapshot?: string | null
+  latest_production_status?: string | null
 }
 
 type ApiRefundRequestCapability = {
@@ -488,6 +561,11 @@ type ApiMyOrderPreviewItem = {
 type ApiMyOrder = {
   order_id?: string
   display_id?: string | number | null
+  order_kind?: "order" | "checkout_reservation"
+  checkout_cart_id?: string | null
+  checkout_recovery_href?: string | null
+  payment_expires_at?: string | null
+  payment_attempt_status?: string | null
   created_at?: string | null
   email?: string | null
   status?: string | null
@@ -725,6 +803,7 @@ export type BuyerRefundRequest = {
   reason: string
   note?: string | null
   requestedAmount: number
+  eligibleAmount?: number | null
   approvedAmount?: number | null
   currencyCode?: string | null
   paymentProviderId?: string | null
@@ -732,6 +811,10 @@ export type BuyerRefundRequest = {
   providerStatus?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  policyResult?: string | null
+  productionStatusSnapshot?: string | null
+  latestProductionStatus?: string | null
+  requestedItems?: Array<{ itemId: string; quantity: number }>
 }
 
 export type BuyerRefundRequestCapability = {
@@ -744,6 +827,11 @@ export type BuyerRefundRequestCapability = {
 export type BuyerOrderSummary = {
   orderId: string
   displayId?: string
+  orderKind?: "order" | "checkout_reservation"
+  checkoutCartId?: string | null
+  checkoutRecoveryHref?: string | null
+  paymentExpiresAt?: string | null
+  paymentAttemptStatus?: string | null
   createdAt?: string | null
   email?: string | null
   status?: string | null
@@ -820,6 +908,7 @@ const config = {
 }
 
 export const getStripePublishableKey = () => readEnv("VITE_STRIPE_PK")
+export const getPayPalClientId = () => readEnv("VITE_PAYPAL_CLIENT_ID")
 
 export const getAiWorkerPublicBase = () => config.aiWorkerPublicBase
 
@@ -1215,14 +1304,47 @@ const normalizeCart = (cart: ApiCart): StoreCart => {
   }
 }
 
-const normalizePaymentSession = (session?: ApiPaymentSession): BuyerPaymentSession | null => {
+export const normalizePaymentSession = (session?: ApiPaymentSession): BuyerPaymentSession | null => {
   if (!session?.id || !session.provider_id) return null
-  const clientSecret = typeof session.data?.client_secret === "string" ? session.data.client_secret : undefined
+  const dataClientSecret =
+    typeof session.data?.client_secret === "string"
+      ? session.data.client_secret
+      : typeof session.data?.clientSecret === "string"
+        ? session.data.clientSecret
+        : undefined
+  const clientSecret =
+    typeof session.client_secret === "string"
+      ? session.client_secret
+      : typeof session.clientSecret === "string"
+        ? session.clientSecret
+        : dataClientSecret
+  const paypalOrderId = readPayPalOrderId(session.provider_id, session.data)
   return {
     id: session.id,
     providerId: session.provider_id,
     status: session.status,
     clientSecret,
+    paypalOrderId,
+    paypalStatus: typeof session.data?.paypal_status === "string" ? session.data.paypal_status : undefined,
+  }
+}
+
+const normalizePaymentAttempt = (attempt?: ApiPaymentAttempt): BuyerPaymentAttempt | null => {
+  if (!attempt?.id) return null
+  return {
+    id: attempt.id,
+    cartId: attempt.cart_id ?? null,
+    storeId: attempt.store_id ?? null,
+    customerId: attempt.customer_id ?? null,
+    providerId: attempt.provider_id ?? null,
+    paymentCollectionId: attempt.payment_collection_id ?? null,
+    paymentSessionId: attempt.payment_session_id ?? null,
+    providerPaymentId: attempt.provider_payment_id ?? null,
+    completedOrderId: attempt.completed_order_id ?? null,
+    status: attempt.status ?? "created",
+    expiresAt: attempt.expires_at ?? null,
+    lastError: attempt.last_error ?? null,
+    recoveryAction: attempt.recovery_action ?? "confirm_payment",
   }
 }
 
@@ -1848,8 +1970,12 @@ export const listCartPaymentProviders = async (regionId: string): Promise<BuyerP
   return (payload.payment_providers ?? [])
     .filter((provider): provider is Required<Pick<ApiPaymentProvider, "id">> & ApiPaymentProvider => Boolean(provider.id))
     .filter((provider) => provider.is_enabled !== false)
-    .filter((provider) => provider.id === "pp_system_default" || provider.id.startsWith("pp_stripe_"))
-    .map((provider) => ({ id: provider.id, isStripe: provider.id.startsWith("pp_stripe_") }))
+    .filter((provider) => provider.id === "pp_system_default" || provider.id.startsWith("pp_stripe_") || provider.id.startsWith("pp_paypal_"))
+    .map((provider) => ({
+      id: provider.id,
+      isStripe: provider.id.startsWith("pp_stripe_"),
+      isPayPal: provider.id.startsWith("pp_paypal_"),
+    }))
 }
 
 export const initializeCartPaymentSession = async (
@@ -1857,32 +1983,79 @@ export const initializeCartPaymentSession = async (
   providerId: string,
   options?: StoreScopedRequestOptions
 ): Promise<BuyerPaymentSession> => {
-  const collectionPayload = await storeScopedFetch<ApiPaymentCollectionResponse>(
-    "/store/payment-collections",
-    {
-      method: "POST",
-      body: JSON.stringify({ cart_id: cartId }),
-    },
-    options
-  )
-  const collectionId = collectionPayload.payment_collection?.id
-  if (!collectionId) throw new Error("Medusa did not return a payment collection for this cart.")
-
-  const sessionPayload = await storeScopedFetch<ApiPaymentCollectionResponse>(
-    `/store/payment-collections/${encodeURIComponent(collectionId)}/payment-sessions`,
-    {
-      method: "POST",
-      body: JSON.stringify({ provider_id: providerId }),
-    },
-    options
-  )
-  const sessions = sessionPayload.payment_collection?.payment_sessions ?? []
-  const session = normalizePaymentSession(sessions.find((candidate) => candidate.provider_id === providerId))
+  const recovery = await initializeCartPaymentRecovery(cartId, providerId, options)
+  const session = recovery.paymentSession
   if (!session) throw new Error("Medusa did not return the selected payment session.")
   if (providerId.startsWith("pp_stripe_") && !session.clientSecret) {
     throw new Error("Stripe payment session is missing client_secret.")
   }
   return session
+}
+
+const paymentRecoveryInFlight = new Map<string, Promise<BuyerPaymentRecovery>>()
+
+export const initializeCartPaymentRecovery = async (
+  cartId: string,
+  providerId: string,
+  options?: StoreScopedRequestOptions
+): Promise<BuyerPaymentRecovery> => {
+  const key = `${options?.storeId ?? getScopedBuyerStoreId()}:${cartId}:${providerId}`
+  const existing = paymentRecoveryInFlight.get(key)
+  if (existing) return existing
+
+  const request = postCartPaymentRecovery(cartId, providerId, false, options)
+  paymentRecoveryInFlight.set(key, request)
+  void request.then(
+    () => {
+      if (paymentRecoveryInFlight.get(key) === request) paymentRecoveryInFlight.delete(key)
+    },
+    () => {
+      if (paymentRecoveryInFlight.get(key) === request) paymentRecoveryInFlight.delete(key)
+    }
+  )
+  return request
+}
+
+export const reserveCheckoutPayment = async (
+  cartId: string,
+  providerId: string,
+  options?: StoreScopedRequestOptions
+): Promise<BuyerPaymentRecovery> => {
+  return postCartPaymentRecovery(cartId, providerId, true, options)
+}
+
+const postCartPaymentRecovery = async (
+  cartId: string,
+  providerId: string,
+  reserveOnly: boolean,
+  options?: StoreScopedRequestOptions
+): Promise<BuyerPaymentRecovery> => {
+  const payload = await storeScopedFetch<ApiPaymentRecoveryResponse>(
+    `/store/carts/${encodeURIComponent(cartId)}/payment-recovery`,
+    {
+      method: "POST",
+      body: JSON.stringify({ provider_id: providerId, ...(reserveOnly ? { reserve_only: true } : {}) }),
+    },
+    options
+  )
+  const paymentAttempt = normalizePaymentAttempt(payload.payment_attempt)
+  if (!paymentAttempt) throw new Error("Payment recovery did not return an attempt.")
+  const paymentSession = normalizePaymentSession(payload.payment_session ?? undefined)
+  const recoveredPayPalSession =
+    paymentSession &&
+    !paymentSession.paypalOrderId &&
+    paymentAttempt.providerId?.startsWith("pp_paypal_") &&
+    paymentAttempt.providerPaymentId
+      ? { ...paymentSession, paypalOrderId: paymentAttempt.providerPaymentId }
+      : paymentSession
+  return {
+    cartId: payload.cart_id ?? cartId,
+    status: payload.status ?? paymentAttempt.status,
+    paymentAttempt,
+    paymentSession: recoveredPayPalSession,
+    orderId: payload.order_id ?? paymentAttempt.completedOrderId,
+    paymentIntentStatus: payload.payment_intent_status ?? null,
+  }
 }
 
 export const selectCartShippingMethod = async (cartId: string, optionId: string) => {
@@ -2044,6 +2217,14 @@ export const getMyOrders = async ({
   const parsedOrders = rawOrders.map((order) => ({
       orderId: order.order_id ?? "",
       displayId: order.display_id == null ? undefined : String(order.display_id),
+      orderKind: order.order_kind ?? "order",
+      checkoutCartId: order.checkout_cart_id ?? null,
+      checkoutRecoveryHref: order.checkout_recovery_href ?? null,
+      paymentExpiresAt: order.payment_expires_at ?? null,
+      paymentAttemptStatus:
+        "payment_attempt_status" in order && typeof order.payment_attempt_status === "string"
+          ? order.payment_attempt_status
+          : null,
       createdAt: order.created_at ?? null,
       email: order.email ?? null,
       status: order.status ?? null,
@@ -2185,6 +2366,7 @@ const normalizeRefundRequest = (request?: ApiRefundRequest | null): BuyerRefundR
     reason: request.reason ?? "",
     note: request.note ?? null,
     requestedAmount: request.requested_amount ?? 0,
+    eligibleAmount: request.eligible_amount ?? null,
     approvedAmount: request.approved_amount ?? null,
     currencyCode: request.currency_code ?? null,
     paymentProviderId: request.payment_provider_id ?? null,
@@ -2192,6 +2374,18 @@ const normalizeRefundRequest = (request?: ApiRefundRequest | null): BuyerRefundR
     providerStatus: request.provider_status ?? "not_connected",
     createdAt: request.created_at ?? null,
     updatedAt: request.updated_at ?? null,
+    policyResult: request.policy_result ?? null,
+    productionStatusSnapshot: request.production_status_snapshot ?? null,
+    latestProductionStatus: request.latest_production_status ?? null,
+    requestedItems: Array.isArray(request.requested_items)
+      ? request.requested_items.flatMap((entry) => {
+          if (!entry || typeof entry !== "object") return []
+          const row = entry as { item_id?: unknown; id?: unknown; quantity?: unknown }
+          const itemId = String(row.item_id ?? row.id ?? "").trim()
+          const quantity = Number(row.quantity)
+          return itemId && Number.isInteger(quantity) && quantity > 0 ? [{ itemId, quantity }] : []
+        })
+      : undefined,
   }
 }
 
@@ -2271,7 +2465,7 @@ export const cancelAuthenticatedOrder = async (orderId: string, reason?: string)
 
 export const createRefundRequest = async (
   orderId: string,
-  payload: { reason: string; note?: string }
+  payload: { reason: string; note?: string; items?: unknown[]; idempotencyKey: string }
 ): Promise<BuyerRefundRequest> => {
   const response = await apiFetch<ApiRefundRequestResponse>(
     `/store/customers/me/orders/${encodeURIComponent(orderId)}/refund-requests`,
@@ -2280,6 +2474,8 @@ export const createRefundRequest = async (
       body: JSON.stringify({
         reason: payload.reason.trim(),
         note: payload.note?.trim() || undefined,
+        items: payload.items,
+        idempotency_key: payload.idempotencyKey,
       }),
     }
   )
@@ -2295,6 +2491,20 @@ export const listRefundRequests = async (orderId: string): Promise<BuyerRefundRe
   return (response.refund_requests ?? [])
     .map(normalizeRefundRequest)
     .filter((request): request is BuyerRefundRequest => Boolean(request))
+}
+
+export const updateRefundRequest = async (
+  orderId: string,
+  requestId: string,
+  input: { action: "cancel" | "provide_information"; note?: string }
+): Promise<BuyerRefundRequest> => {
+  const response = await apiFetch<ApiRefundRequestResponse>(
+    `/store/customers/me/orders/${encodeURIComponent(orderId)}/refund-requests/${encodeURIComponent(requestId)}`,
+    { method: "POST", body: JSON.stringify(input) }
+  )
+  const request = normalizeRefundRequest(response.refund_request)
+  if (!request) throw new Error("Refund request API did not return a request.")
+  return request
 }
 
 const createCustomerSession = async (token: string) => {
@@ -2333,28 +2543,53 @@ export const signInCustomer = async (input: BuyerSignInInput) => {
 export const registerCustomer = async (input: BuyerRegisterInput) => {
   const email = input.email.trim().toLowerCase()
   try {
-    const auth = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass/register", {
-      method: "POST",
-      body: JSON.stringify({
-        email,
-        password: input.password,
-      }),
-    })
+    let auth: ApiAuthTokenResponse
+    try {
+      auth = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass/register", {
+        method: "POST",
+        body: JSON.stringify({
+          email,
+          password: input.password,
+        }),
+      })
+    } catch (registrationError) {
+      // An earlier customer-create failure can leave an unbound auth identity.
+      // A successful sign-in proves ownership of that identity and lets this
+      // request safely finish the missing customer record.
+      try {
+        auth = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
+          method: "POST",
+          body: JSON.stringify({ email, password: input.password }),
+        })
+      } catch {
+        throw registrationError
+      }
+    }
     if (!auth.token) throw new Error("Registration succeeded without an auth token.")
-    const payload = await apiFetch<ApiCustomerResponse>("/store/customers", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${auth.token}`,
-      },
-      body: JSON.stringify({ email }),
-    })
-    const signedIn = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
-      method: "POST",
-      body: JSON.stringify({ email, password: input.password }),
-    })
-    if (!signedIn.token) throw new Error("Customer was created but session authentication did not return a token.")
-    await createCustomerSession(signedIn.token)
-    return normalizeCustomer(payload.customer) ?? getCurrentCustomer()
+    try {
+      const payload = await apiFetch<ApiCustomerResponse>("/store/customers", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({ email }),
+      })
+      const signedIn = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
+        method: "POST",
+        body: JSON.stringify({ email, password: input.password }),
+      })
+      if (!signedIn.token) throw new Error("Customer was created but session authentication did not return a token.")
+      await createCustomerSession(signedIn.token)
+      return normalizeCustomer(payload.customer) ?? getCurrentCustomer()
+    } catch (customerCreateError) {
+      // A valid identity can already be attached to a customer if a prior
+      // request completed after the browser was interrupted. Reuse that
+      // account instead of reporting an irrecoverable registration failure.
+      await createCustomerSession(auth.token)
+      const existingCustomer = await getCurrentCustomer()
+      if (existingCustomer) return existingCustomer
+      throw customerCreateError
+    }
   } catch {
     throw new Error("We couldn't create that account. Check the email and password, or sign in if you already have an account.")
   }

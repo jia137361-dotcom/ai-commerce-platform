@@ -12,10 +12,16 @@ type ProductCartActionInput = {
   storage: Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">
   createCart: () => Promise<StoreCart>
   addLineItem: (cartId: string, variantId: string, quantity: number) => Promise<StoreCart>
+  isCartReservedForCheckout?: (cartId: string) => Promise<boolean>
 }
 
 export async function addProductSelectionToCart(input: ProductCartActionInput) {
   let cartId = input.storage.getItem(input.storageKey)
+  if (cartId && await input.isCartReservedForCheckout?.(cartId)) {
+    input.storage.removeItem(input.storageKey)
+    cartId = null
+  }
+
   if (!cartId) {
     const created = await input.createCart()
     cartId = created.id

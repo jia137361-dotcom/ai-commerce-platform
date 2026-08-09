@@ -2,13 +2,14 @@ import fs from "node:fs"
 
 const BACKEND = process.env.MEDUSA_BACKEND_URL || "http://127.0.0.1:9000"
 const STORE_ID = process.env.PAY_STRIPE_TEST_STORE_ID || "mkt01_stripe_test_store_20260621_01"
-const PRODUCT_ID = "mkt01_stripe_test_product_20260621_01"
+const PRODUCT_ID = process.env.PAY_STRIPE_TEST_PRODUCT_ID || "mkt01_stripe_test_product_20260621_01"
 const PASSWORD = process.env.PAY_STRIPE_TEST_PASSWORD
-const SELLER_EMAIL = "mkt01_stripe_seller_20260621_01@example.com"
-const BUYER_A_EMAIL = "mkt01_stripe_buyer_a_20260621_01@example.com"
-const BUYER_B_EMAIL = "mkt01_stripe_buyer_b_20260621_01@example.com"
+const SELLER_EMAIL = process.env.PAY_STRIPE_TEST_SELLER_EMAIL || "mkt01_stripe_seller_20260621_01@example.com"
+const BUYER_A_EMAIL = process.env.PAY_STRIPE_TEST_BUYER_A_EMAIL || "mkt01_stripe_buyer_a_20260621_01@example.com"
+const BUYER_B_EMAIL = process.env.PAY_STRIPE_TEST_BUYER_B_EMAIL || "mkt01_stripe_buyer_b_20260621_01@example.com"
 
 if (!PASSWORD) throw new Error("PAY_STRIPE_TEST_PASSWORD is required")
+console.log("PAY_STRIPE_TEST_PASSWORD_PRESENT=true")
 
 const storefrontEnv = fs.readFileSync(new URL("../../../storefront/.env.local", import.meta.url), "utf8")
 const publishableKey = storefrontEnv.match(/^VITE_PUBLISHABLE_API_KEY=(.+)$/m)?.[1]?.trim()

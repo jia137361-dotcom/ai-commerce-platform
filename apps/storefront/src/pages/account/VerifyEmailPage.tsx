@@ -27,6 +27,7 @@ export function VerifyEmailPage({ cartCount }: { cartCount: number }) {
   const [cooldown, setCooldown] = useState(0)
   const [verified, setVerified] = useState(false)
   const [autoSent, setAutoSent] = useState(false)
+  const [devCode, setDevCode] = useState<string>()
   const requestSeq = useRef(0)
   const returnTo = safeReturnTo("/account")
 
@@ -61,6 +62,7 @@ export function VerifyEmailPage({ cartCount }: { cartCount: number }) {
     try {
       const result = await sendBuyerEmailVerification()
       if (requestSeq.current !== requestId) return
+      setDevCode(import.meta.env.DEV ? result.dev_code : undefined)
       dispatchUi({ type: "send_success", email: result.email ?? auth.customer?.email ?? "your email" })
       setCooldown(RESEND_COOLDOWN_SECONDS)
     } catch {
@@ -107,6 +109,11 @@ export function VerifyEmailPage({ cartCount }: { cartCount: number }) {
           <p className="buyer-account-kicker">Email verification</p>
           <h1>Verify your email</h1>
           <p>Enter the 6-digit code sent to {auth.customer.email ?? "your email"}.</p>
+          {devCode ? (
+            <p className="buyer-account-dev-code" role="status">
+              Development verification code: <strong>{devCode}</strong>
+            </p>
+          ) : null}
           {verified ? (
             <>
               <p className="buyer-account-success" role="status">Your email is verified.</p>

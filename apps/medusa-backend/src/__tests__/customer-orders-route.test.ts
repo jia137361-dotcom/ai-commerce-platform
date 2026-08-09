@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { GET as getCustomerOrders } from "../api/store/customers/me/orders/route"
+import { CHECKOUT_PAYMENT_ATTEMPTS_MODULE } from "../modules/checkout-payment-attempts"
 
 type MockRes = MedusaResponse & {
   statusCode?: number
@@ -96,6 +97,8 @@ const createReq = ({
   listedOrders = orders,
   graphOrders = [],
   listError,
+  attemptsService,
+  cartModule,
 }: {
   authCustomerId?: string | null
   query?: Record<string, unknown>
@@ -103,6 +106,8 @@ const createReq = ({
   listedOrders?: Record<string, unknown>[]
   graphOrders?: Record<string, unknown>[]
   listError?: Error
+  attemptsService?: Record<string, unknown>
+  cartModule?: Record<string, unknown>
 } = {}) => {
   const orderModule = {
     listOrders: jest.fn(async () => {
@@ -124,6 +129,8 @@ const createReq = ({
       resolve: jest.fn((key: string) => {
         if (key === Modules.ORDER) return orderModule
         if (key === Modules.CUSTOMER) return customerModule
+        if (key === Modules.CART && cartModule) return cartModule
+        if (key === CHECKOUT_PAYMENT_ATTEMPTS_MODULE && attemptsService) return attemptsService
         if (key === ContainerRegistrationKeys.QUERY) return queryGraph
         throw new Error(`Unexpected dependency: ${key}`)
       }),
@@ -234,6 +241,117 @@ describe("GET /store/customers/me/orders", () => {
       orders: [
         { order_id: "order_display_number", display_id: 70 },
         { order_id: "order_display_string", display_id: "71" },
+      ],
+    })
+  })
+
+  it("includes active checkout reservations in the unpaid bucket", async () => {
+    const attemptsService = {
+      listCheckoutPaymentAttempts: jest.fn(async () => [
+        {
+          id: "cpa_active",
+          cart_id: "cart_active",
+          store_id: "default_store",
+          customer_id: "cus_a",
+          provider_id: "pp_stripe_stripe",
+          status: "awaiting_payment",
+          expires_at: new Date(Date.now() + 10 * 60 * 1000),
+          created_at: "2026-06-16T09:00:00.000Z",
+        },
+      ]),
+      updateCheckoutPaymentAttempts: jest.fn(),
+    }
+    const cartModule = {
+      retrieveCart: jest.fn(async () => ({
+        id: "cart_active",
+        customer_id: "cus_a",
+        email: "a@example.com",
+        currency_code: "usd",
+        total: 2500,
+        items: [{ title: "Reserved item", quantity: 2, thumbnail: "https://example.test/reserved.png" }],
+      })),
+    }
+    const { req } = createReq({
+      query: { bucket: "unpaid" },
+      attemptsService,
+      cartModule,
+      listedOrders: [],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      count: 1,
+      orders: [
+        {
+          order_id: "cpa_active",
+          order_kind: "checkout_reservation",
+          checkout_cart_id: "cart_active",
+          payment_status: "pending",
+          buyer_display_status: "unpaid",
+          item_count: 2,
+        },
+      ],
+    })
+  })
+
+  it("keeps expired checkout reservations visible but disables recovery", async () => {
+    const attemptsService = {
+      listCheckoutPaymentAttempts: jest.fn(async () => [
+        {
+          id: "cpa_expired",
+          cart_id: "cart_expired",
+          store_id: "default_store",
+          customer_id: "cus_a",
+          provider_id: "pp_stripe_stripe",
+          status: "awaiting_payment",
+          expires_at: new Date(Date.now() - 60 * 1000),
+          created_at: "2026-06-16T09:00:00.000Z",
+        },
+      ]),
+      updateCheckoutPaymentAttempts: jest.fn(),
+    }
+    const cartModule = {
+      retrieveCart: jest.fn(async () => ({
+        id: "cart_expired",
+        customer_id: "cus_a",
+        email: "a@example.com",
+        currency_code: "usd",
+        total: 2500,
+        items: [{ title: "Expired reserved item", quantity: 1, thumbnail: "https://example.test/reserved.png" }],
+      })),
+    }
+    const { req } = createReq({
+      query: { bucket: "unpaid" },
+      attemptsService,
+      cartModule,
+      listedOrders: [],
+    })
+    const res = createRes()
+
+    await getCustomerOrders(req, res)
+
+    expect(attemptsService.updateCheckoutPaymentAttempts).toHaveBeenCalledWith({
+      id: "cpa_expired",
+      status: "expired",
+      last_error: "Payment window expired.",
+    })
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      count: 1,
+      orders: [
+        {
+          order_id: "cpa_expired",
+          order_kind: "checkout_reservation",
+          checkout_cart_id: "cart_expired",
+          checkout_recovery_href: null,
+          payment_status: "expired",
+          payment_attempt_status: "expired",
+          buyer_display_status: "unpaid",
+          item_count: 1,
+        },
       ],
     })
   })

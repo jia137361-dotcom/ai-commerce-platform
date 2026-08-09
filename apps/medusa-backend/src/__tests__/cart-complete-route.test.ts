@@ -10,6 +10,10 @@ const mockSyncFulfillmentPayloadFromOrder = jest.fn()
 const mockMarkOrderPaidAndFulfillmentWaiting = jest.fn()
 const mockSyncPaidIfPaymentAlreadyCaptured = jest.fn()
 const mockResolvePaymentMethodLabelFromClientSecret = jest.fn()
+const mockReadActiveCheckoutPaymentAttempt = jest.fn()
+const mockReadStripePaymentIntentForAttempt = jest.fn()
+const mockRetrievePayPalOrder = jest.fn()
+const mockUpdateCheckoutPaymentAttempts = jest.fn()
 
 jest.mock("@medusajs/medusa/core-flows", () => ({
   completeCartWorkflow: jest.fn(() => ({ run: mockCompleteRun })),
@@ -40,6 +44,22 @@ jest.mock("../lib/stripe-payment-method-label", () => ({
   resolvePaymentMethodLabelFromClientSecret: (...args: unknown[]) => mockResolvePaymentMethodLabelFromClientSecret(...args),
 }))
 
+jest.mock("../lib/checkout-payment-attempts", () => ({
+  formatPaymentAttemptError: (error: unknown) => error instanceof Error ? error.message : String(error),
+  isPayPalProviderId: (providerId?: string) => Boolean(providerId?.startsWith("pp_paypal_")),
+  isStripeProviderId: (providerId?: string) => Boolean(providerId?.startsWith("pp_stripe_")),
+  normalizePayPalOrderStatus: (status?: string) => status === "COMPLETED" ? "payment_succeeded" : "awaiting_payment",
+  normalizeStripePaymentIntentStatus: (status?: string) => status === "succeeded" ? "payment_succeeded" : "awaiting_payment",
+  readActiveCheckoutPaymentAttempt: (...args: unknown[]) => mockReadActiveCheckoutPaymentAttempt(...args),
+  readPayPalOrderId: (session?: { data?: { paypal_order_id?: string } }) => session?.data?.paypal_order_id ?? null,
+  readPayPalCaptureStatus: (order?: { purchase_units?: Array<{ payments?: { captures?: Array<{ status?: string }> } }> }) => order?.purchase_units?.[0]?.payments?.captures?.[0]?.status ?? null,
+  readStripePaymentIntentForAttempt: (...args: unknown[]) => mockReadStripePaymentIntentForAttempt(...args),
+}))
+
+jest.mock("../modules/paypal/client", () => ({
+  getConfiguredPayPalClient: () => ({ retrieveOrder: mockRetrievePayPalOrder }),
+}))
+
 jest.mock("../lib/s2bdiy/push-s2b-order", () => ({
   pushOrderToS2bdiy: jest.fn(),
 }))
@@ -55,6 +75,7 @@ jest.mock("../lib/publish-buyer-designs-from-order", () => ({
 }))
 
 import { POST as completeCart } from "../api/store/carts/[id]/complete/route"
+import { CHECKOUT_PAYMENT_ATTEMPTS_MODULE } from "../modules/checkout-payment-attempts"
 
 type MockRes = MedusaResponse & {
   statusCode?: number
@@ -154,6 +175,9 @@ const createReq = ({
         if (key === Modules.CART) return cartModule
         if (key === Modules.ORDER) return orderModule
         if (key === ContainerRegistrationKeys.QUERY) return query
+        if (key === CHECKOUT_PAYMENT_ATTEMPTS_MODULE) {
+          return { updateCheckoutPaymentAttempts: mockUpdateCheckoutPaymentAttempts }
+        }
         throw new Error(`Unexpected dependency: ${key}`)
       }),
     },
@@ -168,6 +192,10 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     mockCompleteRun.mockResolvedValue({ result: { id: "order_1" } })
     mockFindCartPaymentSession.mockResolvedValue(null)
     mockResolvePaymentMethodLabelFromClientSecret.mockResolvedValue(null)
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue(null)
+    mockReadStripePaymentIntentForAttempt.mockResolvedValue(null)
+    mockRetrievePayPalOrder.mockResolvedValue({ id: "PAYPAL_ORDER_1", status: "CREATED" })
+    mockUpdateCheckoutPaymentAttempts.mockResolvedValue({})
   })
 
   it("rejects authenticated complete when cart is not bound to current customer", async () => {
@@ -261,6 +289,40 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
         message: "Payment session is not authorized",
       },
     })
+  })
+
+  it("marks PayPal for order recovery when capture completed before complete failed", async () => {
+    mockCompleteRun.mockRejectedValueOnce(new Error("Order persistence temporarily failed"))
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_1",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      provider_id: "pp_paypal_paypal",
+      provider_payment_id: "PAYPAL_ORDER_1",
+      status: "requires_action",
+    })
+    mockFindCartPaymentSession.mockResolvedValue({
+      id: "ps_paypal",
+      provider_id: "pp_paypal_paypal",
+      status: "captured",
+      data: { paypal_order_id: "PAYPAL_ORDER_1" },
+    })
+    mockRetrievePayPalOrder.mockResolvedValue({
+      id: "PAYPAL_ORDER_1",
+      status: "COMPLETED",
+      purchase_units: [{ payments: { captures: [{ status: "COMPLETED" }] } }],
+    })
+    const { req } = createReq({ paymentProviderId: "pp_paypal_paypal" })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockUpdateCheckoutPaymentAttempts).toHaveBeenCalledWith(expect.objectContaining({
+      id: "cpa_1",
+      status: "order_completion_failed",
+      completed_order_id: null,
+    }))
+    expect(res.status).toHaveBeenCalledWith(400)
   })
 
   it("returns the original order when a retry repeats after the first response was lost", async () => {

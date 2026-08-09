@@ -48,9 +48,18 @@ export async function stripeApiRequest<T>(
     body,
   })
 
-  const payload = (await response.json()) as T & { error?: { message?: string } }
+  const payload = (await response.json()) as T & { error?: { message?: string; code?: string; type?: string } }
   if (!response.ok) {
-    throw new Error(payload.error?.message || `Stripe request failed (${response.status})`)
+    throw Object.assign(new Error(payload.error?.message || `Stripe request failed (${response.status})`), {
+      status: response.status,
+      stripeCode: payload.error?.code,
+      stripeType: payload.error?.type,
+    })
   }
   return payload
+}
+
+export const isStripeResourceNotFoundError = (error: unknown) => {
+  const candidate = error as { status?: unknown; stripeCode?: unknown } | null
+  return candidate?.status === 404 || candidate?.stripeCode === "resource_missing"
 }

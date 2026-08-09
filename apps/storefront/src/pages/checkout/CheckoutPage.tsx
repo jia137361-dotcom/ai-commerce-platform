@@ -5,7 +5,7 @@ import type { CheckoutContact } from "../../components/checkout/CheckoutContactF
 import { CheckoutCompleteError } from "../../components/checkout/CheckoutCompleteError"
 import { CheckoutPageStatus } from "../../components/checkout/CheckoutPageStatus"
 import { CheckoutPaymentPanel } from "../../components/checkout/CheckoutPaymentPanel"
-import { CheckoutShippingCard } from "../../components/checkout/CheckoutShippingCard"
+import { CheckoutPaymentRecoveryBanner } from "../../components/checkout/CheckoutPaymentRecoveryBanner"
 import { CheckoutSummaryCard } from "../../components/checkout/CheckoutSummaryCard"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
@@ -20,13 +20,15 @@ import {
   fetchStoreSettings,
   getCartShippingOptions,
   getScopedBuyerStoreId,
+  getPayPalClientId,
   getStripePublishableKey,
-  initializeCartPaymentSession,
+  initializeCartPaymentRecovery,
   listCartPaymentProviders,
   listCustomerAddresses,
   listCustomerPaymentMethods,
   payCartWithSavedPaymentMethod,
   readBuyerPreferences,
+  reserveCheckoutPayment,
   selectCartShippingMethod,
   setActiveBuyerStoreId,
   updateCartAddress,
@@ -39,9 +41,11 @@ import {
   type BuyerCoupon,
   type BuyerPaymentMethod,
   type BuyerPaymentProvider,
+  type BuyerPaymentRecovery,
   type BuyerPaymentSession,
   type BuyerStoreSettings,
   type BuyerCustomerAddress,
+  type BuyerCustomerAddressInput,
   type CheckoutPricingBreakdown,
 } from "../../lib/buyer-api"
 import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
@@ -59,6 +63,7 @@ import { isCheckoutCountryCode, shippingUnavailableMessage } from "./checkout-co
 import {
   chooseDefaultPaymentProvider,
   hasValidStripeClientSecret,
+  isPayPalProviderId,
   isStripeProviderId,
   isValidStripePublishableKey,
   STRIPE_ORDER_CREATION_FAILED_MESSAGE,
@@ -92,7 +97,7 @@ const initialAddress: CheckoutAddress = {
   label: "Home",
 }
 
-export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
+export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
   const auth = useBuyerAuth()
   const [settings, setSettings] = useState<BuyerStoreSettings>(fallbackSettings)
   const [cart, setCart] = useState<StoreCart | null>(null)
@@ -118,21 +123,22 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
   const [paymentProviders, setPaymentProviders] = useState<BuyerPaymentProvider[]>([{ id: "pp_system_default", isStripe: false }])
   const [selectedPaymentProviderId, setSelectedPaymentProviderId] = useState("pp_system_default")
   const [paymentSession, setPaymentSession] = useState<BuyerPaymentSession | null>(null)
+  const [paymentRecovery, setPaymentRecovery] = useState<BuyerPaymentRecovery | null>(null)
   const [paymentPreparing, setPaymentPreparing] = useState(false)
   const [paymentError, setPaymentError] = useState<string | undefined>()
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<BuyerPaymentMethod[]>([])
   const [selectedSavedPaymentMethodId, setSelectedSavedPaymentMethodId] = useState<string | null>(null)
   const [completeError, setCompleteError] = useState<string | undefined>()
   const [loadVersion, setLoadVersion] = useState(0)
-  const [saveToAddressBook, setSaveToAddressBook] = useState(true)
-  const [usingNewAddress, setUsingNewAddress] = useState(false)
   const [walletCoupons, setWalletCoupons] = useState<BuyerCoupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(false)
   const [checkoutPricing, setCheckoutPricing] = useState<CheckoutPricingBreakdown | null>(null)
   const [couponError, setCouponError] = useState<string | undefined>()
+  const [checkoutHeaderCartCount, setCheckoutHeaderCartCount] = useState(0)
   const skipAddressResetRef = useRef(false)
-  const autoSavedAddressRef = useRef(false)
   const shippingSelectGenerationRef = useRef(0)
+  const autoAppliedAddressRef = useRef("")
+  const placeOrderInFlightRef = useRef(false)
 
   const applyShippingOption = async (cartId: string, optionId: string) => {
     const generation = ++shippingSelectGenerationRef.current
@@ -167,11 +173,17 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     (contact.name ?? "").trim().length > 1
   const addressIsValid = Boolean(address.address1.trim() && address.city.trim() && address.postalCode.trim() && isCheckoutCountryCode(address.country))
   const stripePublishableKey = getStripePublishableKey()
+  const paypalClientId = getPayPalClientId()
   const stripeSelected = isStripeProviderId(selectedPaymentProviderId)
+  const paypalSelected = isPayPalProviderId(selectedPaymentProviderId)
+  const recoveryAction = paymentRecovery?.paymentAttempt.recoveryAction ?? "confirm_payment"
   const paymentSessionReady =
-    !stripeSelected ||
-    hasValidStripeClientSecret(paymentSession) ||
-    Boolean(selectedSavedPaymentMethodId)
+    (!stripeSelected && !paypalSelected) ||
+    recoveryAction === "complete_order" ||
+    (recoveryAction === "confirm_payment" &&
+      (paypalSelected
+        ? Boolean(paymentSession?.paypalOrderId)
+        : hasValidStripeClientSecret(paymentSession) || Boolean(selectedSavedPaymentMethodId)))
   const checkoutState = resolveCheckoutState({
     cart,
     authLoading: auth.isLoading,
@@ -185,10 +197,11 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     paymentSessionReady,
     placingOrder,
   })
-  const { canPlaceOrder, disabledReason: placeOrderDisabledReason } = checkoutState
+  const { canPlaceOrder } = checkoutState
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
   const checkoutSearchParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const checkoutStoreId = checkoutSearchParams.get("store")?.trim() || getScopedBuyerStoreId()
+  const checkoutCartIdParam = checkoutSearchParams.get("cart_id")?.trim() || ""
   const platformCheckoutId = checkoutSearchParams.get("platform_checkout_id")?.trim() || ""
   const platformCheckoutIndex = Number(checkoutSearchParams.get("platform_checkout_index"))
   const platformCheckoutCount = Number(checkoutSearchParams.get("platform_checkout_count"))
@@ -213,7 +226,8 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       }
 
       const resolved = resolveBuyerCartStorageId(checkoutStoreId, auth.customer?.id, window.localStorage)
-      const cartId = resolved.cartId
+      const cartId = checkoutCartIdParam || resolved.cartId
+      setCheckoutHeaderCartCount(0)
       if (!cartId) {
         if (active) {
           setCart(null)
@@ -237,6 +251,25 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         if (!active) return
         setCart(activeCart)
         onCartUpdated(activeCart)
+
+        if (checkoutCartIdParam) {
+          const splitKey = `citigoo:${checkoutStoreId}:split_checkout`
+          const splitRaw =
+            window.sessionStorage.getItem(splitKey) ??
+            window.localStorage.getItem(splitKey)
+          if (splitRaw) {
+            try {
+              const split = JSON.parse(splitRaw) as { sourceCartId?: string; checkoutCartId?: string }
+              if (split.checkoutCartId === checkoutCartIdParam && split.sourceCartId) {
+                const sourceCart = await fetchCart(split.sourceCartId, { storeId: checkoutStoreId })
+                if (!active) return
+                setCheckoutHeaderCartCount(sourceCart.items.reduce((sum, item) => sum + item.quantity, 0))
+              }
+            } catch (splitError) {
+              console.warn("[checkout] unable to read split source cart count", splitError)
+            }
+          }
+        }
 
         const cartShippingAddress: CartShippingAddress | null | undefined = activeCart.shippingAddress
           ? {
@@ -325,7 +358,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     return () => {
       active = false
     }
-  }, [auth.customer, loadVersion, onCartUpdated])
+  }, [auth.customer, checkoutCartIdParam, loadVersion, onCartUpdated])
 
   useEffect(() => {
     if (skipAddressResetRef.current) {
@@ -340,18 +373,36 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     setShippingMethodSaved(false)
     setShippingError(undefined)
     setPaymentSession(null)
+    setPaymentRecovery(null)
     setPaymentError(undefined)
   }, [contact, address])
 
   useEffect(() => {
-    if (!stripeSelected || !cart || (requiresShippingMethod && !shippingMethodSaved)) {
+    if (!cart?.id || !auth.customer || !selectedPaymentProviderId) return
+    let active = true
+    void reserveCheckoutPayment(cart.id, selectedPaymentProviderId, { storeId: checkoutStoreId })
+      .then((recovery) => {
+        if (!active) return
+        setPaymentRecovery(recovery)
+      })
+      .catch((reason) => {
+        if (!active) return
+        console.warn("[checkout] unable to reserve unpaid checkout", reason)
+      })
+    return () => {
+      active = false
+    }
+  }, [auth.customer, cart?.id, checkoutStoreId, selectedPaymentProviderId])
+
+  useEffect(() => {
+    if ((!stripeSelected && !paypalSelected) || !cart || (requiresShippingMethod && !shippingMethodSaved)) {
       setPaymentSession(null)
-      if (stripeSelected && cart && requiresShippingMethod && !shippingMethodSaved) {
+      if (!paymentRecovery && (stripeSelected || paypalSelected) && cart && requiresShippingMethod && !shippingMethodSaved) {
         setPaymentError(undefined)
       }
       return
     }
-    if (!isValidStripePublishableKey(stripePublishableKey)) {
+    if (stripeSelected && !isValidStripePublishableKey(stripePublishableKey)) {
       setPaymentSession(null)
       setPaymentError("VITE_STRIPE_PK must be configured with a Stripe publishable key (pk_test_ or pk_live_).")
       return
@@ -359,12 +410,37 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     let active = true
     setPaymentPreparing(true)
     setPaymentError(undefined)
-    void initializeCartPaymentSession(cart.id, selectedPaymentProviderId, { storeId: checkoutStoreId })
-      .then((session) => { if (active) setPaymentSession(session) })
-      .catch((value) => { if (active) { setPaymentSession(null); setPaymentError(value instanceof Error ? value.message : "Unable to initialize Stripe payment.") } })
+    const initializeSession = async () => {
+      try {
+        return await initializeCartPaymentRecovery(cart.id, selectedPaymentProviderId, { storeId: checkoutStoreId })
+      } catch (value) {
+        const message = value instanceof Error ? value.message : ""
+        if (!message.includes("client_secret")) throw value
+        await new Promise((resolve) => window.setTimeout(resolve, 400))
+        return initializeCartPaymentRecovery(cart.id, selectedPaymentProviderId, { storeId: checkoutStoreId })
+      }
+    }
+    void initializeSession()
+      .then((recovery) => {
+        if (!active) return
+        setPaymentRecovery(recovery)
+        setPaymentSession(recovery.paymentSession)
+        if (recovery.paymentAttempt.recoveryAction === "completed" && recovery.orderId) {
+          const successParams = new URLSearchParams({ order_id: recovery.orderId })
+          if (platformCheckoutActive) successParams.set("platform_checkout", "1")
+          window.location.assign(`/checkout/success?${successParams.toString()}`)
+        }
+      })
+      .catch((value) => {
+        if (active) {
+          setPaymentSession(null)
+          const message = value instanceof Error ? value.message : "Unable to initialize payment."
+          setPaymentError(message.includes("client_secret") ? "Payment session is still being prepared. Choose the delivery address again or reload checkout." : message)
+        }
+      })
       .finally(() => { if (active) setPaymentPreparing(false) })
     return () => { active = false }
-  }, [cart?.id, cart?.total, checkoutStoreId, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
+  }, [cart?.id, cart?.total, checkoutStoreId, paypalSelected, platformCheckoutActive, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
 
   useEffect(() => {
     if (!auth.customer || contactTouched || contact.email || contact.name || contact.phone) return
@@ -389,8 +465,8 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     void listCustomerAddresses().then((addresses) => {
       if (!active) return
       setSavedAddresses(addresses)
-      const defaultAddress = addresses.find((entry) => entry.isDefaultShipping) ?? addresses[0]
-      if (defaultAddress && !address.address1 && !usingNewAddress) {
+      const defaultAddress = addresses.find((entry) => entry.isDefaultShipping)
+      if (defaultAddress && !address.address1) {
         const selection = savedAddressToCheckout(defaultAddress)
         skipAddressResetRef.current = true
         setSelectedAddressId(defaultAddress.id)
@@ -444,34 +520,52 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     }
   }, [auth.customer?.id, cart?.id, shippingMethodSaved, cart?.total])
 
-  useEffect(() => {
-    if (!cart || !auth.customer || autoSavedAddressRef.current || addressSaved || usingNewAddress) return
-    const defaultAddress = savedAddresses.find((entry) => entry.id === selectedAddressId)
-      ?? savedAddresses.find((entry) => entry.isDefaultShipping)
-      ?? savedAddresses[0]
-    if (!defaultAddress || !address.address1) return
-    autoSavedAddressRef.current = true
-    selectSavedAddress(defaultAddress, { autoSave: true })
-  }, [address.address1, addressSaved, auth.customer, cart, savedAddresses, selectedAddressId, usingNewAddress])
+  const selectedSavedAddress =
+    savedAddresses.find((entry) => entry.id === selectedAddressId) ??
+    (selectedAddressId ? null : savedAddresses.find((entry) => entry.isDefaultShipping)) ??
+    null
 
-  const selectSavedAddress = (saved: BuyerCustomerAddress, options?: { autoSave?: boolean }) => {
+  const contactForSavedAddress = (saved: BuyerCustomerAddress): CheckoutContact => {
     const selection = savedAddressToCheckout(saved)
-    setUsingNewAddress(false)
-    setSelectedAddressId(saved.id)
-    setAddress(selection.address)
-    setContact((current) => ({ ...current, name: selection.name || current.name, phone: selection.phone || current.phone }))
-    setContactTouched(true)
-    if (options?.autoSave !== false && cart) {
-      void persistCheckoutAddress({ address: selection.address, contact: { ...contact, name: selection.name || contact.name, phone: selection.phone || contact.phone }, selectedId: saved.id })
+    return {
+      email: (contact.email || cart?.email || auth.customer?.email || "").trim(),
+      phone: (selection.phone || contact.phone || auth.customer?.phone || "").trim(),
+      name: (selection.name || contact.name || [auth.customer?.firstName, auth.customer?.lastName].filter(Boolean).join(" ")).trim(),
     }
   }
 
+  const validateDeliverySelection = (nextContact: CheckoutContact, nextAddress: CheckoutAddress) => {
+    setContactError(undefined)
+    setAddressError(undefined)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((nextContact.email ?? "").trim())) {
+      setContactError("Enter a valid email address.")
+      return false
+    }
+    if ((nextContact.phone ?? "").trim().length < 4) {
+      setContactError("Enter a phone number for delivery updates.")
+      return false
+    }
+    if ((nextContact.name ?? "").trim().length <= 1) {
+      setAddressError("Enter the receiver name.")
+      return false
+    }
+    if (requiresShippingMethod) {
+      if (!isCheckoutCountryCode(nextAddress.country) || !nextAddress.city.trim() || !nextAddress.postalCode.trim() || !nextAddress.address1.trim()) {
+        setAddressError("Choose a complete delivery address.")
+        return false
+      }
+    }
+    return true
+  }
+
   const persistCheckoutAddress = async (input?: {
+    cart?: StoreCart
     address?: CheckoutAddress
     contact?: CheckoutContact
     selectedId?: string
   }) => {
-    if (!cart) return
+    const targetCart = input?.cart ?? cart
+    if (!targetCart) throw new Error("Checkout cart is unavailable.")
     const nextAddress = input?.address ?? address
     const nextContact = input?.contact ?? contact
     setAddressSaving(true)
@@ -480,7 +574,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     try {
       const fullName = (nextContact.name ?? "").trim()
       const [firstName, ...restName] = fullName.split(/\s+/).filter(Boolean)
-      const updated = await updateCartAddress(cart.id, {
+      const updated = await updateCartAddress(targetCart.id, {
         email: (nextContact.email ?? "").trim(),
         phone: (nextContact.phone ?? "").trim(),
         shippingAddress: {
@@ -498,7 +592,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       onCartUpdated(updated)
       setAddressSaved(true)
 
-      if (auth.customer && saveToAddressBook && !input?.selectedId) {
+      if (auth.customer && !input?.selectedId) {
         const refreshed = await createCustomerAddress({
           label: nextAddress.label || "Home",
           firstName: firstName || fullName || "Customer",
@@ -522,47 +616,112 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         if (created) setSelectedAddressId(created.id)
       }
 
-      setShippingLoading(true)
-      try {
-        const shipping = await getCartShippingOptions(updated.id)
-        setShippingOptions(shipping.options)
-        setRequiresShippingMethod(shipping.requiresShippingMethod)
-        const firstAvailable = shipping.options.find((option) => option.available)?.id ?? ""
-        setSelectedShippingOptionId(firstAvailable)
-        if (!shipping.requiresShippingMethod) {
-          setShippingMethodSaved(true)
-        } else if (firstAvailable) {
-          // Persist shipping immediately so Stripe can create a PaymentIntent.
-          await applyShippingOption(updated.id, firstAvailable)
-        } else {
-          setShippingMethodSaved(false)
-        }
-      } catch (shippingLoadError) {
-        setShippingOptions([])
-        setRequiresShippingMethod(true)
-        setShippingMethodSaved(false)
-        setShippingError(shippingUnavailableMessage(shippingLoadError))
-      }
+      return updated
     } catch (saveError) {
       setAddressError(saveError instanceof Error ? saveError.message : "Unable to save delivery address.")
       setAddressSaved(false)
+      throw saveError
     } finally {
       setAddressSaving(false)
+    }
+  }
+
+  const loadShippingOptionsForCart = async (targetCart: StoreCart) => {
+    setShippingLoading(true)
+    setShippingError(undefined)
+    try {
+      const shipping = await getCartShippingOptions(targetCart.id)
+      setShippingOptions(shipping.options)
+      setRequiresShippingMethod(shipping.requiresShippingMethod)
+      setSelectedShippingOptionId("")
+      setShippingMethodSaved(!shipping.requiresShippingMethod)
+      return shipping
+    } catch (shippingLoadError) {
+      setShippingOptions([])
+      setRequiresShippingMethod(true)
+      setShippingMethodSaved(false)
+      setShippingError(shippingUnavailableMessage(shippingLoadError))
+      throw shippingLoadError
+    } finally {
       setShippingLoading(false)
     }
   }
 
-  const handleSaveAddress = async () => {
-    await persistCheckoutAddress()
+  const applySavedAddressToCheckout = async (saved: BuyerCustomerAddress) => {
+    if (!cart) return
+    autoAppliedAddressRef.current = `${cart.id}:${saved.id}`
+    const selection = savedAddressToCheckout(saved)
+    const nextContact = contactForSavedAddress(saved)
+    setCompleteError(undefined)
+    setContactError(undefined)
+    setAddressError(undefined)
+    setShippingError(undefined)
+    setShippingMethodSaved(false)
+    setPaymentSession(null)
+    setPaymentError(undefined)
+    skipAddressResetRef.current = true
+    setSelectedAddressId(saved.id)
+    setAddress(selection.address)
+    setContact(nextContact)
+    setContactTouched(true)
+    if (!validateDeliverySelection(nextContact, selection.address)) {
+      setAddressSaved(false)
+      return
+    }
+    try {
+      const contactCart = await saveContactForCart(cart, nextContact)
+      const addressCart = await persistCheckoutAddress({
+        cart: contactCart,
+        address: selection.address,
+        contact: nextContact,
+        selectedId: saved.id,
+      })
+      const reloaded = await fetchCart(addressCart.id, { storeId: checkoutStoreId })
+      setCart(reloaded)
+      onCartUpdated(reloaded)
+      const shipping = await loadShippingOptionsForCart(reloaded)
+      if (shipping.requiresShippingMethod) {
+        const firstAvailable = shipping.options.find((option) => option.available)
+        if (!firstAvailable) {
+          const message = "No shipping service is available for this delivery address."
+          setShippingError(message)
+          throw new Error(message)
+        }
+        await applyShippingOption(reloaded.id, firstAvailable.id)
+      }
+    } catch (reason) {
+      setAddressError(reason instanceof Error ? reason.message : "Unable to apply delivery address.")
+      throw reason
+    }
   }
 
-  const saveContactForCart = async (targetCart: StoreCart) => {
+  const createAndApplyAddress = async (input: BuyerCustomerAddressInput) => {
+    const refreshed = await createCustomerAddress(input)
+    setSavedAddresses(refreshed)
+    const created =
+      input.id ? refreshed.find((entry) => entry.id === input.id) : undefined
+    const matched =
+      created ??
+      refreshed.find((entry) =>
+        entry.address1 === input.address1.trim() &&
+        entry.city === input.city.trim() &&
+        entry.postalCode === input.postalCode.trim() &&
+        entry.countryCode === input.countryCode.trim().toLowerCase()
+      ) ??
+      refreshed.find((entry) => entry.isDefaultShipping) ??
+      refreshed[0]
+    if (matched) {
+      await applySavedAddressToCheckout(matched)
+    }
+  }
+
+  const saveContactForCart = async (targetCart: StoreCart, nextContact = contact) => {
     setContactStatus("saving")
     setContactError(undefined)
     try {
       const updated = await updateCartContact(targetCart.id, {
-        email: contact.email.trim(),
-        phone: contact.phone.trim() || undefined,
+        email: nextContact.email.trim(),
+        phone: nextContact.phone.trim() || undefined,
       })
       setCart(updated)
       onCartUpdated(updated)
@@ -576,26 +735,23 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     }
   }
 
-  const handleSaveContact = async () => {
-    if (!cart) throw new Error("Checkout cart is unavailable.")
-    return saveContactForCart(cart)
-  }
-
-  const handleSelectShippingMethod = async (optionId: string) => {
-    if (!cart) return
-    try {
-      await applyShippingOption(cart.id, optionId)
-    } catch {
-      // Error UI is handled inside applyShippingOption.
-    }
-  }
+  useEffect(() => {
+    if (!cart?.id || !auth.customer || !selectedSavedAddress || loading) return
+    const applyKey = `${cart.id}:${selectedSavedAddress.id}`
+    if (autoAppliedAddressRef.current === applyKey) return
+    autoAppliedAddressRef.current = applyKey
+    void applySavedAddressToCheckout(selectedSavedAddress).catch((reason) => {
+      console.warn("[checkout] unable to auto-apply default delivery address", reason)
+    })
+  }, [auth.customer, cart?.id, loading, selectedSavedAddress])
 
   const handlePlaceOrder = async (
     providerId = selectedPaymentProviderId,
     propagateCompleteError = false,
     stripePaymentMethodLabel?: string
   ) => {
-    if (!cart || !canPlaceOrder) return
+    if (placeOrderInFlightRef.current || !cart || !canPlaceOrder) return
+    placeOrderInFlightRef.current = true
     setPlacingOrder(true)
     setCompleteError(undefined)
     try {
@@ -650,7 +806,9 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
 
       const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
       const splitKey = `citigoo:${storeId}:split_checkout`
-      const splitRaw = window.sessionStorage.getItem(splitKey)
+      const splitRaw =
+        window.sessionStorage.getItem(splitKey) ??
+        window.localStorage.getItem(splitKey)
       let split: { sourceCartId?: string; checkoutCartId?: string; selectedLineIds?: string[] } | null = null
       if (splitRaw) {
         try {
@@ -662,6 +820,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         } catch (parseError) {
           console.warn("[checkout] invalid split checkout payload", parseError)
           window.sessionStorage.removeItem(splitKey)
+          window.localStorage.removeItem(splitKey)
         }
       }
       if (split?.checkoutCartId === cart.id && split.sourceCartId) {
@@ -679,6 +838,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         }
         if (failedLineIds.length) {
           // Keep split state so a later refresh can retry cleanup without losing source cart.
+          window.localStorage.setItem(
+            splitKey,
+            JSON.stringify({
+              ...split,
+              selectedLineIds: failedLineIds,
+            })
+          )
           window.sessionStorage.setItem(
             splitKey,
             JSON.stringify({
@@ -690,6 +856,7 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
         } else {
           registerStoreCart(window.localStorage, cartIdentity, storeId, split.sourceCartId)
           window.sessionStorage.removeItem(splitKey)
+          window.localStorage.removeItem(splitKey)
         }
       } else {
         unregisterStoreCart(window.localStorage, cartIdentity, storeId)
@@ -713,11 +880,13 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
       if (propagateCompleteError) throw completeErrorValue
     } finally {
       setPlacingOrder(false)
+      placeOrderInFlightRef.current = false
     }
   }
 
   const handlePayWithSavedMethod = async (paymentMethodId: string) => {
-    if (!cart || placingOrder || !canPlaceOrder) return
+    if (placeOrderInFlightRef.current || !cart || placingOrder || !canPlaceOrder) return
+    placeOrderInFlightRef.current = true
     setPlacingOrder(true)
     setCompleteError(undefined)
     let paymentMethodLabel: string | undefined
@@ -730,14 +899,16 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
     } catch (reason) {
       setCompleteError(reason instanceof Error ? reason.message : "Unable to pay with saved card.")
       setPlacingOrder(false)
+      placeOrderInFlightRef.current = false
       return
     }
     setPlacingOrder(false)
+    placeOrderInFlightRef.current = false
     await handlePlaceOrder(selectedPaymentProviderId, true, paymentMethodLabel)
   }
 
   return (
-    <PageShell className="buyer-checkout-page" contentClassName="buyer-checkout-shell-content" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
+    <PageShell className="buyer-checkout-page" contentClassName="buyer-checkout-shell-content" header={<StoreTopBar settings={settings} cartCount={checkoutHeaderCartCount} />} footer={<StoreFooter />}>
       <header className="buyer-checkout-page-header">
         <div>
           <p>Secure checkout</p>
@@ -759,98 +930,106 @@ export function CheckoutPage({ cartCount, onCartUpdated }: CheckoutPageProps) {
               {completeError ? <CheckoutCompleteError message={completeError} /> : null}
               <CheckoutAddressCard
                 value={address}
-                onChange={(next) => { setUsingNewAddress(true); setSelectedAddressId(""); setAddress(next); setAddressSaved(false) }}
-                onSave={() => void handleSaveAddress()}
+                onSave={() => {
+                  if (!selectedSavedAddress) return
+                  void applySavedAddressToCheckout(selectedSavedAddress).catch(() => undefined)
+                }}
                 required={requiresShippingMethod}
-                saving={addressSaving}
+                saving={addressSaving || shippingLoading}
                 saved={addressSaved}
-                error={addressError}
+                error={addressError || shippingError}
                 savedAddresses={savedAddresses}
                 selectedAddressId={selectedAddressId}
-                onSelectSavedAddress={(saved) => selectSavedAddress(saved)}
-                onUseNewAddress={() => { setUsingNewAddress(true); setSelectedAddressId(""); setAddress(initialAddress); setAddressSaved(false) }}
-                saveToAddressBook={saveToAddressBook}
-                onSaveToAddressBookChange={setSaveToAddressBook}
-                canSaveToAddressBook={Boolean(auth.customer && !selectedAddressId)}
+                onSelectSavedAddress={(saved) => void applySavedAddressToCheckout(saved).catch(() => undefined)}
+                onCreateAddress={auth.customer ? createAndApplyAddress : undefined}
                 contact={contact}
-                onContactChange={(nextContact) => { setContactTouched(true); setContact(nextContact) }}
-                onSaveContact={() => { void handleSaveContact().catch(() => undefined) }}
                 contactStatus={contactStatus}
                 contactError={contactError}
                 emailVerified={emailVerified}
               />
-              <CheckoutShippingCard required={requiresShippingMethod} addressSaved={addressSaved} loading={shippingLoading} error={shippingError} options={shippingOptions} selectedId={selectedShippingOptionId} methodSaved={shippingMethodSaved} onSelect={(id) => void handleSelectShippingMethod(id)} />
+              <CheckoutSummaryCard
+                cart={cart}
+                canPlaceOrder={
+                  canPlaceOrder &&
+                  !paypalSelected &&
+                  (!stripeSelected ||
+                    (Boolean(selectedSavedPaymentMethodId) && recoveryAction === "confirm_payment"))
+                }
+                showPayButton={!paypalSelected && (!stripeSelected || (Boolean(selectedSavedPaymentMethodId) && recoveryAction === "confirm_payment"))}
+                onPlaceOrder={() => {
+                  if (selectedSavedPaymentMethodId) {
+                    void handlePayWithSavedMethod(selectedSavedPaymentMethodId)
+                    return
+                  }
+                  void handlePlaceOrder()
+                }}
+                placing={placingOrder}
+                shippingAmount={shippingMethodSaved ? selectedShippingOption?.amount ?? 0 : undefined}
+                pricing={checkoutPricing}
+                coupons={walletCoupons}
+                couponsLoading={couponsLoading}
+                couponError={couponError}
+                onApplyCoupon={(walletId) => {
+                  if (!cart) return
+                  setCouponError(undefined)
+                  void applyCartCoupon(cart.id, walletId)
+                    .then((pricing) => {
+                      setCheckoutPricing(pricing)
+                      return fetchMyCoupons("all")
+                    })
+                    .then(setWalletCoupons)
+                    .catch((reason) => {
+                      setCouponError(reason instanceof Error ? reason.message : "Unable to apply coupon")
+                    })
+                }}
+                onClearCoupon={() => {
+                  if (!cart) return
+                  setCouponError(undefined)
+                  void clearCartCoupon(cart.id)
+                    .then((pricing) => {
+                      setCheckoutPricing(pricing)
+                      return fetchMyCoupons("all")
+                    })
+                    .then(setWalletCoupons)
+                    .catch((reason) => {
+                    setCouponError(reason instanceof Error ? reason.message : "Unable to clear coupon")
+                    })
+                }}
+              />
               <CheckoutPaymentPanel
                 providers={paymentProviders}
                 selectedProviderId={selectedPaymentProviderId}
                 onProviderChange={(providerId) => {
+                  if (providerId === selectedPaymentProviderId) return
                   setSelectedPaymentProviderId(providerId)
                   setPaymentSession(null)
+                  setPaymentRecovery(null)
                   setPaymentError(undefined)
                 }}
                 session={paymentSession}
                 stripePublishableKey={stripePublishableKey}
+                paypalClientId={paypalClientId}
+                currencyCode={cart.currencyCode}
+                amountMinor={Number.isFinite(cart.total) ? Math.round(cart.total * 100) : undefined}
                 preparing={paymentPreparing}
                 waitingForShipping={requiresShippingMethod && !shippingMethodSaved}
                 error={paymentError}
-                canSubmit={canPlaceOrder}
+                canSubmit={canPlaceOrder && paymentSessionReady}
                 placing={placingOrder}
                 savedPaymentMethods={savedPaymentMethods}
                 selectedSavedPaymentMethodId={selectedSavedPaymentMethodId}
                 onSavedPaymentMethodChange={setSelectedSavedPaymentMethodId}
+                recoveryAction={recoveryAction}
                 onStripeComplete={(paymentMethodLabel) =>
                   handlePlaceOrder(selectedPaymentProviderId, true, paymentMethodLabel)
                 }
+                onPayPalComplete={() => handlePlaceOrder(selectedPaymentProviderId, true)}
+                onPaymentError={(message) => setPaymentError(message || undefined)}
+              />
+              <CheckoutPaymentRecoveryBanner
+                attempt={paymentRecovery?.paymentAttempt ?? null}
               />
             </div>
-            <CheckoutSummaryCard
-              cart={cart}
-              canPlaceOrder={canPlaceOrder && (!stripeSelected || Boolean(selectedSavedPaymentMethodId))}
-              disabledReason={
-                stripeSelected && canPlaceOrder && !selectedSavedPaymentMethodId
-                  ? "Confirm payment in Step 3, or choose a saved card."
-                  : placeOrderDisabledReason
-              }
-              onPlaceOrder={() => {
-                if (selectedSavedPaymentMethodId) {
-                  void handlePayWithSavedMethod(selectedSavedPaymentMethodId)
-                  return
-                }
-                void handlePlaceOrder()
-              }}
-              placing={placingOrder}
-              shippingAmount={shippingMethodSaved ? selectedShippingOption?.amount ?? 0 : undefined}
-              pricing={checkoutPricing}
-              coupons={walletCoupons}
-              couponsLoading={couponsLoading}
-              couponError={couponError}
-              onApplyCoupon={(walletId) => {
-                if (!cart) return
-                setCouponError(undefined)
-                void applyCartCoupon(cart.id, walletId)
-                  .then((pricing) => {
-                    setCheckoutPricing(pricing)
-                    return fetchMyCoupons("all")
-                  })
-                  .then(setWalletCoupons)
-                  .catch((reason) => {
-                    setCouponError(reason instanceof Error ? reason.message : "Unable to apply coupon")
-                  })
-              }}
-              onClearCoupon={() => {
-                if (!cart) return
-                setCouponError(undefined)
-                void clearCartCoupon(cart.id)
-                  .then((pricing) => {
-                    setCheckoutPricing(pricing)
-                    return fetchMyCoupons("all")
-                  })
-                  .then(setWalletCoupons)
-                  .catch((reason) => {
-                    setCouponError(reason instanceof Error ? reason.message : "Unable to clear coupon")
-                  })
-              }}
-            />
           </section>
       ) : null}
     </PageShell>

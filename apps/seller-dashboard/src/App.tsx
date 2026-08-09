@@ -7,6 +7,7 @@ import { ProductListPage } from "./pages/Products/ProductList"
 import { EditDraftPage } from "./pages/Products/EditDraft"
 import { OrderListPage } from "./pages/Orders/OrderList"
 import { OrderFulfillmentPage } from "./pages/Orders/OrderFulfillment"
+import { RefundRequestsPage } from "./pages/Orders/RefundRequests"
 import { SettingsPage } from "./pages/Settings"
 import { CreateProductPage } from "./pages/AiStudio/CreateProduct"
 import { GenerationProgressPage } from "./pages/AiStudio/GenerationProgress"
@@ -49,6 +50,7 @@ export default function App() {
         />
         <Route path="orders" element={<OrderListPage />} />
         <Route path="orders/:orderId/fulfillment" element={<OrderFulfillmentPage />} />
+        <Route path="refund-requests" element={<RefundRequestsPage />} />
         <Route path="coupons" element={<CouponsPage />} />
         <Route path="followers" element={<FollowersPage />} />
         <Route path="reviews" element={<ProductReviewsPage />} />

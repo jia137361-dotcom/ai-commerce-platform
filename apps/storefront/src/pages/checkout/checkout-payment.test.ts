@@ -1,6 +1,7 @@
 import {
   chooseDefaultPaymentProvider,
   confirmStripePaymentAndComplete,
+  confirmStripeWalletPaymentAndComplete,
   hasValidStripeClientSecret,
   STRIPE_ORDER_CREATION_FAILED_MESSAGE,
 } from "./checkout-payment"
@@ -88,5 +89,29 @@ describe("Stripe checkout payment state", () => {
       complete,
     })).rejects.toThrow(STRIPE_ORDER_CREATION_FAILED_MESSAGE)
     expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it("confirms the existing Stripe PaymentIntent before completing a wallet order once", async () => {
+    const complete = jest.fn().mockResolvedValue({ orderId: "order_1" })
+    const elements = { submit: jest.fn().mockResolvedValue({}) }
+    await expect(confirmStripeWalletPaymentAndComplete({
+      stripe: { confirmPayment: jest.fn().mockResolvedValue({ paymentIntent: { status: "succeeded", payment_method_types: ["card"] } }) } as never,
+      elements: elements as never,
+      returnUrl: "http://localhost/checkout",
+      complete,
+    })).resolves.toEqual({ result: { orderId: "order_1" }, paymentMethodLabel: "Card" })
+    expect(elements.submit).toHaveBeenCalledTimes(1)
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not complete a wallet order when Elements rejects it", async () => {
+    const complete = jest.fn()
+    await expect(confirmStripeWalletPaymentAndComplete({
+      stripe: { confirmPayment: jest.fn() } as never,
+      elements: { submit: jest.fn().mockResolvedValue({ error: { message: "Wallet unavailable" } }) } as never,
+      returnUrl: "http://localhost/checkout",
+      complete,
+    })).rejects.toThrow("Wallet unavailable")
+    expect(complete).not.toHaveBeenCalled()
   })
 })

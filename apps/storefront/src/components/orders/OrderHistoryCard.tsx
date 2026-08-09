@@ -1,11 +1,13 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   createRefundRequest,
   formatBuyerMoney,
   readBuyerPreferences,
   reorderItemsToCheckout,
+  setActiveBuyerStoreId,
   type BuyerOrderSummary,
 } from "../../lib/buyer-api"
+import { readdItemsToCart } from "../../lib/buyer-reorder-cart"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   buildViewReviewHref,
@@ -38,6 +40,20 @@ type OrderHistoryCardProps = {
 
 const MAX_THUMBS = 5
 
+const readReservationRemainingMs = (expiresAt?: string | null, now = Date.now()) => {
+  if (!expiresAt) return 0
+  const parsed = Date.parse(expiresAt)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(0, parsed - now)
+}
+
+const formatReservationCountdown = (remainingMs: number) => {
+  const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${String(seconds).padStart(2, "0")}`
+}
+
 export function OrderHistoryCard({
   order,
   storeName = "Store",
@@ -60,9 +76,17 @@ export function OrderHistoryCard({
   const [openReviewAfterConfirm, setOpenReviewAfterConfirm] = useState(false)
   const [orderAgainLoading, setOrderAgainLoading] = useState(false)
   const [orderAgainError, setOrderAgainError] = useState<string>()
+  const [reservationRemainingMs, setReservationRemainingMs] = useState(() =>
+    readReservationRemainingMs(order.paymentExpiresAt)
+  )
   const viewReviewHref = buildViewReviewHref(order)
   const detailHref = `/account/orders/${encodeURIComponent(order.orderId)}`
   const againHref = orderAgainHref(order)
+  const isCheckoutReservation = order.orderKind === "checkout_reservation"
+  const isCheckoutReservationExpired =
+    isCheckoutReservation &&
+    (order.paymentAttemptStatus === "expired" ||
+      (Boolean(order.paymentExpiresAt) && reservationRemainingMs <= 0))
   const totalLabel =
     order.total != null ? formatBuyerMoney(order.total, order.currencyCode ?? undefined) : "—"
   const thumbs = order.previewItems.slice(0, MAX_THUMBS)
@@ -92,6 +116,43 @@ export function OrderHistoryCard({
     }
   }
 
+  const handleReAddReservationToCart = async () => {
+    if (orderAgainLoading) return
+    const lines = collectReorderLinesFromSummary(order)
+    if (!lines.length) {
+      window.location.assign(againHref)
+      return
+    }
+    setOrderAgainLoading(true)
+    setOrderAgainError(undefined)
+    try {
+      const storeId = order.storeId?.trim() || "default_store"
+      const reservedCartIds = order.checkoutCartId ? [order.checkoutCartId] : []
+      const { cartHref } = await readdItemsToCart({
+        storeId,
+        storeName,
+        countryCode: readBuyerPreferences(auth.customer).countryCode,
+        items: lines,
+        customerId: auth.customer?.id ?? null,
+        reservedCartIds,
+      })
+      window.location.assign(cartHref)
+    } catch (error) {
+      setOrderAgainError(error instanceof Error ? error.message : "Unable to re-add items to cart.")
+      setOrderAgainLoading(false)
+    }
+  }
+
+  const handleContinuePayment = () => {
+    if (isCheckoutReservationExpired) return
+    const storeId = order.storeId?.trim() || "default_store"
+    setActiveBuyerStoreId(storeId)
+    const href = order.checkoutRecoveryHref || `/checkout?store=${encodeURIComponent(storeId)}`
+    const url = new URL(href, window.location.origin)
+    if (order.checkoutCartId) url.searchParams.set("cart_id", order.checkoutCartId)
+    window.location.assign(`${url.pathname}${url.search}${url.hash}`)
+  }
+
   const orderAgainButton = (
     <Button
       variant="secondary"
@@ -103,6 +164,14 @@ export function OrderHistoryCard({
       {orderAgainLoading ? "Preparing…" : "Order again"}
     </Button>
   )
+
+  useEffect(() => {
+    if (!isCheckoutReservation) return
+    const syncRemaining = () => setReservationRemainingMs(readReservationRemainingMs(order.paymentExpiresAt))
+    syncRemaining()
+    const interval = window.setInterval(syncRemaining, 1000)
+    return () => window.clearInterval(interval)
+  }, [isCheckoutReservation, order.paymentExpiresAt])
 
   const runConfirm = async (andReview: boolean) => {
     if (!onConfirmReceipt) return
@@ -134,6 +203,7 @@ export function OrderHistoryCard({
           kind === "return"
             ? "Buyer requested return and refund after confirming receipt."
             : "Buyer requested refund only after confirming receipt.",
+        idempotencyKey: window.crypto.randomUUID(),
       })
       onRefundSubmitted?.()
       window.location.reload()
@@ -185,11 +255,40 @@ export function OrderHistoryCard({
           ) : null}
         </div>
 
+        {isCheckoutReservation ? (
+          <div
+            className={`buyer-order-history-reservation${isCheckoutReservationExpired ? " is-expired" : ""}`}
+          >
+            <span>{isCheckoutReservationExpired ? "Payment window expired" : "Payment reserved for"}</span>
+            <strong>
+              {isCheckoutReservationExpired
+                ? "Re-add items to cart to buy again."
+                : order.paymentExpiresAt
+                  ? formatReservationCountdown(reservationRemainingMs)
+                  : "Pending"}
+            </strong>
+          </div>
+        ) : null}
+
         <footer className="buyer-order-history-card-actions">
           <nav aria-label={`Order ${order.displayId ?? order.orderId} actions`}>
             {isUnpaid ? (
               <>
-                {onCancelOrder ? (
+                {isCheckoutReservation && !isCheckoutReservationExpired ? (
+                  <Button variant="secondary" onClick={handleContinuePayment}>
+                    Continue payment
+                  </Button>
+                ) : isCheckoutReservation ? (
+                  <Button
+                    variant="secondary"
+                    loading={orderAgainLoading}
+                    onClick={() => {
+                      void handleReAddReservationToCart()
+                    }}
+                  >
+                    {orderAgainLoading ? "Re-adding…" : "Re-add to cart"}
+                  </Button>
+                ) : onCancelOrder ? (
                   <Button variant="secondary" onClick={() => onCancelOrder(order.orderId)}>
                     Cancel order
                   </Button>
@@ -198,7 +297,13 @@ export function OrderHistoryCard({
                     Cancel order
                   </Button>
                 )}
-                {orderAgainButton}
+                {isCheckoutReservation && !isCheckoutReservationExpired ? (
+                  <Button variant="ghost" href="/cart">
+                    Return to cart
+                  </Button>
+                ) : !isCheckoutReservation ? (
+                  orderAgainButton
+                ) : null}
               </>
             ) : null}
 

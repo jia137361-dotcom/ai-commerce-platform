@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { OrderDetailAddress } from "../../components/orders/OrderDetailAddress"
 import { OrderDetailActions } from "../../components/orders/OrderDetailActions"
 import { OrderDetailEmptyState } from "../../components/orders/OrderDetailEmptyState"
@@ -20,13 +20,24 @@ import {
   getBuyerStoreId,
   getAuthenticatedOrderDetail,
   getOrderDetail,
+  listRefundRequests,
+  formatBuyerMoney,
+  updateRefundRequest,
   readBuyerPreferences,
   reorderItemsToCheckout,
   type BuyerOrderDetail,
+  type BuyerRefundRequest,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { resolveOrderDetailActions } from "./order-detail-state"
 import { collectReorderLinesFromDetail, orderAgainHref } from "./order-history-display"
+import {
+  buildRefundSelection,
+  canBuyerCancelRefund,
+  canBuyerProvideRefundInformation,
+  REFUND_REASONS,
+  refundStatusLabel,
+} from "./refund-request-state"
 
 type OrderDetailPageProps = {
   orderId: string
@@ -65,6 +76,12 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const [refundSubmitting, setRefundSubmitting] = useState(false)
   const [refundError, setRefundError] = useState<string | undefined>()
   const [refundSuccess, setRefundSuccess] = useState<string | undefined>()
+  const [refundQuantities, setRefundQuantities] = useState<Record<string, number>>({})
+  const [refundRequests, setRefundRequests] = useState<BuyerRefundRequest[]>([])
+  const [refundActionNotes, setRefundActionNotes] = useState<Record<string, string>>({})
+  const [refundActionBusy, setRefundActionBusy] = useState<string | null>(null)
+  const [refundActionError, setRefundActionError] = useState<string | undefined>()
+  const refundIdempotencyKeyRef = useRef<string | null>(null)
   const [orderAgainLoading, setOrderAgainLoading] = useState(false)
   const [orderAgainError, setOrderAgainError] = useState<string | undefined>()
 
@@ -90,6 +107,17 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
           : await getOrderDetail(orderId, email)
         if (!active) return
         setOrder(result)
+        if (auth.customer) {
+          try {
+            const requests = await listRefundRequests(orderId)
+            if (active) setRefundRequests(requests)
+          } catch (refundLoadError) {
+            console.warn("[order-detail] unable to load refund history", refundLoadError)
+            if (active) setRefundRequests(result.refundRequest?.openRequest ? [result.refundRequest.openRequest] : [])
+          }
+        } else {
+          setRefundRequests([])
+        }
       } catch (detailError) {
         if (!active) return
         setOrder(null)
@@ -117,6 +145,9 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   })
   const canCancel = actionState.showCancel
   const canRequestRefund = actionState.showRequestRefund
+  const refundSelection = order
+    ? buildRefundSelection(order.items, refundQuantities, order.total)
+    : { items: [], fullOrder: false, estimatedAmount: 0 }
 
   const handleOrderAgain = async () => {
     if (!order || orderAgainLoading) return
@@ -179,13 +210,20 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
       setRefundError("Select a reason for the refund request.")
       return
     }
+    if (!refundSelection.items.length) {
+      setRefundError("Select at least one item and quantity.")
+      return
+    }
     setRefundSubmitting(true)
     setRefundError(undefined)
     setRefundSuccess(undefined)
     try {
+      refundIdempotencyKeyRef.current ??= window.crypto.randomUUID()
       const request = await createRefundRequest(order.orderId, {
         reason: refundReason,
         note: refundNote,
+        items: refundSelection.fullOrder ? undefined : refundSelection.items,
+        idempotencyKey: refundIdempotencyKeyRef.current,
       })
       setOrder((current) => current ? {
         ...current,
@@ -197,9 +235,12 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
         },
       } : current)
       setRefundSuccess("Refund request submitted. Status: Pending review.")
+      setRefundRequests((current) => [request, ...current.filter((entry) => entry.id !== request.id)])
       setRefundOpen(false)
       setRefundReason("")
       setRefundNote("")
+      setRefundQuantities({})
+      refundIdempotencyKeyRef.current = null
     } catch (refundFailure) {
       setRefundError(
         refundFailure instanceof Error
@@ -208,6 +249,35 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
       )
     } finally {
       setRefundSubmitting(false)
+    }
+  }
+
+  const handleRefundAction = async (
+    request: BuyerRefundRequest,
+    action: "cancel" | "provide_information"
+  ) => {
+    if (!order || refundActionBusy) return
+    const note = refundActionNotes[request.id]?.trim()
+    if (action === "provide_information" && !note) {
+      setRefundActionError("Add the requested information before submitting.")
+      return
+    }
+    setRefundActionBusy(request.id)
+    setRefundActionError(undefined)
+    try {
+      const updated = await updateRefundRequest(order.orderId, request.id, { action, note })
+      setRefundRequests((current) => current.map((entry) => entry.id === updated.id ? updated : entry))
+      setOrder((current) => current ? {
+        ...current,
+        refundRequest: action === "cancel"
+          ? { allowed: true, code: null, message: null, openRequest: null }
+          : { allowed: false, code: "ORDER_REFUND_REQUEST_EXISTS", message: "A refund request is under review.", openRequest: updated },
+      } : current)
+      setRefundActionNotes((current) => ({ ...current, [request.id]: "" }))
+    } catch (actionError) {
+      setRefundActionError(actionError instanceof Error ? actionError.message : "Unable to update refund request.")
+    } finally {
+      setRefundActionBusy(null)
     }
   }
 
@@ -263,6 +333,8 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                   setCancelSuccess(undefined)
                 }}
                 onRequestRefund={() => {
+                  setRefundQuantities(Object.fromEntries(order.items.map((item) => [item.id, item.quantity])))
+                  refundIdempotencyKeyRef.current = null
                   setRefundOpen(true)
                   setRefundError(undefined)
                   setRefundSuccess(undefined)
@@ -272,6 +344,49 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                 refundSuccess={refundSuccess}
                 refundError={!refundOpen ? refundError : undefined}
               />
+              {refundRequests.length ? (
+                <section className="buyer-order-card buyer-order-refund-timeline" aria-label="Refund status">
+                  <h2>Refund status</h2>
+                  {refundActionError ? <p className="buyer-order-error" role="alert">{refundActionError}</p> : null}
+                  {refundRequests.map((request) => (
+                    <article key={request.id} className="buyer-order-refund-timeline-entry">
+                      <span aria-hidden="true" />
+                      <div>
+                        <strong>{refundStatusLabel(request)}</strong>
+                        <p>{request.reason.replace(/_/g, " ")}</p>
+                        <small>{request.updatedAt ?? request.createdAt ? new Date(request.updatedAt ?? request.createdAt!).toLocaleString() : "Status updated"}</small>
+                        {canBuyerProvideRefundInformation(request.status) ? (
+                          <div className="buyer-order-refund-followup">
+                            <TextArea
+                              label="Additional information"
+                              value={refundActionNotes[request.id] ?? ""}
+                              maxLength={1000}
+                              onChange={(event) => setRefundActionNotes((current) => ({ ...current, [request.id]: event.target.value }))}
+                            />
+                            <Button
+                              variant="primary"
+                              loading={refundActionBusy === request.id}
+                              onClick={() => void handleRefundAction(request, "provide_information")}
+                            >
+                              Submit information
+                            </Button>
+                          </div>
+                        ) : null}
+                        {canBuyerCancelRefund(request.status) ? (
+                          <Button
+                            variant="ghost"
+                            disabled={Boolean(refundActionBusy)}
+                            onClick={() => void handleRefundAction(request, "cancel")}
+                          >
+                            Cancel request
+                          </Button>
+                        ) : null}
+                      </div>
+                      <b>{formatBuyerMoney(request.approvedAmount ?? request.requestedAmount, request.currencyCode ?? order.currencyCode ?? undefined)}</b>
+                    </article>
+                  ))}
+                </section>
+              ) : null}
             </section>
           </>
         )}
@@ -318,7 +433,7 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
               <Button
                 variant="primary"
                 loading={refundSubmitting}
-                disabled={!refundReason}
+                disabled={!refundReason || !refundSelection.items.length}
                 onClick={() => void submitRefundRequest()}
               >
                 {refundSubmitting ? "Submitting..." : "Submit request"}
@@ -327,17 +442,51 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
           )}
         >
             {refundError ? <p className="buyer-order-error">{refundError}</p> : null}
+            <fieldset className="buyer-order-refund-items">
+              <legend>Items and quantity</legend>
+              {order.items.map((item) => {
+                const quantity = refundQuantities[item.id] ?? 0
+                return (
+                  <div className="buyer-order-refund-item" key={item.id}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={quantity > 0}
+                        onChange={(event) => setRefundQuantities((current) => ({
+                          ...current,
+                          [item.id]: event.target.checked ? item.quantity : 0,
+                        }))}
+                      />
+                      <span>{item.title}</span>
+                    </label>
+                    <input
+                      aria-label={`Refund quantity for ${item.title}`}
+                      type="number"
+                      min="1"
+                      max={item.quantity}
+                      disabled={quantity === 0}
+                      value={quantity || ""}
+                      onChange={(event) => setRefundQuantities((current) => ({
+                        ...current,
+                        [item.id]: Math.min(item.quantity, Math.max(1, Number(event.target.value) || 1)),
+                      }))}
+                    />
+                  </div>
+                )
+              })}
+            </fieldset>
+            <div className="buyer-order-refund-estimate">
+              <span>Estimated request</span>
+              <strong>{formatBuyerMoney(refundSelection.estimatedAmount, order.currencyCode ?? undefined)}</strong>
+              <small>Final eligible amount is calculated by the payment service.</small>
+            </div>
             <SelectField
               label="Reason"
               value={refundReason}
               onChange={(event) => setRefundReason(event.target.value)}
             >
                 <option value="">Select a reason</option>
-                <option value="Ordered by mistake">Ordered by mistake</option>
-                <option value="Wrong item">Wrong item</option>
-                <option value="Item damaged">Item damaged</option>
-                <option value="Item not received">Item not received</option>
-                <option value="Other">Other</option>
+                {REFUND_REASONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
             </SelectField>
             <TextArea
               label="Additional note optional"

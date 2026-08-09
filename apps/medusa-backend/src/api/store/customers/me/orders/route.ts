@@ -5,6 +5,13 @@ import { readOrderStoreId } from "../../../../../lib/order-store-context"
 import { assertActiveCustomer } from "../../../../../lib/customer-session"
 import { STORE_CORE_MODULE } from "../../../../../modules/store-core"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../../modules/buyer-refund-requests"
+import { CHECKOUT_PAYMENT_ATTEMPTS_MODULE } from "../../../../../modules/checkout-payment-attempts"
+import type CheckoutPaymentAttemptsModuleService from "../../../../../modules/checkout-payment-attempts/service"
+import {
+  isActiveCheckoutPaymentAttemptStatus,
+  isCheckoutPaymentAttemptExpired,
+  type CheckoutPaymentAttemptRecord,
+} from "../../../../../lib/checkout-payment-attempts"
 import { matchesBuyerOrderBucket } from "../../../../../lib/customer-order-buckets"
 import {
   buyerOrderDisplayStatusLabel,
@@ -35,6 +42,11 @@ type CustomerOrder = {
   id?: string
   display_id?: string | number | null
   displayId?: string | number | null
+  order_kind?: "order" | "checkout_reservation"
+  checkout_cart_id?: string | null
+  checkout_recovery_href?: string | null
+  payment_expires_at?: string | null
+  payment_attempt_status?: string | null
   customer_id?: string | null
   email?: string | null
   status?: string | null
@@ -165,6 +177,13 @@ const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<
   return {
     order_id: order.id ?? "",
     display_id: readDisplayId(order),
+    order_kind: order.order_kind ?? "order",
+    checkout_cart_id: order.checkout_cart_id ?? null,
+    checkout_recovery_href: order.checkout_recovery_href ?? null,
+    payment_expires_at: order.payment_expires_at ?? null,
+    payment_attempt_status:
+      order.payment_attempt_status ??
+      (typeof metadata?.payment_attempt_status === "string" ? metadata.payment_attempt_status : null),
     created_at: dateValue(order.created_at),
     email: order.email ?? null,
     status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
@@ -279,6 +298,109 @@ const loadCustomerOrders = async (
   return { orders: moduleOrders, source: "order_module" }
 }
 
+type CheckoutPaymentAttemptService = CheckoutPaymentAttemptsModuleService & {
+  listCheckoutPaymentAttempts: (
+    filters: Record<string, unknown>,
+    config?: Record<string, unknown>
+  ) => Promise<CheckoutPaymentAttemptRecord[]>
+  updateCheckoutPaymentAttempts: (input: Record<string, unknown>) => Promise<unknown>
+}
+
+const isPayableReservationStatus = (status?: string | null) =>
+  isActiveCheckoutPaymentAttemptStatus(status) &&
+  status !== "payment_succeeded" &&
+  status !== "completed"
+
+const isDisplayableReservationStatus = (status?: string | null) =>
+  status === "expired" || isPayableReservationStatus(status)
+
+const loadCheckoutReservationSummaries = async (
+  req: MedusaRequest,
+  input: { customerId: string; storeId: string; platformScope: boolean }
+): Promise<CustomerOrder[]> => {
+  let service: CheckoutPaymentAttemptService
+  try {
+    service = req.scope.resolve(CHECKOUT_PAYMENT_ATTEMPTS_MODULE) as CheckoutPaymentAttemptService
+  } catch {
+    return []
+  }
+
+  const attempts = await service.listCheckoutPaymentAttempts(
+    input.platformScope
+      ? { customer_id: [input.customerId] }
+      : { customer_id: [input.customerId], store_id: [input.storeId] },
+    { order: { created_at: "DESC" }, take: 100 }
+  )
+  const cartModule = req.scope.resolve(Modules.CART)
+  const reservations: CustomerOrder[] = []
+
+  for (const attempt of attempts) {
+    const expired = attempt.status === "expired" || isCheckoutPaymentAttemptExpired(attempt)
+    const reservationStatus = expired ? "expired" : attempt.status ?? "created"
+    if (!isDisplayableReservationStatus(reservationStatus)) continue
+
+    if (expired && attempt.status !== "expired") {
+      await service.updateCheckoutPaymentAttempts({
+        id: attempt.id,
+        status: "expired",
+        last_error: attempt.last_error ?? "Payment window expired.",
+      })
+    }
+
+    try {
+      const cart = await cartModule.retrieveCart(attempt.cart_id!, {
+        relations: ["items"],
+      } as never) as {
+        id: string
+        email?: string | null
+        customer_id?: string | null
+        created_at?: string | Date | null
+        currency_code?: string | null
+        total?: number | string | null
+        items?: Array<{
+          title?: string | null
+          thumbnail?: string | null
+          quantity?: number | string | null
+          variant_id?: string | null
+          metadata?: Record<string, unknown> | null
+        }> | null
+      }
+      if (cart.customer_id && cart.customer_id !== input.customerId) continue
+      const storeId = attempt.store_id ?? input.storeId
+      reservations.push({
+        id: attempt.id,
+        display_id: `PAY-${attempt.id.slice(-6).toUpperCase()}`,
+        order_kind: "checkout_reservation",
+        checkout_cart_id: attempt.cart_id ?? null,
+        checkout_recovery_href: expired
+          ? null
+          : `/checkout?store=${encodeURIComponent(storeId)}&cart_id=${encodeURIComponent(attempt.cart_id ?? "")}`,
+        payment_expires_at: dateValue(attempt.expires_at),
+        payment_attempt_status: reservationStatus,
+        customer_id: input.customerId,
+        email: cart.email ?? null,
+        status: "pending",
+        created_at: dateValue(attempt.created_at) ?? dateValue(cart.created_at),
+        currency_code: cart.currency_code ?? "usd",
+        total: readNumber(cart.total),
+        metadata: {
+          store_id: storeId,
+          payment_status: expired ? "expired" : "pending",
+          payment_attempt_status: reservationStatus,
+          fulfillment_status: "none",
+          checkout_cart_id: attempt.cart_id,
+          payment_attempt_id: attempt.id,
+        },
+        items: cart.items ?? [],
+      })
+    } catch {
+      // A missing cart means the reservation can no longer be resumed.
+    }
+  }
+
+  return reservations
+}
+
 const assertOwnershipWasEnforced = (
   selector: Record<string, unknown>,
   customerId: string
@@ -365,8 +487,20 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     } catch {
       // Optional aggregates remain empty if a module is unavailable.
     }
+    const reservations = await loadCheckoutReservationSummaries(req, {
+      customerId,
+      storeId,
+      platformScope,
+    })
+    const mergedOrders = reservations.length
+      ? [...filtered, ...reservations].sort((a, b) => {
+          const aTime = Date.parse(dateValue(a.created_at) ?? "") || 0
+          const bTime = Date.parse(dateValue(b.created_at) ?? "") || 0
+          return bTime - aTime
+        })
+      : filtered
     const bucketed = bucket
-      ? filtered.filter((order) =>
+      ? mergedOrders.filter((order) =>
           matchesBuyerOrderBucket({
             bucket,
             status: order.canceled_at || order.cancelled_at ? "cancelled" : order.status ?? null,
@@ -383,7 +517,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
             returnOrderIds,
           })
         )
-      : filtered
+      : mergedOrders
     const page = bucketed.slice(offset, offset + limit)
     const applyPreviewImages = async (ordersPage: CustomerOrder[]) => {
       const withSyncThumbnails = ordersPage.map((order) => ({

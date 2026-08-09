@@ -19,15 +19,34 @@ export function CartSummaryCard({
   const checkoutReady = canCheckoutCart(cart)
   return (
     <Card as="aside" className="buyer-cart-summary-card">
-      <header><p>Order summary</p><h2>{itemCount} item{itemCount === 1 ? "" : "s"}</h2></header>
+      <header>
+        <p>Order summary</p>
+        <h2>
+          {itemCount} item{itemCount === 1 ? "" : "s"}
+        </h2>
+      </header>
       <dl>
-        <div><dt>Subtotal</dt><dd><MoneyText amount={cart.hasSubtotal === false ? undefined : cart.subtotal} currencyCode={cart.currencyCode} /></dd></div>
-        <div><dt>Shipping</dt><dd>Calculated at checkout</dd></div>
-        <div className="total"><dt>Total</dt><dd><MoneyText amount={cart.hasTotal === false ? undefined : cart.total} currencyCode={cart.currencyCode} /></dd></div>
+        <div>
+          <dt>Subtotal</dt>
+          <dd>
+            <MoneyText amount={cart.hasSubtotal === false ? undefined : cart.subtotal} currencyCode={cart.currencyCode} />
+          </dd>
+        </div>
+        <div>
+          <dt>Shipping</dt>
+          <dd>Calculated at checkout</dd>
+        </div>
+        <div className="total">
+          <dt>Total</dt>
+          <dd>
+            <MoneyText amount={cart.hasTotal === false ? undefined : cart.total} currencyCode={cart.currencyCode} />
+          </dd>
+        </div>
       </dl>
       {!checkoutReady ? <p className="buyer-cart-summary-warning">Resolve unavailable items or missing prices before checkout.</p> : null}
-      <Button href={onCheckout ? undefined : "/checkout"} onClick={onCheckout} disabled={!checkoutReady || preparing}>{preparing ? "Preparing checkout…" : checkoutLabel}</Button>
-      <Button variant="ghost" href="/">Continue shopping</Button>
+      <Button href={onCheckout ? undefined : "/checkout"} onClick={onCheckout} disabled={!checkoutReady || preparing}>
+        {preparing ? "Preparing checkout…" : checkoutLabel}
+      </Button>
     </Card>
   )
 }

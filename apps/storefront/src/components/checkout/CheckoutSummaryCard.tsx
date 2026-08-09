@@ -8,9 +8,9 @@ import { CheckoutItemList } from "./CheckoutItemList"
 type CheckoutSummaryCardProps = {
   cart: StoreCart
   canPlaceOrder: boolean
-  disabledReason: string
   onPlaceOrder: () => void
   placing: boolean
+  showPayButton?: boolean
   shippingAmount?: number
   pricing?: CheckoutPricingBreakdown | null
   coupons?: BuyerCoupon[]
@@ -23,9 +23,9 @@ type CheckoutSummaryCardProps = {
 export function CheckoutSummaryCard({
   cart,
   canPlaceOrder,
-  disabledReason,
   onPlaceOrder,
   placing,
+  showPayButton = true,
   shippingAmount,
   pricing,
   coupons = [],
@@ -78,10 +78,18 @@ export function CheckoutSummaryCard({
           </p>
         ) : null}
         {pricing?.appliedCoupon ? (
-          <p className="buyer-checkout-coupon-applied">
-            Applied: {pricing.appliedCoupon.title} (−
-            <MoneyText amount={couponDiscount} currencyCode={cart.currencyCode} />)
-          </p>
+          <div className="buyer-checkout-coupon-ticket buyer-checkout-coupon-ticket--applied">
+            <span>
+              <strong>
+                −<MoneyText amount={couponDiscount} currencyCode={cart.currencyCode} />
+              </strong>
+              <small>Applied</small>
+            </span>
+            <p>
+              <b>{pricing.appliedCoupon.title}</b>
+              <small>{pricing.appliedCoupon.minSubtotal > 0 ? `When over $${pricing.appliedCoupon.minSubtotal}` : "No condition"}</small>
+            </p>
+          </div>
         ) : usableCoupons.length ? (
           <div className="buyer-checkout-coupon-options">
             {usableCoupons.slice(0, 4).map((coupon) => (
@@ -91,8 +99,11 @@ export function CheckoutSummaryCard({
                 disabled={!coupon.walletId}
                 onClick={() => coupon.walletId && onApplyCoupon?.(coupon.walletId)}
               >
-                <strong>{coupon.amountLabel}</strong>
-                <span>{coupon.conditionLabel}</span>
+                <span>
+                  <strong>{coupon.amountLabel}</strong>
+                  <small>{coupon.conditionLabel}</small>
+                </span>
+                <b>Use</b>
               </button>
             ))}
           </div>
@@ -141,22 +152,11 @@ export function CheckoutSummaryCard({
           </dd>
         </div>
       </dl>
-      <Button loading={placing} disabled={!canPlaceOrder || placing} onClick={onPlaceOrder}>
-        {placing ? "Placing order..." : "Place order"}
-      </Button>
-      <p>
-        {canPlaceOrder
-          ? "Guest checkout is available with a valid contact email. Coupons and plan discounts reduce the payable total shown above."
-          : disabledReason}
-      </p>
-      {!canPlaceOrder ? (
-        <a className="buyer-checkout-sign-in-link" href="/account/sign-in?returnTo=/checkout">
-          Sign in for saved order history
-        </a>
+      {showPayButton ? (
+        <Button loading={placing} disabled={!canPlaceOrder || placing} onClick={onPlaceOrder}>
+          {placing ? "Processing payment..." : "Pay now"}
+        </Button>
       ) : null}
-      <Button variant="ghost" href="/cart">
-        Back to cart
-      </Button>
     </Card>
   )
 }

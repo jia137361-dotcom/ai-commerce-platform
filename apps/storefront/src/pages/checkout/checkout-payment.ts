@@ -3,6 +3,7 @@ import type { Stripe, StripeElements } from "@stripe/stripe-js"
 import { formatStripePaymentMethodLabel, resolveStripePaymentMethodLabel } from "../../lib/stripe-payment-method"
 
 export const isStripeProviderId = (providerId?: string) => Boolean(providerId?.startsWith("pp_stripe_"))
+export const isPayPalProviderId = (providerId?: string) => Boolean(providerId?.startsWith("pp_paypal_"))
 
 export const isValidStripePublishableKey = (publishableKey: string) =>
   (publishableKey.startsWith("pk_test_") || publishableKey.startsWith("pk_live_")) &&
@@ -88,4 +89,15 @@ export async function confirmStripePaymentAndComplete<T>(input: {
   } catch {
     throw new Error(STRIPE_ORDER_CREATION_FAILED_MESSAGE)
   }
+}
+
+export async function confirmStripeWalletPaymentAndComplete<T>(input: {
+  stripe: StripeWithPaymentMethodLookup
+  elements: StripeElements
+  returnUrl: string
+  complete: (paymentMethodLabel?: string) => Promise<T>
+}): Promise<{ result: T; paymentMethodLabel?: string }> {
+  const { error } = await input.elements.submit()
+  if (error) throw new Error(error.message || "Stripe wallet confirmation failed.")
+  return confirmStripePaymentAndComplete(input)
 }

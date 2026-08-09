@@ -31,15 +31,15 @@ describe("CheckoutSummaryCard", () => {
       createElement(CheckoutSummaryCard, {
         cart,
         canPlaceOrder: true,
-        disabledReason: "",
         onPlaceOrder: () => undefined,
         placing: false,
       })
     )
     expect(html).toContain("Real cart item")
     expect(html).toContain("$21.25")
-    expect(html).toContain("Place order")
+    expect(html).toContain("Pay now")
     expect(html).toContain("Ciiverse coupon")
+    expect(html).not.toContain("Sign in for saved order history")
   })
 
   it("adds shipping into the displayed total when selected", () => {
@@ -47,7 +47,6 @@ describe("CheckoutSummaryCard", () => {
       createElement(CheckoutSummaryCard, {
         cart,
         canPlaceOrder: true,
-        disabledReason: "",
         onPlaceOrder: () => undefined,
         placing: false,
         shippingAmount: 1.46,
@@ -62,7 +61,6 @@ describe("CheckoutSummaryCard", () => {
       createElement(CheckoutSummaryCard, {
         cart,
         canPlaceOrder: true,
-        disabledReason: "",
         onPlaceOrder: () => undefined,
         placing: false,
         shippingAmount: 1.46,
@@ -96,10 +94,22 @@ describe("CheckoutSummaryCard", () => {
         createElement(CheckoutSummaryCard, {
           cart,
           canPlaceOrder: false,
-          disabledReason: "Missing price",
           onPlaceOrder: () => undefined,
           placing: false,
         })
       )
     ).toContain("disabled"))
+
+  it("can hide its pay button when Stripe Elements owns payment submission", () => {
+    const html = renderToStaticMarkup(
+      createElement(CheckoutSummaryCard, {
+        cart,
+        canPlaceOrder: true,
+        onPlaceOrder: () => undefined,
+        placing: false,
+        showPayButton: false,
+      })
+    )
+    expect(html).not.toContain("Pay now")
+  })
 })

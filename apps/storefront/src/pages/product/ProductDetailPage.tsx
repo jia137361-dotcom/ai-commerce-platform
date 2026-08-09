@@ -20,6 +20,7 @@ import {
   fetchProducts,
   fetchProductShare,
   fetchStoreSettings,
+  getMyOrders,
   getBuyerCartStorageKey,
   getScopedBuyerStoreId,
   readBuyerPreferences,
@@ -33,6 +34,7 @@ import {
 } from "../../lib/buyer-api"
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
 import { addProductSelectionToCart } from "./product-cart-action"
+import { isReservedCheckoutCartId } from "../../lib/buyer-checkout-reservations"
 import { resolveProductPurchaseState, resolveSelectedProductVariant } from "./product-detail-state"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { buildProductSignInHref } from "./product-auth"
@@ -241,6 +243,10 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
             countryCode: readBuyerPreferences(auth.customer).countryCode,
           }),
         addLineItem: (cartId, variantId, qty) => addCartLineItem(cartId, variantId, qty, { storeId: cartStoreId }),
+        isCartReservedForCheckout: async (cartId) => {
+          const unpaid = await getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 }).catch(() => null)
+          return isReservedCheckoutCartId(unpaid?.orders ?? [], cartId)
+        },
       })
       onCartUpdated(updated)
       setAddNotice({ tone: "success", message: "Added to cart." })

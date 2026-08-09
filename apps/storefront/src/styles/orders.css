@@ -1323,6 +1323,38 @@
   font-weight: 700;
 }
 
+.buyer-order-history-reservation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 12px;
+}
+
+.buyer-order-history-reservation strong {
+  color: #ea580c;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.buyer-order-history-reservation.is-expired {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.buyer-order-history-reservation.is-expired strong {
+  color: #374151;
+  font-size: 12px;
+}
+
 .buyer-order-history-card-actions {
   margin-top: 12px;
 }
@@ -1533,6 +1565,103 @@
   border-radius: 999px;
   border-color: #ea580c;
   color: #ea580c;
+}
+
+.buyer-order-refund-items {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.buyer-order-refund-items legend,
+.buyer-order-refund-timeline h2 {
+  margin: 0 0 8px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.buyer-order-refund-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.buyer-order-refund-item label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.buyer-order-refund-item input[type="number"] {
+  width: 72px;
+  min-height: 38px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0 8px;
+}
+
+.buyer-order-refund-estimate {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  padding: 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  background: #fff7ed;
+}
+
+.buyer-order-refund-estimate small {
+  grid-column: 1 / -1;
+  color: #6b7280;
+}
+
+.buyer-order-refund-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-order-refund-timeline-entry {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.buyer-order-refund-timeline-entry > span {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #ea580c;
+}
+
+.buyer-order-refund-timeline-entry p,
+.buyer-order-refund-timeline-entry small {
+  margin: 3px 0 0;
+  color: #6b7280;
+}
+
+.buyer-order-refund-timeline-entry b {
+  font-size: 13px;
+}
+
+.buyer-order-refund-followup {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.buyer-order-refund-followup .buyer-ui-button,
+.buyer-order-refund-timeline-entry > div > .buyer-ui-button {
+  width: fit-content;
+  margin-top: 8px;
 }
 
 @media (max-width: 980px) {

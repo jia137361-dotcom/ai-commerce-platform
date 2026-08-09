@@ -14,6 +14,7 @@ import {
   addCartLineItem,
   createCart,
   fetchBuyerMyDesigns,
+  getMyOrders,
   getBuyerCartStorageKey,
   setActiveBuyerStoreId,
   type BuyerStoreSettings,
@@ -24,6 +25,7 @@ import {
   removeBuyerDesignDraft,
   upsertBuyerDesignDraft,
 } from "../../lib/buyer-my-designs"
+import { isReservedCheckoutCartId } from "../../lib/buyer-checkout-reservations"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type MyDesignsPageProps = {
@@ -159,6 +161,10 @@ export function MyDesignsPage({ cartCount, onCartUpdated }: MyDesignsPageProps) 
         createCart: () => createCart({ storeId: settings.storeId }),
         addLineItem: (cartId, variantId, quantity) =>
           addCartLineItem(cartId, variantId, quantity, { storeId: settings.storeId }),
+        isCartReservedForCheckout: async (cartId) => {
+          const unpaid = await getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 }).catch(() => null)
+          return isReservedCheckoutCartId(unpaid?.orders ?? [], cartId)
+        },
       })
       onCartUpdated(result)
     } catch (err) {

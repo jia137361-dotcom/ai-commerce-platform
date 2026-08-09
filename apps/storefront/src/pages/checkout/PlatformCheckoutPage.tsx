@@ -21,6 +21,7 @@ type PlatformCheckoutPageProps = {
 const buildStoreCheckoutHref = (group: PlatformCheckoutSession["groups"][number], session: PlatformCheckoutSession) => {
   const params = new URLSearchParams({
     store: group.store_id,
+    cart_id: group.cart_id,
     platform_checkout_id: session.platform_checkout_id,
     platform_checkout_index: String(group.platform_checkout_index),
     platform_checkout_count: String(group.platform_checkout_count),

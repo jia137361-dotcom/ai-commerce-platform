@@ -12,6 +12,9 @@ export default defineConfig({
   envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   plugins: [react()],
   server: {
+    allowedHosts: [
+      "virgin-boundary-adapters-loaded.trycloudflare.com",
+    ],
     proxy: {
       "/auth": {
         target: "http://127.0.0.1:9000",

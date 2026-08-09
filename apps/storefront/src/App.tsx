@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { cloneElement, isValidElement, useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import type { StoreCart } from "./lib/mock-data"
 import { CartPage } from "./pages/cart/CartPage"
@@ -45,7 +45,11 @@ import {
 
 function App() {
   const auth = useBuyerAuth()
-  const [path, setPath] = useState(window.location.pathname)
+  const [location, setLocation] = useState({
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+  })
   const [cartCount, setCartCount] = useState(0)
 
   useEffect(() => {
@@ -54,8 +58,8 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const applyLocation = (pathname: string, hash = window.location.hash) => {
-      setPath(pathname)
+    const applyLocation = (pathname: string, search = window.location.search, hash = window.location.hash) => {
+      setLocation({ pathname, search, hash })
       syncRouteStoreContext(pathname)
       if (hash) {
         window.requestAnimationFrame(() => {
@@ -71,12 +75,12 @@ function App() {
     }
 
     const onPop = () => {
-      applyLocation(window.location.pathname, window.location.hash)
+      applyLocation(window.location.pathname, window.location.search, window.location.hash)
     }
 
     const onNavigate = (event: Event) => {
       const detail = (event as CustomEvent<BuyerNavigateDetail>).detail
-      applyLocation(detail.pathname, detail.hash)
+      applyLocation(detail.pathname, detail.search, detail.hash)
     }
 
     const onDocumentClick = (event: MouseEvent) => {
@@ -125,110 +129,111 @@ function App() {
     setCartCount(cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
   }
 
+  const routeKey = `${location.pathname}${location.search}${location.hash}`
   let page: ReactNode = <StoreHomePage cartCount={cartCount} />
 
-  if (path.startsWith("/design/")) {
+  if (location.pathname.startsWith("/design/")) {
     page = (
       <DesignerPage
-        productId={decodeURIComponent(path.split("/").pop() ?? "")}
+        productId={decodeURIComponent(location.pathname.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}
       />
     )
-  } else if (path === "/studio" || path.startsWith("/studio/")) {
+  } else if (location.pathname === "/studio" || location.pathname.startsWith("/studio/")) {
     page = <StudioLandingPage cartCount={cartCount} />
-  } else if (path === "/my-designs" || path.startsWith("/my-designs/")) {
+  } else if (location.pathname === "/my-designs" || location.pathname.startsWith("/my-designs/")) {
     page = <MyDesignsPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
-  } else if (path === "/ai-design" || path.startsWith("/ai-design/")) {
-    const parts = path.split("/").filter(Boolean)
+  } else if (location.pathname === "/ai-design" || location.pathname.startsWith("/ai-design/")) {
+    const parts = location.pathname.split("/").filter(Boolean)
     const productIdFromPath = parts.length >= 2 ? decodeURIComponent(parts[1]) : undefined
     page = <AiDesignPage cartCount={cartCount} productIdFromPath={productIdFromPath} />
-  } else if (path.startsWith("/ai-studio/")) {
-    const productId = decodeURIComponent(path.split("/").pop() ?? "")
+  } else if (location.pathname.startsWith("/ai-studio/")) {
+    const productId = decodeURIComponent(location.pathname.split("/").pop() ?? "")
     page = <AiDesignPage cartCount={cartCount} productIdFromPath={productId} />
-  } else if (path.startsWith("/categories")) {
+  } else if (location.pathname.startsWith("/categories")) {
     page = <CategoriesPage cartCount={cartCount} />
-  } else if (path.startsWith("/search")) {
+  } else if (location.pathname.startsWith("/search")) {
     page = <SearchPage cartCount={cartCount} />
-  } else if (path.startsWith("/saved")) {
+  } else if (location.pathname.startsWith("/saved")) {
     page = <SavedPage cartCount={cartCount} />
-  } else if (path.startsWith("/products/")) {
+  } else if (location.pathname.startsWith("/products/")) {
     page = (
       <ProductDetailPage
-        productId={decodeURIComponent(path.split("/").pop() ?? "")}
+        productId={decodeURIComponent(location.pathname.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}
       />
     )
-  } else if (path.startsWith("/cart")) {
+  } else if (location.pathname.startsWith("/cart")) {
     page = <CartPage onCartUpdated={onCartUpdated} />
-  } else if (path.startsWith("/checkout/success")) {
+  } else if (location.pathname.startsWith("/checkout/success")) {
     page = <CheckoutSuccessPage cartCount={cartCount} />
-  } else if (path.startsWith("/checkout/platform")) {
+  } else if (location.pathname.startsWith("/checkout/platform")) {
     page = <PlatformCheckoutPage cartCount={cartCount} />
-  } else if (path.startsWith("/checkout")) {
+  } else if (location.pathname.startsWith("/checkout")) {
     page = <CheckoutPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
-  } else if (path.startsWith("/orders/lookup")) {
+  } else if (location.pathname.startsWith("/orders/lookup")) {
     page = <OrderLookupPage cartCount={cartCount} />
-  } else if (path.startsWith("/account/sign-in")) {
+  } else if (location.pathname.startsWith("/account/sign-in")) {
     page = <SignInPage cartCount={cartCount} />
-  } else if (path.startsWith("/account/register")) {
+  } else if (location.pathname.startsWith("/account/register")) {
     page = <RegisterPage cartCount={cartCount} />
-  } else if (path.startsWith("/account/verify-email")) {
+  } else if (location.pathname.startsWith("/account/verify-email")) {
     page = <VerifyEmailPage cartCount={cartCount} />
-  } else if (path.startsWith("/account/forgot-password")) {
+  } else if (location.pathname.startsWith("/account/forgot-password")) {
     page = <ForgotPasswordPage cartCount={cartCount} />
-  } else if (path.startsWith("/account/reset-password")) {
+  } else if (location.pathname.startsWith("/account/reset-password")) {
     page = <ResetPasswordPage cartCount={cartCount} />
   } else if (
     (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[]).some(
-      (slug) => path === `/account/${slug}`
+      (slug) => location.pathname === `/account/${slug}`
     )
   ) {
     const realAccountSetting = (
       ["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[]
-    ).find((slug) => path === `/account/${slug}`)!
+    ).find((slug) => location.pathname === `/account/${slug}`)!
     page = <AccountSettingsPage cartCount={cartCount} slug={realAccountSetting} />
-  } else if (findAccountSettingPlaceholder(path)) {
+  } else if (findAccountSettingPlaceholder(location.pathname)) {
     page = (
-      <AccountSettingPlaceholderPage cartCount={cartCount} setting={findAccountSettingPlaceholder(path)!} />
+      <AccountSettingPlaceholderPage cartCount={cartCount} setting={findAccountSettingPlaceholder(location.pathname)!} />
     )
-  } else if (path.startsWith("/account/profile")) {
+  } else if (location.pathname.startsWith("/account/profile")) {
     page = <AccountProfilePage cartCount={cartCount} />
-  } else if (path.startsWith("/account/messages")) {
+  } else if (location.pathname.startsWith("/account/messages")) {
     const orderId = new URLSearchParams(window.location.search).get("orderId") ?? undefined
     const storeId = new URLSearchParams(window.location.search).get("store_id") ?? undefined
     page = <StoreMessagesPage cartCount={cartCount} orderId={orderId} storeId={storeId} />
-  } else if (path.startsWith("/account/orders/") && path.endsWith("/tracking")) {
-    page = <OrderTrackingPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
-  } else if (path.startsWith("/account/orders/")) {
-    page = <OrderDetailPage orderId={decodeURIComponent(path.split("/")[3] ?? "")} cartCount={cartCount} />
-  } else if (path.startsWith("/account/orders")) {
+  } else if (location.pathname.startsWith("/account/orders/") && location.pathname.endsWith("/tracking")) {
+    page = <OrderTrackingPage orderId={decodeURIComponent(location.pathname.split("/")[3] ?? "")} cartCount={cartCount} />
+  } else if (location.pathname.startsWith("/account/orders/")) {
+    page = <OrderDetailPage orderId={decodeURIComponent(location.pathname.split("/")[3] ?? "")} cartCount={cartCount} />
+  } else if (location.pathname.startsWith("/account/orders")) {
     page = <OrderHistoryPage cartCount={cartCount} />
-  } else if (path === "/account" || path.startsWith("/account?")) {
+  } else if (location.pathname === "/account" || location.pathname.startsWith("/account?")) {
     page = <AccountHomePage cartCount={cartCount} />
-  } else if (path.startsWith("/plans")) {
+  } else if (location.pathname.startsWith("/plans")) {
     page = <PlansPage cartCount={cartCount} />
-  } else if (path.startsWith("/help")) {
+  } else if (location.pathname.startsWith("/help")) {
     page = <HelpPage cartCount={cartCount} />
-  } else if (path.startsWith("/about")) {
+  } else if (location.pathname.startsWith("/about")) {
     page = <AboutPage cartCount={cartCount} />
-  } else if (path.startsWith("/cookies")) {
+  } else if (location.pathname.startsWith("/cookies")) {
     page = <CookiesPage cartCount={cartCount} />
-  } else if (path.startsWith("/terms")) {
+  } else if (location.pathname.startsWith("/terms")) {
     page = <TermsPage cartCount={cartCount} />
-  } else if (path.startsWith("/privacy")) {
+  } else if (location.pathname.startsWith("/privacy")) {
     page = <PrivacyPage cartCount={cartCount} />
-  } else if (path.startsWith("/shops/")) {
-    const slug = decodeURIComponent(path.split("/")[2] ?? "")
+  } else if (location.pathname.startsWith("/shops/")) {
+    const slug = decodeURIComponent(location.pathname.split("/")[2] ?? "")
     page = <StoreHomePage cartCount={cartCount} storeSlug={slug} />
-  } else if (path.startsWith("/store") || path === "/" || path.startsWith("/?")) {
+  } else if (location.pathname.startsWith("/store") || location.pathname === "/" || location.pathname.startsWith("/?")) {
     page = <StoreHomePage cartCount={cartCount} />
-  } else if (path.startsWith("/marketplace")) {
+  } else if (location.pathname.startsWith("/marketplace")) {
     page = <MarketplaceHomePage cartCount={cartCount} />
   }
 
-  return page
+  return isValidElement(page) ? cloneElement(page, { key: routeKey }) : page
 }
 
 export default App

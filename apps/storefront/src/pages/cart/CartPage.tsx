@@ -25,6 +25,7 @@ import {
   composePlatformLineKey,
   fetchPlatformCart,
   parsePlatformLineKey,
+  registerStoreCart,
   type PlatformCartGroup,
 } from "../../lib/buyer-platform-cart"
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
@@ -32,9 +33,22 @@ import { writePlatformCheckoutSession } from "../../lib/platform-checkout-sessio
 import { removeCartItem, updateCartItemQuantity } from "./cart-actions"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import { getMyOrders } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { collectReservedCheckoutCartIds } from "./cart-reservations"
 
 type CartPageProps = { onCartUpdated: (cart: StoreCart | null) => void }
+
+const splitCheckoutKey = (storeId: string) => `citigoo:${storeId}:split_checkout`
+
+const rememberSplitCheckout = (
+  storeId: string,
+  state: { sourceCartId: string; checkoutCartId: string; selectedLineIds: string[] }
+) => {
+  const serialized = JSON.stringify(state)
+  window.localStorage.setItem(splitCheckoutKey(storeId), serialized)
+  window.sessionStorage.setItem(splitCheckoutKey(storeId), serialized)
+}
 
 export function CartPage({ onCartUpdated }: CartPageProps) {
   const auth = useBuyerAuth()
@@ -59,20 +73,31 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     setLoadError(undefined)
     try {
       const platformCart = await fetchPlatformCart(window.localStorage, cartIdentity)
+      const unpaidOrders = auth.customer
+        ? await getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 }).catch(() => null)
+        : null
       if (!isActive()) return
-      setGroups(platformCart.groups)
-      const allLineKeys = platformCart.groups.flatMap((group) =>
+      const reservedCartIds = collectReservedCheckoutCartIds(unpaidOrders?.orders ?? [])
+      const visibleGroups = platformCart.groups.filter((group) => !reservedCartIds.has(group.cart.id))
+      setGroups(visibleGroups)
+      const allLineKeys = visibleGroups.flatMap((group) =>
         group.cart.items.map((item) => composePlatformLineKey(group.storeId, item.id))
       )
       setSelectedLineKeys(new Set(allLineKeys))
-      const aggregate = platformCart.groups[0]?.cart ?? null
+      const aggregate = visibleGroups[0]?.cart ?? null
       onCartUpdated(
         aggregate
           ? {
               ...aggregate,
-              items: platformCart.groups.flatMap((group) => group.cart.items),
-              subtotal: platformCart.grandSubtotal,
-              total: platformCart.grandSubtotal,
+              items: visibleGroups.flatMap((group) => group.cart.items),
+              subtotal: visibleGroups.reduce(
+                (sum, group) => sum + (group.cart.hasSubtotal === false ? 0 : group.cart.subtotal),
+                0
+              ),
+              total: visibleGroups.reduce(
+                (sum, group) => sum + (group.cart.hasTotal === false ? 0 : group.cart.total),
+                0
+              ),
             }
           : null
       )
@@ -85,7 +110,7 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     } finally {
       if (isActive()) setLoading(false)
     }
-  }, [cartIdentity, onCartUpdated])
+  }, [auth.customer, cartIdentity, onCartUpdated])
 
   useEffect(() => {
     let active = true
@@ -150,6 +175,7 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
             countryCode: readBuyerPreferences(auth.customer).countryCode,
           })
           let nextCart = checkoutCart
+          let sourceCart = entry.group.cart
           for (const item of entry.selectedItems) {
             if (!item.variantId) throw new Error("A selected item has no purchasable variant.")
             nextCart = await addCartLineItem(nextCart.id, item.variantId, item.quantity, {
@@ -157,6 +183,15 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
             })
           }
           checkoutCartId = nextCart.id
+          for (const item of entry.selectedItems) {
+            sourceCart = await deleteCartLineItem(entry.group.cart.id, item.id, { storeId: entry.group.storeId })
+          }
+          rememberSplitCheckout(entry.group.storeId, {
+            sourceCartId: entry.group.cart.id,
+            checkoutCartId,
+            selectedLineIds: [],
+          })
+          registerStoreCart(window.localStorage, cartIdentity, entry.group.storeId, sourceCart.id)
         }
         preparedGroups.push({
           store_id: entry.group.storeId,
@@ -187,7 +222,12 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
       })
       for (const group of prepared.groups) {
         setActiveBuyerStoreId(group.store_id)
-        window.localStorage.setItem(getBuyerCartStorageKey(group.store_id, cartIdentity), group.cart_id)
+        const splitRaw =
+          window.localStorage.getItem(splitCheckoutKey(group.store_id)) ??
+          window.sessionStorage.getItem(splitCheckoutKey(group.store_id))
+        if (!splitRaw) {
+          window.localStorage.setItem(getBuyerCartStorageKey(group.store_id, cartIdentity), group.cart_id)
+        }
       }
       window.location.assign("/checkout/platform")
     } catch (error) {
@@ -208,7 +248,9 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     setPreparingCheckoutStoreId(group.storeId)
     try {
       let checkoutCart = group.cart
+      let checkoutHref = `/checkout?store=${encodeURIComponent(group.storeId)}`
       if (selectedItems.length !== group.cart.items.length) {
+        let sourceCart = group.cart
         checkoutCart = await createCart({
           storeId: group.storeId,
           countryCode: readBuyerPreferences(auth.customer).countryCode,
@@ -219,10 +261,22 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
             storeId: group.storeId,
           })
         }
+        for (const item of selectedItems) {
+          sourceCart = await deleteCartLineItem(group.cart.id, item.id, { storeId: group.storeId })
+        }
+        rememberSplitCheckout(group.storeId, {
+          sourceCartId: group.cart.id,
+          checkoutCartId: checkoutCart.id,
+          selectedLineIds: [],
+        })
+        registerStoreCart(window.localStorage, cartIdentity, group.storeId, sourceCart.id)
+        onCartUpdated(sourceCart)
+        checkoutHref = `/checkout?store=${encodeURIComponent(group.storeId)}&cart_id=${encodeURIComponent(checkoutCart.id)}`
+      } else {
+        window.localStorage.setItem(getBuyerCartStorageKey(group.storeId, cartIdentity), checkoutCart.id)
       }
       setActiveBuyerStoreId(group.storeId)
-      window.localStorage.setItem(getBuyerCartStorageKey(group.storeId, cartIdentity), checkoutCart.id)
-      window.location.assign(`/checkout?store=${encodeURIComponent(group.storeId)}`)
+      window.location.assign(checkoutHref)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Unable to prepare checkout for this store.")
       setPreparingCheckoutStoreId(undefined)

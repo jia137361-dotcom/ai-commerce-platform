@@ -5,7 +5,7 @@ import { PaymentEvents } from "@medusajs/utils"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../modules/fulfillment-orders/service"
 import { markOrderPaidAndFulfillmentWaiting } from "../lib/sync-order-paid-fulfillment"
-import { tryRegisterWebhookDedupe } from "../lib/webhook-dedupe"
+import { releaseWebhookDedupe, tryRegisterWebhookDedupe } from "../lib/webhook-dedupe"
 import { pushOrderToS2bdiy } from "../lib/s2bdiy/push-s2b-order"
 import { getS2bdiyConfig } from "../modules/suppliers/s2bdiy/config"
 import { STORE_CORE_MODULE } from "../modules/store-core"
@@ -51,7 +51,12 @@ export default async function paymentCapturedSyncHandler({
     return
   }
 
-  await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment.captured_event")
+  try {
+    await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment.captured_event")
+  } catch (error) {
+    await releaseWebhookDedupe(container, dedupeKey).catch(() => undefined)
+    throw error
+  }
 
   try {
     const orderModule = container.resolve(Modules.ORDER)
