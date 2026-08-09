@@ -83,7 +83,9 @@ export function ProductListPage() {
       ),
   })
 
-  const products = data?.products ?? []
+  // Local database fallback and Medusa may omit optional collection fields on
+  // older product rows. Never let an incomplete row crash the product list.
+  const products = Array.isArray(data?.products) ? data.products : []
   const count = data?.count ?? 0
   const visibleIds = useMemo(() => products.map((product) => product.product_id), [products])
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
@@ -349,7 +351,7 @@ export function ProductListPage() {
                   (product.metadata?.mockup_image_url as string | undefined) ||
                   (product.metadata?.design_image_url as string | undefined) ||
                   product.image_url
-                const productId = product.product_id
+                const productId = typeof product.product_id === "string" ? product.product_id : "unknown-product"
                 const checked = selectedIds.includes(productId)
                 return (
                   <tr key={productId} className={`border-t border-slate-100 ${checked ? "bg-slate-50" : ""}`}>
@@ -386,6 +388,10 @@ export function ProductListPage() {
                           {
                             label: product.status === "archived" ? "View" : "Edit",
                             onClick: () => navigate(`/products/${productId}/edit`),
+                          },
+                          {
+                            label: "Manage SKUs",
+                            onClick: () => navigate(`/products/${productId}/skus`),
                           },
                           {
                             label: "Duplicate",

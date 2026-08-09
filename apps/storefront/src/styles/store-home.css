@@ -3797,3 +3797,560 @@ button.buyer-shop-product-customize:disabled,
     padding: 0 12px;
   }
 }
+
+/* Word 页面分析: homepage header menus, mobile + menu, and filter facets. */
+.buyer-account-panel-signout {
+  width: 100%;
+  justify-content: flex-start !important;
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
+  color: #b42318 !important;
+  font-size: 14px;
+  font-weight: 700 !important;
+}
+
+.buyer-account-panel-signout:hover,
+.buyer-account-panel-signout:focus-visible {
+  background: #fff1f0 !important;
+}
+
+.buyer-store-header-menu {
+  position: relative;
+}
+
+.buyer-store-header-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 240px;
+  display: none;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(17, 24, 39, 0.16);
+  color: #111827;
+}
+
+.buyer-store-header-menu:hover .buyer-store-header-popover,
+.buyer-store-header-menu:focus-within .buyer-store-header-popover {
+  display: grid;
+}
+
+.buyer-store-header-popover a,
+.buyer-store-header-popover button {
+  width: 100%;
+  min-height: 40px;
+  justify-content: flex-start;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.buyer-store-header-popover a:hover,
+.buyer-store-header-popover button:hover {
+  background: #f3f4f6;
+}
+
+.buyer-store-preferences-popover {
+  min-width: 300px;
+  gap: 10px;
+}
+
+.buyer-store-preferences-popover section {
+  display: grid;
+  gap: 4px;
+}
+
+.buyer-store-preferences-popover section > strong {
+  padding: 0 10px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.buyer-store-preferences-popover section a,
+.buyer-store-preferences-popover section button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.buyer-store-preferences-popover small {
+  color: #667085;
+}
+
+.buyer-store-preferences-popover p {
+  margin: 2px 10px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.buyer-store-preferences-change {
+  justify-content: center !important;
+  border: 1px solid #d1d5db;
+}
+
+.buyer-mhome-plus-menu a,
+.buyer-mhome-plus-menu button {
+  display: grid;
+  align-content: center;
+  gap: 1px;
+}
+
+.buyer-mhome-plus-menu a span,
+.buyer-mhome-plus-menu button span {
+  color: #111827;
+}
+
+.buyer-mhome-plus-menu a small,
+.buyer-mhome-plus-menu button small {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.buyer-filter-color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 8px;
+}
+
+.buyer-filter-color-grid button {
+  display: grid !important;
+  justify-items: center;
+  gap: 5px;
+  padding: 5px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+}
+
+.buyer-filter-color-grid button.active {
+  border-color: #ea580c !important;
+  background: #fff7ed !important;
+}
+
+.buyer-filter-color-swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+.buyer-filter-color-grid small {
+  max-width: 64px;
+  overflow: hidden;
+  color: #667085;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buyer-filter-price-custom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.buyer-filter-price-custom input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+}
+
+/* Word 页面分析: categories, search history, and Saved management. */
+.buyer-categories-trending header > div:first-child {
+  min-width: 0;
+}
+
+.buyer-categories-trending header p {
+  margin: 0 0 2px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.buyer-categories-trending header h2 {
+  margin: 0;
+}
+
+.buyer-categories-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.buyer-categories-heading-actions a {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.buyer-categories-result-count {
+  margin: 0 0 10px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.buyer-search-history {
+  margin: 4px 12px 14px;
+}
+
+.buyer-search-history header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.buyer-search-history header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.buyer-search-history header button {
+  color: #667085;
+  font-size: 13px;
+}
+
+.buyer-search-history li {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.buyer-search-history .buyer-search-history-term,
+.buyer-search-history .buyer-search-history-remove {
+  min-height: 34px;
+  border: 0;
+  border-radius: 0;
+}
+
+.buyer-search-history .buyer-search-history-term {
+  padding: 0 6px 0 12px;
+}
+
+.buyer-search-history .buyer-search-history-remove {
+  width: 30px;
+  padding: 0;
+  color: #98a2b3;
+  font-size: 17px;
+}
+
+.buyer-search-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 12px 12px;
+}
+
+.buyer-search-results-header p {
+  margin: 0 0 2px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.buyer-search-results-header strong {
+  font-size: 14px;
+}
+
+.buyer-search-results-header button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.buyer-saved-manage {
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+
+.buyer-saved-manage-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 12px 12px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+  font-size: 13px;
+}
+
+.buyer-saved-manage-bar span {
+  color: #667085;
+  text-align: center;
+}
+
+.buyer-saved-manage-bar button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.buyer-saved-manage-bar button.danger {
+  border-color: #fda29b;
+  color: #b42318;
+}
+
+.buyer-saved-manage-bar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.buyer-saved-manage-error {
+  margin: 0 12px 12px;
+  color: #b42318;
+  font-size: 13px;
+}
+
+.buyer-saved-list li {
+  position: relative;
+}
+
+.buyer-saved-list li.managing .buyer-saved-row {
+  padding-left: 54px;
+}
+
+.buyer-saved-select {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+}
+
+.buyer-saved-select input {
+  width: 20px;
+  height: 20px;
+  accent-color: #ea580c;
+}
+
+@media (min-width: 981px) {
+  .buyer-search-mobile-body,
+  .buyer-saved-shell {
+    width: min(100%, 1120px);
+    margin: 0 auto;
+  }
+
+  .buyer-search-mobile-body .buyer-mhome-grid,
+  .buyer-saved-recommendations .buyer-mhome-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 24px 18px;
+  }
+}
+
+.buyer-trends-shell {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+  padding: 24px 20px 64px !important;
+}
+
+.buyer-trends-hero {
+  min-height: 260px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  padding: 40px clamp(24px, 7vw, 80px);
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 82% 28%, rgba(255, 255, 255, 0.42), transparent 24%),
+    radial-gradient(circle at 72% 78%, rgba(255, 215, 160, 0.7), transparent 26%),
+    linear-gradient(120deg, #fff7ed, #fed7aa 58%, #fdba74);
+}
+
+.buyer-trends-hero p {
+  margin: 0 0 8px;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.buyer-trends-hero h1 {
+  margin: 0;
+  color: #431407;
+  font-size: clamp(44px, 8vw, 82px);
+  line-height: 0.95;
+}
+
+.buyer-trends-hero span {
+  max-width: 520px;
+  margin-top: 18px;
+  color: #7c2d12;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.buyer-trends-topics,
+.buyer-trends-categories {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.buyer-trends-topics {
+  padding: 18px 2px;
+}
+
+.buyer-trends-topics span,
+.buyer-trends-categories button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.buyer-trends-topics span.active,
+.buyer-trends-categories button.active {
+  border-color: #111827;
+  background: #111827;
+  color: #fff;
+}
+
+.buyer-trends-feed {
+  padding-top: 12px;
+}
+
+.buyer-trends-feed > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.buyer-trends-feed > header p {
+  margin: 0 0 3px;
+  color: #ea580c;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.buyer-trends-feed > header h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.buyer-trends-feed > header a {
+  color: #475467;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.buyer-trends-categories {
+  padding-bottom: 18px;
+}
+
+.buyer-trends-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 10px;
+}
+
+.buyer-trends-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 56px 20px;
+  border: 1px dashed #d1d5db;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.buyer-trends-empty h2,
+.buyer-trends-empty p {
+  margin: 0;
+}
+
+.buyer-trends-empty p {
+  max-width: 480px;
+  color: #667085;
+}
+
+.buyer-trends-empty a {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: #111827;
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (min-width: 720px) {
+  .buyer-trends-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 24px 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-trends-shell {
+    padding: 12px 0 72px !important;
+  }
+
+  .buyer-trends-hero {
+    min-height: 220px;
+    margin: 0 10px;
+    padding: 28px 22px;
+    border-radius: 18px;
+  }
+
+  .buyer-trends-topics,
+  .buyer-trends-categories,
+  .buyer-trends-feed > header {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .buyer-trends-grid {
+    padding: 0 8px;
+  }
+}
+
+

@@ -21,6 +21,19 @@ export async function ensureVariantHasPriceSet(
 
   const existingPriceSetId = data[0]?.price_set?.id
   if (existingPriceSetId) {
+    const pricingModule = container.resolve(Modules.PRICING) as {
+      updatePriceSets?: (
+        data: Array<{ id: string; prices: Array<{ amount: number; currency_code: string }> }>
+      ) => Promise<unknown>
+    }
+    if (typeof pricingModule.updatePriceSets === "function") {
+      await pricingModule.updatePriceSets([
+        {
+          id: existingPriceSetId,
+          prices: [{ amount: input.amount, currency_code: input.currencyCode }],
+        },
+      ])
+    }
     return existingPriceSetId
   }
 

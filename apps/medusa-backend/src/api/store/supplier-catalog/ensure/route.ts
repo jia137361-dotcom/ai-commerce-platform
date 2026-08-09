@@ -15,6 +15,7 @@ import {
 import { resolveCurrentStore } from "../../../../lib/store-context"
 import { calculateRetailPriceUsd } from "../../../../lib/pricing"
 import { syncBasicProduct } from "../../../../modules/suppliers/services/supplier-sync-service"
+import { resolveSupplierShipFromCountry } from "../../../../lib/supplier-shipping-country"
 
 const DEFAULT_SUPPLIER_ID = "sup_s2bdiy"
 
@@ -102,6 +103,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       supplier_product_id: String(sp.id),
       image_url: sp.product_show_master_image,
       mockup_image_url: sp.product_show_master_image,
+      ship_from_country: resolveSupplierShipFromCountry(null, sp),
       variants: variantRows,
       metadata: {
         synced_from_supplier: true,

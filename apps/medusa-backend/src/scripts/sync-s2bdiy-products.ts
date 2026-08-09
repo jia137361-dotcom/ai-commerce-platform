@@ -19,7 +19,7 @@ import type { ExecArgs } from "./medusa-exec-args"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 import { requireSupplierAdapter } from "../modules/suppliers/registry"
-import { syncBasicProduct } from "../modules/suppliers/services/supplier-sync-service"
+import { ensureSupplierProductDraft, syncBasicProduct } from "../modules/suppliers/services/supplier-sync-service"
 import { getS2bdiyConfig, isS2bdiyMockMode } from "../modules/suppliers/s2bdiy/config"
 
 const SUPPLIER_ID = "sup_s2bdiy"
@@ -104,6 +104,7 @@ export default async function syncS2bdiyProducts({ container }: ExecArgs) {
         if (!Number.isFinite(productId) || productId <= 0) continue
         try {
           const result = await syncBasicProduct(productId, SUPPLIER_ID, context)
+          await ensureSupplierProductDraft(storeCoreService, storeId, result.supplier_product_id)
           synced++
           if (synced <= 5 || synced % 50 === 0) {
             console.log(

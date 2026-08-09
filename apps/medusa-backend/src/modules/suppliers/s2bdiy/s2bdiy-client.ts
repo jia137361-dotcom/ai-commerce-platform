@@ -23,6 +23,8 @@ export type S2bdiyRequestOptions = {
   timeoutMs?: number
 }
 
+const DEFAULT_S2BDIY_TIMEOUT_MS = 30000
+
 // ---- S2bdiyClient class ----
 
 export class S2bdiyClient {
@@ -53,7 +55,7 @@ export class S2bdiyClient {
       const timeoutMs =
         typeof options.timeoutMs === "number" && options.timeoutMs > 0
           ? options.timeoutMs
-          : undefined
+          : DEFAULT_S2BDIY_TIMEOUT_MS
       const controller = timeoutMs ? new AbortController() : null
       const timer = controller
         ? setTimeout(() => controller.abort(), timeoutMs)
@@ -143,7 +145,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers["Content-Type"] = "application/json"
     fetchBody = JSON.stringify(body)
   }
-  const res = await fetch(`${baseUrl}${path}`, { method, headers, body: fetchBody })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), DEFAULT_S2BDIY_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(`${baseUrl}${path}`, { method, headers, body: fetchBody, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
   if (!res.ok) {
     const text = await res.text()
     throw new S2bDiyError(`S2BDIY ${method} ${path} failed: ${res.status}`, res.status, text)

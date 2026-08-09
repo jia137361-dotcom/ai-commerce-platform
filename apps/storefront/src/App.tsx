@@ -24,7 +24,8 @@ import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { SearchPage } from "./pages/search/SearchPage"
 import { SavedPage } from "./pages/saved/SavedPage"
 import { CategoriesPage } from "./pages/categories/CategoriesPage"
-import { DesignerPage } from "./pages/design/DesignerPage"
+import { TrendsPage } from "./pages/trends/TrendsPage"
+import { CustomDesignerPage } from "./pages/custom-designer/CustomDesignerPage"
 import { AiDesignPage } from "./pages/ai-design/AiDesignPage"
 import { MyDesignsPage } from "./pages/my-designs/MyDesignsPage"
 import { StudioLandingPage } from "./pages/studio/StudioLandingPage"
@@ -134,7 +135,7 @@ function App() {
 
   if (location.pathname.startsWith("/design/")) {
     page = (
-      <DesignerPage
+      <CustomDesignerPage
         productId={decodeURIComponent(location.pathname.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}
@@ -153,6 +154,8 @@ function App() {
     page = <AiDesignPage cartCount={cartCount} productIdFromPath={productId} />
   } else if (location.pathname.startsWith("/categories")) {
     page = <CategoriesPage cartCount={cartCount} />
+  } else if (location.pathname.startsWith("/trends")) {
+    page = <TrendsPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/search")) {
     page = <SearchPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/saved")) {

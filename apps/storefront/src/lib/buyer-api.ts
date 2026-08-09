@@ -897,7 +897,9 @@ const isPlaceholderValue = (value: string) =>
   !value || value.includes("replace_me") || value.includes("<") || value.includes(">")
 
 const config = {
-  backendUrl: readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
+  backendUrl: import.meta.env.DEV && typeof window !== "undefined" && window.location.port === "5174"
+    ? window.location.origin
+    : readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
   publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
   aiWorkerPublicBase: (() => {
     const explicit = readEnv("VITE_AI_WORKER_PUBLIC_BASE_URL", readEnv("NEXT_PUBLIC_AI_WORKER_PUBLIC_BASE_URL"))
@@ -988,22 +990,31 @@ const storeScopedFetch = async <T>(
   return (text ? JSON.parse(text) : undefined) as T
 }
 
-export const formatBuyerMoney = (value: number | undefined, currency = "USD") => {
-  const amount = Number.isFinite(value) ? (value as number) : 0
+/**
+ * Format a dollar amount for display.
+ * Returns "Price unavailable" for null/undefined/NaN instead of "$0.00".
+ */
+export const formatBuyerMoney = (value: number | undefined | null, currency = "USD"): string => {
+  if (value == null || !Number.isFinite(value)) return "Price unavailable"
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
-  }).format(amount)
+  }).format(value)
 }
 
-const readNumber = (value: number | string | null | undefined) => {
+/**
+ * Read a dollar amount from API response.
+ * No heuristic conversion — the backend is responsible for sending major units (dollars).
+ * Returns undefined for null/undefined/NaN.
+ */
+const readNumber = (value: number | string | null | undefined): number | undefined => {
   if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
+  return Number.isFinite(numeric) ? numeric : undefined
 }
 
-/** Medusa cart / payment amounts are stored in minor units (cents). */
-const fromCartMinorUnits = (value: number | string | null | undefined) => {
+/** Medusa cart / payment amounts are stored in minor units (cents). Convert to dollars. */
+const fromCartMinorUnits = (value: number | string | null | undefined): number | undefined => {
   if (value == null || value === "") return undefined
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? numeric / 100 : undefined
@@ -2401,7 +2412,13 @@ const normalizeRefundCapability = (
   }
 }
 
-const readOrderMoneyMajor = (value: number | string | null | undefined) => {
+/**
+ * Read a dollar amount from order detail API response.
+ * The backend (buyer-order-totals.ts) already converts cents→dollars via minorMoneyToMajor.
+ * This function just validates and normalizes the value.
+ * Returns null for null/undefined/NaN.
+ */
+const readOrderMoneyMajor = (value: number | string | null | undefined): number | null => {
   if (value == null || value === "") return null
   const numeric = typeof value === "number" ? value : Number(value)
   return Number.isFinite(numeric) ? numeric : null
@@ -3699,4 +3716,102 @@ export const fetchFavoriteProducts = async (): Promise<FavoriteListResult> => {
   } catch {
     return { favorites: [], count: 0 }
   }
+}
+
+// ─── Custom Editor APIs (proxy to S2BDIY, token stays server-side) ───
+
+/**
+ * Upload a design image to S2BDIY via our backend proxy.
+ * Returns material_id for use in quickCreate.
+ */
+export const uploadDesignMaterial = async (imageBase64: string): Promise<{
+  material_id: number
+  material_url: string | null
+  name: string
+}> => {
+  const payload = await apiFetch<{
+    material_id: number
+    material_url: string | null
+    name: string
+  }>("/store/design-sessions/material-upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_base64: imageBase64 }),
+  })
+  return payload
+}
+
+/**
+ * Create a designed product on S2BDIY via our backend proxy.
+ * Returns s2b_product_id.
+ */
+export const quickCreateDesign = async (input: {
+  basicProductId: number | string
+  sizeId: number | string
+  colorId: number | string
+  materialId: number | string
+  viewId?: number | string
+  designType?: number
+  name?: string
+}): Promise<{
+  s2b_product_id: number | string
+  product_name?: string
+  product_code?: string
+}> => {
+  const payload = await apiFetch<{
+    s2b_product_id: number | string
+    product_name?: string
+    product_code?: string
+  }>("/store/design-sessions/quick-create", {
+    method: "POST",
+    body: JSON.stringify({
+      basic_product_id: input.basicProductId,
+      size_id: input.sizeId,
+      color_id: input.colorId,
+      name: input.name ?? "Custom Design",
+      views: [
+        {
+          view_id: input.viewId ?? 1,
+          objects: [
+            {
+              type: "image",
+              material_id: input.materialId,
+              design_type: input.designType ?? 1,
+            },
+          ],
+        },
+      ],
+    }),
+  })
+  return payload
+}
+
+/**
+ * Get designed product detail (mockup URLs) from S2BDIY via our backend proxy.
+ */
+export const fetchS2bProductDetail = async (s2bProductId: number | string): Promise<{
+  product_id: number | string
+  product_name: string | null
+  mockup_urls: string[]
+  variants: Array<{
+    id: number
+    size_id: number
+    color_id: number
+    size_name: string
+    color_name: string
+  }>
+}> => {
+  const payload = await apiFetch<{
+    product_id: number | string
+    product_name: string | null
+    mockup_urls: string[]
+    variants: Array<{
+      id: number
+      size_id: number
+      color_id: number
+      size_name: string
+      color_name: string
+    }>
+  }>(`/store/design-sessions/product-detail/${encodeURIComponent(String(s2bProductId))}`)
+  return payload
 }

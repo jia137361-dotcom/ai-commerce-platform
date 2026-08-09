@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Modal } from "../ui/Modal"
 
 export type FilterState = {
@@ -7,6 +8,7 @@ export type FilterState = {
   color?: string
   material?: string
   size?: string
+  occasion?: string
 }
 
 type FilterDrawerProps = {
@@ -34,11 +36,40 @@ const PRICE_PRESETS = [
   { label: "Over USD 100", min: 100, max: undefined },
 ]
 
-const COLOR_OPTIONS = ["Any", "Black", "White", "Red", "Blue", "Green"]
+const COLOR_OPTIONS = [
+  { label: "Any", value: "", swatch: "linear-gradient(135deg, #ef4444, #facc15, #22c55e, #3b82f6, #a855f7)" },
+  { label: "White", value: "White", swatch: "#ffffff" },
+  { label: "Black", value: "Black", swatch: "#111827" },
+  { label: "Red", value: "Red", swatch: "#ef4444" },
+  { label: "Blue", value: "Blue", swatch: "#2563eb" },
+  { label: "Yellow", value: "Yellow", swatch: "#facc15" },
+  { label: "Green", value: "Green", swatch: "#16a34a" },
+  { label: "Pink", value: "Pink", swatch: "#f9a8d4" },
+  { label: "Purple", value: "Purple", swatch: "#9333ea" },
+  { label: "Brown", value: "Brown", swatch: "#92400e" },
+  { label: "Gray", value: "Gray", swatch: "#9ca3af" },
+  { label: "Orange", value: "Orange", swatch: "#f97316" },
+]
 const MATERIAL_OPTIONS = ["Any", "Cotton", "Polyester", "Ceramic", "Canvas"]
 const SIZE_OPTIONS = ["Any", "S", "M", "L", "XL"]
+const OCCASION_OPTIONS = [
+  "Valentine's Day",
+  "Wedding & engagement",
+  "Get well",
+  "Housewarming",
+  "General gift",
+  "Reunion",
+  "Birthday",
+  "New Year",
+  "Anniversary",
+  "Retirement",
+  "Prom",
+  "Seasonal celebration",
+]
 
 export function FilterDrawer({ open, onClose, sort, onSortChange, filters, onFiltersChange }: FilterDrawerProps) {
+  const [showAllOccasions, setShowAllOccasions] = useState(false)
+
   return (
     <Modal open={open} onClose={onClose} title="Filters" className="buyer-filter-drawer">
       <section className="buyer-filter-section">
@@ -59,15 +90,18 @@ export function FilterDrawer({ open, onClose, sort, onSortChange, filters, onFil
 
       <section className="buyer-filter-section">
         <h3>Color</h3>
-        <div className="buyer-filter-chips">
+        <div className="buyer-filter-color-grid">
           {COLOR_OPTIONS.map((color) => (
             <button
-              key={color}
+              key={color.label}
               type="button"
-              className={(filters.color ?? "Any") === color ? "active" : ""}
-              onClick={() => onFiltersChange({ ...filters, color: color === "Any" ? undefined : color })}
+              className={(filters.color ?? "") === color.value ? "active" : ""}
+              aria-label={color.label}
+              title={color.label}
+              onClick={() => onFiltersChange({ ...filters, color: color.value || undefined })}
             >
-              {color}
+              <span className="buyer-filter-color-swatch" style={{ background: color.swatch }} aria-hidden="true" />
+              <small>{color.label}</small>
             </button>
           ))}
         </div>
@@ -107,6 +141,31 @@ export function FilterDrawer({ open, onClose, sort, onSortChange, filters, onFil
       </section>
 
       <section className="buyer-filter-section">
+        <h3>Occasion</h3>
+        <div className="buyer-filter-options">
+          {OCCASION_OPTIONS.slice(0, showAllOccasions ? OCCASION_OPTIONS.length : 6).map((occasion) => (
+            <button
+              key={occasion}
+              type="button"
+              className={filters.occasion === occasion ? "active" : ""}
+              onClick={() =>
+                onFiltersChange({
+                  ...filters,
+                  occasion: filters.occasion === occasion ? undefined : occasion,
+                })
+              }
+            >
+              {occasion}
+            </button>
+          ))}
+          <button type="button" onClick={() => setShowAllOccasions((show) => !show)}>
+            {showAllOccasions ? "Show less" : "+ View more"}
+          </button>
+        </div>
+        <p className="buyer-filter-mock-note">Occasion is UI-only until the catalog API exposes product tags.</p>
+      </section>
+
+      <section className="buyer-filter-section">
         <h3>Price</h3>
         <div className="buyer-filter-options">
           {PRICE_PRESETS.map((preset) => {
@@ -122,6 +181,43 @@ export function FilterDrawer({ open, onClose, sort, onSortChange, filters, onFil
               </button>
             )
           })}
+        </div>
+        <div className="buyer-filter-price-custom">
+          <label>
+            <span className="sr-only">Minimum price</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="decimal"
+              placeholder="$ Min."
+              value={filters.minPrice ?? ""}
+              onChange={(event) =>
+                onFiltersChange({
+                  ...filters,
+                  minPrice: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)),
+                })
+              }
+            />
+          </label>
+          <span>–</span>
+          <label>
+            <span className="sr-only">Maximum price</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="decimal"
+              placeholder="$ Max."
+              value={filters.maxPrice ?? ""}
+              onChange={(event) =>
+                onFiltersChange({
+                  ...filters,
+                  maxPrice: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)),
+                })
+              }
+            />
+          </label>
         </div>
       </section>
 

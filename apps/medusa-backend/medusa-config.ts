@@ -44,15 +44,17 @@ const paypalPaymentProviders =
     : []
 
 const disableAdmin = process.env.MEDUSA_ADMIN_DISABLE === "true"
-const databaseSslDisabled = process.env.DATABASE_SSL === "false"
 
 export default defineConfig({
   ...(disableAdmin ? { admin: { disable: true } } : {}),
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
-    ...(databaseSslDisabled
-      ? { databaseDriverOptions: { connection: { ssl: false } } }
-      : {}),
+    databaseDriverOptions: {
+      connection: process.env.DATABASE_SSL === "false" ? { ssl: false } : {},
+      // The remote development database resets bursts of concurrent startup transactions.
+      // A small pool keeps Medusa module initialization stable without changing data behavior.
+      pool: { min: 0, max: 2 },
+    },
     redisUrl: process.env.REDIS_URL,
     http: {
       storeCors:

@@ -18,9 +18,37 @@ describe("buyer product normalization", () => {
       .toBe("https://example.com/item.jpg")
   })
 
-  it("normalizes minor-unit prices without inventing a fallback", () => {
-    expect(normalizeBuyerProductPrice({ price: 2450 })).toBe(24.5)
+  it("keeps backend product prices in major units without inventing a fallback", () => {
+    expect(normalizeBuyerProductPrice({ price: 2450 })).toBe(2450)
     expect(normalizeBuyerProductPrice({ price: null })).toBeUndefined()
+  })
+
+  it("normalizes supplier English details for the product page", () => {
+    const product = normalizeBuyerProduct({
+      product_id: "prod_supplier",
+      title: "Supplier product",
+      supplier_details: {
+        supplier_product_code: "S2B-100",
+        english: {
+          english_material: "100% cotton",
+          colors: [{ id: "1", name: "Black" }],
+          sizes: [{ id: "2", name: "Large" }],
+          images: ["https://example.com/product.jpg"],
+          blank_design_images: ["https://example.com/blank.jpg"],
+          print_areas: [{ design_area_width: 1200, design_area_height: 1600 }],
+        },
+      },
+    })
+
+    expect(product.supplierDetails).toEqual(expect.objectContaining({
+      supplierProductCode: "S2B-100",
+      englishMaterial: "100% cotton",
+      colors: [{ id: "1", name: "Black" }],
+      sizes: [{ id: "2", name: "Large" }],
+      images: ["https://example.com/product.jpg"],
+      blankDesignImages: ["https://example.com/blank.jpg"],
+      printSpecs: [{ design_area_width: 1200, design_area_height: 1600 }],
+    }))
   })
 
   it("normalizes real variants and falls back only to the real bridge variant id", () => {

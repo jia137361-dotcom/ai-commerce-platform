@@ -350,6 +350,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
           </div>
 
           <div className="buyer-ai-studio-sidebar">
+            <div id="ai-materials">
             <Card className="buyer-ai-studio-info-card">
               <h3>{t("aiDesignLibraryTitle")}</h3>
               {libraryLoading ? <p>{t("catalogLoading")}</p> : null}
@@ -379,6 +380,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
                 </ul>
               )}
             </Card>
+            </div>
 
             <Card className="buyer-ai-studio-tips-card">
               <h3>Tips</h3>

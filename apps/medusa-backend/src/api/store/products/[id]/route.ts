@@ -5,6 +5,7 @@ import { attachSupportedRegionsToProduct } from "../../../../lib/product-regions
 import {
   getProductReviewSummaries,
   getStoreCoreService,
+  loadSupplierProductPresentation,
   normalizeProductWithReviewSummary,
   sendError
 } from "../../../_helpers/store-core"
@@ -54,12 +55,14 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     ? await storeCoreService.listProductCategories({ id: product.category_ids, store_id: storeId })
     : []
   const categoryNames = new Map(categories.map((category: any) => [category.id, category.name]))
+  const supplier_details = await loadSupplierProductPresentation(storeCoreService, product.supplier_product_id)
 
   return res.json({
     product: {
       ...normalizeProductWithReviewSummary(productWithRegions, summaries.get(product.id)),
       supported_regions: productWithRegions.supported_regions,
       category_name: product.category_ids?.[0] ? categoryNames.get(product.category_ids[0]) ?? null : null,
+      supplier_details,
     },
   })
 }

@@ -10,6 +10,7 @@ import { getS2bdiyAccessToken } from "./s2bdiy-auth"
 import { getBasicProduct } from "./s2bdiy-product"
 
 const SUPPLIER_ID = "sup_s2bdiy"
+const S2BDIY_REQUEST_TIMEOUT_MS = Number(process.env.S2BDIY_REQUEST_TIMEOUT_MS || 30000)
 
 async function fetchCatalog(params: {
   page: number
@@ -30,9 +31,19 @@ async function fetchCatalog(params: {
   if (params.categoryId) query.set("category_id", String(params.categoryId))
   if (params.keyword) query.set("keyword", params.keyword)
 
-  const resp = await fetch(`${baseUrl}/open/v1/basicProduct?${query.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), S2BDIY_REQUEST_TIMEOUT_MS)
+  let resp: Response
+  try {
+    resp = await fetch(`${baseUrl}/open/v1/basicProduct?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    throw new Error(`S2BDIY catalog request timed out or failed: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!resp.ok) {
     throw new Error(`S2BDIY catalog API failed: ${resp.status}`)
