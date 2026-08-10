@@ -669,6 +669,11 @@
 }
 
 @media (max-width: 980px) {
+  .buyer-store-topbar,
+  .buyer-store-toolbar {
+    max-width: 100%;
+  }
+
   .buyer-store-topbar {
     grid-template-columns: auto 1fr auto;
     gap: 14px;
@@ -679,14 +684,29 @@
     display: none;
   }
 
+  .buyer-store-mainnav,
+  .buyer-store-feature-nav,
+  .buyer-store-social {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .buyer-store-mainnav {
     gap: 10px;
     font-size: 12px;
-    overflow-x: auto;
   }
 
   .buyer-store-actions {
     gap: 12px;
+  }
+
+  .buyer-store-actions a,
+  .buyer-store-actions button,
+  .buyer-mobile-bottom-nav a {
+    min-height: 44px;
+    min-width: 44px;
   }
 
   .buyer-store-account span:last-child {
@@ -702,7 +722,6 @@
   .buyer-store-social,
   .buyer-store-feature-nav {
     width: 100%;
-    overflow-x: auto;
   }
 
   .buyer-store-feature-nav {
@@ -1355,6 +1374,21 @@
   left: auto;
 }
 
+.buyer-shop-product-media .buyer-shop-product-ship-flag,
+.buyer-product-image .buyer-shop-product-ship-flag {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 28px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+  background: #fff;
+  pointer-events: none;
+}
+
 .buyer-shop-product-image-placeholder {
   width: 100%;
   height: 100%;
@@ -1898,6 +1932,10 @@
   color: #fff;
   font-weight: 600;
   padding: 0 18px;
+}
+
+.buyer-marketplace-history-grid .buyer-marketplace-store-media {
+  aspect-ratio: 1;
 }
 
 .buyer-marketplace-store-grid {
@@ -2464,12 +2502,6 @@ button.buyer-shop-product-customize:disabled,
   border-top: 1px solid #e5e7eb;
 }
 
-@media (max-width: 980px) {
-  .buyer-ui-page-shell {
-    padding-bottom: 24px;
-  }
-}
-
 .buyer-mobile-bottom-nav a {
   display: grid;
   justify-items: center;
@@ -2581,9 +2613,8 @@ button.buyer-shop-product-customize:disabled,
     display: grid;
   }
 
-  .buyer-store-page .buyer-ui-page-shell-main,
-  .buyer-product-page .buyer-ui-page-shell-main {
-    padding-bottom: 72px;
+  .buyer-ui-page-shell.has-mobile-bottom-nav .buyer-ui-page-shell-main {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -3575,11 +3606,23 @@ button.buyer-shop-product-customize:disabled,
 .buyer-mhome-page .buyer-store-hero-copy h1 {
   max-width: 680px;
   font-size: clamp(34px, 6vw, 64px);
+  color: #111827;
 }
 
-.buyer-mhome-page .buyer-store-hero-title-suffix,
+.buyer-mhome-page .buyer-store-hero-title-suffix {
+  display: inline;
+}
+
 .buyer-mhome-page .buyer-store-hero-actions {
-  display: none;
+  display: flex;
+}
+
+.buyer-mhome-page .buyer-store-hero-kicker {
+  color: #5f452d;
+}
+
+.buyer-mhome-page .buyer-store-hero-copy > span:not(.buyer-store-hero-fallback) {
+  color: #1f2937;
 }
 
 .buyer-mhome-page .buyer-shop-identity {
@@ -4216,6 +4259,45 @@ button.buyer-shop-product-customize:disabled,
   line-height: 1.55;
 }
 
+.buyer-trends-hero-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.buyer-trends-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.buyer-trends-search input {
+  flex: 1 1 240px;
+  min-height: 44px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 0 14px;
+  font: inherit;
+}
+
+.buyer-trends-search button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 16px;
+  background: #111827;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.buyer-trends-search-clear {
+  background: #f2f4f7 !important;
+  color: #344054 !important;
+}
+
 .buyer-trends-topics,
 .buyer-trends-categories {
   display: flex;
@@ -4229,6 +4311,7 @@ button.buyer-shop-product-customize:disabled,
 }
 
 .buyer-trends-topics span,
+.buyer-trends-topics button,
 .buyer-trends-categories button {
   flex: 0 0 auto;
   min-height: 36px;
@@ -4244,6 +4327,7 @@ button.buyer-shop-product-customize:disabled,
 }
 
 .buyer-trends-topics span.active,
+.buyer-trends-topics button.active,
 .buyer-trends-categories button.active {
   border-color: #111827;
   background: #111827;
