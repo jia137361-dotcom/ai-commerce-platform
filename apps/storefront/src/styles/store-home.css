@@ -2571,12 +2571,14 @@ button.buyer-shop-product-customize:disabled,
 
 .buyer-saved-row {
   display: grid;
-  grid-template-columns: 88px 1fr;
+  grid-template-columns: 88px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 12px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .buyer-saved-row img,
@@ -4583,6 +4585,42 @@ button.buyer-shop-product-customize:disabled,
 
   .buyer-studio-landing-hero h1 {
     font-size: clamp(28px, 8vw, 36px);
+  }
+}
+
+@media (max-width: 980px) {
+  /* P2 Saved / My Designs adjacent grids */
+  .buyer-saved-shell {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .buyer-saved-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .buyer-saved-manage-bar {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .buyer-saved-list {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .buyer-saved-recommendations .buyer-mhome-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-saved-recommendations .buyer-mhome-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
