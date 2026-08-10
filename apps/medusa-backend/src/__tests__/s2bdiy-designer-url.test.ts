@@ -1,5 +1,6 @@
 import {
   buildS2bdiyDesignerUrl,
+  resolveS2bEditorSelection,
   resolveS2bEditorMode,
 } from "../lib/s2bdiy/product-design-config"
 
@@ -84,5 +85,76 @@ describe("S2BDIY designer URL", () => {
     }
 
     expect(resolveS2bEditorMode(product, "992793")).toBe("new")
+  })
+
+  it("uses the catalog variant selection instead of unrelated test defaults", () => {
+    const originalBasicProductId = process.env.S2BDIY_TEST_BASIC_PRODUCT_ID
+    const originalSizeId = process.env.S2BDIY_TEST_SIZE_ID
+    const originalColorId = process.env.S2BDIY_TEST_COLOR_ID
+    process.env.S2BDIY_TEST_BASIC_PRODUCT_ID = "1672"
+    process.env.S2BDIY_TEST_SIZE_ID = "20"
+    process.env.S2BDIY_TEST_COLOR_ID = "6"
+
+    try {
+      expect(
+        resolveS2bEditorSelection(
+          {
+            basic_product_id: "3000",
+            variants: [
+              {
+                supplier_variant_id: "variant-blue",
+                supplier_size_id: "20",
+                supplier_color_id: "10",
+              },
+            ],
+          },
+          "3000"
+        )
+      ).toEqual({
+        sizeId: "20",
+        colorId: "10",
+        viewId: null,
+      })
+    } finally {
+      if (originalBasicProductId == null) delete process.env.S2BDIY_TEST_BASIC_PRODUCT_ID
+      else process.env.S2BDIY_TEST_BASIC_PRODUCT_ID = originalBasicProductId
+      if (originalSizeId == null) delete process.env.S2BDIY_TEST_SIZE_ID
+      else process.env.S2BDIY_TEST_SIZE_ID = originalSizeId
+      if (originalColorId == null) delete process.env.S2BDIY_TEST_COLOR_ID
+      else process.env.S2BDIY_TEST_COLOR_ID = originalColorId
+    }
+  })
+
+  it("only uses test defaults for their matching fixture product", () => {
+    const originalBasicProductId = process.env.S2BDIY_TEST_BASIC_PRODUCT_ID
+    const originalSizeId = process.env.S2BDIY_TEST_SIZE_ID
+    const originalColorId = process.env.S2BDIY_TEST_COLOR_ID
+    const originalViewId = process.env.S2BDIY_TEST_VIEW_ID
+    process.env.S2BDIY_TEST_BASIC_PRODUCT_ID = "1672"
+    process.env.S2BDIY_TEST_SIZE_ID = "20"
+    process.env.S2BDIY_TEST_COLOR_ID = "6"
+    process.env.S2BDIY_TEST_VIEW_ID = "1"
+
+    try {
+      expect(resolveS2bEditorSelection({ basic_product_id: "1672" }, "1672")).toEqual({
+        sizeId: "20",
+        colorId: "6",
+        viewId: "1",
+      })
+      expect(resolveS2bEditorSelection({ basic_product_id: "3000" }, "3000")).toEqual({
+        sizeId: null,
+        colorId: null,
+        viewId: null,
+      })
+    } finally {
+      if (originalBasicProductId == null) delete process.env.S2BDIY_TEST_BASIC_PRODUCT_ID
+      else process.env.S2BDIY_TEST_BASIC_PRODUCT_ID = originalBasicProductId
+      if (originalSizeId == null) delete process.env.S2BDIY_TEST_SIZE_ID
+      else process.env.S2BDIY_TEST_SIZE_ID = originalSizeId
+      if (originalColorId == null) delete process.env.S2BDIY_TEST_COLOR_ID
+      else process.env.S2BDIY_TEST_COLOR_ID = originalColorId
+      if (originalViewId == null) delete process.env.S2BDIY_TEST_VIEW_ID
+      else process.env.S2BDIY_TEST_VIEW_ID = originalViewId
+    }
   })
 })

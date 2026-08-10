@@ -351,6 +351,13 @@
   color: var(--buyer-text-muted);
 }
 
+.buyer-ui-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--buyer-space-3);
+}
+
 .buyer-ui-error {
   border-color: #efc2b7;
 }

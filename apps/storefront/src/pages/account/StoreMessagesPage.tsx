@@ -12,7 +12,7 @@ import {
   sendBuyerStoreMessage,
   type BuyerStoreMessage,
 } from "../../lib/buyer-api"
-import { buildSettingsStoreHref, buildStoreMessagesHref } from "../../lib/storefront-links"
+import { buildSettingsStoreHref, buildStoreMessagesHref, resolveMessageStoreId } from "../../lib/storefront-links"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type StoreMessagesPageProps = {
@@ -28,14 +28,16 @@ const readStoreIdFromUrl = () => {
 
 export function StoreMessagesPage({ cartCount, orderId, storeId }: StoreMessagesPageProps) {
   const auth = useBuyerAuth()
-  const [requestedStoreId] = useState(() => storeId?.trim() || readStoreIdFromUrl() || getScopedBuyerStoreId())
-  const { settings, marketplaceMode } = useBuyerPageSettings({ storeId: requestedStoreId })
+  const [requestedStoreId] = useState(() =>
+    resolveMessageStoreId(storeId?.trim() || readStoreIdFromUrl() || getScopedBuyerStoreId())
+  )
+  const { settings } = useBuyerPageSettings({ storeId: requestedStoreId })
   const [messages, setMessages] = useState<BuyerStoreMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
-  const messageStoreId = settings.storeId?.trim() || requestedStoreId
+  const messageStoreId = resolveMessageStoreId(settings.storeId || requestedStoreId)
   const storeHref = buildSettingsStoreHref(settings)
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export function StoreMessagesPage({ cartCount, orderId, storeId }: StoreMessages
   return (
     <PageShell
       className="buyer-messages-page"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StoreFooter />}
       cartCount={cartCount}
       storeHref={storeHref}

@@ -6,6 +6,10 @@ import { AccountProfileForm } from "./AccountProfileForm"
 import { RegisterForm } from "./RegisterForm"
 import { SignInForm } from "./SignInForm"
 
+jest.mock("../../lib/buyer-api", () => ({
+  sendBuyerLoginOtp: jest.fn(async () => ({ sent: true, email: "user@gmail.com" })),
+}))
+
 const customer = { id: "cus_1", email: "buyer@example.com" }
 
 describe("buyer account components", () => {
@@ -59,27 +63,31 @@ describe("buyer account components", () => {
     expect(html).toContain('role="alert"')
   })
 
-  it("register only asks for email and password", () => {
+  it("register starts with email code and consent; password appears after code is sent", () => {
     const html = renderToStaticMarkup(createElement(RegisterForm, {
       loading: false,
       onSubmit: async () => undefined,
     }))
     expect(html).toContain("Email")
-    expect(html).toContain("Password")
+    expect(html).toContain("Send verification code")
     expect(html).toContain("Terms of Use")
     expect(html).toContain("Privacy Policy")
+    expect(html).toContain("Keep me signed in")
+    expect(html).not.toContain("Create a password")
     expect(html).not.toContain("First name")
     expect(html).not.toContain("Last name")
     expect(html).not.toContain("Phone")
   })
 
-  it("sign-in shows forgot password and disabled social auth", () => {
+  it("sign-in defaults to password with email-code alternate", () => {
     const html = renderToStaticMarkup(createElement(SignInForm, {
       loading: false,
       onSubmit: async () => undefined,
     }))
     expect(html).toContain('href="/account/forgot-password"')
-    expect(html).toContain("Or continue with other ways")
-    expect(html).toContain("disabled")
+    expect(html).toContain("Sign in")
+    expect(html).toContain("Keep me signed in")
+    expect(html).toContain("Use email code instead")
+    expect(html).toContain("coming soon")
   })
 })

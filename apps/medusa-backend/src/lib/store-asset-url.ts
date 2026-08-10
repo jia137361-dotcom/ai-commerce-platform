@@ -30,7 +30,7 @@ export const resolveStoreAssetUrl = (url: string | null | undefined): string | n
   const medusaBase = (
     process.env.MEDUSA_PUBLIC_URL ??
     process.env.MEDUSA_BACKEND_URL ??
-    "http://127.0.0.1:9000"
+    "http://127.0.0.1:9001"
   ).replace(/\/+$/, "")
 
   if (!/^https?:\/\//i.test(trimmed)) {

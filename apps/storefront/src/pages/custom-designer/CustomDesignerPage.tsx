@@ -383,7 +383,7 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
       showMobileBottomNav={false}
     >
       <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
-        <a href="/store">Store</a><span>/</span><a href="/studio">{t("navStudio")}</a><span>/</span><span>Custom Designer</span>
+        <a href="/store">Store</a><span>/</span><a href="/trends">Product selection</a><span>/</span><span>Custom Designer</span>
       </nav>
       <div className="designer-product-header">
         <div>

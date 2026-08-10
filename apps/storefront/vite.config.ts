@@ -11,8 +11,13 @@ const localStoreProducts = () => ({
   name: "local-store-products",
   configureServer(server: any) {
     server.middlewares.use("/store/products/", async (req: any, res: any, next: () => void) => {
-      const id = decodeURIComponent(String(req.url || "").split("?")[0]).replace(/^\//, "")
-      if (!id) return next()
+      const segments = decodeURIComponent(String(req.url || "").split("?")[0])
+        .split("/")
+        .filter(Boolean)
+      // Only provide the local fallback for GET /store/products/:id. Nested
+      // routes such as /design-config must continue to the Medusa proxy.
+      if (req.method !== "GET" || segments.length !== 1) return next()
+      const [id] = segments
       try {
         const result = await pool.query(`select p.id product_id,p.store_id,p.title,coalesce(nullif(p.description,''),sp.raw_json->>'en_desc') description,p.status,p.image_url,p.mockup_image_url,p.design_image_url,p.price,p.variants,p.tags,p.metadata,sp.raw_json supplier_raw from mc_product p left join mc_supplier_product sp on sp.id=p.supplier_product_id where p.id=$1 and p.status='published'`, [id])
         const product = result.rows[0]
@@ -42,19 +47,23 @@ export default defineConfig({
     ],
     proxy: {
       "/auth": {
-        target: "http://127.0.0.1:9000",
+        target: "http://127.0.0.1:9001",
         changeOrigin: true,
         bypass: spaBypass,
       },
       "/store": {
-        target: "http://127.0.0.1:9000",
+        target: "http://127.0.0.1:9001",
         changeOrigin: true,
         bypass: spaBypass,
       },
       "/admin": {
-        target: "http://127.0.0.1:9000",
+        target: "http://127.0.0.1:9001",
         changeOrigin: true,
         bypass: spaBypass,
+      },
+      "/static": {
+        target: "http://127.0.0.1:9001",
+        changeOrigin: true,
       },
     },
   },

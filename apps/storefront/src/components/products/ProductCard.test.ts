@@ -40,4 +40,15 @@ describe("ProductCard", () => {
     expect(html).not.toContain('href="/design/prod_123"')
     expect(html).not.toContain("/ai-design?productId=prod_123")
   })
+
+  it("shows a ship-from flag badge when country code is present", () => {
+    const html = render({
+      ...product,
+      shipFromCountry: "US",
+      shipFromLabel: "United States",
+    })
+    expect(html).toContain("buyer-shop-product-ship-flag")
+    expect(html).toContain("https://flagcdn.com/w40/us.png")
+    expect(html).toContain("Ships from United States")
+  })
 })

@@ -16,12 +16,12 @@ export function ShopHero({
   isFallback = false,
   announcement,
   description,
-  studioHref = "/studio",
+  studioHref = "/trends",
   shopHref = "/marketplace",
 }: ShopHeroProps) {
   const { t } = useBuyerLocale()
   const backgroundImage = imageUrl
-    ? `linear-gradient(105deg, rgba(12, 12, 12, .72) 0%, rgba(12, 12, 12, .28) 55%, rgba(12, 12, 12, .08) 100%), url("${imageUrl.replace(/["\\]/g, "")}")`
+    ? `linear-gradient(90deg, rgba(255, 250, 237, .96) 0%, rgba(255, 250, 237, .78) 38%, rgba(255, 250, 237, .08) 68%), url("${imageUrl.replace(/["\\]/g, "")}")`
     : undefined
 
   return (

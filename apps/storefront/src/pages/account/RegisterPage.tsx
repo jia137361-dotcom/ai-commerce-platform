@@ -12,13 +12,23 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
   const [error, setError] = useState<string | undefined>()
   const auth = useBuyerAuth()
 
-  const submit = async (input: { email: string; password: string }) => {
+  const submit = async (input: {
+    email: string
+    code: string
+    password: string
+    rememberMe: boolean
+  }) => {
     setLoading(true)
     setError(undefined)
     try {
-      await auth.register(input)
-      const returnTo = safeReturnTo("/account")
-      window.location.assign(`/account/verify-email?returnTo=${encodeURIComponent(returnTo)}`)
+      await auth.register({
+        email: input.email,
+        code: input.code,
+        password: input.password,
+        rememberMe: input.rememberMe,
+        acceptedTerms: true,
+      })
+      window.location.assign(safeReturnTo("/account"))
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : "Unable to create account.")
     } finally {
@@ -32,14 +42,16 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
         <section className="buyer-account-auth-intro">
           <p>Buyer account</p>
           <h1>Create your account</h1>
-          <span>Register with email and password. Add your name and phone later from Profile.</span>
+          <span>Verify your Gmail or Apple email with a code, then create a password for next time.</span>
         </section>
         <Card as="section" className="buyer-account-auth-card">
-        <div className="buyer-account-auth-tabs">
-          <a href="/account/sign-in">Sign in</a>
-          <a className="active" href="/account/register">Sign up</a>
-        </div>
-        <RegisterForm loading={loading} error={error} onSubmit={submit} />
+          <div className="buyer-account-auth-tabs">
+            <a href="/account/sign-in">Sign in</a>
+            <a className="active" href="/account/register">
+              Sign up
+            </a>
+          </div>
+          <RegisterForm loading={loading} error={error} onSubmit={submit} />
         </Card>
       </div>
     </AccountAuthLayout>

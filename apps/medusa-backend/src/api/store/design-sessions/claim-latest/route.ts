@@ -91,17 +91,82 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       },
       { take: 100 }
     )
-    const existingIds = (Array.isArray(existing) ? existing : [])
+    const existingRows = Array.isArray(existing) ? existing : []
+    const completedIds = existingRows
+      .filter((row: { medusa_variant_id?: string | null }) => readString(row.medusa_variant_id))
       .map((row: { supplier_product_id?: string; metadata?: Record<string, unknown> }) => {
         const fromField = readString(row.supplier_product_id)
         const fromMeta = readString(row.metadata?.s2b_product_id)
         return fromField || fromMeta
       })
       .filter(Boolean) as string[]
+    const incompleteIds = new Set(
+      existingRows
+        .filter((row: { medusa_variant_id?: string | null }) => !readString(row.medusa_variant_id))
+        .map((row: { supplier_product_id?: string; metadata?: Record<string, unknown> }) =>
+          readString(row.supplier_product_id) || readString(row.metadata?.s2b_product_id)
+        )
+        .filter(Boolean) as string[]
+    )
+    const clientExcludedIds = new Set(excludeIds.map(String))
+    const completedCandidate = existingRows
+      .filter((row: {
+        supplier_product_id?: string
+        medusa_variant_id?: string | null
+        metadata?: Record<string, unknown>
+      }) => {
+        const s2bId =
+          readString(row.supplier_product_id) || readString(row.metadata?.s2b_product_id)
+        if (!s2bId || !readString(row.medusa_variant_id) || clientExcludedIds.has(s2bId)) {
+          return false
+        }
+        const sameOwner = customerId
+          ? readString(row.metadata?.customer_id) === customerId
+          : Boolean(guestKey) && readString(row.metadata?.guest_key) === guestKey
+        const sameBlank =
+          !blankProductId || readString(row.metadata?.blank_product_id) === blankProductId
+        return sameOwner && sameBlank
+      })
+      .sort((a: { created_at?: string | Date }, b: { created_at?: string | Date }) =>
+        String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))
+      )[0] as {
+        supplier_product_id?: string
+        metadata?: Record<string, unknown>
+      } | undefined
+
+    // The native bridge may finish just after an earlier poll. Return that
+    // completed design when it was not part of this page's baseline so the
+    // current editor can immediately reveal its product/order panel.
+    if (completedCandidate) {
+      const completedS2bId =
+        readString(completedCandidate.supplier_product_id) ||
+        readString(completedCandidate.metadata?.s2b_product_id)
+      if (completedS2bId) {
+        const result = await completeBuyerDesignSession(req.scope, {
+          storeId,
+          s2bProductId: completedS2bId,
+          basicProductId,
+          saveAs: body.save_as === "ready" ? "ready" : "draft",
+          blankProductId,
+          guestKey,
+          customerId,
+        })
+        return res.status(200).json({
+          claimed: true,
+          known_s2b_ids: [completedS2bId, ...completedIds],
+          ...result,
+        })
+      }
+    }
 
     const found = await findLatestDesignedProductId({
       basicProductId,
-      excludeIds: [...excludeIds, ...existingIds],
+      // Incomplete rows must be claimable again so a failed native bridge can
+      // resume. They may also be present in the browser's baseline snapshot.
+      excludeIds: [
+        ...excludeIds.filter((id) => !incompleteIds.has(String(id))),
+        ...completedIds,
+      ],
     })
 
     if (!found) {
@@ -122,7 +187,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     return res.status(201).json({
       claimed: true,
-      known_s2b_ids: [found.s2bProductId, ...existingIds],
+      known_s2b_ids: [found.s2bProductId, ...completedIds],
       ...result,
     })
   } catch (error: unknown) {

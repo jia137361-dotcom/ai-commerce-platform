@@ -67,7 +67,10 @@ export function StoreTopBar({
   const [localSearch, setLocalSearch] = useState("")
   const [stores, setStores] = useState<MarketplaceStore[]>([])
   const currentStoreHref = storeHref ?? buildSettingsStoreHref(settings)
-  const storeMessagesHref = buildStoreMessagesHref(settings.storeId)
+  // Marketplace chrome is not a seller store — message the last real shop instead.
+  const storeMessagesHref = buildStoreMessagesHref(
+    marketplaceMode ? undefined : settings.storeId
+  )
   const accountMessagesHref = auth.customer
     ? storeMessagesHref
     : `/account/sign-in?returnTo=${encodeURIComponent(storeMessagesHref)}`
@@ -85,7 +88,10 @@ export function StoreTopBar({
   useEffect(() => {
     let active = true
     void fetchMarketplaceStores().then((result) => {
-      if (active) setStores(result.data)
+      // Single-store MVP: only the default/ciiverse shop appears in the switcher.
+      if (active) {
+        setStores(result.data.filter((store) => store.storeId === "default_store" || store.slug === "default-store"))
+      }
     })
     return () => {
       active = false
@@ -244,7 +250,7 @@ export function StoreTopBar({
               <span className="buyer-store-message-icon" aria-hidden="true" />
             </a>
             <div className="buyer-store-account buyer-store-account--dropdown buyer-store-features">
-              <button className="buyer-store-icon-trigger" type="button" aria-label="Open feature menu">
+              <button className="buyer-store-icon-trigger" type="button" aria-label="Open create menu">
                 <span className="buyer-store-feature-icon" aria-hidden="true" />
               </button>
               <FeatureMenuPanel />

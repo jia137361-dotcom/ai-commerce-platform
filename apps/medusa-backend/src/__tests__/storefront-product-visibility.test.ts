@@ -1,49 +1,79 @@
 import {
   isBuyerCustomDesignProduct,
-  isSupplierCatalogBlankProduct,
+  isStorefrontCatalogVisible,
   isStorefrontProductVisible,
+  isSupplierCatalogBlankProduct,
 } from "../lib/storefront-product-visibility"
 
 describe("storefront product visibility", () => {
-  it("allows published catalog products", () => {
+  it("allows published ordinary catalog products on the store homepage", () => {
+    expect(isStorefrontCatalogVisible({ status: "published", metadata: {} })).toBe(true)
     expect(isStorefrontProductVisible({ status: "published", metadata: {} })).toBe(true)
   })
 
-  it("hides ordinary drafts", () => {
+  it("hides ordinary drafts from the store homepage", () => {
+    expect(isStorefrontCatalogVisible({ status: "draft", metadata: {} })).toBe(false)
     expect(isStorefrontProductVisible({ status: "draft", metadata: {} })).toBe(false)
   })
 
-  it("hides buyer custom designs from the public storefront catalog", () => {
+  it("shows published supplier blanks on the store homepage", () => {
     expect(
-      isStorefrontProductVisible({
+      isStorefrontCatalogVisible({
         status: "published",
-        metadata: { buyer_design: true },
+        metadata: { catalog_blank: true },
+      })
+    ).toBe(true)
+    expect(
+      isStorefrontCatalogVisible({
+        status: "published",
+        tags: ["blank", "s2bdiy"],
+      })
+    ).toBe(true)
+    expect(isSupplierCatalogBlankProduct({ tags: ["blank", "s2bdiy"] })).toBe(true)
+  })
+
+  it("never shows buyer custom designs on the store homepage", () => {
+    expect(
+      isStorefrontCatalogVisible({
+        status: "published",
+        metadata: { buyer_design: true, customer_id: "cus_a" },
       })
     ).toBe(false)
     expect(
-      isStorefrontProductVisible({
+      isStorefrontCatalogVisible({
         status: "draft",
-        metadata: { buyer_design: true },
+        metadata: { buyer_design: true, customer_id: "cus_a" },
       })
     ).toBe(false)
     expect(isBuyerCustomDesignProduct({ tags: ["custom-design"] })).toBe(true)
   })
 
-  it("hides supplier catalog blanks from the public storefront catalog", () => {
-    expect(
-      isStorefrontProductVisible({
-        status: "published",
-        metadata: { catalog_blank: true },
-      })
-    ).toBe(false)
-    expect(isSupplierCatalogBlankProduct({ tags: ["blank", "s2bdiy"] })).toBe(true)
+  it("lets only the owning buyer open a custom design by id", () => {
+    const ownPublished = {
+      status: "published",
+      metadata: { buyer_design: true, customer_id: "cus_a" },
+    }
+    const ownDraft = {
+      status: "draft",
+      metadata: { buyer_design: true, customer_id: "cus_a" },
+    }
+    const other = {
+      status: "published",
+      metadata: { buyer_design: true, customer_id: "cus_b" },
+    }
+
+    expect(isStorefrontProductVisible(ownPublished, { customerId: "cus_a" })).toBe(true)
+    expect(isStorefrontProductVisible(ownDraft, { customerId: "cus_a" })).toBe(true)
+    expect(isStorefrontProductVisible(other, { customerId: "cus_a" })).toBe(false)
+    expect(isStorefrontProductVisible(ownPublished, { customerId: "cus_b" })).toBe(false)
+    expect(isStorefrontProductVisible(ownPublished)).toBe(false)
   })
 
-  it("hides archived products", () => {
+  it("hides archived ordinary products", () => {
     expect(
-      isStorefrontProductVisible({
+      isStorefrontCatalogVisible({
         status: "archived",
-        metadata: { buyer_design: true },
+        metadata: { catalog_blank: true },
       })
     ).toBe(false)
   })

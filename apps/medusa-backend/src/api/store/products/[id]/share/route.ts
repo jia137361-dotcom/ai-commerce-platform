@@ -14,7 +14,7 @@ const readRequestOrigin = (req: MedusaRequest) => {
     ? forwardedHost[0]
     : forwardedHost ?? req.headers.host
   if (!host) return undefined
-  return `${protocol}://${host}`.replace(":9000", ":5174")
+  return `${protocol}://${host}`.replace(":9001", ":5174").replace(":9000", ":5174")
 }
 
 /** GET /store/products/:id/share — 获取商品分享链接和文案 */

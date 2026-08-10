@@ -131,7 +131,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
     if (job?.editorPath) return job.editorPath
     if (productId && job?.materialId) return buildStudioEditorHref(productId, job.materialId)
     if (productId) return buildStudioEditorHref(productId)
-    return "/studio"
+    return "/trends"
   }, [job, productId])
 
   const pollJob = (jobId: string) => {
@@ -216,7 +216,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
           prompt: material.prompt,
         })
       }
-      navigateBuyer("/studio")
+      navigateBuyer("/trends")
       return
     }
     setError("This material is not ready for Studio yet.")
@@ -242,7 +242,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
         prompt,
       })
     }
-    navigateBuyer("/studio")
+    navigateBuyer("/trends")
   }
 
   return (
@@ -272,7 +272,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
           )}
           {returnTo || productId ? (
             <p>
-              <a href={returnTo || (productId ? buildStudioEditorHref(productId) : "/studio")}>
+              <a href={returnTo || (productId ? buildStudioEditorHref(productId) : "/trends")}>
                 {t("aiDesignBackToStudio")}
               </a>
             </p>
@@ -395,8 +395,8 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
               </ul>
             </Card>
 
-            <a href="/studio" className="buyer-ai-studio-back-link">
-              ← {t("navStudio")}
+            <a href="/trends" className="buyer-ai-studio-back-link">
+              ← Product selection
             </a>
           </div>
         </div>

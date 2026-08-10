@@ -65,7 +65,7 @@ export const resolveStoreMediaBaseUrl = (req?: RequestLike, fallback?: string): 
     fallback ||
     process.env.MEDUSA_BACKEND_URL ||
     process.env.MEDUSA_BASE_URL ||
-    "http://127.0.0.1:9000"
+    "http://127.0.0.1:9001"
   ).replace(/\/$/, "")
 }
 

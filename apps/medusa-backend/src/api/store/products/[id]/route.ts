@@ -10,6 +10,11 @@ import {
   sendError
 } from "../../../_helpers/store-core"
 import { isStorefrontProductVisible } from "../../../../lib/storefront-product-visibility"
+import { enrichBuyerDesignShipFromCountries } from "../../../../lib/buyer-design-ship-from"
+
+type AuthenticatedRequest = MedusaRequest & {
+  auth_context?: { actor_id?: string }
+}
 
 const storefrontProductPayload = (product: any) => ({
   ...product,
@@ -20,11 +25,16 @@ const storefrontProductPayload = (product: any) => ({
 
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const productId = (req.params.id ?? req.params.product_id) as string
-  const query = req.query as { store_id?: string; store?: string }
+  const query = req.query as { store_id?: string; store?: string; guest_key?: string }
   const queryStoreId = query.store_id?.trim() || query.store?.trim()
   const { store_id: headerStoreId } = resolveCurrentStore(req)
   const storeId = queryStoreId || headerStoreId
   const storeCoreService = getStoreCoreService(req)
+  const customerId = (req as AuthenticatedRequest).auth_context?.actor_id ?? null
+  const guestKey =
+    typeof query.guest_key === "string" && query.guest_key.trim()
+      ? query.guest_key.trim()
+      : null
 
   let products = await storeCoreService.listProducts({
     id: productId,
@@ -41,7 +51,13 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
   const product = products[0]
 
-  if (!product || !isStorefrontProductVisible(product as Record<string, unknown>)) {
+  if (
+    !product ||
+    !isStorefrontProductVisible(product as Record<string, unknown>, {
+      customerId,
+      guestKey,
+    })
+  ) {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
   }
 
@@ -49,7 +65,10 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     ...storefrontProductPayload(product),
     requires_shipping: resolveProductRequiresShipping(product as Record<string, unknown>),
   }
-  const productWithRegions = await attachSupportedRegionsToProduct(req.scope, productWithShipping)
+  const [productWithShipFrom] = await enrichBuyerDesignShipFromCountries(storeCoreService, storeId, [
+    productWithShipping,
+  ])
+  const productWithRegions = await attachSupportedRegionsToProduct(req.scope, productWithShipFrom)
   const summaries = await getProductReviewSummaries(storeCoreService, storeId, [product.id])
   const categories = product.category_ids?.length
     ? await storeCoreService.listProductCategories({ id: product.category_ids, store_id: storeId })

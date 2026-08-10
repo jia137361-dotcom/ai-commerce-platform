@@ -48,7 +48,7 @@ export default function App() {
         <Route index element={<OverviewPage />} />
         <Route path="products" element={<ProductListPage />} />
         <Route
-          path="skus"
+          path="products/skus"
           element={
             <ErrorBoundary>
               <SkuManagerPage />
@@ -71,6 +71,8 @@ export default function App() {
             </ErrorBoundary>
           }
         />
+        <Route path="skus" element={<Navigate to="/products" replace />} />
+        <Route path="skus/*" element={<Navigate to="/products" replace />} />
         <Route path="orders" element={<OrderListPage />} />
         <Route path="orders/:orderId/fulfillment" element={<OrderFulfillmentPage />} />
         <Route path="refund-requests" element={<RefundRequestsPage />} />

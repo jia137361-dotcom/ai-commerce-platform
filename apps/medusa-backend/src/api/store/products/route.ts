@@ -9,8 +9,9 @@ import {
   normalizeProductWithReviewSummary
 } from "../../_helpers/store-core"
 import { normalizeShipFromCountryCode } from "../../../lib/ship-from-country"
-import { isStorefrontProductVisible } from "../../../lib/storefront-product-visibility"
+import { isStorefrontCatalogVisible } from "../../../lib/storefront-product-visibility"
 import { S2B_SHIPPING_COUNTRY_CODES } from "../../../lib/product-regions"
+import { enrichBuyerDesignShipFromCountries } from "../../../lib/buyer-design-ship-from"
 
 const storefrontProductPayload = (product: any) => ({
   ...product,
@@ -63,7 +64,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
         ? S2B_SHIPPING_COUNTRY_CODES.includes(countryCode)
         : !countries.length || countries.includes(countryCode))
     return (
-      isStorefrontProductVisible(product as Record<string, unknown>) &&
+      isStorefrontCatalogVisible(product as Record<string, unknown>) &&
       countryAllowed &&
       isProductAvailableInRegion(product, requestedRegionId)
     )
@@ -80,7 +81,12 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     ...storefrontProductPayload(product),
     requires_shipping: resolveProductRequiresShipping(product as Record<string, unknown>),
   }))
-  const productsWithRegions = await attachSupportedRegionsToProducts(req.scope, productsWithShipping)
+  const productsWithShipFrom = await enrichBuyerDesignShipFromCountries(
+    storeCoreService,
+    storeId,
+    productsWithShipping
+  )
+  const productsWithRegions = await attachSupportedRegionsToProducts(req.scope, productsWithShipFrom)
 
   return res.json({
     store_id: storeId,

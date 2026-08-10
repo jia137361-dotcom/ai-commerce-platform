@@ -246,3 +246,23 @@ export async function sendBuyerPasswordResetCode(input: {
     `),
   })
 }
+
+export async function sendBuyerLoginOtpCode(input: {
+  to: string
+  code: string
+  expiresInMinutes: number
+  idempotencyKey?: string
+}): Promise<EmailResult> {
+  return sendEmail({
+    kind: "buyer_login_otp",
+    to: input.to,
+    subject: "Your Ciiverse sign-in code",
+    idempotencyKey: input.idempotencyKey,
+    html: baseEmailShell(`
+      <h1 style="margin:0 0 12px;color:#202636;font-size:28px;line-height:1.2">Sign in to Ciiverse</h1>
+      <p style="margin:0 0 20px;color:#4b5563;line-height:1.6">Enter this 6-digit code to sign in or create your buyer account. No password needed.</p>
+      <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#202636;background:#f7f8fa;border-radius:10px;padding:18px 20px;text-align:center">${input.code}</div>
+      <p style="margin:20px 0 0;color:#677083;line-height:1.6">This code expires in ${input.expiresInMinutes} minutes. You do not need to click a link.</p>
+    `),
+  })
+}

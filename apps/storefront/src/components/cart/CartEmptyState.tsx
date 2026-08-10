@@ -4,8 +4,9 @@ export function CartEmptyState() {
       <div>
         <span aria-hidden="true">0</span>
         <h1>Your cart is empty</h1>
-        <p>Products you add from the store will appear here.</p>
-        <a href="/store">Shop products</a>
+        <p>Designs you order from My Designs show up here for quantity, shipping, and checkout.</p>
+        <a href="/my-designs">View My Designs</a>
+        <a href="/store">Continue shopping</a>
       </div>
     </section>
   )

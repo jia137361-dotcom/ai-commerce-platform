@@ -71,7 +71,7 @@ function StoreFooter({ brandName, storeHref }: { brandName: string; storeHref: s
       <section>
         <h2>{t("navShop")}</h2>
         <a href={storeHref}>{t("heroCtaShop")}</a>
-        <a href="/saved">Saved</a>
+        <a href="/my-designs">My Designs</a>
         <a href="/cart">{t("navCart")}</a>
       </section>
       <section>
@@ -396,7 +396,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           isFallback={!settings.bannerUrl}
           announcement={settings.announcement}
           description={settings.description}
-          studioHref="/studio"
+          studioHref="/trends"
           shopHref={`${storeHref}#products`}
         />
         <StoreIdentity settings={settings} />
@@ -463,7 +463,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           isFallback={!settings.bannerUrl}
           announcement={settings.announcement}
           description={settings.description}
-          studioHref="/studio"
+          studioHref="/trends"
           shopHref={`${storeHref}#products`}
         />
         <StoreIdentity settings={settings} />

@@ -1,6 +1,7 @@
 import type { CartDTO } from "@medusajs/types"
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
+import { deletePaymentSessionsWorkflow } from "@medusajs/core-flows"
 import {
   createPaymentCollectionForCartWorkflow,
   createPaymentSessionsWorkflow,
@@ -11,6 +12,7 @@ const PROCESSABLE_STATUSES = new Set([
   "requires_more",
   "authorized",
   "captured",
+  "pending_authorization",
 ])
 
 export type PaymentSessionRow = {
@@ -107,6 +109,18 @@ export async function ensureCartPaymentReady(
       const sessions = await listPaymentSessions(container, paymentCollectionId)
       if (hasProcessableSessionForProvider(sessions, providerId)) {
         return
+      }
+
+      // Stale error/canceled sessions for this provider block Medusa's
+      // complete-cart validator (it only accepts processable statuses). Remove
+      // them before recreating, optionally reusing the external PayPal order.
+      const staleSessionIds = sessions
+        .filter((session) => session.provider_id === providerId && session.id)
+        .map((session) => session.id as string)
+      if (staleSessionIds.length) {
+        await deletePaymentSessionsWorkflow(container).run({
+          input: { ids: staleSessionIds },
+        })
       }
 
       const cart = await cartModule.retrieveCart(cartId)

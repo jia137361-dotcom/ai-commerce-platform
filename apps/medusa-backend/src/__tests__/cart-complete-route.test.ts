@@ -468,6 +468,30 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     expect(mockEnsureCartPaymentReady).not.toHaveBeenCalled()
   })
 
+  it("reuses the active PayPal order id when ensuring payment sessions for complete", async () => {
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_1",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      provider_id: "pp_paypal_paypal",
+      provider_payment_id: "PAYPAL_ORDER_APPROVED",
+      status: "requires_action",
+    })
+    const { req } = createReq({ paymentProviderId: "pp_paypal_paypal" })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockEnsureCartPaymentReady).toHaveBeenCalledWith(
+      expect.anything(),
+      "cart_1",
+      "pp_paypal_paypal",
+      "PAYPAL_ORDER_APPROVED"
+    )
+    expect(mockCompleteRun).toHaveBeenCalledTimes(1)
+    expect(res.status).toHaveBeenCalledWith(200)
+  })
+
   it("allows Stripe completion with an initialized official payment session", async () => {
     mockFindCartPaymentSession.mockResolvedValue({
       provider_id: "pp_stripe_stripe",

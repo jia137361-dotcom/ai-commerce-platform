@@ -1,4 +1,14 @@
-/** Whether a store-core product may be opened on the buyer storefront by id. */
+/** Storefront visibility for catalog blanks vs buyer-owned custom designs. */
+
+import {
+  buyerOwnsResource,
+  readBuyerResourceOwner,
+} from "./buyer-resource-ownership"
+
+export type StorefrontViewer = {
+  customerId?: string | null
+  guestKey?: string | null
+}
 
 export function isBuyerCustomDesignProduct(product: Record<string, unknown>) {
   const metadata =
@@ -25,13 +35,38 @@ export function isSupplierCatalogBlankProduct(product: Record<string, unknown>) 
 }
 
 /**
- * Storefront catalog/details only expose seller-published catalog products.
- * Buyer Custom Designs and supplier blanks are private workflow resources.
+ * Store homepage / public catalog.
+ * Shows published blanks and ordinary published products.
+ * Buyer custom designs never appear here — they live under My Designs.
  */
-export function isStorefrontProductVisible(product: Record<string, unknown>) {
+export function isStorefrontCatalogVisible(product: Record<string, unknown>) {
   const status = typeof product.status === "string" ? product.status : ""
   if (status !== "published") return false
   if (isBuyerCustomDesignProduct(product)) return false
-  if (isSupplierCatalogBlankProduct(product)) return false
   return true
+}
+
+/**
+ * Product detail / direct id access.
+ * Blanks and ordinary products: published only.
+ * Custom designs: owner only (any status); never visible to other buyers.
+ */
+export function isStorefrontProductVisible(
+  product: Record<string, unknown>,
+  viewer?: StorefrontViewer
+) {
+  if (isBuyerCustomDesignProduct(product)) {
+    const metadata =
+      product.metadata && typeof product.metadata === "object"
+        ? (product.metadata as Record<string, unknown>)
+        : {}
+    return buyerOwnsResource(
+      readBuyerResourceOwner(metadata),
+      viewer?.customerId ?? null,
+      viewer?.guestKey ?? null
+    )
+  }
+
+  const status = typeof product.status === "string" ? product.status : ""
+  return status === "published"
 }

@@ -205,6 +205,9 @@ export function ProductListPage() {
         title="Products"
         action={
           <div className="flex flex-wrap gap-2">
+            <Link to="/products/skus">
+              <Button variant="outline">All SKUs</Button>
+            </Link>
             <Link to="/suppliers">
               <Button>+ Add from supplier catalog</Button>
             </Link>

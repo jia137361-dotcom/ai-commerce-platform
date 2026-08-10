@@ -665,12 +665,24 @@ export type BuyerCustomer = {
 
 export type BuyerRegisterInput = {
   email: string
-  password: string
+  password?: string
+  code?: string
+  rememberMe?: boolean
+  acceptedTerms?: boolean
 }
 
 export type BuyerSignInInput = {
   email: string
-  password: string
+  password?: string
+  code?: string
+  rememberMe?: boolean
+}
+
+export type BuyerOtpSendResult = {
+  sent: boolean
+  email: string
+  expiresAt?: string
+  devCode?: string
 }
 
 export type BuyerPasswordResetRequest = {
@@ -2533,12 +2545,65 @@ const createCustomerSession = async (token: string) => {
   })
 }
 
+export const sendBuyerLoginOtp = async (email: string): Promise<BuyerOtpSendResult> => {
+  const payload = await apiFetch<{
+    sent?: boolean
+    email?: string
+    expires_at?: string
+    dev_code?: string
+  }>("/store/auth/otp/send", {
+    method: "POST",
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  })
+  return {
+    sent: Boolean(payload.sent),
+    email: payload.email ?? email.trim().toLowerCase(),
+    expiresAt: payload.expires_at,
+    devCode: payload.dev_code,
+  }
+}
+
+export const confirmBuyerLoginOtp = async (input: {
+  email: string
+  code: string
+  rememberMe?: boolean
+  password?: string
+}): Promise<BuyerCustomer> => {
+  const payload = await apiFetch<ApiAuthTokenResponse & { expires_in?: string; remember_me?: boolean }>(
+    "/store/auth/otp/confirm",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email: input.email.trim().toLowerCase(),
+        code: input.code.trim(),
+        remember_me: Boolean(input.rememberMe),
+        ...(input.password ? { password: input.password } : {}),
+      }),
+    }
+  )
+  if (!payload.token) throw new Error("Authentication succeeded without a token.")
+  await createCustomerSession(payload.token)
+  const customer = await getCurrentCustomer()
+  if (!customer) throw new Error("Unable to load customer after sign in.")
+  return customer
+}
+
 export const getCurrentCustomer = async () => {
   const payload = await apiFetch<ApiCustomerResponse>("/store/customers/me")
   return normalizeCustomer(payload.customer)
 }
 
 export const signInCustomer = async (input: BuyerSignInInput) => {
+  if (input.code?.trim()) {
+    return confirmBuyerLoginOtp({
+      email: input.email,
+      code: input.code,
+      rememberMe: input.rememberMe,
+    })
+  }
+  if (!input.password) {
+    throw new Error("Enter your password or request a sign-in code.")
+  }
   try {
     const payload = await apiFetch<ApiAuthTokenResponse>("/auth/customer/emailpass", {
       method: "POST",
@@ -2552,13 +2617,30 @@ export const signInCustomer = async (input: BuyerSignInInput) => {
     const customer = await getCurrentCustomer()
     if (!customer) throw new Error("Unable to load customer after sign in.")
     return customer
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message && !/incorrect/i.test(error.message)) {
+      throw error
+    }
     throw new Error("The email or password is incorrect.")
   }
 }
 
 export const registerCustomer = async (input: BuyerRegisterInput) => {
   const email = input.email.trim().toLowerCase()
+  if (input.code?.trim()) {
+    if (!input.password) {
+      throw new Error("Create a password after verifying your email.")
+    }
+    return confirmBuyerLoginOtp({
+      email,
+      code: input.code,
+      password: input.password,
+      rememberMe: input.rememberMe,
+    })
+  }
+  if (!input.password) {
+    throw new Error("Enter a password or complete email verification.")
+  }
   try {
     let auth: ApiAuthTokenResponse
     try {

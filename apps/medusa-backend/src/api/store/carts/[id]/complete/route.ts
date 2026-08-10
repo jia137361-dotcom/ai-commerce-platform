@@ -350,7 +350,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         console.warn("[checkout-complete] unable to resolve Stripe payment method label", error)
       }
     } else {
-      await ensureCartPaymentReady(req.scope, cartId, providerId)
+      // Reuse the active attempt's external PayPal order when Medusa only lost
+      // a processable session row. Creating a second PayPal order after the
+      // buyer already approved the first one leaves checkout unrecoverable.
+      let existingProviderPaymentId: string | undefined
+      if (isPayPalProviderId(providerId)) {
+        const attempt = await readActiveCheckoutPaymentAttempt(req.scope, { cartId, storeId })
+        if (attempt?.provider_id === providerId && attempt.provider_payment_id) {
+          existingProviderPaymentId = attempt.provider_payment_id
+        } else {
+          const session = await findCartPaymentSession(req.scope, cartId, providerId)
+          existingProviderPaymentId = readPayPalOrderId(session) ?? undefined
+        }
+      }
+      await ensureCartPaymentReady(req.scope, cartId, providerId, existingProviderPaymentId)
     }
 
     let result: { id?: string }

@@ -7,6 +7,7 @@ import {
 } from "../../api/_helpers/store-core"
 import { attachSupportedRegionsToProducts } from "../product-regions"
 import { resolveProductRequiresShipping } from "../product-shipping"
+import { enrichBuyerDesignShipFromCountries } from "../buyer-design-ship-from"
 
 const ACTIVE_STORE_STATUSES = new Set(["active"])
 
@@ -46,8 +47,10 @@ export async function listPublicStores(container: MedusaContainer, options: List
     brandByStore.set(row.store_id, row.brand_name ?? null)
   }
 
+  // Current MVP is single-store: only default_store / ciiverse is public.
   let filtered = (stores as Array<Record<string, unknown>>).filter((store) =>
-    isPublicStoreVisible(String(store.status ?? ""))
+    isPublicStoreVisible(String(store.status ?? "")) &&
+    String(store.id) === "default_store"
   )
 
   if (q) {
@@ -175,9 +178,17 @@ export async function listMarketplaceProducts(
     ...product,
     requires_shipping: resolveProductRequiresShipping(product),
   }))
+  const enrichedProducts = await enrichBuyerDesignShipFromCountries(
+    storeCore as never,
+    storeIdFilter || String(page[0]?.store_id ?? "default_store"),
+    productsWithShipping as MarketplaceProductRow[]
+  )
   const productsWithRegions = (await attachSupportedRegionsToProducts(
     container,
-    productsWithShipping
+    enrichedProducts.map((product) => ({
+      ...product,
+      requires_shipping: resolveProductRequiresShipping(product),
+    }))
   )) as EnrichedMarketplaceProduct[]
 
   const reviewSummariesByStore = new Map<string, Map<string, { average_rating: number | null; review_count: number }>>()

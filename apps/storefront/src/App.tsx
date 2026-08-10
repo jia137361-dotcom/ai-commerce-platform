@@ -22,13 +22,11 @@ import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { SearchPage } from "./pages/search/SearchPage"
-import { SavedPage } from "./pages/saved/SavedPage"
 import { CategoriesPage } from "./pages/categories/CategoriesPage"
 import { TrendsPage } from "./pages/trends/TrendsPage"
-import { CustomDesignerPage } from "./pages/custom-designer/CustomDesignerPage"
+import { DesignerPage } from "./pages/design/DesignerPage"
 import { AiDesignPage } from "./pages/ai-design/AiDesignPage"
 import { MyDesignsPage } from "./pages/my-designs/MyDesignsPage"
-import { StudioLandingPage } from "./pages/studio/StudioLandingPage"
 import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
 import { AboutPage, CookiesPage, HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
@@ -126,6 +124,15 @@ function App() {
     void refreshCartCount()
   }, [auth.customer?.id])
 
+  useEffect(() => {
+    if (location.pathname === "/studio" || location.pathname.startsWith("/studio/")) {
+      navigateBuyer(`/trends${location.search}${location.hash}`, { replace: true })
+    } else if (location.pathname === "/saved" || location.pathname.startsWith("/saved/")) {
+      // Legacy favorites URL → My Designs (buyer design drafts).
+      navigateBuyer(`/my-designs${location.search}${location.hash}`, { replace: true })
+    }
+  }, [location.hash, location.pathname, location.search])
+
   const onCartUpdated = (cart: StoreCart | null) => {
     setCartCount(cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
   }
@@ -135,14 +142,15 @@ function App() {
 
   if (location.pathname.startsWith("/design/")) {
     page = (
-      <CustomDesignerPage
+      <DesignerPage
         productId={decodeURIComponent(location.pathname.split("/").pop() ?? "")}
         cartCount={cartCount}
         onCartUpdated={onCartUpdated}
       />
     )
   } else if (location.pathname === "/studio" || location.pathname.startsWith("/studio/")) {
-    page = <StudioLandingPage cartCount={cartCount} />
+    // Legacy product-selection URL; effect above rewrites to /trends.
+    page = <TrendsPage cartCount={cartCount} />
   } else if (location.pathname === "/my-designs" || location.pathname.startsWith("/my-designs/")) {
     page = <MyDesignsPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
   } else if (location.pathname === "/ai-design" || location.pathname.startsWith("/ai-design/")) {
@@ -158,8 +166,9 @@ function App() {
     page = <TrendsPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/search")) {
     page = <SearchPage cartCount={cartCount} />
-  } else if (location.pathname.startsWith("/saved")) {
-    page = <SavedPage cartCount={cartCount} />
+  } else if (location.pathname === "/saved" || location.pathname.startsWith("/saved/")) {
+    // Effect above rewrites to /my-designs; keep drafts visible during replace.
+    page = <MyDesignsPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
   } else if (location.pathname.startsWith("/products/")) {
     page = (
       <ProductDetailPage
