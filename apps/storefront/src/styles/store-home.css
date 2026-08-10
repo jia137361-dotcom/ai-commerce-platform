@@ -311,7 +311,7 @@
 .buyer-store-toolbar {
   min-height: 58px;
   display: grid;
-  grid-template-columns: auto 1fr minmax(220px, 288px);
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 288px);
   align-items: center;
   column-gap: 18px;
   position: relative;
@@ -1549,7 +1549,7 @@
 }
 .buyer-shop-about {
   display: grid;
-  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
   gap: 30px;
   padding-top: 36px;
 }
@@ -2619,7 +2619,7 @@ button.buyer-shop-product-customize:disabled,
 }
 
 .buyer-store-topbar--temu {
-  grid-template-columns: auto auto auto minmax(280px, 1fr) auto;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
   gap: 18px;
   padding: 0 24px;
   min-height: 72px;
@@ -2815,16 +2815,21 @@ button.buyer-shop-product-customize:disabled,
 
 .buyer-filter-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .buyer-filter-chips button {
+  flex: 0 0 auto;
   min-height: 32px;
   padding: 0 12px;
   border: 1px solid #e5e7eb;
   border-radius: 999px;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .buyer-filter-chips button.active {
@@ -3680,7 +3685,7 @@ button.buyer-shop-product-customize:disabled,
 
 .buyer-shop-category-layout.active {
   display: grid;
-  grid-template-columns: 230px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 230px) minmax(0, 1fr);
   gap: 28px;
   align-items: start;
 }
