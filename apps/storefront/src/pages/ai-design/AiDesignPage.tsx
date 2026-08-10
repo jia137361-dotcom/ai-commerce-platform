@@ -249,6 +249,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
       contentClassName="buyer-ai-studio-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <div className="buyer-ai-studio-container">
         <div className="buyer-ai-studio-header">

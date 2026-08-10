@@ -114,6 +114,7 @@ export function CategoriesPage({ cartCount }: CategoriesPageProps) {
       className="buyer-store-page buyer-categories-page"
       contentClassName="buyer-categories-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      cartCount={cartCount}
     >
       <div className="buyer-categories-layout">
         <aside className="buyer-categories-sidebar" aria-label="Categories">

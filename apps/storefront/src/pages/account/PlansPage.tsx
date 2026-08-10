@@ -236,6 +236,7 @@ export function PlansPage({ cartCount }: PlansPageProps) {
       className="buyer-account-page"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       {content}
     </PageShell>

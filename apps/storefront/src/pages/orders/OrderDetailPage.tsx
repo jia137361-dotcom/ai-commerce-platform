@@ -287,6 +287,7 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
       contentClassName="buyer-orders-main buyer-order-detail-main-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
         {loading ? (
           <LoadingState label="Loading order..." />

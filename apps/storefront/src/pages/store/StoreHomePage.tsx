@@ -386,6 +386,8 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
         />
       }
       footer={<StoreFooter brandName={brand} storeHref={storeHref} />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-mhome-mobile-body">
         <ShopHero

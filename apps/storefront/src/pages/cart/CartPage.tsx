@@ -329,6 +329,7 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
       contentClassName="buyer-cart-shell-content"
       header={<StoreTopBar settings={settings} cartCount={itemCount} />}
       footer={<StoreFooter />}
+      cartCount={itemCount}
     >
       <header className="buyer-cart-page-header">
         <div>

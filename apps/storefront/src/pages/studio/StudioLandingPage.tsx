@@ -137,6 +137,7 @@ export function StudioLandingPage({ cartCount }: StudioLandingPageProps) {
       contentClassName="buyer-studio-landing-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StudioFooter brandName={brand} />}
+      cartCount={cartCount}
     >
       <section className="buyer-studio-landing-hero">
         <p className="buyer-studio-landing-kicker">{t("studioKicker")}</p>

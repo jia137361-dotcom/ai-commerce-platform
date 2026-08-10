@@ -299,6 +299,8 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       contentClassName="buyer-product-shell-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} storeHref={storeHref} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
         <a href={storeHref}>Store</a>

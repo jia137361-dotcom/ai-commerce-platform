@@ -53,6 +53,7 @@ export function MarketplaceHomePage({ cartCount }: MarketplaceHomePageProps) {
       contentClassName="buyer-shop-shell-content"
       header={<StoreTopBar settings={marketplaceBuyerSettings} cartCount={cartCount} marketplaceMode />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <section className="buyer-marketplace-hero">
         <p className="buyer-marketplace-eyebrow">Stores</p>

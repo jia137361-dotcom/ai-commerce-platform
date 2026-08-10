@@ -180,6 +180,7 @@ export function MyDesignsPage({ cartCount, onCartUpdated }: MyDesignsPageProps) 
       contentClassName="buyer-my-designs-content"
       header={<StoreTopBar settings={settings as BuyerStoreSettings} cartCount={cartCount} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <header className="buyer-my-designs-hero">
         <p className="buyer-studio-landing-kicker">{t("navMyDesigns")}</p>

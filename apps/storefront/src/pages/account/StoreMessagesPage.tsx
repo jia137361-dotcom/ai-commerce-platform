@@ -82,6 +82,7 @@ export function StoreMessagesPage({ cartCount, orderId, storeId }: StoreMessages
       className="buyer-messages-page"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <header className="buyer-messages-header">
         <h1>Messages with {settings.brandName}</h1>

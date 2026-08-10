@@ -548,6 +548,8 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
       contentClassName="designer-content"
       header={fullscreen ? null : <StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={fullscreen ? null : <StoreFooter />}
+      cartCount={cartCount}
+      showMobileBottomNav={false}
     >
       {!fullscreen ? (
         <>

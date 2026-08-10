@@ -127,6 +127,7 @@ export function SearchPage({ cartCount }: SearchPageProps) {
           onSearchSubmit={() => setDebouncedQuery(query.trim())}
         />
       }
+      cartCount={cartCount}
     >
       <div className="buyer-search-mobile-body">
         <div className="buyer-search-filter-chips" aria-label="Filters">

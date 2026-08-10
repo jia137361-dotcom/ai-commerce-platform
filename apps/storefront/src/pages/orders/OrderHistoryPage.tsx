@@ -79,6 +79,7 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
         </>
       }
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <div className="buyer-order-history-desktop-title">
         <OrderHistoryHeader signedInEmail={auth.customer?.email} />

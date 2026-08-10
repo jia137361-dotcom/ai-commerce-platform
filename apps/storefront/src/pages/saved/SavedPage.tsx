@@ -89,6 +89,7 @@ export function SavedPage({ cartCount }: SavedPageProps) {
       contentClassName="buyer-mhome-shell buyer-saved-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <header className="buyer-saved-header">
         <h1>My Saved ({favorites.length})</h1>

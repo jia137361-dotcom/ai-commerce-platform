@@ -30,6 +30,7 @@ export function InfoPage({ cartCount, title, sourceLabel, children }: InfoPagePr
       className="buyer-info-page"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <Card as="article" className="buyer-info-card">
         <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">

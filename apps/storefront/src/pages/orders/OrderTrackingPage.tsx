@@ -105,6 +105,7 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
       contentClassName="buyer-orders-main"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
         {loading ? (
           <LoadingState label="Loading tracking..." />

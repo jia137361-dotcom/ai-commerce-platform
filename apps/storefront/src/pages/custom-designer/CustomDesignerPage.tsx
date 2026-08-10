@@ -375,7 +375,13 @@ export function CustomDesignerPage({ productId, cartCount, onCartUpdated }: Prop
   const colorName = colors.find((c) => c.id === selectedColorId)?.name ?? ""
 
   return (
-    <PageShell className="buyer-designer-page" header={<StoreTopBar settings={settings} cartCount={cartCount} />} footer={<StoreFooter />}>
+    <PageShell
+      className="buyer-designer-page"
+      header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      footer={<StoreFooter />}
+      cartCount={cartCount}
+      showMobileBottomNav={false}
+    >
       <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
         <a href="/store">Store</a><span>/</span><a href="/studio">{t("navStudio")}</a><span>/</span><span>Custom Designer</span>
       </nav>

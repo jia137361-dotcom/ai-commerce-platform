@@ -50,6 +50,7 @@ export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
       contentClassName="buyer-orders-main buyer-order-lookup-main"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
         <OrderLookupForm
           email={email}

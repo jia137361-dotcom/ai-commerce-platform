@@ -106,6 +106,7 @@ export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
       contentClassName="buyer-checkout-success-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={platformCheckoutActive} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       {successInfo?.orderId ? (
         <>

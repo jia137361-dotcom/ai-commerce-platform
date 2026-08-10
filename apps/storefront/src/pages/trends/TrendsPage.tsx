@@ -85,6 +85,7 @@ export function TrendsPage({ cartCount }: TrendsPageProps) {
       contentClassName="buyer-trends-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <section className="buyer-trends-hero">
         <p>Discover what people are creating</p>

@@ -908,7 +908,13 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
   }
 
   return (
-    <PageShell className="buyer-checkout-page" contentClassName="buyer-checkout-shell-content" header={<StoreTopBar settings={settings} cartCount={checkoutHeaderCartCount} />} footer={<StoreFooter />}>
+    <PageShell
+      className="buyer-checkout-page"
+      contentClassName="buyer-checkout-shell-content"
+      header={<StoreTopBar settings={settings} cartCount={checkoutHeaderCartCount} />}
+      footer={<StoreFooter />}
+      cartCount={checkoutHeaderCartCount}
+    >
       <header className="buyer-checkout-page-header">
         <div>
           <p>Secure checkout</p>
