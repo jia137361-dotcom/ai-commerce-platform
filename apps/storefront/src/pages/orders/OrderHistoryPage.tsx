@@ -11,6 +11,7 @@ import { ErrorState, LoadingState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { confirmOrderReceived, getMyOrders, type BuyerOrdersPage } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { groupOrdersForHistory } from "./order-history-groups"
 
 type OrderHistoryPageProps = {
@@ -19,6 +20,7 @@ type OrderHistoryPageProps = {
 
 export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const [ordersPage, setOrdersPage] = useState<BuyerOrdersPage | null>(null)
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState<string | undefined>()
@@ -80,6 +82,7 @@ export function OrderHistoryPage({ cartCount }: OrderHistoryPageProps) {
       }
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-order-history-desktop-title">
         <OrderHistoryHeader signedInEmail={auth.customer?.email} />

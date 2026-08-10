@@ -12,7 +12,7 @@ import {
   sendBuyerStoreMessage,
   type BuyerStoreMessage,
 } from "../../lib/buyer-api"
-import { buildStoreMessagesHref } from "../../lib/storefront-links"
+import { buildSettingsStoreHref, buildStoreMessagesHref } from "../../lib/storefront-links"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 type StoreMessagesPageProps = {
@@ -36,6 +36,7 @@ export function StoreMessagesPage({ cartCount, orderId, storeId }: StoreMessages
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
   const messageStoreId = settings.storeId?.trim() || requestedStoreId
+  const storeHref = buildSettingsStoreHref(settings)
 
   useEffect(() => {
     if (!auth.customer) {
@@ -83,6 +84,7 @@ export function StoreMessagesPage({ cartCount, orderId, storeId }: StoreMessages
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <header className="buyer-messages-header">
         <h1>Messages with {settings.brandName}</h1>

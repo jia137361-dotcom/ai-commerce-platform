@@ -14,6 +14,7 @@ import { buildStudioEditorHref } from "../../lib/buyer-design-handoff"
 import { navigateBuyer } from "../../lib/buyer-navigate"
 import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 
 type TrendsPageProps = { cartCount: number }
 
@@ -21,6 +22,7 @@ const TREND_LABELS = ["Popular now", "New arrivals", "Creator picks", "Gift idea
 
 export function TrendsPage({ cartCount }: TrendsPageProps) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const [categories, setCategories] = useState<SupplierCatalogCategory[]>([])
   const [activeCategoryId, setActiveCategoryId] = useState("all")
   const [items, setItems] = useState<SupplierCatalogItem[]>([])
@@ -86,6 +88,7 @@ export function TrendsPage({ cartCount }: TrendsPageProps) {
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <section className="buyer-trends-hero">
         <p>Discover what people are creating</p>

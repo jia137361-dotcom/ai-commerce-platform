@@ -5,6 +5,7 @@ import { StoreFooter } from "../../components/layout/StoreFooter"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import {
   fetchBuyerAiJob,
   fetchBuyerAiMaterials,
@@ -69,6 +70,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
   const customerId = auth.customer?.id ?? null
   const materialGuestKey = () => getBuyerDesignGuestKey()
   const { settings } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams()
   const productId = (productIdFromPath || search.get("productId") || "").trim()
   const returnTo = (search.get("returnTo") || "").trim()
@@ -250,6 +252,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-ai-studio-container">
         <div className="buyer-ai-studio-header">

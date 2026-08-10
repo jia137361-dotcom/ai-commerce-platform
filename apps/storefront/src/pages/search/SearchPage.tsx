@@ -11,6 +11,7 @@ import { fetchProducts } from "../../lib/buyer-api"
 import { clearSearchHistory, pushSearchHistory, readSearchHistory, removeSearchHistory } from "../../lib/buyer-search-history"
 import { getScopedBuyerStoreId, setActiveBuyerStoreId } from "../../lib/buyer-store-context"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import type { StoreProduct } from "../../lib/mock-data"
 
 type SearchPageProps = { cartCount: number }
@@ -20,6 +21,7 @@ export function SearchPage({ cartCount }: SearchPageProps) {
   const storeFromQuery = new URLSearchParams(window.location.search).get("store_id") ?? new URLSearchParams(window.location.search).get("store")
   const scopedStoreId = getScopedBuyerStoreId(storeFromQuery)
   const { settings } = useBuyerPageSettings({ storeId: scopedStoreId })
+  const storeHref = buildSettingsStoreHref(settings)
   const [debouncedQuery, setDebouncedQuery] = useState(query)
   const [items, setItems] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,6 +130,7 @@ export function SearchPage({ cartCount }: SearchPageProps) {
         />
       }
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-search-mobile-body">
         <div className="buyer-search-filter-chips" aria-label="Filters">

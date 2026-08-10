@@ -11,6 +11,7 @@ import { ProductCard } from "../../components/products/ProductCard"
 import { fetchFavoriteProducts, fetchProducts, toggleProductFavorite } from "../../lib/buyer-api"
 import type { StoreProduct } from "../../lib/mock-data"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { buildProductSignInHref } from "../product/product-auth"
 import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
 
@@ -19,6 +20,7 @@ type SavedPageProps = { cartCount: number }
 export function SavedPage({ cartCount }: SavedPageProps) {
   const auth = useBuyerAuth()
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const [favorites, setFavorites] = useState<
     Array<{ id: string; title: string; price?: number; image_url?: string }>
   >([])
@@ -90,6 +92,7 @@ export function SavedPage({ cartCount }: SavedPageProps) {
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <header className="buyer-saved-header">
         <h1>My Saved ({favorites.length})</h1>

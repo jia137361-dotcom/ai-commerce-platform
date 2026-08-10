@@ -9,6 +9,7 @@ import {
   type MarketplaceStore,
 } from "../../lib/buyer-api"
 import { enterMarketplaceContext } from "../../lib/buyer-store-context"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 
 type MarketplaceHomePageProps = {
   cartCount: number
@@ -47,6 +48,8 @@ export function MarketplaceHomePage({ cartCount }: MarketplaceHomePageProps) {
     )
   }, [storeQuery, stores])
 
+  const storeHref = buildSettingsStoreHref(marketplaceBuyerSettings)
+
   return (
     <PageShell
       className="buyer-store-page buyer-marketplace-page"
@@ -54,6 +57,7 @@ export function MarketplaceHomePage({ cartCount }: MarketplaceHomePageProps) {
       header={<StoreTopBar settings={marketplaceBuyerSettings} cartCount={cartCount} marketplaceMode />}
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <section className="buyer-marketplace-hero">
         <p className="buyer-marketplace-eyebrow">Stores</p>

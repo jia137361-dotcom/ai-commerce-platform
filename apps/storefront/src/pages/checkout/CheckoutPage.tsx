@@ -48,6 +48,7 @@ import {
   type BuyerCustomerAddressInput,
   type CheckoutPricingBreakdown,
 } from "../../lib/buyer-api"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
 import type { StoreCart } from "../../lib/mock-data"
 import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
@@ -907,6 +908,8 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     await handlePlaceOrder(selectedPaymentProviderId, true, paymentMethodLabel)
   }
 
+  const storeHref = buildSettingsStoreHref(settings)
+
   return (
     <PageShell
       className="buyer-checkout-page"
@@ -914,6 +917,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       header={<StoreTopBar settings={settings} cartCount={checkoutHeaderCartCount} />}
       footer={<StoreFooter />}
       cartCount={checkoutHeaderCartCount}
+      storeHref={storeHref}
     >
       <header className="buyer-checkout-page-header">
         <div>

@@ -9,6 +9,7 @@ import { EmptyState } from "../../components/ui/States"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { getScopedBuyerStoreId } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import {
   clearPlatformCheckoutSession,
   isPlatformCheckoutComplete,
@@ -85,6 +86,7 @@ export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
     marketplace: platformCheckoutActive,
     storeId: successStoreId,
   })
+  const storeHref = buildSettingsStoreHref(settings)
   const pendingGroup = useMemo(
     () => (platformCheckoutActive ? nextPendingPlatformCheckoutGroup(platformSession) : null),
     [platformCheckoutActive, platformSession]
@@ -107,6 +109,7 @@ export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={platformCheckoutActive} />}
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       {successInfo?.orderId ? (
         <>

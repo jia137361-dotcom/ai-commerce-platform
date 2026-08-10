@@ -17,6 +17,7 @@ import {
 } from "../../lib/buyer-design-handoff"
 import { enterLegacyDefaultStoreContext, getLegacyDefaultStoreId } from "../../lib/buyer-store-context"
 import { navigateBuyer } from "../../lib/buyer-navigate"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { useBuyerLocale } from "../../lib/locale"
 
 type StudioLandingPageProps = {
@@ -130,6 +131,7 @@ export function StudioLandingPage({ cartCount }: StudioLandingPageProps) {
   )
 
   const brand = settings.brandName?.trim() || "Store"
+  const storeHref = buildSettingsStoreHref(settings)
 
   return (
     <PageShell
@@ -138,6 +140,7 @@ export function StudioLandingPage({ cartCount }: StudioLandingPageProps) {
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StudioFooter brandName={brand} />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <section className="buyer-studio-landing-hero">
         <p className="buyer-studio-landing-kicker">{t("studioKicker")}</p>

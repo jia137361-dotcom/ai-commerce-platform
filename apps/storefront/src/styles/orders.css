@@ -1686,6 +1686,10 @@
     display: none !important;
   }
 
+  .buyer-order-detail-sticky-bar {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
   .buyer-orders-page--temu .buyer-order-history-main {
     width: min(100% - 24px, 720px);
     padding-top: 8px;

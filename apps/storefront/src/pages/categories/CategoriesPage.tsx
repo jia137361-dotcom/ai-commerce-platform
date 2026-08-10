@@ -15,6 +15,7 @@ import {
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
 import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import type { StoreProduct } from "../../lib/mock-data"
 
 type CategoriesPageProps = { cartCount: number }
@@ -109,12 +110,15 @@ export function CategoriesPage({ cartCount }: CategoriesPageProps) {
     return list
   })()
 
+  const storeHref = buildSettingsStoreHref(settings)
+
   return (
     <PageShell
       className="buyer-store-page buyer-categories-page"
       contentClassName="buyer-categories-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-categories-layout">
         <aside className="buyer-categories-sidebar" aria-label="Categories">

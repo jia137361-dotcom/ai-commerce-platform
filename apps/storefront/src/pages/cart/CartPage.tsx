@@ -34,6 +34,7 @@ import { removeCartItem, updateCartItemQuantity } from "./cart-actions"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
 import { getMyOrders } from "../../lib/buyer-api"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { collectReservedCheckoutCartIds } from "./cart-reservations"
 
@@ -53,6 +54,7 @@ const rememberSplitCheckout = (
 export function CartPage({ onCartUpdated }: CartPageProps) {
   const auth = useBuyerAuth()
   const { settings } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
   const [groups, setGroups] = useState<PlatformCartGroup[]>([])
   const [recommendations, setRecommendations] = useState<StoreProduct[]>([])
@@ -330,6 +332,7 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
       header={<StoreTopBar settings={settings} cartCount={itemCount} />}
       footer={<StoreFooter />}
       cartCount={itemCount}
+      storeHref={storeHref}
     >
       <header className="buyer-cart-page-header">
         <div>

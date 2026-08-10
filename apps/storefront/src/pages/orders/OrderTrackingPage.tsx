@@ -20,6 +20,7 @@ import {
   type BuyerOrderTracking,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { hasOrderTrackingData } from "./order-tracking-state"
 
 type OrderTrackingPageProps = {
@@ -45,6 +46,7 @@ const readSessionEmail = (orderId: string, storeId?: string) => {
 export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps) {
   const auth = useBuyerAuth()
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const [tracking, setTracking] = useState<BuyerOrderTracking | null>(null)
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -106,6 +108,7 @@ export function OrderTrackingPage({ orderId, cartCount }: OrderTrackingPageProps
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
       cartCount={cartCount}
+      storeHref={storeHref}
     >
         {loading ? (
           <LoadingState label="Loading tracking..." />
