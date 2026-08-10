@@ -1854,14 +1854,25 @@
   font-size: 14px;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 980px) {
   .buyer-shop-about {
     grid-template-columns: 1fr;
     margin: 0 16px;
+    min-width: 0;
+  }
+
+  .buyer-shop-information-sidebar,
+  .buyer-shop-information-content,
+  .buyer-shop-information-stack,
+  .buyer-shop-information-card {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .buyer-shop-information-sidebar nav {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .buyer-shop-information-sidebar nav button {
@@ -1879,6 +1890,20 @@
   .buyer-shop-information-card {
     min-height: 0;
     padding: 28px 22px;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-shop-about {
+    margin: 0 12px;
+  }
+
+  .buyer-shop-information-sidebar nav {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-shop-information-card {
+    padding: 22px 16px;
   }
 }
 
