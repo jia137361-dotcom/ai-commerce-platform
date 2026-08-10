@@ -53,15 +53,15 @@
 }
 
 .buyer-account-auth-card {
+  width: 100%;
+  max-width: 100%;
   box-shadow: var(--buyer-shadow-card);
-}
-
-.buyer-account-auth-card {
   overflow: hidden;
 }
 
 .buyer-auth-card {
   width: min(100%, 560px);
+  max-width: 100%;
   margin: 0 auto;
   padding: 28px;
 }
@@ -773,7 +773,7 @@
   text-align: left;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 980px) {
   .buyer-account-main {
     width: min(100% - 28px, 620px);
     padding: 32px 0 64px;
@@ -978,12 +978,6 @@
   font-weight: 700;
 }
 
-@media (max-width: 760px) {
-  .buyer-plans-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 .buyer-coupons-panel {
   overflow: hidden;
   background: #fff;
@@ -1182,6 +1176,10 @@
 }
 
 @media (max-width: 640px) {
+  .buyer-plans-grid {
+    grid-template-columns: 1fr;
+  }
+
   .buyer-coupons-claim,
   .buyer-coupon-card {
     grid-template-columns: 1fr;
