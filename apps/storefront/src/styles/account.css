@@ -189,6 +189,73 @@
   line-height: 1.45;
 }
 
+.buyer-auth-social-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.buyer-auth-google-btn {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--buyer-border);
+  border-radius: 10px;
+  background: #fff;
+  color: #17202e;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.buyer-auth-google-btn--primary {
+  min-height: 52px;
+  border-color: #111827;
+  background: #111827;
+  color: #fff;
+  font-size: 16px;
+}
+
+.buyer-auth-google-btn--primary:not(:disabled):hover {
+  border-color: #0b1220;
+  background: #0b1220;
+}
+
+.buyer-auth-google-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.buyer-auth-google-btn:not(:disabled):hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.buyer-auth-google-btn--primary:not(:disabled):hover {
+  border-color: #0b1220;
+  background: #0b1220;
+}
+
+.buyer-auth-primary-google {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-auth-social--secondary {
+  padding-top: 8px;
+  border-top: none;
+}
+
+.buyer-auth-email-secondary {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-auth-collapse-email {
+  justify-self: center;
+  margin-top: 4px;
+}
+
 .buyer-auth-dev-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   color: #b45309;

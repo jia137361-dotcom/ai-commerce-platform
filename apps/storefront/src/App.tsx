@@ -12,6 +12,7 @@ import { SignInPage } from "./pages/account/SignInPage"
 import { ForgotPasswordPage } from "./pages/account/ForgotPasswordPage"
 import { ResetPasswordPage } from "./pages/account/ResetPasswordPage"
 import { VerifyEmailPage } from "./pages/account/VerifyEmailPage"
+import { GoogleAuthCallbackPage } from "./pages/account/GoogleAuthCallbackPage"
 import { AccountSettingPlaceholderPage } from "./pages/account/AccountSettingPlaceholderPage"
 import { findAccountSettingPlaceholder } from "./pages/account/account-setting-placeholders"
 import { AccountSettingsPage, type AccountSettingsSlug } from "./pages/account/AccountSettingsPage"
@@ -187,6 +188,8 @@ function App() {
     page = <CheckoutPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
   } else if (location.pathname.startsWith("/orders/lookup")) {
     page = <OrderLookupPage cartCount={cartCount} />
+  } else if (location.pathname.startsWith("/auth/google/callback")) {
+    page = <GoogleAuthCallbackPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/account/sign-in")) {
     page = <SignInPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/account/register")) {

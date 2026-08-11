@@ -6,8 +6,18 @@ import { AccountProfileForm } from "./AccountProfileForm"
 import { RegisterForm } from "./RegisterForm"
 import { SignInForm } from "./SignInForm"
 
+jest.mock("../../lib/buyer-google-auth", () => ({
+  isGoogleAuthUiEnabled: () => true,
+  resolveBuyerGoogleCallbackUrl: () => "http://127.0.0.1:5174/auth/google/callback",
+  stashBuyerGoogleAuthContext: () => undefined,
+  clearBuyerGoogleAuthContext: () => undefined,
+  readBuyerGoogleAuthContext: () => ({ returnTo: "/account", rememberMe: true }),
+}))
+
 jest.mock("../../lib/buyer-api", () => ({
   sendBuyerLoginOtp: jest.fn(async () => ({ sent: true, email: "user@gmail.com" })),
+  getBuyerGoogleAuthStatus: jest.fn(async () => ({ enabled: true })),
+  startBuyerGoogleAuth: jest.fn(async () => ({ location: "https://accounts.google.com" })),
 }))
 
 const customer = { id: "cus_1", email: "buyer@example.com" }
@@ -79,15 +89,15 @@ describe("buyer account components", () => {
     expect(html).not.toContain("Phone")
   })
 
-  it("sign-in defaults to password with email-code alternate", () => {
+  it("sign-in leads with Google and keeps email as a secondary entry", () => {
     const html = renderToStaticMarkup(createElement(SignInForm, {
       loading: false,
       onSubmit: async () => undefined,
     }))
-    expect(html).toContain('href="/account/forgot-password"')
-    expect(html).toContain("Sign in")
+    expect(html).toContain("Continue with Google")
+    expect(html).toContain("Sign in with email")
     expect(html).toContain("Keep me signed in")
-    expect(html).toContain("Use email code instead")
-    expect(html).toContain("coming soon")
+    expect(html).toContain("or use email")
+    expect(html).not.toContain("Forgot password?")
   })
 })

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import {
   AuthLegalCopy,
   DisabledSocialAuth,
+  SocialAuthSection,
   isAllowedBuyerAuthEmail,
   isValidAuthEmail,
   PasswordField,
@@ -43,5 +44,27 @@ describe("buyer auth primitives", () => {
     const html = renderToStaticMarkup(createElement(DisabledSocialAuth))
     expect(html).toContain("coming soon")
     expect(html).toContain("verification code")
+  })
+
+  it("renders an enabled Google button and keeps Apple as coming soon", () => {
+    const html = renderToStaticMarkup(
+      createElement(SocialAuthSection, {
+        googleEnabled: true,
+        onGoogleClick: () => undefined,
+      })
+    )
+    expect(html).toContain("Continue with Google")
+    expect(html).toContain("Apple one-tap sign-in is coming soon")
+  })
+
+  it("hides the Google button when google auth is disabled", () => {
+    const html = renderToStaticMarkup(
+      createElement(SocialAuthSection, {
+        googleEnabled: false,
+        googleUnavailableReason: "unavailable",
+      })
+    )
+    expect(html).not.toContain("Continue with Google")
+    expect(html).toContain("unavailable in this environment")
   })
 })

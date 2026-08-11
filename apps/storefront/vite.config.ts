@@ -5,6 +5,8 @@ import dotenv from "dotenv"
 import path from "node:path"
 
 dotenv.config({ path: path.resolve(__dirname, "../medusa-backend/.env") })
+dotenv.config({ path: path.resolve(__dirname, ".env") })
+dotenv.config({ path: path.resolve(__dirname, ".env.local") })
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })
 
 const localStoreProducts = () => ({
@@ -40,6 +42,10 @@ const spaBypass = (req: { headers: { accept?: string } }) => {
 
 export default defineConfig({
   envPrefix: ["VITE_", "NEXT_PUBLIC_"],
+  define: {
+    // Keep Google auth flag readable without import.meta (Jest-friendly).
+    "process.env.VITE_GOOGLE_AUTH_ENABLED": JSON.stringify(process.env.VITE_GOOGLE_AUTH_ENABLED ?? ""),
+  },
   plugins: [react(), localStoreProducts()],
   server: {
     allowedHosts: [

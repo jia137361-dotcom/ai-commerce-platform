@@ -79,6 +79,49 @@ export function AuthLegalCopy() {
   )
 }
 
+export function SocialAuthSection({
+  googleEnabled = false,
+  googleLoading = false,
+  onGoogleClick,
+  error,
+  googleUnavailableReason = "coming_soon",
+}: {
+  googleEnabled?: boolean
+  googleLoading?: boolean
+  onGoogleClick?: () => void
+  error?: string
+  googleUnavailableReason?: "coming_soon" | "unavailable"
+}) {
+  return (
+    <div className="buyer-auth-social">
+      <div>
+        <span />
+        or
+        <span />
+      </div>
+      {googleEnabled ? (
+        <button
+          type="button"
+          className="buyer-auth-google-btn"
+          disabled={googleLoading}
+          onClick={() => onGoogleClick?.()}
+        >
+          {googleLoading ? "Redirecting to Google…" : "Continue with Google"}
+        </button>
+      ) : (
+        <p className="buyer-auth-social-note">
+          {googleUnavailableReason === "unavailable"
+            ? "Google sign-in is unavailable in this environment."
+            : "Google one-tap sign-in is coming soon."}
+        </p>
+      )}
+      <p className="buyer-auth-social-note">Apple one-tap sign-in is coming soon.</p>
+      {error ? <p className="buyer-auth-social-error">{error}</p> : null}
+    </div>
+  )
+}
+
+/** @deprecated Prefer SocialAuthSection; kept for older tests/call sites. */
 export function DisabledSocialAuth() {
   return (
     <p className="buyer-auth-social-note">

@@ -1,7 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   AuthLegalCopy,
-  DisabledSocialAuth,
+  SocialAuthSection,
   BUYER_PASSWORD_MIN_LENGTH,
   buyerAuthEmailHint,
   isAllowedBuyerAuthEmail,
@@ -11,7 +11,14 @@ import {
 import { Button } from "../ui/Button"
 import { FormField } from "../ui/FormField"
 import { ErrorState } from "../ui/States"
-import { sendBuyerLoginOtp } from "../../lib/buyer-api"
+import { getBuyerGoogleAuthStatus, sendBuyerLoginOtp, startBuyerGoogleAuth } from "../../lib/buyer-api"
+import {
+  resolveBuyerGoogleCallbackUrl,
+  stashBuyerGoogleAuthContext,
+  isGoogleAuthUiEnabled,
+  withGoogleAccountPickerPrompt,
+} from "../../lib/buyer-google-auth"
+import { safeReturnTo } from "../../pages/account/account-utils"
 
 type RegisterFormProps = {
   loading: boolean
@@ -35,6 +42,43 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
   const [devCode, setDevCode] = useState<string>()
   const [sending, setSending] = useState(false)
   const [validation, setValidation] = useState<string>()
+  const [googleEnabled, setGoogleEnabled] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState<string>()
+
+  useEffect(() => {
+    if (!isGoogleAuthUiEnabled()) return
+    let active = true
+    void getBuyerGoogleAuthStatus().then((status) => {
+      if (active) setGoogleEnabled(status.enabled)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const startGoogle = async () => {
+    if (!accepted) {
+      setValidation("Review and accept the Terms of Use and Privacy Policy.")
+      return
+    }
+    setGoogleError(undefined)
+    setGoogleLoading(true)
+    try {
+      stashBuyerGoogleAuthContext({
+        returnTo: safeReturnTo(),
+        rememberMe,
+      })
+      const { location } = await startBuyerGoogleAuth({
+        callbackUrl: resolveBuyerGoogleCallbackUrl(),
+        signOutFirst: true,
+      })
+      window.location.assign(withGoogleAccountPickerPrompt(location))
+    } catch (startError) {
+      setGoogleLoading(false)
+      setGoogleError(startError instanceof Error ? startError.message : "Unable to start Google sign-in.")
+    }
+  }
 
   const requestCode = async () => {
     if (!isValidAuthEmail(email)) {
@@ -154,7 +198,7 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
         <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
         <span>Keep me signed in on this device</span>
       </label>
-      <Button type="submit" loading={loading || sending} fullWidth>
+      <Button type="submit" loading={loading || sending || googleLoading} fullWidth>
         {loading || sending
           ? codeSent
             ? "Creating account..."
@@ -168,7 +212,13 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
           Resend code
         </Button>
       ) : null}
-      <DisabledSocialAuth />
+      <SocialAuthSection
+        googleEnabled={isGoogleAuthUiEnabled() && googleEnabled}
+        googleUnavailableReason={isGoogleAuthUiEnabled() ? "unavailable" : "coming_soon"}
+        googleLoading={googleLoading}
+        onGoogleClick={() => void startGoogle()}
+        error={googleError}
+      />
       <AuthLegalCopy />
     </form>
   )

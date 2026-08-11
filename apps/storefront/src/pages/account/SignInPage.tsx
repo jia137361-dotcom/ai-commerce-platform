@@ -45,7 +45,7 @@ export function SignInPage({ cartCount }: { cartCount: number }) {
         <section className="buyer-account-auth-intro">
           <p>Buyer account</p>
           <h1>Welcome back</h1>
-          <span>Sign in with your password or an email code. Keep me signed in stays active on this device.</span>
+          <span>Continue with Google for the fastest sign-in. Email and password stay available as a backup.</span>
         </section>
         <Card as="section" className="buyer-account-auth-card">
           <div className="buyer-account-auth-tabs">

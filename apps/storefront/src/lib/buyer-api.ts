@@ -2545,6 +2545,75 @@ const createCustomerSession = async (token: string) => {
   })
 }
 
+export const getBuyerGoogleAuthStatus = async (): Promise<{ enabled: boolean; callbackUrl?: string | null }> => {
+  try {
+    const payload = await apiFetch<{ enabled?: boolean; callback_url?: string | null }>("/store/auth/google/status")
+    return {
+      enabled: Boolean(payload.enabled),
+      callbackUrl: payload.callback_url,
+    }
+  } catch {
+    return { enabled: false }
+  }
+}
+
+export const startBuyerGoogleAuth = async (input?: {
+  callbackUrl?: string
+  /** Clear an existing buyer session before starting OAuth (switch account). */
+  signOutFirst?: boolean
+}): Promise<{ location: string }> => {
+  if (input?.signOutFirst !== false) {
+    await signOutCustomer().catch(() => undefined)
+  }
+  const callbackUrl = input?.callbackUrl
+  const payload = await apiFetch<{ location?: string; token?: string }>("/auth/customer/google", {
+    method: "POST",
+    body: JSON.stringify(callbackUrl ? { callback_url: callbackUrl } : {}),
+  })
+  if (payload.token) {
+    await createCustomerSession(payload.token)
+    throw Object.assign(new Error("GOOGLE_ALREADY_AUTHENTICATED"), { code: "GOOGLE_ALREADY_AUTHENTICATED" })
+  }
+  if (!payload.location) {
+    throw new Error("Google sign-in did not return a redirect URL.")
+  }
+  return { location: payload.location }
+}
+
+export const completeBuyerGoogleCallback = async (input: {
+  query: Record<string, string>
+  rememberMe?: boolean
+}): Promise<BuyerCustomer> => {
+  const params = new URLSearchParams(input.query)
+  const callbackPath = `/auth/customer/google/callback?${params.toString()}`
+  const auth = await apiFetch<ApiAuthTokenResponse>(callbackPath, {
+    method: "POST",
+  })
+  if (!auth.token) {
+    throw new Error("Google authentication succeeded without a token.")
+  }
+
+  const completed = await apiFetch<ApiAuthTokenResponse & { customer_id?: string; created?: boolean }>(
+    "/store/auth/google/complete",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${auth.token}`,
+      },
+      body: JSON.stringify({
+        remember_me: Boolean(input.rememberMe),
+      }),
+    }
+  )
+  if (!completed.token) {
+    throw new Error("Unable to finish Google sign-in.")
+  }
+  await createCustomerSession(completed.token)
+  const customer = await getCurrentCustomer()
+  if (!customer) throw new Error("Unable to load customer after Google sign-in.")
+  return customer
+}
+
 export const sendBuyerLoginOtp = async (email: string): Promise<BuyerOtpSendResult> => {
   const payload = await apiFetch<{
     sent?: boolean
