@@ -1,0 +1,283 @@
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
+
+export type BuyerLocale = "en" | "zh"
+
+const STORAGE_KEY = "citigoo:buyer-locale"
+
+const messages = {
+  en: {
+    shipTo: "Ship to",
+    stores: "Stores",
+    locals: "Locals",
+    support: "Support",
+    ordersAccount: "Orders & Account",
+    buyerAccount: "Buyer Account",
+    signIn: "Sign in",
+    follow: "Follow",
+    following: "Following",
+    message: "Message",
+    officialStore: "Official store · Secure checkout",
+    newsletter: "Newsletter",
+    newsletterPlaceholder: "Email address",
+    newsletterJoin: "Join",
+    newsletterSuccess: "Thanks for subscribing.",
+    newsletterError: "Unable to subscribe.",
+    localeLabel: "EN",
+    localeAlt: "中文",
+    checkoutSignIn: "Sign in to continue checkout",
+    guestCheckoutHint: "Guest checkout uses your contact email. Sign in to save order history.",
+    navShop: "Shop",
+    navAiDesign: "AI Design",
+    navStudio: "Studio",
+    navMyDesigns: "My Designs",
+    navAiStudio: "Studio",
+    navHowItWorks: "How it works",
+    navOrders: "Orders",
+    navMe: "Me",
+    navCart: "Cart",
+    heroKicker: "Design for clothes & pet accessories",
+    heroTitleSuffix: "— make it yours",
+    heroDescription: "Custom design for personalized, daily-use goods via AI.",
+    heroCtaStudio: "Start in AI Studio",
+    heroCtaShop: "Browse shop",
+    howItWorksEyebrow: "How it works",
+    howItWorksTitle: "Customize in three steps",
+    howItWorksStep1Title: "Pick a blank",
+    howItWorksStep1Body: "Choose a supply-chain base — tee, hoodie, mug, and more.",
+    howItWorksStep2Title: "Design in Studio",
+    howItWorksStep2Body: "Place artwork on the product in Studio. Use AI Design anytime to generate materials.",
+    howItWorksStep3Title: "Order & ship",
+    howItWorksStep3Body: "Add to cart, checkout, receive, then leave a review.",
+    howItWorksCta: "Open Studio",
+    customizeBadge: "New",
+    customizeLink: "View details",
+    studioKicker: "Studio",
+    studioTitle: "Place your design on a blank",
+    studioDescription:
+      "Pick a supply-chain blank, open the product editor, then optionally pull artwork from AI Design.",
+    studioPendingMaterial: "You have AI artwork ready. Choose a blank to place it in Studio.",
+    studioOpenAiDesign: "Need artwork? Open AI Design",
+    studioStartAi: "Create with AI Design",
+    studioOpenEditor: "Open Studio",
+    studioEmpty: "No customizable blanks yet. Browse the supply-chain catalog.",
+    studioBrowseShop: "Browse shop blanks",
+    aiDesignKicker: "AI Design",
+    aiDesignTitle: "Generate artwork",
+    aiDesignDescription:
+      "Create images with AI and save them to your personal materials library, then send them into Studio.",
+    aiDesignNeedProduct: "To place artwork on a product, pick a blank in Studio after generating.",
+    aiDesignPickBlank: "Choose a blank in Studio",
+    aiDesignOpenStudio: "Send to Studio",
+    aiDesignBackToStudio: "Back to Studio editor",
+    aiDesignLibraryTitle: "My AI materials",
+    aiDesignLibraryEmpty: "No materials yet. Generate an image to save it here.",
+    aiDesignGenerateHint: "Describe the subject, style, colors, and mood. Avoid describing the garment.",
+    catalogEyebrow: "Shop",
+    catalogTitle: "All",
+    catalogCount: "products",
+    catalogLoading: "Loading products…",
+    catalogLoadingMore: "Loading more…",
+    catalogLoadMore: "Load more",
+    catalogEmpty: "No products yet",
+    catalogEmptyHint: "Published products will appear here.",
+    catalogEmptyFiltered: "No matching products",
+    catalogEmptyFilteredHint: "Try another category or search term.",
+    catalogOpening: "Opening…",
+    catalogPricePending: "Price on customize",
+    catalogAllItems: "All",
+    catalogSearchPlaceholder: "Search products",
+    catalogCategoryFilter: "Categories",
+    catalogCategoriesLoading: "Loading categories…",
+    designerAiCta: "AI Design",
+    designerAiCtaHint: "Generate artwork and bring it back here",
+    designerFullscreen: "Fullscreen",
+    designerExitFullscreen: "Exit fullscreen",
+    designerZoomReset: "Reset",
+    designerSavingDraft: "Saving your design to My Design…",
+    designerSaveHint: "Save inside the editor — it will be added to My Design automatically.",
+    designerSyncMyDesign: "Sync to My Design",
+    designerAlreadySaved: "Already in My Design — you can order below.",
+    designerAlreadyInMyDesign: "This design is already in My Design.",
+    designerClaimWaiting:
+      "No new Studio design found yet. Tap Save in the editor, wait a few seconds, then retry.",
+    designerRetrySave: "Retry save to My Design",
+    designerSavedTitle: "Saved to My Design",
+    designerSavedHint: "Your design is ready to order. Find it later under My Design.",
+    designerQuantity: "Quantity",
+    designerSize: "Size",
+    designerColor: "Color",
+    designerOrderNow: "Add to cart",
+    designerPlaceOrder: "Place order",
+    designerKeepEditing: "Keep editing",
+    designerViewMyDesigns: "View My Design",
+    designerOpenDraft: "Open this draft",
+    designerAddedToCart: "Added to cart.",
+    designerSignInToOrder: "Sign in to place order",
+    designerSignInToCart: "Sign in to add to cart",
+    myDesignsTitle: "My Designs",
+    myDesignsDescription:
+      "Your design bag — save and keep editing here. When you order a design, it moves into Cart for quantity, shipping, and payment.",
+    myDesignsLoading: "Loading your designs…",
+    myDesignsEmpty: "No saved designs yet. Start from Product selection — ordered designs will appear in Cart.",
+    myDesignsContinue: "Continue editing",
+    myDesignsRemove: "Remove",
+  },
+  zh: {
+    shipTo: "配送至",
+    stores: "店铺",
+    locals: "本地",
+    support: "客服",
+    ordersAccount: "订单与账户",
+    buyerAccount: "买家账户",
+    signIn: "登录",
+    follow: "关注",
+    following: "已关注",
+    message: "联系",
+    officialStore: "官方店铺 · 安全结账",
+    newsletter: "邮件订阅",
+    newsletterPlaceholder: "邮箱地址",
+    newsletterJoin: "订阅",
+    newsletterSuccess: "订阅成功。",
+    newsletterError: "订阅失败。",
+    localeLabel: "中文",
+    localeAlt: "EN",
+    checkoutSignIn: "登录后继续结账",
+    guestCheckoutHint: "访客结账将使用您填写的联系邮箱。登录后可保存订单历史。",
+    navShop: "商店",
+    navAiDesign: "AI Design",
+    navStudio: "Studio",
+    navMyDesigns: "我的设计",
+    navAiStudio: "Studio",
+    navHowItWorks: "购物流程",
+    navOrders: "订单",
+    navMe: "我的",
+    navCart: "购物车",
+    heroKicker: "服装与宠物配饰定制",
+    heroTitleSuffix: "— 做属于你的产品",
+    heroDescription: "通过 AI 为个性化日常用品创建设计。",
+    heroCtaStudio: "进入 AI Studio",
+    heroCtaShop: "浏览店铺",
+    howItWorksEyebrow: "定制流程",
+    howItWorksTitle: "三步完成定制",
+    howItWorksStep1Title: "选空白款",
+    howItWorksStep1Body: "挑选 T 恤、卫衣、杯子等供应链底款。",
+    howItWorksStep2Title: "Studio 编辑",
+    howItWorksStep2Body: "在 Studio 把图案放到商品上；随时可去 AI Design 生成素材。",
+    howItWorksStep3Title: "下单发货",
+    howItWorksStep3Body: "加购结账、收货，再留下评价。",
+    howItWorksCta: "打开 Studio",
+    customizeBadge: "新品",
+    customizeLink: "查看详情",
+    studioKicker: "Studio",
+    studioTitle: "把设计放到底款上",
+    studioDescription: "先选供应链底款，打开产品编辑器；需要素材时从 AI Design 送入。",
+    studioPendingMaterial: "你有可用的 AI 素材。选一款底款，即可放入 Studio。",
+    studioOpenAiDesign: "需要素材？打开 AI Design",
+    studioStartAi: "用 AI Design 生成",
+    studioOpenEditor: "打开 Studio",
+    studioEmpty: "暂无可定制底款，请先浏览供应链目录。",
+    studioBrowseShop: "浏览底款",
+    aiDesignKicker: "AI Design",
+    aiDesignTitle: "生成素材图",
+    aiDesignDescription: "用 AI 生图，保存到个人素材库，再送入 Studio 放到商品上。",
+    aiDesignNeedProduct: "要把图案放到商品上，生成后请到 Studio 选择底款。",
+    aiDesignPickBlank: "去 Studio 选底款",
+    aiDesignOpenStudio: "送入 Studio",
+    aiDesignBackToStudio: "返回 Studio 编辑器",
+    aiDesignLibraryTitle: "我的 AI 素材库",
+    aiDesignLibraryEmpty: "还没有素材。生成一张图会自动存到这里。",
+    aiDesignGenerateHint: "描述主体、风格、颜色和氛围；不要描述衣服本身。",
+    catalogEyebrow: "商店",
+    catalogTitle: "全部",
+    catalogCount: "件商品",
+    catalogLoading: "正在加载商品…",
+    catalogLoadingMore: "加载中…",
+    catalogLoadMore: "加载更多",
+    catalogEmpty: "暂无商品",
+    catalogEmptyHint: "发布后的商品会显示在这里。",
+    catalogEmptyFiltered: "没有匹配的商品",
+    catalogEmptyFilteredHint: "换个分类或关键词试试。",
+    catalogOpening: "打开中…",
+    catalogPricePending: "定制时定价",
+    catalogAllItems: "全部",
+    catalogSearchPlaceholder: "搜索商品",
+    catalogCategoryFilter: "分类",
+    catalogCategoriesLoading: "正在加载分类…",
+    designerAiCta: "AI Design",
+    designerAiCtaHint: "生成素材并带回编辑器",
+    designerFullscreen: "全屏",
+    designerExitFullscreen: "退出全屏",
+    designerZoomReset: "重置",
+    designerSavingDraft: "正在保存到「我的设计」…",
+    designerSaveHint: "在编辑器内点击保存后，会自动进入「我的设计」。",
+    designerSyncMyDesign: "同步到我的设计",
+    designerAlreadySaved: "已在「我的设计」中，可直接在下方下单。",
+    designerAlreadyInMyDesign: "该设计已在「我的设计」中。",
+    designerClaimWaiting: "还没检测到新的 Studio 设计。请先在编辑器内保存，稍等几秒再重试。",
+    designerRetrySave: "重试保存到我的设计",
+    designerSavedTitle: "已保存到我的设计",
+    designerSavedHint: "设计已可下单。之后也可在「我的设计」中找到。",
+    designerQuantity: "数量",
+    designerSize: "尺码",
+    designerColor: "颜色",
+    designerOrderNow: "加入购物车",
+    designerPlaceOrder: "立即下单",
+    designerKeepEditing: "继续编辑",
+    designerViewMyDesigns: "查看我的设计",
+    designerOpenDraft: "打开此草稿",
+    designerAddedToCart: "已加入购物车。",
+    designerSignInToOrder: "登录后下单",
+    designerSignInToCart: "登录后加入购物车",
+    myDesignsTitle: "我的设计",
+    myDesignsDescription: "作品库：在这里保存并继续编辑。下单后会进入 Cart，再选数量、运费并支付。",
+    myDesignsLoading: "正在加载设计…",
+    myDesignsEmpty: "还没有保存的设计。先去选品开做——下单后会出现在购物车里。",
+    myDesignsContinue: "继续编辑",
+    myDesignsRemove: "移除",
+  },
+} as const
+
+export type BuyerMessageKey = keyof typeof messages.en
+
+type BuyerLocaleContextValue = {
+  locale: BuyerLocale
+  t: (key: BuyerMessageKey) => string
+  toggleLocale: () => void
+}
+
+const BuyerLocaleContext = createContext<BuyerLocaleContextValue | null>(null)
+
+const readInitialLocale = (): BuyerLocale => {
+  if (typeof window === "undefined") return "en"
+  const stored = window.localStorage.getItem(STORAGE_KEY)
+  return stored === "zh" ? "zh" : "en"
+}
+
+export function BuyerLocaleProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocale] = useState<BuyerLocale>(() => readInitialLocale())
+
+  const toggleLocale = useCallback(() => {
+    setLocale((current) => {
+      const next: BuyerLocale = current === "en" ? "zh" : "en"
+      window.localStorage.setItem(STORAGE_KEY, next)
+      return next
+    })
+  }, [])
+
+  const value = useMemo(
+    () => ({
+      locale,
+      toggleLocale,
+      t: (key: BuyerMessageKey) => messages[locale][key],
+    }),
+    [locale, toggleLocale]
+  )
+
+  return <BuyerLocaleContext.Provider value={value}>{children}</BuyerLocaleContext.Provider>
+}
+
+export function useBuyerLocale() {
+  const ctx = useContext(BuyerLocaleContext)
+  if (!ctx) throw new Error("useBuyerLocale must be used within BuyerLocaleProvider")
+  return ctx
+}

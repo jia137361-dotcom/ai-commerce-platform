@@ -1,0 +1,18 @@
+{
+  "provider": "pp_stripe_stripe",
+  "mode": "test",
+  "source_purchase_order_id": "order_01KYWNSNKJCXVX3HKVT4KZ201V",
+  "source_payment_intent_id": "pi_3TzKqhRz4711Gbmd1TEuQo00",
+  "purchase_evidence_preserved": true,
+  "refund_request_count_before_runtime": 0,
+  "medusa_refund_row_count_before_runtime": 0,
+  "stripe_refund_id": null,
+  "medusa_refund_id": null,
+  "buyer_refund_visible": false,
+  "seller_refund_visible": false,
+  "duplicate_refund_verified": false,
+  "runtime_verification_status": "blocked",
+  "blocker": "PAY_STRIPE_TEST_PASSWORD is not present and no authenticated Stripe fixture buyer session was provided; runtime refund was not executed to avoid bypassing authorization.",
+  "refund_closure_claimed": false,
+  "timestamp": "2026-08-01T15:32:50Z"
+}

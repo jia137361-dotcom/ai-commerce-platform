@@ -15,6 +15,12 @@ import ProductAsset from "./models/product-asset"
 import ProductReview from "./models/product-review"
 import SupplierOrder from "./models/supplier-order"
 import SupplierOrderItem from "./models/supplier-order-item"
+import AiGenerationJob from "./models/ai-generation-job"
+import StoreNotification from "./models/store-notification"
+import StoreMessage from "./models/store-message"
+import PlatformOperator from "./models/platform-operator"
+import PlatformAuditEvent from "./models/platform-audit-event"
+import ProductFavorite from "./models/product-favorite"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -33,6 +39,12 @@ class StoreCoreModuleService extends MedusaService({
   ProductReview,
   SupplierOrder,
   SupplierOrderItem,
+  AiGenerationJob,
+  StoreNotification,
+  StoreMessage,
+  PlatformOperator,
+  PlatformAuditEvent,
+  ProductFavorite,
 }) {}
 
 export default StoreCoreModuleService

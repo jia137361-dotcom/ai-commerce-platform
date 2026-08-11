@@ -1,0 +1,143 @@
+.buyer-info-card {
+  display: grid;
+  gap: var(--buyer-space-6);
+  padding: clamp(22px, 4vw, 40px);
+  box-shadow: var(--buyer-shadow-card);
+}
+
+.buyer-info-card .buyer-product-breadcrumb {
+  margin: 0;
+}
+
+.buyer-info-body,
+.buyer-info-sections {
+  display: grid;
+  gap: var(--buyer-space-4);
+}
+
+.buyer-info-section {
+  padding: var(--buyer-space-6);
+}
+
+.buyer-info-section .buyer-ui-section-header h2 {
+  font-size: 20px;
+}
+
+.buyer-info-section-body {
+  margin-top: var(--buyer-space-3);
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-info-section-body p,
+.buyer-info-draft-notice p {
+  margin: 0;
+  color: var(--buyer-text-muted);
+  line-height: 1.65;
+}
+
+.buyer-info-bullet-heading {
+  margin: 0 0 4px !important;
+  color: var(--buyer-text) !important;
+  font-weight: 700;
+}
+
+.buyer-info-section-body ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--buyer-text-muted);
+  line-height: 1.55;
+}
+
+.buyer-info-section-body li + li {
+  margin-top: 4px;
+}
+
+.buyer-info-inline-links,
+.buyer-info-meta p {
+  margin: 0;
+}
+
+.buyer-info-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.buyer-info-toc a {
+  color: var(--buyer-focus);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.buyer-info-toc a:hover {
+  text-decoration: underline;
+}
+
+.buyer-info-help-block + .buyer-info-help-block {
+  margin-top: 16px;
+}
+
+.buyer-info-help-block h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.buyer-info-section-body a {
+  color: var(--buyer-focus);
+  font-weight: 750;
+}
+
+.buyer-info-draft-notice {
+  padding: var(--buyer-space-4) var(--buyer-space-6);
+}
+
+.buyer-info-draft-notice strong {
+  display: block;
+  margin-bottom: var(--buyer-space-1);
+}
+
+.buyer-info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--buyer-space-3);
+  padding-top: var(--buyer-space-2);
+  border-top: 1px solid var(--buyer-border);
+}
+
+@media (max-width: 980px) {
+  .buyer-info-page,
+  .buyer-info-card,
+  .buyer-info-body,
+  .buyer-info-sections,
+  .buyer-info-section {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .buyer-info-section-body {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-info-card {
+    padding: var(--buyer-space-4);
+  }
+
+  .buyer-info-section {
+    padding: var(--buyer-space-4);
+  }
+
+  .buyer-info-actions {
+    flex-direction: column;
+  }
+
+  .buyer-info-actions .buyer-ui-button,
+  .buyer-info-actions a {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from app.config import get_settings
+from app.config import get_effective_settings, get_settings, resolve_image_generation_mode
 from app.tools.deepseek_client import DeepSeekClient, DeepSeekError
 
 
@@ -20,15 +20,32 @@ def _strip_json_fences(raw: str) -> str:
     return text
 
 
-def _mock_copy(prompt: str, base_cost: float) -> dict[str, Any]:
+def _calculate_tiered_markup(
+    cny_price: float, rate: float, markup_min: float, markup_max: float
+) -> float:
+    """阶梯倍率：低价高倍率(3x)，高价低倍率(2.3x)，中间线性插值"""
+    usd_base = cny_price / rate
+    threshold_low = 20.0 / rate
+    threshold_high = 40.0 / rate
+    if usd_base <= threshold_low:
+        return markup_max
+    if usd_base >= threshold_high:
+        return markup_min
+    t = (usd_base - threshold_low) / (threshold_high - threshold_low)
+    return round(markup_max - t * (markup_max - markup_min), 2)
+
+
+def build_template_copy(prompt: str, product_name: str, base_cost: float) -> dict[str, Any]:
+    """Local title/tags without calling any language model."""
     settings = get_settings()
-    price = round(max(base_cost * settings.price_markup_multiplier, base_cost + 5), 2)
-    title = f"Custom Design — {prompt[:60]}".strip()
-    description = (
-        f"Premium print-on-demand product featuring your design: {prompt}. "
-        "Soft fabric, vibrant print, made to order."
+    markup = _calculate_tiered_markup(
+        base_cost, settings.usd_cny_rate, settings.price_markup_min, settings.price_markup_max
     )
-    tags = ["custom", "pod", "ai-generated", "t-shirt"]
+    price = round((base_cost / settings.usd_cny_rate) * markup, 2)
+    title = f"AI artwork — {prompt[:60]}".strip()
+    description = f"AI-generated artwork from prompt: {prompt}"
+    product_tag = product_name.strip().lower() or "product"
+    tags = ["ai-artwork", "buyer-design", product_tag]
     return {
         "title": title,
         "description": description,
@@ -36,6 +53,10 @@ def _mock_copy(prompt: str, base_cost: float) -> dict[str, Any]:
         "seo": {"title": title[:60], "description": description[:155]},
         "price_suggestion": price,
     }
+
+
+# Backward-compatible alias used by mock/fallback paths.
+_mock_copy = build_template_copy
 
 
 async def generate_product_copy(
@@ -46,9 +67,17 @@ async def generate_product_copy(
     color: str | None,
     size: str | None,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    if settings.mock_generation or not settings.deepseek_api_key.strip():
-        return _mock_copy(prompt, base_cost)
+    settings = get_effective_settings()
+    copy_provider = (settings.copy_gen_provider or "deepseek").strip().lower()
+
+    if copy_provider == "dashscope":
+        has_key = bool(settings.dashscope_api_key.strip())
+    else:
+        has_key = bool(settings.deepseek_api_key.strip())
+
+    use_mock, _ = resolve_image_generation_mode(settings)
+    if use_mock or not has_key:
+        return _mock_copy(prompt, product_name, base_cost)
 
     variant_bits = []
     if color:
@@ -63,14 +92,16 @@ Generate ecommerce product copy for a print-on-demand item.
 Product: {product_name}
 Customer design prompt: {prompt}
 Variant: {variant_line}
-Supplier base cost (USD): {base_cost}
+Supplier base cost (CNY): {base_cost}
+Exchange rate: 1 USD = {settings.usd_cny_rate} CNY
+Retail price formula: (CNY price / exchange rate) × tiered markup (2.3x-3x based on price level)
 
 Output exactly one JSON object with keys:
 - title (string, max 120 chars)
 - description (string, 200-600 chars, buyer-facing)
 - tags (array of 3-8 short strings)
 - seo (object with title and description strings)
-- price_suggestion (number, USD retail price, typically 2-3x base cost)
+- price_suggestion (number, USD retail price, apply tiered markup to converted USD base cost)
 
 Rules:
 - English only.
@@ -78,7 +109,14 @@ Rules:
 - JSON only.
 """.strip()
 
-    client = DeepSeekClient()
+    if copy_provider == "dashscope":
+        client = DeepSeekClient(
+            api_key=settings.dashscope_api_key,
+            model=settings.dashscope_chat_model,
+            base_url=settings.dashscope_chat_base_url,
+        )
+    else:
+        client = DeepSeekClient()
     try:
         raw = await client.agenerate_text(
             user_prompt,
@@ -87,14 +125,14 @@ Rules:
             max_tokens=900,
         )
     except DeepSeekError:
-        return _mock_copy(prompt, base_cost)
+        return _mock_copy(prompt, product_name, base_cost)
 
     try:
         data = json.loads(_strip_json_fences(raw))
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
-            return _mock_copy(prompt, base_cost)
+            return _mock_copy(prompt, product_name, base_cost)
         data = json.loads(match.group(0))
 
     title = str(data.get("title") or "").strip()
@@ -105,10 +143,13 @@ Rules:
     try:
         price_suggestion = float(price_raw)
     except (TypeError, ValueError):
-        price_suggestion = round(base_cost * settings.price_markup_multiplier, 2)
+        markup = _calculate_tiered_markup(
+            base_cost, settings.usd_cny_rate, settings.price_markup_min, settings.price_markup_max
+        )
+        price_suggestion = round((base_cost / settings.usd_cny_rate) * markup, 2)
 
     if not title or not description:
-        return _mock_copy(prompt, base_cost)
+        return _mock_copy(prompt, product_name, base_cost)
 
     return {
         "title": title,
@@ -118,5 +159,5 @@ Rules:
             "title": str(seo.get("title") or title)[:120],
             "description": str(seo.get("description") or description)[:320],
         },
-        "price_suggestion": max(price_suggestion, base_cost),
+        "price_suggestion": max(price_suggestion, round(base_cost / settings.usd_cny_rate, 2)),
     }

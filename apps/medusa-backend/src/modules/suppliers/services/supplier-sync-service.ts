@@ -1,16 +1,106 @@
-import { getBasicProduct, getProduct } from "../s2bdiy/s2bdiy-product"
 import type StoreCoreModuleService from "../../store-core/service"
+import { requireSupplierAdapter } from "../registry"
+import type { SyncData } from "../adapter"
+import { createMcProduct } from "../../../api/_helpers/store-core"
+import { calculateRetailPriceUsd } from "../../../lib/pricing"
+import { resolveSupplierShipFromCountry } from "../../../lib/supplier-shipping-country"
 
 export type SyncContext = {
   storeCoreService: StoreCoreModuleService
+  storeId?: string
+}
+
+// Ensure a product category exists for the given S2BDIY category, return its ID
+async function ensureCategory(
+  storeCoreService: StoreCoreModuleService,
+  storeId: string,
+  s2bCategory: { id: number; name: string; en_name?: string },
+  level: number,
+  parentId: string | null
+): Promise<string> {
+  // Check if category already exists with this supplier_category_id
+  const existing = (await storeCoreService.listProductCategories({
+    store_id: storeId,
+  } as any)) as any[]
+
+  const match = existing.find((c: any) =>
+    c.supplier_category_id === String(s2bCategory.id) &&
+    (c.parent_id ?? null) === parentId
+  )
+  if (match) return match.id
+
+  const name = s2bCategory.en_name || s2bCategory.name || `Category ${s2bCategory.id}`
+  const slug = `${parentId ?? "root"}-${s2bCategory.en_name || `cat-${s2bCategory.id}`}`
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+
+  // Check by slug to avoid duplicates
+  const bySlug = existing.find((c: any) => c.slug === slug)
+  if (bySlug) {
+    // Update with supplier_category_id if missing
+    if (!bySlug.supplier_category_id) {
+      await storeCoreService.updateProductCategories({
+        selector: { id: bySlug.id },
+        data: {
+          supplier_category_id: String(s2bCategory.id),
+          parent_id: parentId,
+          level,
+        } as any,
+      })
+    }
+    return bySlug.id
+  }
+
+  const created = await storeCoreService.createProductCategories({
+    store_id: storeId,
+    name,
+    slug,
+    description: s2bCategory.name !== name ? s2bCategory.name : null,
+    parent_id: parentId,
+    supplier_category_id: String(s2bCategory.id),
+    level,
+  } as any)
+
+  // Set supplier_category_id (column exists in DB but may not be in model)
+  try {
+    await storeCoreService.updateProductCategories({
+      selector: { id: created.id },
+      data: { supplier_category_id: String(s2bCategory.id) } as any,
+    })
+  } catch {
+    // Column might not be in the ORM model yet, ignore
+  }
+
+  return created.id
+}
+
+export async function ensureS2bProductCategories(
+  storeCoreService: StoreCoreModuleService,
+  storeId: string,
+  categories: Array<{ id: number; name: string; en_name?: string }>
+) {
+  const categoryIds: string[] = []
+  let parentId: string | null = null
+  for (let index = 0; index < categories.length; index += 1) {
+    const categoryId = await ensureCategory(
+      storeCoreService,
+      storeId,
+      categories[index],
+      index + 1,
+      parentId
+    )
+    categoryIds.push(categoryId)
+    parentId = categoryId
+  }
+  return categoryIds
 }
 
 export async function syncBasicProduct(
   basicProductId: number,
   supplierId: string,
-  { storeCoreService }: SyncContext
+  { storeCoreService, storeId }: SyncContext
 ) {
-  const data = await getBasicProduct(basicProductId)
+  const adapter = requireSupplierAdapter(supplierId)
+  const data = await adapter.syncProduct(basicProductId)
 
   // Upsert supplier product
   const existing = await storeCoreService.listSupplierProducts({
@@ -20,18 +110,24 @@ export async function syncBasicProduct(
   const supplierProductData = {
     supplier_id: supplierId,
     basic_product_id: String(data.id),
-    basic_product_code: data.code ?? null,
+    basic_product_code: (data as any).code ?? null,
     basic_product_name: data.name ?? null,
     basic_product_en_name: data.en_name ?? null,
     name: data.name ?? `Basic Product ${data.id}`,
-    category: "apparel",
-    purchase_price: data.purchase_price ?? null,
+    category:
+      data.categorys?.[0]?.en_name ??
+      data.categorys?.[0]?.name ??
+      null,
+    purchase_price: Number(data.purchase_price) || null,
     product_show_master_image: data.product_show_master_image ?? null,
     produce_country: data.produce_country ?? null,
     warehouse_name: data.warehouse_name ?? null,
     deliver_goods_text: data.deliver_goods_text ?? null,
-    base_cost: data.purchase_price ?? 0,
-    raw_json: data as unknown as Record<string, unknown>,
+    base_cost: Number(data.purchase_price) || 0,
+    raw_json: {
+      ...(data.raw ?? (data as unknown as Record<string, unknown>)),
+      ...(data.product_show_images ? { product_show_images: data.product_show_images } : {}),
+    },
   }
 
   let supplierProductId: string
@@ -76,11 +172,11 @@ export async function syncBasicProduct(
         size_name: size?.name ?? null,
         color_name: color?.name ?? null,
         sku: item.code ?? `S2B-${data.id}-${item.id}`,
-        cost: item.price ?? 0,
-        weight: item.weight ?? null,
-        length: item.length ?? null,
-        width: item.width ?? null,
-        height: item.height ?? null,
+        cost: Number(item.price) || 0,
+        weight: Number(item.weight) || null,
+        length: Number(item.length) || null,
+        width: Number(item.width) || null,
+        height: Number(item.height) || null,
         raw_json: item as unknown as Record<string, unknown>,
       }
 
@@ -107,9 +203,11 @@ export async function syncBasicProduct(
       supplier_product_id: supplierProductId,
     })
 
+    // print_areas are at top level, match by view_id
+    const printAreas = data.print_areas ?? []
+
     for (const view of data.views) {
-      const printAreas = view.print_areas ?? []
-      const area = printAreas[0]
+      const area = printAreas.find((pa: any) => pa.view_id === view.id)
 
       const specData = {
         supplier_product_id: supplierProductId,
@@ -118,10 +216,10 @@ export async function syncBasicProduct(
         view_name: view.name ?? null,
         view_en_name: view.en_name ?? null,
         print_position: view.name ?? "front",
-        print_file_width: area?.width ?? 0,
-        print_file_height: area?.height ?? 0,
-        design_area_width: area?.width ?? null,
-        design_area_height: area?.height ?? null,
+        print_file_width: Number(area?.width) || 0,
+        print_file_height: Number(area?.height) || 0,
+        design_area_width: Number(area?.width) || null,
+        design_area_height: Number(area?.height) || null,
         design_area_unit: "px" as const,
         design_type: 1,
         tip_level: String(view.tip_level ?? ""),
@@ -145,83 +243,101 @@ export async function syncBasicProduct(
     }
   }
 
+  // Sync categories from S2BDIY
+  const categoryIds: string[] = []
+  if (data.categorys?.length && storeId) {
+    categoryIds.push(...await ensureS2bProductCategories(storeCoreService, storeId, data.categorys))
+  }
+
   return {
     supplier_product_id: supplierProductId,
     basic_product_id: data.id,
     variant_count: data.items?.length ?? 0,
     view_count: data.views?.length ?? 0,
+    category_ids: categoryIds,
   }
 }
 
-export async function syncProductDetail(
-  supplierProductId: number,
-  { storeCoreService }: SyncContext
+function buildSupplierDraftTitle(supplier: any): string {
+  const base = String(supplier.en_name || supplier.basic_product_en_name || supplier.name || supplier.supplier_product_id)
+    .trim()
+  const sourceName = String(supplier.name || "")
+  const suffix = sourceName.includes("-") ? sourceName.split("-").slice(1).join("-") : ""
+  const englishSuffix = suffix
+    .replace(/英格兰/g, "England")
+    .replace(/美国/g, "US")
+    .replace(/加拿大/g, "Canada")
+    .replace(/澳大利亚/g, "Australia")
+    .replace(/海外本土/g, "Overseas Local")
+    .replace(/海外/g, "Overseas")
+    .replace(/本土/g, "Local")
+    .replace(/[（(].*?[）)]/g, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/[^a-zA-Z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  return englishSuffix && !base.toLowerCase().includes(englishSuffix.toLowerCase())
+    ? `${base} — ${englishSuffix}`
+    : base
+}
+
+export async function ensureSupplierProductDraft(
+  storeCoreService: StoreCoreModuleService,
+  storeId: string,
+  supplierProductId: string
 ) {
-  const data = await getProduct(supplierProductId)
-
-  // Extract best mockup image
-  let mockupUrl: string | null = null
-
-  for (const variant of data.variants ?? []) {
-    const imgs = variant.show_images?.[0]?.images
-    if (imgs?.length) {
-      mockupUrl = imgs[0].src
-      break
+  const supplier = (await storeCoreService.listSupplierProducts({ id: supplierProductId }))[0] as any
+  if (!supplier) throw new Error(`Supplier product ${supplierProductId} not found`)
+  const products = (await storeCoreService.listProducts({ store_id: storeId })) as any[]
+  const existing = products.find((product) => product.supplier_product_id === supplierProductId)
+  const title = buildSupplierDraftTitle(supplier)
+  if (existing) {
+    if (existing.status === "draft" && existing.title !== title) {
+      return storeCoreService.updateProducts({ selector: { id: existing.id }, data: { title } })
     }
+    return existing
   }
 
-  if (!mockupUrl) {
-    const imgs = data.show_images?.[0]?.images
-    if (imgs?.length) {
-      mockupUrl = imgs[0].src
-    }
-  }
-
-  // Update supplier product with mockup
-  const citigooProducts = await storeCoreService.listSupplierProducts({
-    supplier_product_id: String(supplierProductId),
-  })
-
-  if (citigooProducts.length > 0) {
-    await storeCoreService.updateSupplierProducts({
-      selector: { id: citigooProducts[0].id },
-      data: {
-        supplier_mockup_image_url: mockupUrl,
-        supplier_product_code: data.product_code ?? null,
-        supplier_product_name: data.product_name ?? null,
-      },
-    })
-  }
-
-  // Sync variant details
-  if (data.variants?.length) {
-    const existingVariants = await storeCoreService.listSupplierProductVariants({
-      supplier_product_id: citigooProducts[0]?.id,
-    })
-
-    for (const variant of data.variants) {
-      const match = existingVariants.find(
-        (v: any) => v.supplier_size_id === String(variant.size_id) && v.supplier_color_id === String(variant.color_id)
-      )
-
-      if (match) {
-        await storeCoreService.updateSupplierProductVariants({
-          selector: { id: match.id },
-          data: {
-            size_name: variant.size_name ?? match.size_name,
-            color_name: variant.color_name ?? match.color_name,
-            weight: variant.weight ?? match.weight,
-            length: variant.length ?? match.length,
-            width: variant.width ?? match.width,
-            height: variant.height ?? match.height,
-          },
-        })
-      }
-    }
-  }
-
-  return {
+  const variants = (await storeCoreService.listSupplierProductVariants({
     supplier_product_id: supplierProductId,
-    supplier_mockup_image_url: mockupUrl,
-  }
+  })) as any[]
+  const purchasePrice = Number(supplier.purchase_price) || 0
+  const retailPrice = purchasePrice > 0 ? calculateRetailPriceUsd(purchasePrice) : 29.99
+  return createMcProduct(storeCoreService, {
+    store_id: storeId,
+    title,
+    description: String(supplier.en_desc || supplier.description || ""),
+    status: "draft",
+    source: "manual",
+    price: retailPrice,
+    cost: purchasePrice,
+    tags: ["s2bdiy", "supplier-catalog"],
+    supplier_id: supplier.supplier_id,
+    supplier_product_id: supplierProductId,
+    basic_product_id: supplier.supplier_product_id,
+    image_url: supplier.product_show_master_image ?? null,
+    mockup_image_url: supplier.product_show_master_image ?? null,
+    ship_from_country: resolveSupplierShipFromCountry(null, supplier),
+    variants: variants.map((variant: any) => ({
+      supplier_variant_id: variant.supplier_variant_id ?? variant.id,
+      supplier_size_id: variant.supplier_size_id,
+      supplier_color_id: variant.supplier_color_id,
+      color: variant.color_name ?? variant.color ?? "Default",
+      size: variant.size_name ?? variant.size ?? "Default",
+      sku: variant.sku,
+      cost: Number(variant.cost) || 0,
+      price: retailPrice,
+      weight: variant.weight,
+      length: variant.length,
+      width: variant.width,
+      height: variant.height,
+      stock: 50,
+    })),
+    metadata: {
+      synced_from_supplier: true,
+      supplier_catalog_draft: true,
+      external_supplier_product_id: supplier.supplier_product_id,
+      supplier_details: supplier.raw_json ?? {},
+    },
+  })
 }

@@ -1,5 +1,5 @@
 import type StoreCoreModuleService from "../../modules/store-core/service"
-import { requireS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { requireS2bdiyConfig, isS2bdiyMockMode } from "../../modules/suppliers/s2bdiy/config"
 import { S2bdiyClient } from "../../modules/suppliers/s2bdiy/s2bdiy-client"
 import { fetchPrintFileBuffer, uploadMaterialClient } from "../../modules/suppliers/s2bdiy/s2bdiy-material"
 import {
@@ -28,6 +28,24 @@ export async function provisionS2bProductForMcProduct(
   const client = new S2bdiyClient(config)
 
   const S2BDIY_SUPPLIER_ID = "sup_s2bdiy"
+
+  if (isS2bdiyMockMode()) {
+    const mockProductId = String(900000 + (Date.now() % 900000))
+    await storeCore.updateProducts({
+      selector: { id: input.productId },
+      data: {
+        supplier_id: S2BDIY_SUPPLIER_ID,
+        basic_product_id: input.basicProductId,
+        supplier_size_id: String(input.sizeId),
+        supplier_color_id: String(input.colorId),
+        view_id: String(input.viewId),
+        design_type: input.designType ?? 1,
+        supplier_material_id: `mock_mat_${input.productId.slice(-8)}`,
+        supplier_product_id: mockProductId,
+      },
+    })
+    return
+  }
 
   try {
     await storeCore.updateProducts({

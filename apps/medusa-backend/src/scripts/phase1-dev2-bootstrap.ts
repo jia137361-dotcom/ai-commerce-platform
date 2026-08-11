@@ -1,4 +1,4 @@
-import type { ExecArgs, MedusaContainer } from "@medusajs/framework/types"
+import type { ExecArgs, MedusaContainer } from "./medusa-exec-args"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { createProductsWorkflow } from "@medusajs/medusa/core-flows"
 import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
@@ -31,7 +31,7 @@ async function findNativeProductAndVariantByHandle(
 }
 
 export default async function phase1Dev2Bootstrap({ container }: ExecArgs) {
-  const storeCore = container.resolve<StoreCoreModuleService>(STORE_CORE_MODULE)
+  const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
   const regionId = await resolveDefaultRegionId(container, VARIANT_PRICE_CURRENCY)
 
   async function ensureNativeProduct(

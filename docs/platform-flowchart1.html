@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ciiverse Platform Flowchart — Current & Pending</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; padding: 32px; }
+  h1 { text-align: center; font-size: 28px; margin-bottom: 8px; color: #f8fafc; }
+  .subtitle { text-align: center; color: #94a3b8; margin-bottom: 32px; font-size: 14px; }
+  .legend { display: flex; gap: 24px; justify-content: center; margin-bottom: 28px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e1; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; }
+  .dot-done { background: #22c55e; }
+  .dot-partial { background: #eab308; }
+  .dot-todo { background: #ef4444; }
+  .dot-future { background: #6366f1; }
+
+  /* Main grid */
+  .flow-container { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 1400px; margin: 0 auto; }
+  .flow-section { background: #1e293b; border-radius: 12px; padding: 24px; border: 1px solid #334155; }
+  .flow-section h2 { font-size: 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .flow-section h2 .icon { font-size: 22px; }
+
+  /* Full-width section */
+  .full-width { grid-column: 1 / -1; }
+
+  /* Flow steps */
+  .flow-steps { position: relative; }
+  .step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; position: relative; }
+  .step::before { content: ''; position: absolute; left: 15px; top: 32px; bottom: -12px; width: 2px; background: #334155; }
+  .step:last-child::before { display: none; }
+  .step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; z-index: 1; }
+  .step-dot.done { background: #166534; color: #86efac; border: 2px solid #22c55e; }
+  .step-dot.partial { background: #713f12; color: #fde047; border: 2px solid #eab308; }
+  .step-dot.todo { background: #7f1d1d; color: #fca5a5; border: 2px solid #ef4444; }
+  .step-dot.future { background: #312e81; color: #a5b4fc; border: 2px solid #6366f1; }
+  .step-content { flex: 1; min-width: 0; }
+  .step-title { font-weight: 600; font-size: 14px; color: #f1f5f9; margin-bottom: 2px; }
+  .step-desc { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+  .step-tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-weight: 600; }
+  .tag-done { background: #166534; color: #86efac; }
+  .tag-partial { background: #713f12; color: #fde047; }
+  .tag-todo { background: #7f1d1d; color: #fca5a5; }
+  .tag-future { background: #312e81; color: #a5b4fc; }
+
+  /* Connector arrows */
+  .connector { text-align: center; color: #475569; font-size: 20px; margin: 8px 0; grid-column: 1 / -1; }
+  .connector-h { display: flex; align-items: center; justify-content: center; gap: 8px; color: #475569; font-size: 13px; padding: 4px 0; }
+  .connector-h .line { flex: 1; height: 2px; background: #334155; }
+
+  /* Phase tags */
+  .phase-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-bottom: 12px; }
+  .phase-current { background: #1e3a5f; color: #60a5fa; border: 1px solid #3b82f6; }
+  .phase-next { background: #3b1f4e; color: #c084fc; border: 1px solid #a855f7; }
+  .phase-later { background: #1a1a2e; color: #94a3b8; border: 1px solid #475569; }
+
+  /* Data flow section */
+  .data-flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .data-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; }
+  .data-card h4 { font-size: 13px; color: #60a5fa; margin-bottom: 6px; }
+  .data-card p { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+  .data-card ul { list-style: none; padding: 0; }
+  .data-card li { font-size: 11px; color: #94a3b8; padding: 2px 0; }
+  .data-card li::before { content: '→ '; color: #475569; }
+
+  /* Summary bar */
+  .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; max-width: 1400px; margin-left: auto; margin-right: auto; }
+  .summary-card { background: #1e293b; border-radius: 10px; padding: 16px; text-align: center; border: 1px solid #334155; }
+  .summary-card .num { font-size: 32px; font-weight: 800; }
+  .summary-card .label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+  .num-green { color: #22c55e; }
+  .num-yellow { color: #eab308; }
+  .num-red { color: #ef4444; }
+  .num-purple { color: #6366f1; }
+
+  /* Table */
+  .spec-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  .spec-table th { text-align: left; padding: 6px 8px; background: #0f172a; color: #60a5fa; border-bottom: 1px solid #334155; font-weight: 600; }
+  .spec-table td { padding: 5px 8px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+  .spec-table tr:hover td { background: #1e293b; }
+
+  @media (max-width: 900px) {
+    .flow-container { grid-template-columns: 1fr; }
+    .data-flow { grid-template-columns: 1fr; }
+    .summary-bar { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<h1>Ciiverse Platform — 功能流程图</h1>
+<p class="subtitle">基于代码分析 + 网站资料文档 | 绿色=已完成 黄色=部分完成 红色=待开发 紫色=远期规划</p>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot dot-done"></div>已完成 (Done)</div>
+  <div class="legend-item"><div class="legend-dot dot-partial"></div>部分完成 (Partial)</div>
+  <div class="legend-item"><div class="legend-dot dot-todo"></div>待开发 (To Do)</div>
+  <div class="legend-item"><div class="legend-dot dot-future"></div>远期规划 (Future)</div>
+</div>
+
+<!-- Summary -->
+<div class="summary-bar">
+  <div class="summary-card"><div class="num num-green">18</div><div class="label">已完成模块</div></div>
+  <div class="summary-card"><div class="num num-yellow">8</div><div class="label">部分完成</div></div>
+  <div class="summary-card"><div class="num num-red">22</div><div class="label">待开发</div></div>
+  <div class="summary-card"><div class="num num-purple">12</div><div class="label">远期规划</div></div>
+</div>
+
+<div class="flow-container">
+
+<!-- ==================== BUYER FLOW ==================== -->
+<div class="flow-section">
+  <h2><span class="icon">🛒</span> 买家端完整流程 (Buyer Flow)</h2>
+  <span class="phase-badge phase-current">Phase 1-2A: 进行中</span>
+
+  <div class="flow-steps">
+    <div class="step">
+      <div class="step-dot done">1</div>
+      <div class="step-content">
+        <div class="step-title">访问首页 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">Storefront SPA (React 18 + Vite) → 展示产品列表、店铺信息<br>
+        <b>待完善:</b> 首页Banner/Featured/Trending分区、Categories导航栏、Ship to地区选择弹窗</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">2</div>
+      <div class="step-content">
+        <div class="step-title">浏览产品 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">产品列表页、产品详情页 (Item/Size/Review/Detail 标签页)<br>
+        <b>待完善:</b> Filter筛选 (Categories/Sort/Color/Material/Size/Occasion/Price/Ships from)、搜索功能优化</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot partial">3</div>
+      <div class="step-content">
+        <div class="step-title">AI设计 / Design Now <span class="step-tag tag-partial">Partial</span></div>
+        <div class="step-desc">✅ AI Worker生成设计图 + Mockup + 打印文件<br>
+        ✅ AI生成标题/描述/标签<br>
+        ✅ 创建产品草稿<br>
+        <b>缺失:</b> 买家端AI设计入口页面、设计编辑器、Design Now按钮替换Add to cart</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">4</div>
+      <div class="step-content">
+        <div class="step-title">加入购物车 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">Cart CRUD API、购物车状态管理 (localStorage)<br>
+        <b>待完善:</b> 多商品选择、Manage管理模式、商品勾选同步Checkout数量</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot partial">5</div>
+      <div class="step-content">
+        <div class="step-title">结算 Checkout <span class="step-tag tag-partial">Partial</span></div>
+        <div class="step-desc">✅ Stripe支付集成、购物车结算流程<br>
+        <b>缺失:</b> 优惠券系统 (Coupon UI + API)、运费计算逻辑、Buy Now按钮激活条件、Edit billing address</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">6</div>
+      <div class="step-content">
+        <div class="step-title">支付 Payment <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">Stripe Payment Intent、支付成功回调、Webhook处理<br>
+        支持: Visa/Mastercard/Amex/JCB/Apple Pay/Google Pay</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">7</div>
+      <div class="step-content">
+        <div class="step-title">订单生成 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">支付成功 → 创建Order → 创建FulfillmentOrder → 通知Supplier<br>
+        自动触发: payment.captured subscriber</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot partial">8</div>
+      <div class="step-content">
+        <div class="step-title">订单管理 <span class="step-tag tag-partial">Partial</span></div>
+        <div class="step-desc">✅ 订单查询、订单详情、物流追踪<br>
+        <b>缺失:</b> 订单分类筛选 (All/Cancelled/Unpaid/Shipped/Processing/Delivered/Refund)、取消订单UI、修改订单</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">9</div>
+      <div class="step-content">
+        <div class="step-title">物流追踪 <span class="step-tag tag-partial">Partial</span></div>
+        <div class="step-desc">✅ 后端Shipment模型、Tracking API<br>
+        <b>缺失:</b> 买家端追踪页面UI、实时状态更新、邮件通知</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">10</div>
+      <div class="step-content">
+        <div class="step-title">评价 Review <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc">✅ 后端ProductReview模型<br>
+        <b>缺失:</b> 买家端评价页面 (Pending/Reviewed)、图片上传评价、评价展示</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">11</div>
+      <div class="step-content">
+        <div class="step-title">退款/售后 Refund <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc">✅ 后端BuyerRefundRequest模型<br>
+        <b>缺失:</b> 退款申请UI、售后流程页面、退款状态跟踪</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SELLER FLOW ==================== -->
+<div class="flow-section">
+  <h2><span class="icon">🏪</span> 卖家端完整流程 (Seller Flow)</h2>
+  <span class="phase-badge phase-current">Phase 2A-2B: 进行中</span>
+
+  <div class="flow-steps">
+    <div class="step">
+      <div class="step-dot done">1</div>
+      <div class="step-content">
+        <div class="step-title">卖家注册/登录 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">Seller Dashboard (React 19 + Vite)、JWT Token认证、RequireAuth守卫</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">2</div>
+      <div class="step-content">
+        <div class="step-title">Dashboard概览 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">卖家后台首页、基本统计数据展示</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">3</div>
+      <div class="step-content">
+        <div class="step-title">AI产品生成 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">✅ POST /ai/generate-product → AI Worker<br>
+        ✅ 设计图生成、Mockup生成、打印文件生成<br>
+        ✅ 标题/描述/标签AI生成、价格建议<br>
+        ✅ 创建产品草稿</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">4</div>
+      <div class="step-content">
+        <div class="step-title">产品管理 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">✅ 产品列表、产品编辑、产品发布<br>
+        ✅ Platform Products浏览、Supplier Products关联<br>
+        ✅ 产品草稿 → 发布流程</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">5</div>
+      <div class="step-content">
+        <div class="step-title">订单管理 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">✅ 订单列表、订单详情<br>
+        ✅ Fulfillment Order管理、Shipment追踪</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot partial">6</div>
+      <div class="step-content">
+        <div class="step-title">店铺设置 <span class="step-tag tag-partial">Partial</span></div>
+        <div class="step-desc">✅ Store Settings (Logo/Banner/SEO)<br>
+        <b>缺失:</b> 个人信息编辑、支付方式管理、通知设置、语言/货币设置</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">7</div>
+      <div class="step-content">
+        <div class="step-title">SKU管理 <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc">后端已有SupplierProductVariant模型<br>
+        <b>缺失:</b> 卖家端SKU管理页面、SKU映射表 (Platform SKU ↔ Provider ↔ Warehouse ↔ Cost)</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">8</div>
+      <div class="step-content">
+        <div class="step-title">素材库 Element Library <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc"><b>全新功能:</b> 我的图片/文字、分享图片/文字、设计资产存储管理</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">9</div>
+      <div class="step-content">
+        <div class="step-title">选品中心 Product Selection <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc"><b>全新功能:</b> 产品管理、商品库、我的保存、自建产品、自建产品库</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">10</div>
+      <div class="step-content">
+        <div class="step-title">设计中心 Design Center <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc"><b>全新功能:</b> 单品设计、设计记录、设计编辑器集成</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">11</div>
+      <div class="step-content">
+        <div class="step-title">发布管理 Publish <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc"><b>全新功能:</b> 一键发布到Ciiverse平台、发布状态管理</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== AI WORKER FLOW ==================== -->
+<div class="flow-section">
+  <h2><span class="icon">🤖</span> AI Worker 生成流程</h2>
+  <span class="phase-badge phase-current">Phase 2A: 核心</span>
+
+  <div class="flow-steps">
+    <div class="step">
+      <div class="step-dot done">1</div>
+      <div class="step-content">
+        <div class="step-title">接收请求 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">POST /ai/generate-product<br>
+        输入: prompt, platform_product_id, supplier_product_id, variant_id, print_position</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">2</div>
+      <div class="step-content">
+        <div class="step-title">解析供应商上下文 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">从MedusaJS获取: SupplierPrintSpec (打印规格)、SupplierProductVariant (颜色/尺寸)<br>
+        确定打印区域、文件尺寸、DPI、安全边距</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">3</div>
+      <div class="step-content">
+        <div class="step-title">生成设计图 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">调用图像生成API (Fal.ai / OpenAI DALL-E / DashScope)<br>
+        或使用Mock模式跳过外部API<br>
+        输出: design_image_url</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">4</div>
+      <div class="step-content">
+        <div class="step-title">图像处理 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">✅ 图像标准化 (normalize)<br>
+        ✅ 导出打印文件 (print_file) - 符合SupplierPrintSpec<br>
+        ✅ 生成Mockup (模板合成)<br>
+        ✅ 生成Gallery缩略图</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">5</div>
+      <div class="step-content">
+        <div class="step-title">AI文案生成 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">调用DeepSeek/Qwen生成: 标题、描述、标签、SEO元数据<br>
+        输出: title, description, tags, seo</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">6</div>
+      <div class="step-content">
+        <div class="step-title">价格建议 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">基于: base_cost + USD/CNY汇率 + markup_min/max<br>
+        输出: price_suggestion</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">7</div>
+      <div class="step-content">
+        <div class="step-title">返回结果 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">完整响应: design + print_file + mockup + gallery + title + desc + tags + seo + price</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">8</div>
+      <div class="step-content">
+        <div class="step-title">买家端AI设计入口 <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc"><b>缺失:</b> 买家端的AI设计页面 (AiDesignPage已存在但需完善)<br>
+        设计编辑器、Design Now按钮、买家AI生图流程</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">9</div>
+      <div class="step-content">
+        <div class="step-title">批量生成 <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc"><b>缺失:</b> 同一设计生成多个品类产品（衬衣/杯子/抱枕/海报/帽子）<br>
+        1个credit = 1次提示词 = 2张图片，可勾选5个产品类别</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== FULFILLMENT FLOW ==================== -->
+<div class="flow-section">
+  <h2><span class="icon">📦</span> 履约与物流流程 (Fulfillment)</h2>
+  <span class="phase-badge phase-current">Phase 2B: 核心</span>
+
+  <div class="flow-steps">
+    <div class="step">
+      <div class="step-dot done">1</div>
+      <div class="step-content">
+        <div class="step-title">支付成功触发 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">Stripe Webhook → payment.captured → subscriber自动处理<br>
+        标记订单已支付、创建FulfillmentOrder (waiting状态)</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">2</div>
+      <div class="step-content">
+        <div class="step-title">推送供应商 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">✅ S2BDIY Adapter推送订单<br>
+        ✅ SupplierOrder创建、状态映射<br>
+        ✅ 后台定时任务每5分钟同步S2BDIY订单状态</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot done">3</div>
+      <div class="step-content">
+        <div class="step-title">供应商生产 <span class="step-tag tag-done">Done</span></div>
+        <div class="step-desc">S2BDIY接收订单 → 生产中 → 已发货<br>
+        状态: waiting → pushed → in_production → shipped</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot partial">4</div>
+      <div class="step-content">
+        <div class="step-title">物流发货 <span class="step-tag tag-partial">Partial</span></div>
+        <div class="step-desc">✅ Shipment模型、tracking_number、carrier信息<br>
+        <b>缺失:</b> 买家端实时物流追踪页面、物流状态推送通知</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot partial">5</div>
+      <div class="step-content">
+        <div class="step-title">订单完成 <span class="step-tag tag-partial">Partial</span></div>
+        <div class="step-desc">✅ delivered状态更新<br>
+        <b>缺失:</b> 自动确认收货、买家确认收货UI、评价入口引导</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">6</div>
+      <div class="step-content">
+        <div class="step-title">退款/退货 <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc">✅ 后端BuyerRefundRequest模型<br>
+        <b>缺失:</b> 退款申请流程、退款审核、退款执行、退款状态同步</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot todo">7</div>
+      <div class="step-content">
+        <div class="step-title">邮件通知 <span class="step-tag tag-todo">Todo</span></div>
+        <div class="step-desc">✅ Resend集成、订单确认邮件模板<br>
+        <b>缺失:</b> 发货通知邮件、物流更新邮件、退款通知邮件</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SUPPLIER FLOW ==================== -->
+<div class="flow-section full-width">
+  <h2><span class="icon">🔗</span> 供应商与数据对接流程 (Supplier & Data)</h2>
+  <span class="phase-badge phase-current">Phase 2B</span>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+    <div>
+      <h3 style="font-size: 14px; color: #60a5fa; margin-bottom: 12px;">S2BDIY 供应商对接</h3>
+      <div class="flow-steps">
+        <div class="step">
+          <div class="step-dot done">1</div>
+          <div class="step-content">
+            <div class="step-title">产品目录同步 <span class="step-tag tag-done">Done</span></div>
+            <div class="step-desc">1513个SKU分类、19个发货仓库<br>
+            SupplierAdapter接口 + S2BDIY适配器</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot done">2</div>
+          <div class="step-content">
+            <div class="step-title">打印规格同步 <span class="step-tag tag-done">Done</span></div>
+            <div class="step-desc">SupplierPrintSpec: 打印位置/尺寸/DPI/安全边距<br>
+            支持: 前面/侧面/包裹等多种打印方式</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot done">3</div>
+          <div class="step-content">
+            <div class="step-title">订单推送 <span class="step-tag tag-done">Done</span></div>
+            <div class="step-desc">✅ 自动推送订单到S2BDIY<br>
+            ✅ 状态轮询同步 (每5分钟)</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot done">4</div>
+          <div class="step-content">
+            <div class="step-title">物流信息回传 <span class="step-tag tag-done">Done</span></div>
+            <div class="step-desc">Tracking number / carrier 从S2BDIY回传<br>
+            更新Shipment模型</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="font-size: 14px; color: #60a5fa; margin-bottom: 12px;">定价与套餐体系</h3>
+      <div class="flow-steps">
+        <div class="step">
+          <div class="step-dot todo">1</div>
+          <div class="step-content">
+            <div class="step-title">SaaS套餐定义 <span class="step-tag tag-todo">Todo</span></div>
+            <div class="step-desc">Free ($0) / AI Creative ($9) / AI Plus ($19) / AI Store ($19)<br>
+            功能差异: Credits/存储/折扣/品牌定制</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot todo">2</div>
+          <div class="step-content">
+            <div class="step-title">Credit系统 <span class="step-tag tag-todo">Todo</span></div>
+            <div class="step-desc">1 credit = 1次提示词 = 2张图片<br>
+            Free: 5 credits / Creative: 60 / Plus: 100</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot todo">3</div>
+          <div class="step-content">
+            <div class="step-title">存储配额 <span class="step-tag tag-todo">Todo</span></div>
+            <div class="step-desc">Free: 2G / Creative: 10G / Plus: 30G<br>
+            AI图片 + 产品 + 设计资产总空间</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot todo">4</div>
+          <div class="step-content">
+            <div class="step-title">订阅支付 <span class="step-tag tag-todo">Todo</span></div>
+            <div class="step-desc"><b>缺失:</b> Stripe Subscription集成<br>
+            套餐升级/降级、计费周期管理</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 style="font-size: 14px; color: #60a5fa; margin-bottom: 12px;">多平台对接 (Phase 3+)</h3>
+      <div class="flow-steps">
+        <div class="step">
+          <div class="step-dot future">1</div>
+          <div class="step-content">
+            <div class="step-title">商品导出 CSV <span class="step-tag tag-future">Future</span></div>
+            <div class="step-desc">导出商品到Etsy/Shopify/WooCommerce/Wix<br>
+            CSV格式商品数据</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot future">2</div>
+          <div class="step-content">
+            <div class="step-title">订单导入 CSV <span class="step-tag tag-future">Future</span></div>
+            <div class="step-desc">从其他平台导入订单<br>
+            关联Ciiverse商品、支付价格和运费</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot future">3</div>
+          <div class="step-content">
+            <div class="step-title">API自动对接 <span class="step-tag tag-future">Future</span></div>
+            <div class="step-desc">与Etsy/Shopify/WooCommerce/Wix API对接<br>
+            订单自动同步、商品自动上架</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-dot future">4</div>
+          <div class="step-content">
+            <div class="step-title">定制品牌 <span class="step-tag tag-future">Future</span></div>
+            <div class="step-desc">领标/标签/包装/插卡/发货单品牌化<br>
+            需与S2BDIY沟通定价</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TECH ARCHITECTURE ==================== -->
+<div class="flow-section full-width">
+  <h2><span class="icon">⚙️</span> 技术架构与数据流</h2>
+
+  <div class="data-flow">
+    <div class="data-card">
+      <h4>🖥️ 前端层</h4>
+      <ul>
+        <li><b>Storefront</b> (React 18 + Vite) :5174 → proxy MedusaJS</li>
+        <li><b>Seller Dashboard</b> (React 19 + Vite) :5173 → 直连MedusaJS</li>
+        <li><b>Platform Ops</b> (React 19 + Vite) :5176 → 直连MedusaJS</li>
+      </ul>
+    </div>
+    <div class="data-card">
+      <h4>⚡ 后端层 (MedusaJS :9000)</h4>
+      <ul>
+        <li><b>store-core</b>: 22个核心模型 (Store/Product/Supplier/Order...)</li>
+        <li><b>fulfillment-orders</b>: 履约订单生命周期</li>
+        <li><b>shipments</b>: 物流跟踪</li>
+        <li><b>webhook-events</b>: Webhook幂等去重</li>
+        <li><b>buyer-refund-requests</b>: 退款工作流</li>
+        <li><b>Stripe Payment</b>: 支付处理</li>
+      </ul>
+    </div>
+    <div class="data-card">
+      <h4>🤖 AI Worker (FastAPI :8001)</h4>
+      <ul>
+        <li><b>图像生成</b>: Fal.ai / OpenAI / DashScope</li>
+        <li><b>文案生成</b>: DeepSeek / Qwen</li>
+        <li><b>图像处理</b>: Pillow (标准化/打印文件/Mockup)</li>
+        <li><b>供应商对接</b>: MedusaClient HTTP</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Missing features table -->
+  <h3 style="font-size: 15px; color: #f59e0b; margin: 20px 0 10px;">📋 需要补充的功能清单 (按优先级)</h3>
+  <table class="spec-table">
+    <thead>
+      <tr><th>优先级</th><th>功能模块</th><th>涉及层</th><th>说明</th><th>来源</th></tr>
+    </thead>
+    <tbody>
+      <tr><td style="color:#ef4444;font-weight:700">P0</td><td>买家端AI设计入口</td><td>Storefront + AI Worker</td><td>Design Now按钮、AI设计页面、设计编辑器集成</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#ef4444;font-weight:700">P0</td><td>优惠券系统</td><td>MedusaJS + Storefront</td><td>Coupon模型 + UI (All/Shopping/Expiring soon)、发放/使用/过期逻辑</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#ef4444;font-weight:700">P0</td><td>运费计算</td><td>MedusaJS + Storefront</td><td>基于地址/重量/尺寸/方式计算运费、Free Shipping规则</td><td>Getting Started</td></tr>
+      <tr><td style="color:#f59e0b;font-weight:700">P1</td><td>买家端评价系统</td><td>Storefront + MedusaJS</td><td>Pending/Reviewed评价页面、图片上传评价</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#f59e0b;font-weight:700">P1</td><td>物流追踪页面</td><td>Storefront</td><td>实时物流状态、时间线展示、承运商信息</td><td>Getting Started</td></tr>
+      <tr><td style="color:#f59e0b;font-weight:700">P1</td><td>退款/售后流程</td><td>Storefront + MedusaJS</td><td>退款申请UI、售后流程、退款状态跟踪</td><td>Getting Started</td></tr>
+      <tr><td style="color:#f59e0b;font-weight:700">P1</td><td>邮件通知系统</td><td>MedusaJS</td><td>发货通知、物流更新、退款通知邮件模板</td><td>Getting Started</td></tr>
+      <tr><td style="color:#f59e0b;font-weight:700">P1</td><td>订单分类筛选</td><td>Storefront</td><td>All/Cancelled/Unpaid/Shipped/Processing/Delivered/Refund</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#3b82f6;font-weight:700">P2</td><td>Filter筛选系统</td><td>Storefront</td><td>Categories/Sort/Color/Material/Size/Occasion/Price/Ships from</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#3b82f6;font-weight:700">P2</td><td>搜索优化</td><td>Storefront + MedusaJS</td><td>参考temu.com的搜索体验</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#3b82f6;font-weight:700">P2</td><td>首页优化</td><td>Storefront</td><td>Banner/Featured/Trending分区、Categories导航</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#3b82f6;font-weight:700">P2</td><td>Ship to地区选择</td><td>Storefront</td><td>弹窗选择发货地区、根据IP自动定位</td><td>页面分析.docx + 物流数据</td></tr>
+      <tr><td style="color:#3b82f6;font-weight:700">P2</td><td>举报功能</td><td>Storefront + MedusaJS</td><td>多类型举报表单 (版权/冒犯/违禁/信息缺失/安全/售后)</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#8b5cf6;font-weight:700">P3</td><td>SaaS套餐体系</td><td>MedusaJS + Stripe</td><td>Free/Creative/Plus/Store套餐、订阅支付、Credit系统</td><td>价格表.xlsx</td></tr>
+      <tr><td style="color:#8b5cf6;font-weight:700">P3</td><td>SKU管理页面</td><td>Seller Dashboard</td><td>SKU映射表、批量管理</td><td>SKU管理.xlsx</td></tr>
+      <tr><td style="color:#8b5cf6;font-weight:700">P3</td><td>素材库</td><td>Seller Dashboard</td><td>图片/文字资产管理、分享功能</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#8b5cf6;font-weight:700">P3</td><td>选品中心</td><td>Seller Dashboard</td><td>产品浏览、保存、自建产品</td><td>页面分析.docx</td></tr>
+      <tr><td style="color:#6366f1;font-weight:700">P4</td><td>商品导出CSV</td><td>Seller Dashboard</td><td>导出到Etsy/Shopify/WooCommerce/Wix</td><td>商品导出.xlsx</td></tr>
+      <tr><td style="color:#6366f1;font-weight:700">P4</td><td>订单导入CSV</td><td>Seller Dashboard</td><td>从其他平台导入订单</td><td>订单导入.xlsx</td></tr>
+      <tr><td style="color:#6366f1;font-weight:700">P4</td><td>API自动对接</td><td>MedusaJS + 第三方</td><td>Etsy/Shopify/WooCommerce/Wix API集成</td><td>订单自动导入.xlsx</td></tr>
+      <tr><td style="color:#6366f1;font-weight:700">P4</td><td>定制品牌</td><td>S2BDIY + MedusaJS</td><td>领标/包装/插卡品牌化 (需与S2BDIY沟通)</td><td>定制品牌.xlsx</td></tr>
+      <tr><td style="color:#6366f1;font-weight:700">P4</td><td>多店铺管理</td><td>全栈</td><td>一个账号连接多个销售渠道店铺</td><td>店铺数量管理.xlsx</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== COMPLETE BUSINESS LOOP ==================== -->
+<div class="flow-section full-width">
+  <h2><span class="icon">🔄</span> 完整业务闭环 — 从AI生成到买家收货</h2>
+
+  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 16px 0;">
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">1. 卖家输入Prompt</div>
+      <div style="color: #94a3b8; font-size: 11px;">AI生图工具</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">2. 选择平台产品</div>
+      <div style="color: #94a3b8; font-size: 11px;">T-shirt/Mug/Hoodie...</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">3. AI生成设计</div>
+      <div style="color: #94a3b8; font-size: 11px;">设计图+Mockup+打印文件</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">4. AI生成文案</div>
+      <div style="color: #94a3b8; font-size: 11px;">标题/描述/标签/SEO</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">5. 创建草稿</div>
+      <div style="color: #94a3b8; font-size: 11px;">Product Draft</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">6. 卖家发布</div>
+      <div style="color: #94a3b8; font-size: 11px;">Publish → Storefront可见</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">7. 买家浏览</div>
+      <div style="color: #94a3b8; font-size: 11px;">产品列表/详情</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">8. 加入购物车</div>
+      <div style="color: #94a3b8; font-size: 11px;">Cart CRUD</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #713f12; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #eab308;">
+      <div style="font-weight: 700; color: #fde047;">9. 结算</div>
+      <div style="color: #94a3b8; font-size: 11px;">地址+优惠券+运费</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">10. Stripe支付</div>
+      <div style="color: #94a3b8; font-size: 11px;">Payment Intent</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">11. 订单生成</div>
+      <div style="color: #94a3b8; font-size: 11px;">Order + FulfillmentOrder</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">12. 推送S2BDIY</div>
+      <div style="color: #94a3b8; font-size: 11px;">SupplierOrder创建</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">13. 供应商生产</div>
+      <div style="color: #94a3b8; font-size: 11px;">in_production</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #166534; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #22c55e;">
+      <div style="font-weight: 700; color: #86efac;">14. 物流发货</div>
+      <div style="color: #94a3b8; font-size: 11px;">Shipment + Tracking</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #713f12; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #eab308;">
+      <div style="font-weight: 700; color: #fde047;">15. 买家收货</div>
+      <div style="color: #94a3b8; font-size: 11px;">Delivered + 确认收货</div>
+    </div>
+    <div style="color: #475569;">→</div>
+    <div style="background: #7f1d1d; padding: 8px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #ef4444;">
+      <div style="font-weight: 700; color: #fca5a5;">16. 评价/退款</div>
+      <div style="color: #94a3b8; font-size: 11px;">Review / Refund</div>
+    </div>
+  </div>
+
+  <p style="font-size: 12px; color: #94a3b8; margin-top: 8px;">
+    <b>绿色</b> = 已完成 &nbsp;|&nbsp; <b style="color:#eab308">黄色</b> = 部分完成（需完善UI） &nbsp;|&nbsp; <b style="color:#ef4444">红色</b> = 待开发
+  </p>
+</div>
+
+<!-- ==================== UI SCREENSHOT REFERENCE ==================== -->
+<div class="flow-section full-width" style="margin-top: 32px;">
+  <h2><span class="icon">🖼️</span> UI设计参考 — 从页面分析.docx提取的关键截图</h2>
+  <p style="color: #94a3b8; font-size: 13px; margin-bottom: 20px;">以下截图来自Ciiverse网站设计文档，展示了每个页面的目标UI。标记为<span class="step-tag tag-todo">需新建</span>的页面当前代码中不存在，<span class="step-tag tag-partial">需改造</span>的页面需要对照截图调整。</p>
+
+  <!-- Homepage -->
+  <div style="margin-bottom: 32px;">
+    <h3 style="font-size: 16px; color: #60a5fa; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">1. 首页 Homepage</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 14px;">手机版首页</span>
+        </div>
+        <img src="ui-screenshots/image85.png" style="width: 200px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 12px; color: #94a3b8; margin-top: 8px; line-height: 1.6;">
+          <b>需实现:</b><br>
+          • 顶部: Plans / Open Store / 分类Tab(Recommend/Clothings/Home Furnishings/Jewelry)<br>
+          • 搜索栏 + 圆形分类图标(All/Deals/Clothing/Curve & Plus)<br>
+          • 产品网格(4列) + 价格 + 购物车按钮<br>
+          • 底部导航: Home / Cart / Message / Sign In
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 14px;">电脑版首页</span>
+        </div>
+        <img src="ui-screenshots/image65.png" style="width: 100%; max-width: 500px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 12px; color: #94a3b8; margin-top: 8px; line-height: 1.6;">
+          <b>需实现:</b><br>
+          • 顶部: Logo(Citigoo橙色) + Ship to / Stores + 搜索栏<br>
+          • 分类导航: Pet Apparel / Pet Beds / Pet Toys / Pet Cleaning...<br>
+          • 促销横幅: "Sign in and get $100 coupons pack"<br>
+          • 产品网格: 4列 + 星级 + 价格 + New!/AD标签<br>
+          • 页脚: 公司信息 / Information / Customer Service / Help
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product Detail -->
+  <div style="margin-bottom: 32px;">
+    <h3 style="font-size: 16px; color: #60a5fa; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">2. 产品详情 Product Detail</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">产品详情 (带店铺)</span>
+        </div>
+        <img src="ui-screenshots/image130.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 图片轮播(1/15)<br>
+          • 价格(橙色现价+删除线原价+折扣%)<br>
+          • 颜色缩略图选择<br>
+          • 尺寸选择 + Size guide<br>
+          • 物流信息(Shipping/Production/运费)<br>
+          • Item ID(Copy) + 材质 + 重量<br>
+          • 评价区域(星级+评价数)<br>
+          • 店铺信息(Followers/Sold/Follow)<br>
+          • 底部: <b style="color:#ef4444">Design now</b>(非Add to cart)
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">选择规格弹窗</span>
+        </div>
+        <img src="ui-screenshots/image29.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 顶部: 地址+编辑图标<br>
+          • 商品图片+价格(现价/原价/折扣)<br>
+          • 颜色选择(图片列表)<br>
+          • 尺码选择(XS/S/M/L/XL/XXL)<br>
+          • 数量选择(+/-) + 库存状态<br>
+          • Delivery时间 + Freight运费<br>
+          • Free shipping门槛提示<br>
+          • 底部: Add to cart按钮
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 13px;">国家选择弹窗</span>
+        </div>
+        <img src="ui-screenshots/image100.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • Select country & region<br>
+          • 国家列表(Australia/Canada/France/Germany...)<br>
+          • 点击选择后更新运费和配送时间<br>
+          • 根据IP自动预选
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart & Checkout -->
+  <div style="margin-bottom: 32px;">
+    <h3 style="font-size: 16px; color: #60a5fa; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">3. 购物车 & 结算 Cart & Checkout</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">购物车列表</span>
+        </div>
+        <img src="ui-screenshots/image30.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 按店铺分组(BRKUBalle sh 1/2/3/4)<br>
+          • 商品勾选 + 数量选择<br>
+          • 价格显示(现价/原价/折扣%)<br>
+          • 优惠券标签(Citigoo deduct $2)<br>
+          • After-coupon价格 + Discount total<br>
+          • Manage模式(Delete/Exit)<br>
+          • 底部: All + Total + Checkout(N)
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 13px;">金额详情弹窗</span>
+        </div>
+        <img src="ui-screenshots/image40.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • Amount details弹窗<br>
+          • Product total: $33.80<br>
+          • Deduct total: -$5.00<br>
+          • Item discount: -$3.00<br>
+          • Citigoo coupon: -$2.00<br>
+          • Sub total: $28.80<br>
+          • 底部: Total + Checkout(2)
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">结算页面</span>
+        </div>
+        <img src="ui-screenshots/image45.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 顶部: 地址(可编辑)<br>
+          • Price details:<br>
+          &nbsp;&nbsp;Item total / Deduct total<br>
+          &nbsp;&nbsp;Item discount / Citigoo coupon<br>
+          &nbsp;&nbsp;Sub total / Shipping / Order total<br>
+          • Payment method:<br>
+          &nbsp;&nbsp;Card / PayPal / Apple pay / Google pay<br>
+          • Add a new card<br>
+          • 底部: 价格 + Buy Now
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders -->
+  <div style="margin-bottom: 32px;">
+    <h3 style="font-size: 16px; color: #60a5fa; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">4. 订单管理 Orders</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">订单列表 (All)</span>
+        </div>
+        <img src="ui-screenshots/image1.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • Tab: All / Unpaid / Shipped-Sent / Delivered-Used / Refund-After-sales / Reviews<br>
+          • 订单卡片: 店铺名 + 状态标签<br>
+          • Processing / Unpaid(剩余时间) / Received / Closed / Cancelled<br>
+          • 商品缩略图 + 总价<br>
+          • 操作: Order details / Cancel order / Order again / Reviews
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">订单详情</span>
+        </div>
+        <img src="ui-screenshots/image7.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 订单号 + 状态(In progress - In shipping)<br>
+          • 店铺名 + 商品列表<br>
+          • Delivery: 预计送达 / Track number / Shipping method(DHL) / 收件人 / 电话 / 地址<br>
+          • Payment: 支付方式 / 商品总价 / 运费 / 总支付<br>
+          • Merchant Info: Owner / Shop name / Location<br>
+          • Order again按钮
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 13px;">确认收货弹窗</span>
+        </div>
+        <img src="ui-screenshots/image5.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • "Have you confirmed receipt of the goods?"<br>
+          • 商品图片 + 数量<br>
+          • 提示: 确保收到货物且正确后再确认<br>
+          • 两个按钮: Confirm / Confirm & review<br>
+          • Delivered状态: View logistic + Confirm delivery
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account & Settings -->
+  <div style="margin-bottom: 32px;">
+    <h3 style="font-size: 16px; color: #60a5fa; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">5. 账户 & 设置 Account & Settings</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">用户中心 (Me)</span>
+        </div>
+        <img src="ui-screenshots/image95.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 头像 + 名字<br>
+          • 快捷入口: All orders / Shipped / Delivered-Used / Refund-After-sales / Reviews<br>
+          • 功能: Messages / Coupons & offers / Addresses / Saved<br>
+          • 推荐商品网格<br>
+          • 底部: Home / Cart / Sign In
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 13px;">设置页面 (含卖家)</span>
+        </div>
+        <img src="ui-screenshots/image155.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          <b>控制面板:</b> Dashboard / Orders / AI Design / Element Library / Product Selection / Design Center / Publish / Trends<br><br>
+          <b>Settings:</b> Personal info / Addresses / Notifications / Payment methods / Country & region / Language / Currency / Account & security<br><br>
+          <b>Support:</b> Help center / Terms and policies / About<br><br>
+          <b>底部:</b> Login / Log out
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 13px;">账户安全</span>
+        </div>
+        <img src="ui-screenshots/image13.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 安全状态提示(绿色盾牌)<br>
+          • Email显示<br>
+          • Password + Change按钮<br>
+          • Social connect: Google(Linked) / Facebook(Link) / Apple(Link) / X(Link)<br>
+          • Deactivate or delete account<br>
+          • 修改密码弹窗(Current/New password)<br>
+          • 身份验证(Email/Google account)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login & Auth -->
+  <div style="margin-bottom: 32px;">
+    <h3 style="font-size: 16px; color: #60a5fa; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">6. 登录 & 注册 Login & Register</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-partial">需改造</span>
+          <span style="font-weight: 600; font-size: 13px;">登录页面</span>
+        </div>
+        <img src="ui-screenshots/image90.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • Sign in / Sign up Tab切换<br>
+          • Email + Password输入<br>
+          • Remember me + Forget password?<br>
+          • Sign in按钮(橙色)<br>
+          • 社交登录: Google / Facebook / Apple / X<br>
+          • 条款: Terms of Use + Privacy Policy<br>
+          • <b>注册只需Email+Password，不需姓名</b>
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 13px;">地址管理</span>
+        </div>
+        <img src="ui-screenshots/image25.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • 地址列表 + Default/Home标签<br>
+          • 编辑图标<br>
+          • 添加表单: Country/Region + Receiver name + Address + State,City + Post code + Mobile number<br>
+          • Address label: Home/Company/School/Parents/Other<br>
+          • Default勾选<br>
+          • Manage模式: Delete/Copy + Exit management
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 13px;">添加银行卡</span>
+        </div>
+        <img src="ui-screenshots/image28.png" style="width: 160px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; line-height: 1.5;">
+          • "All data is safeguarded"<br>
+          • 支付图标: Visa/MC/Amex/Discover/UnionPay/JCB/Diners<br>
+          • Card number + Expiration date + CVV<br>
+          • Billing address(Edit)<br>
+          • 安全认证: APWG/PCI DSS/VISA Secure/ID Check/JCB J/Secure/Amex SafeKey<br>
+          • Add your card按钮
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Other Pages -->
+  <div style="margin-bottom: 32px;">
+    <h3 style="font-size: 16px; color: #60a5fa; margin-bottom: 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">7. 其他页面</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px;">
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 12px;">筛选面板</span>
+        </div>
+        <img src="ui-screenshots/image80.png" style="width: 140px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 8px; line-height: 1.4;">
+          • 左侧: Target Species / Major Material / Price / Ships From<br>
+          • 右侧: 标签式选择<br>
+          • 价格: Under $14 / $14-$35 / $35-$76 / Over $76<br>
+          • Reset + Apply
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 12px;">评价表单</span>
+        </div>
+        <img src="ui-screenshots/image140.png" style="width: 140px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 8px; line-height: 1.4;">
+          • 商品信息<br>
+          • Description matches (5星)<br>
+          • Logistics service (5星)<br>
+          • Service manner (5星)<br>
+          • 文字输入<br>
+          • Photo上传<br>
+          • Public勾选<br>
+          • Submit review
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 12px;">消息聊天</span>
+        </div>
+        <img src="ui-screenshots/image110.png" style="width: 140px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 8px; line-height: 1.4;">
+          • 类微信对话气泡<br>
+          • 时间戳<br>
+          • 文字+图片消息<br>
+          • 底部输入框<br>
+          • 表情+附件按钮<br>
+          • 单店模式(删掉店铺名)
+        </div>
+      </div>
+      <div style="background: #0f172a; border-radius: 8px; padding: 16px; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="step-tag tag-todo">需新建</span>
+          <span style="font-weight: 600; font-size: 12px;">通知设置</span>
+        </div>
+        <img src="ui-screenshots/image120.png" style="width: 140px; border-radius: 8px; border: 1px solid #475569;">
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 8px; line-height: 1.4;">
+          • 通知分类: Order / Logistics / After-sales / Alert / Comment / Discount / Others<br>
+          • Account安全提醒<br>
+          • Push开关<br>
+          • Email开关(显示邮箱)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key UI Decisions -->
+  <div style="background: #0f172a; border-radius: 8px; padding: 20px; border: 1px solid #334155; margin-top: 20px;">
+    <h3 style="font-size: 15px; color: #f59e0b; margin-bottom: 12px;">⚠️ 从截图中确认的关键UI决策</h3>
+    <table class="spec-table">
+      <thead>
+        <tr><th>决策点</th><th>目标设计</th><th>当前代码状态</th><th>需改动</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>购物车按钮</td><td><b style="color:#ef4444">Design now</b> (非Add to cart)</td><td>Add to cart</td><td>需改名+跳转AI设计</td></tr>
+        <tr><td>底部导航</td><td>Home / Cart / <b>Message</b> / Sign In</td><td>Home / Cart / Sign In</td><td>需加Message tab</td></tr>
+        <tr><td>品牌色</td><td><span style="color:#FF6B00">■</span> 橙色 (#FF6B00系)</td><td>未确定</td><td>需统一橙色主题</td></tr>
+        <tr><td>登录方式</td><td>Email + Google/Facebook/Apple/X</td><td>仅Email</td><td>需加社交登录</td></tr>
+        <tr><td>注册流程</td><td>仅Email+Password，不需姓名</td><td>需验证</td><td>确认简化注册</td></tr>
+        <tr><td>订单Tab</td><td>All/Unpaid/Shipped-Sent/Delivered-Used/Refund-After-sales/Reviews</td><td>基础Tab</td><td>需加Reviews tab</td></tr>
+        <tr><td>评价维度</td><td>Description matches + Logistics service + Service manner</td><td>未实现</td><td>需新建评价系统</td></tr>
+        <tr><td>地址标签</td><td>Home / Company / School / Parents / Other</td><td>无标签</td><td>需加地址标签</td></tr>
+        <tr><td>优惠券</td><td>Citigoo coupon (平台券) + Item discount</td><td>未实现</td><td>需建优惠券系统</td></tr>
+        <tr><td>设置页面</td><td>买家+卖家功能合并</td><td>分离</td><td>需合并Settings</td></tr>
+        <tr><td>产品详情底部</td><td>Design now + 价格</td><td>Add to cart + Buy now</td><td>需改为Design now</td></tr>
+        <tr><td>确认收货</td><td>Confirm / Confirm & review</td><td>无</td><td>需新建确认流程</td></tr>
+        <tr><td>消息系统</td><td>类微信对话(单店模式)</td><td>基础Message模型</td><td>需建聊天UI</td></tr>
+        <tr><td>通知系统</td><td>Push + Email开关</td><td>基础Notification模型</td><td>需建通知设置UI</td></tr>
+        <tr><td>删除账号</td><td>Deactivate(可恢复) / Delete(30天) + 原因选择</td><td>无</td><td>需新建账号管理</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<footer style="text-align: center; margin-top: 40px; padding: 20px; color: #475569; font-size: 12px; border-top: 1px solid #1e293b;">
+  Generated from codebase analysis + Ciiverse website documentation (158 UI screenshots) | CitiGoo Platform Flowchart<br>
+  UI screenshots source: 页面分析.docx | 158 images extracted to docs/ui-screenshots/
+</footer>
+
+</body>
+</html>

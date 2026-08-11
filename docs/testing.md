@@ -1,295 +1,234 @@
-# Developer 3 Testing Baseline
+# Developer 3 Backend Integration Testing
 
-This document defines the tests Developer 3 should add after the documentation PR. It is intentionally a baseline, not an implementation.
+This is the canonical Developer 3 entry point for full backend validation across Phase 1, Phase 2A, and Phase 2B.
 
-## Store Context Tests
+For the full copy/paste runbook, including Admin token acquisition, publishable API key setup, AI Worker mock startup, product rating/review tests, and gated real S2BDIY sandbox flow, see:
 
-Required coverage:
-
-- `resolveCurrentStore` returns `X-Store-Id` when a non-empty header is present.
-- `X-Store-Id` takes precedence over host/default fallback.
-- Empty `X-Store-Id` is ignored.
-- Localhost requests without `X-Store-Id` resolve to `DEFAULT_STORE_ID`.
-- Non-localhost requests without `X-Store-Id` resolve to `DEFAULT_STORE_ID`.
-- `DEFAULT_STORE_ID` falls back to `default_store` when the env var is unset.
-- The returned `source` value is correct for header, host, and default paths.
-
-## Seed Tests
-
-Required coverage:
-
-- Seed creates `default_store` when missing.
-- Seed creates `test_store` when missing.
-- Seed is idempotent when both stores already exist.
-- Seed respects `DEFAULT_STORE_ID` for the default store id.
-
-## Product Store Isolation Tests
-
-Required coverage:
-
-- `GET /store/products` only returns published products for the resolved store.
-- `GET /store/products` does not return products from `test_store` when current store is `default_store`.
-- `GET /store/products` does not return products from `default_store` when current store is `test_store`.
-- `GET /store/products/{product_id}` returns a current-store published product.
-- `GET /store/products/{product_id}` returns `PRODUCT_NOT_FOUND` when the product belongs to another store.
-- Draft products are not returned by storefront product APIs.
-- Product draft creation accepts current-store `category_ids`.
-- Product draft creation rejects `category_ids` from another store with `VALIDATION_ERROR`.
-
-## Product Category Isolation Tests
-
-Required coverage:
-
-- `GET /store/product-categories` only returns categories for the resolved store.
-- `GET /admin/product-categories` only returns categories for the resolved store.
-- `POST /admin/product-categories` creates a category in the resolved store.
-- `POST /admin/product-categories` returns `STORE_NOT_FOUND` when the resolved store does not exist.
-- `POST /admin/product-categories` returns `VALIDATION_ERROR` when `name` is missing.
-- `POST /admin/product-categories` returns `VALIDATION_ERROR` when the generated slug already exists in the current store.
-- `POST /admin/product-categories` returns `VALIDATION_ERROR` when `parent_id` belongs to another store.
-- Product draft `category_ids` ownership validation should remain an automated regression test.
-
-## Publishable API Key Smoke Tests
-
-Current smoke expectations:
-
-- `GET /health` should pass without `x-publishable-api-key`.
-- `GET /store-context` should pass without `x-publishable-api-key`.
-- `GET /store-context` with `X-Store-Id: test_store` should return `test_store` with `source: "header"`.
-- `GET /store/products` should require `x-publishable-api-key`.
-- `GET /store/product-categories` should require `x-publishable-api-key`.
-
-Placeholder curl examples:
-
-```bash
-curl -i http://localhost:9000/health
-
-curl -i http://localhost:9000/store-context
-
-curl -i \
-  -H "X-Store-Id: test_store" \
-  http://localhost:9000/store-context
-
-curl -i \
-  -H "x-publishable-api-key: <publishable_api_key>" \
-  -H "X-Store-Id: test_store" \
-  http://localhost:9000/store/products
-
-curl -i \
-  -H "x-publishable-api-key: <publishable_api_key>" \
-  -H "X-Store-Id: test_store" \
-  http://localhost:9000/store/product-categories
+```text
+docs/testing/dev3-full-backend-pipeline.md
 ```
 
-TODO: Decide whether the backend seed should create a local publishable API key, or whether docs should instruct developers to create one through Medusa Admin.
+## Primary Command
 
-## Local Smoke Test Script
-
-Developer 3 can run the local store isolation smoke test with:
+Run the independent Dev3 pipeline:
 
 ```bash
-export BASE_URL="http://localhost:9000"
-export PUBLISHABLE_API_KEY="<publishable_api_key>"
-export ADMIN_TOKEN="<admin_bearer_token>"
-export DEFAULT_STORE_ID="default_store"
-export TEST_STORE_ID="test_store"
-
-./scripts/smoke-store-isolation.sh
+bash scripts/dev3-full-backend-pipeline.sh
 ```
 
-The script uses `curl` and `jq`, creates uniquely named smoke-test categories and products, publishes products in both seeded stores, then checks positive and negative store isolation behavior.
+The Dev3 pipeline validates the backend from the outside through APIs and documented contracts. It does not call, source, or wrap the Dev1/Dev2 self-test scripts.
 
-Required environment variables:
-
-- `PUBLISHABLE_API_KEY`: Medusa publishable API key for Store API requests.
-- `ADMIN_TOKEN`: bearer token for Admin API requests.
-
-Optional environment variables:
-
-- `BASE_URL`: defaults to `http://localhost:9000`.
-- `DEFAULT_STORE_ID`: defaults to `default_store`.
-- `TEST_STORE_ID`: defaults to `test_store`.
-- `DEFAULT_MEDUSA_PRODUCT_ID`: native Medusa product id used for default-store bridge checks.
-- `DEFAULT_MEDUSA_VARIANT_ID`: native Medusa variant id used for default-store cart checks.
-- `TEST_MEDUSA_PRODUCT_ID`: native Medusa product id used for test-store bridge checks.
-- `TEST_MEDUSA_VARIANT_ID`: native Medusa variant id used for test-store cart checks.
-
-## Phase 1 Product-To-Cart Bridge Tests
-
-Required environment:
-
-- `PUBLISHABLE_API_KEY` or local alias `PAK`.
-- `ADMIN_TOKEN`.
-- `DEFAULT_MEDUSA_PRODUCT_ID`.
-- `DEFAULT_MEDUSA_VARIANT_ID`.
-- `TEST_MEDUSA_PRODUCT_ID`.
-- `TEST_MEDUSA_VARIANT_ID`.
-
-Expected behavior:
-
-- `/store/products` and `/store/products/{product_id}` return `medusa_product_id`, `medusa_variant_id`, and `is_cart_addable`.
-- Products without `medusa_variant_id` return `is_cart_addable: false`.
-- Products with a valid `medusa_variant_id` return `is_cart_addable: true`.
-- Same-store cart line-item adds use native `variant_id` and succeed.
-- Cross-store variant adds return `CART_STORE_MISMATCH`.
-- `product_id` / `mc_product.id` add-to-cart is not supported in Phase 1.
-
-Create an admin user locally if one does not exist:
+Use local overrides by copying:
 
 ```bash
-cd apps/medusa-backend
-npx medusa user -e admin@example.com -p supersecret
+cp scripts/dev3-full-backend-pipeline.example.env scripts/dev3-full-backend-pipeline.local.env
 ```
 
-Get `ADMIN_TOKEN`:
+Do not commit `scripts/dev3-full-backend-pipeline.local.env`.
+
+## What Not To Commit
+
+- `apps/medusa-backend/.env`
+- real `PUBLISHABLE_API_KEY`
+- real `ADMIN_TOKEN`
+- Stripe, DeepSeek, FAL, or supplier API keys
+- S2BDIY sandbox secrets
+- generated AI images
+- local logs
+- Python virtual environments
+- `node_modules`
+- generated local result files containing keys or tokens
+
+## Required Local Services
+
+- Docker Postgres on `localhost:5432`
+- Docker Redis on `localhost:6379`
+- Medusa backend on `http://127.0.0.1:9000`
+- AI Worker on `http://127.0.0.1:8001` for Phase 2A runtime checks
+
+Start AI Worker in mock mode when needed:
 
 ```bash
-curl -sS -X POST http://localhost:9000/auth/user/emailpass \
-  -H "Content-Type: application/json" \
-  --data '{"email":"admin@example.com","password":"supersecret"}'
+cd apps/ai-worker
+AI_WORKER_MOCK_GENERATION=true python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-Copy the returned token and export it:
+## Required Local Env
 
-```bash
-export ADMIN_TOKEN="<token>"
-```
+Required for Phase 1 / Phase 2A:
 
-Get `PUBLISHABLE_API_KEY` from Medusa Admin. The current seed script does not create one.
+- `MEDUSA_BASE_URL`, default `http://127.0.0.1:9000`
+- `AI_WORKER_BASE_URL`, default `http://127.0.0.1:8001`
+- `PUBLISHABLE_API_KEY`
+- `ADMIN_TOKEN`
+- `DEFAULT_STORE_ID=default_store`
 
-## Postman Store Isolation Collection
+Mock-mode notes:
 
-Import this collection into Postman:
+- `STRIPE_API_KEY` can be empty locally when tests use `pp_system_default`.
+- `DEEPSEEK_API_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
+- `FAL_KEY` can be empty when `AI_WORKER_MOCK_GENERATION=true`.
+
+Optional for real Phase 2B S2BDIY:
+
+- `RUN_PHASE2B_S2BDIY` set to `true`
+- `S2BDIY_BASE_URL` or `S2BDIY_API_BASE_URL`
+- `S2BDIY_APP_SECRET`
+- `S2BDIY_BASIC_PRODUCT_ID` or `S2BDIY_TEST_BASIC_PRODUCT_ID`
+- `S2BDIY_SIZE_ID` or `S2BDIY_TEST_SIZE_ID`
+- `S2BDIY_COLOR_ID` or `S2BDIY_TEST_COLOR_ID`
+- `S2BDIY_VIEW_ID` or `S2BDIY_TEST_VIEW_ID`
+- `S2BDIY_LOGISTICS_ID` or `S2BDIY_TEST_LOGISTICS_ID`
+
+If S2BDIY credentials are missing, real supplier tests are `SKIPPED`, not `FAILED`.
+
+## Pipeline Coverage
+
+The Dev3 pipeline stages are:
+
+1. Preflight: repo root, tools, Medusa CLI, branch, dirty tree warning, conflict marker check.
+2. Static checks: TypeScript, backend Jest, dedicated product rating/review Jest, S2BDIY Jest, Dev3 script syntax, Postman JSON.
+3. Database setup: Docker services, migrations, seed, `phase1-dev2-bootstrap`.
+4. Service health: Medusa and AI Worker.
+5. Env/key validation: admin bearer token and publishable API key.
+6. Store context and multi-store isolation.
+7. Dev1 supplier foundation checks.
+8. Product-to-cart bridge checks.
+9. Phase 2A AI product E2E.
+10. Phase 2B S2BDIY readiness, gated sandbox no-payment flow, gated sandbox payment flow, or credential-dependent skip.
+11. Status flow checks.
+12. Negative/exception checks.
+13. Architecture guard for vendor-specific field leakage.
+14. Unified Newman.
+15. Final cleanup, diff check, and secret scan.
+
+## Required Behavior
+
+Phase 1:
+
+- `default_store` and `test_store` are seeded.
+- `X-Store-Id` resolves current store.
+- Storefront product/category APIs require `x-publishable-api-key`.
+- Product/category list/detail APIs are scoped to current store.
+- Cross-store product detail is blocked.
+- Add-to-cart uses native `variant_id = medusa_variant_id`.
+- Cross-store variant add returns `CART_STORE_MISMATCH`.
+
+Dev1 supplier foundation:
+
+- `sup_citigoo_mock` supplier exists.
+- `sp_tshirt` exists.
+- Variants exist for Black/White and S/M/L/XL.
+- Front PNG print spec exists.
+- T-shirt front design template exists.
+
+Phase 2A:
+
+- AI Worker health passes.
+- `POST /admin/ai/generate-and-draft` creates a draft with supplier, mockup, print file, and bridge fields.
+- Publish succeeds.
+- Store product detail exposes supplier/print/mockup fields.
+- Cart add uses `variant_id`.
+- Line-item metadata includes supplier and print production fields.
+- Cart complete creates a paid order with `pp_system_default`.
+- Admin order list can see the order.
+- Push fulfillment and mock shipment routes work.
+
+Phase 2B:
+
+- S2BDIY unit tests always run.
+- Real S2BDIY sandbox checks run only when `RUN_PHASE2B_S2BDIY` is set to `true` and supplier credentials/config are present.
+- Missing supplier credentials are skipped.
+- Default real supplier mode stops at product generation and keeps payment skipped.
+- Create order requires both `S2BDIY_ALLOW_CREATE_ORDER=true` and `S2BDIY_CREATE_ORDER_CONFIRMED_NO_CHARGE=true`.
+- Payment requires `S2BDIY_ALLOW_PAYMENT=true` and `HUMAN_APPROVED_PAYMENT=true` in addition to the create-order gates.
+- Tracking may remain blocked after sandbox payment because S2BDIY test orders require manual review.
+
+Product rating/review:
+
+- `npm --workspace apps/medusa-backend run test -- rating` runs as a dedicated Dev3 stage.
+- Product review creation is verified for valid ratings, invalid ratings, duplicate rejection, verified order/product matching, and cross-store blocking.
+
+## Supplier-Agnostic Core Schema Rule
+
+Core product/order schemas and generic APIs should use supplier-neutral fields:
+
+- `supplier_id`
+- `basic_product_id`
+- `supplier_material_id`
+- `supplier_product_id`
+- `supplier_variant_id`
+- `supplier_size_id`
+- `supplier_color_id`
+- `view_id`
+- `design_type`
+- `supplier_mockup_image_url`
+- `supplier_metadata` or raw supplier response fields where needed
+
+Vendor-specific names such as `s2b_*`, `s2bdiy_*`, `alibaba_*`, or `1688_*` belong only in supplier adapters, supplier-specific scripts, supplier docs, or supplier-specific payload examples.
+
+The Dev3 pipeline includes an architecture guard that fails when vendor-specific fields leak into core models, generic product/cart/order APIs, `docs/api.md`, or `docs/schema.md`.
+
+## Unified Postman / Newman
+
+Canonical collection:
 
 ```text
 postman/ai-commerce-store-isolation.postman_collection.json
 ```
 
-Create or select a Postman environment with these variables:
+Example environment:
 
-| Variable | Example |
-| --- | --- |
-| `base_url` | `http://localhost:9000` |
-| `publishable_api_key` | `<publishable_api_key>` |
-| `admin_token` | `<admin_bearer_token>` |
-| `default_store_id` | `default_store` |
-| `test_store_id` | `test_store` |
-
-Run the collection in order. It mirrors `scripts/smoke-store-isolation.sh` and creates uniquely named categories/products using a collection-level smoke run id.
-
-The collection covers:
-
-- Health and store-context checks.
-- Missing publishable API key rejection.
-- Admin bearer-token auth check.
-- Category creation in both stores.
-- Product category isolation.
-- Draft product creation in both stores.
-- Product publishing in the correct store.
-- Product list isolation.
-- Cross-store publish rejection.
-- Cross-store `category_ids` rejection.
-- Cross-store product detail blocking.
-
-Troubleshooting:
-
-- If product draft creation fails because `platform_product_id`, `supplier_product_id`, or another recently added product column is missing, run migrations with `npm --workspace apps/medusa-backend run db:migrate`.
-- `POST /admin/product-categories` accepts `name` and `description`; `slug` and `sort_order` are generated or defaulted by the backend.
-
-## Store Settings Isolation Tests
-
-Required coverage:
-
-- `GET /store/settings` returns settings for the resolved store.
-- `GET /store/settings` does not return another store's settings.
-- `GET /admin/store-settings` returns settings for the resolved store.
-- `PUT /admin/store-settings` creates settings for the selected store.
-- `PUT /admin/store-settings` updates only the selected store's settings.
-
-## Publish Cross-Store Tests
-
-Required coverage:
-
-- `POST /admin/products/{product_id}/publish` publishes a product in the current store.
-- Publishing a product from another store returns `PRODUCT_STORE_MISMATCH`.
-- A missing product id returns `PRODUCT_NOT_FOUND`.
-- The final updated product remains associated with its original `store_id`.
-
-## body.store_id Override Tests
-
-Current behavior to document in tests before changing:
-
-- `POST /admin/products/draft` uses `body.store_id` when provided.
-- `POST /admin/products/draft` falls back to resolved request store when `body.store_id` is omitted.
-- `POST /admin/products/draft` returns `STORE_NOT_FOUND` for a missing body-selected store.
-- `PUT /admin/store-settings` uses `body.store_id` when provided.
-- `PUT /admin/store-settings` falls back to resolved request store when `body.store_id` is omitted.
-- `PUT /admin/store-settings` returns `STORE_NOT_FOUND` for a missing body-selected store.
-
-Risk to keep visible: admin draft product creation and admin store settings updates may allow `body.store_id` to override request context. This is a known Phase 1 cross-store risk. Do not silently change it without a dedicated behavior-change PR and updated API docs.
-
-## Unknown Store Behavior Tests
-
-Required coverage:
-
-- Storefront product and category list routes with an unknown `X-Store-Id` return empty scoped results unless route behavior changes.
-- Admin category creation validates the resolved store and returns `STORE_NOT_FOUND`.
-- Admin product draft and store settings writes validate the selected store and return `STORE_NOT_FOUND`.
-
-## Future Cart And Order Isolation Tests
-
-When cart and order APIs are added or stabilized, add tests for:
-
-- Cart creation binds cart to current store.
-- Adding items rejects products from another store.
-- Cart reads are scoped to current store.
-- Order creation uses the cart store.
-- Order reads are scoped to current store.
-- Cross-store cart/order operations return `CART_STORE_MISMATCH` or `ORDER_STORE_MISMATCH`.
-- Payment and webhook flows cannot update another store's cart or order.
-
-## Phase 2B S2BDIY Tests
-
-### 单元测试
-
-```bash
-cd apps/medusa-backend && npm test
+```text
+postman/ai-commerce-local.example.postman_environment.json
 ```
 
-覆盖：`s2bdiy-status-mapper`、`buildThirdOrderId`、line-item S2B 字段。
+Required folders:
 
-### S2BDIY 直连 Smoke（不依赖 Medusa）
+- `Phase 1 / Store Isolation Regression`
+- `Dev1 / Supplier Foundation`
+- `Phase 2A / AI Product E2E`
+- `Phase 2B / S2BDIY Supplier Fulfillment`
 
-```bash
-bash scripts/s2bdiy-api-smoke.sh
+Phase 1 and Phase 2A run by default. Phase 2B is present in the same collection but skipped by default with:
+
+```text
+run_phase2b_s2bdiy=false
 ```
 
-前置：`.env` 中 `S2BDIY_API_BASE_URL`、`S2BDIY_APP_KEY`、`S2BDIY_APP_SECRET`；可选 `S2BDIY_TEST_BASIC_PRODUCT_ID` 等（未设则从列表接口自动取第一个）。
+Set `run_phase2b_s2bdiy=true` only when S2BDIY sandbox credentials and account readiness are configured.
 
-`orderPay` 若返回 HTTP 502（余额不足）脚本会 `SKIP` 该步，其余步骤仍应 PASS。
-
-### Phase 2B Medusa E2E
+## Manual Newman Command
 
 ```bash
-# migrate + seed 后
-cd apps/medusa-backend && npx medusa db:migrate && npm run seed
-bash scripts/phase2b-e2e.sh
+npx newman run postman/ai-commerce-store-isolation.postman_collection.json \
+  --env-var "base_url=${MEDUSA_BASE_URL:-http://127.0.0.1:9000}" \
+  --env-var "ai_worker_base_url=${AI_WORKER_BASE_URL:-http://127.0.0.1:8001}" \
+  --env-var "publishable_api_key=$PUBLISHABLE_API_KEY" \
+  --env-var "admin_token=$ADMIN_TOKEN" \
+  --env-var "default_store_id=default_store" \
+  --env-var "test_store_id=test_store" \
+  --env-var "default_medusa_product_id=$DEFAULT_MEDUSA_PRODUCT_ID" \
+  --env-var "default_medusa_variant_id=$DEFAULT_MEDUSA_VARIANT_ID" \
+  --env-var "test_medusa_product_id=$TEST_MEDUSA_PRODUCT_ID" \
+  --env-var "test_medusa_variant_id=$TEST_MEDUSA_VARIANT_ID" \
+  --env-var "run_phase2b_s2bdiy=${RUN_PHASE2B_S2BDIY:-false}" \
+  --env-var "s2bdiy_base_url=${S2BDIY_BASE_URL:-}" \
+  --env-var "s2bdiy_app_secret=${S2BDIY_APP_SECRET:-}" \
+  --env-var "s2bdiy_basic_product_id=${S2BDIY_BASIC_PRODUCT_ID:-}" \
+  --env-var "s2bdiy_size_id=${S2BDIY_SIZE_ID:-}" \
+  --env-var "s2bdiy_color_id=${S2BDIY_COLOR_ID:-}" \
+  --env-var "s2bdiy_view_id=${S2BDIY_VIEW_ID:-}" \
+  --env-var "s2bdiy_logistics_id=${S2BDIY_LOGISTICS_ID:-}"
 ```
 
-### Admin API 手工检查
+Expected result with `run_phase2b_s2bdiy=false`: Phase 1, Dev1, and Phase 2A pass; Phase 2B logs skipped requests.
 
-- `POST /admin/ai/generate-and-draft` → S2B 配置后 `product.metadata` 含 `supplier_product_id`（quickCreate id）
-- `POST /admin/products/{id}/publish`（Phase 2A 规则；S2B 字段由开发一 schema 落地后校验）
-- `GET /admin/orders/{order_id}/supplier-order`
-- `POST /admin/supplier-orders/sync`
+## Final PR Checklist
 
-详见 [docs/suppliers/s2bdiy.md](suppliers/s2bdiy.md)。
-
-## Documentation And Collection Tests
-
-Developer 3 should also maintain:
-
-- API documentation examples for store-aware routes.
-- Shared error code documentation.
-- Postman or Apifox collection covering happy paths and cross-store failures.
-- Manual review steps for `default_store` and `test_store` scenarios.
+- Worktree contains only intentional docs/test assets.
+- `bash -n scripts/dev3-full-backend-pipeline.sh` passes.
+- Postman collection and environment JSON validate with `jq empty`.
+- No conflict markers.
+- No secrets in docs, Postman, or scripts diff.
+- Full Dev3 pipeline result is recorded in the PR notes, including any Phase 2B supplier skips.

@@ -8,16 +8,30 @@
   ],
   "scripts": {
     "dev": "npm --workspace apps/medusa-backend run dev",
+    "dev:seller": "npm --workspace apps/seller-dashboard run dev",
+    "dev:storefront": "npm --workspace apps/storefront run dev",
+    "dev:ops": "npm --workspace apps/platform-ops run dev",
+    "dev:ai-worker": "sh -c 'cd apps/ai-worker && unset AI_WORKER_MOCK_GENERATION; PY=\"$(test -x citigooapi/bin/python && echo citigooapi/bin/python || (command -v python3.13 || command -v python3))\" && \"$PY\" -m uvicorn app.main:app --host 127.0.0.1 --port 8001'",
+    "dev:all-frontend": "concurrently -n seller,storefront -c green,magenta \"npm run dev:seller\" \"npm run dev:storefront\"",
+    "dev:all": "concurrently -n backend,seller,storefront,ai -c blue,green,magenta,yellow \"npm run dev\" \"npm run dev:seller\" \"npm run dev:storefront\" \"npm run dev:ai-worker\"",
+    "dev:full": "npm run dev:all",
+    "dev:with-ops": "concurrently -n backend,seller,storefront,ops,ai -c blue,green,magenta,cyan,yellow \"npm run dev\" \"npm run dev:seller\" \"npm run dev:storefront\" \"npm run dev:ops\" \"npm run dev:ai-worker\"",
     "build": "npm --workspace apps/medusa-backend run build",
     "seed": "npm --workspace apps/medusa-backend run seed",
-    "test": "npm --workspace apps/medusa-backend run test"
+    "test": "npm --workspace apps/medusa-backend run test",
+    "test:seller": "npm --workspace apps/seller-dashboard run test",
+    "test:e2e:seller": "npm --workspace apps/seller-dashboard run test:e2e",
+    "db:migrate": "npm --workspace apps/medusa-backend run db:migrate"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "concurrently": "^10.0.3",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0"
+  },
+  "dependencies": {
+    "set-cookie-parser": "^3.1.1"
   }
 }
-

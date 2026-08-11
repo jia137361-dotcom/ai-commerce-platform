@@ -1,5 +1,6 @@
 import {
   isValidReviewRating,
+  normalizeProductReview,
   readMcProductIdsFromOrder,
   summarizeProductReviews,
 } from "../lib/product-reviews"
@@ -59,5 +60,23 @@ describe("product review helpers", () => {
     })
 
     expect(ids.sort()).toEqual(["prod_1", "prod_2"])
+  })
+
+  it("normalizes extended review metadata fields", () => {
+    expect(
+      normalizeProductReview({
+        id: "prv_1",
+        rating: 5,
+        metadata: {
+          logistics_rating: 4,
+          overall_rating: 5,
+          image_urls: ["https://example.com/review.jpg"],
+        },
+      })
+    ).toMatchObject({
+      logistics_rating: 4,
+      overall_rating: 5,
+      image_urls: ["https://example.com/review.jpg"],
+    })
   })
 })

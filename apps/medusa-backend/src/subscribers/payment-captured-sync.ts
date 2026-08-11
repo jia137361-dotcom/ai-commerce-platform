@@ -5,9 +5,14 @@ import { PaymentEvents } from "@medusajs/utils"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
 import type FulfillmentOrdersModuleService from "../modules/fulfillment-orders/service"
 import { markOrderPaidAndFulfillmentWaiting } from "../lib/sync-order-paid-fulfillment"
-import { tryRegisterWebhookDedupe } from "../lib/webhook-dedupe"
+import { releaseWebhookDedupe, tryRegisterWebhookDedupe } from "../lib/webhook-dedupe"
 import { pushOrderToS2bdiy } from "../lib/s2bdiy/push-s2b-order"
 import { getS2bdiyConfig } from "../modules/suppliers/s2bdiy/config"
+import { STORE_CORE_MODULE } from "../modules/store-core"
+import type StoreCoreModuleService from "../modules/store-core/service"
+import { readOrderStoreId } from "../lib/order-store-context"
+import { notifyFulfillmentFailed, notifyOrderPaid } from "../lib/notifications"
+import { sendOrderConfirmation } from "../lib/email"
 
 async function resolveOrderIdFromPayment(
   container: MedusaContainer,
@@ -46,13 +51,67 @@ export default async function paymentCapturedSyncHandler({
     return
   }
 
-  await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment.captured_event")
+  try {
+    await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment.captured_event")
+  } catch (error) {
+    await releaseWebhookDedupe(container, dedupeKey).catch(() => undefined)
+    throw error
+  }
+
+  try {
+    const orderModule = container.resolve(Modules.ORDER)
+    const order = await orderModule.retrieveOrder(orderId)
+    const storeId = readOrderStoreId(order)
+    if (storeId) {
+      const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+      await notifyOrderPaid(storeCore, storeId, {
+        orderId,
+        displayId: typeof order.display_id === "number" ? order.display_id : null,
+        email: typeof order.email === "string" ? order.email : null,
+      })
+    }
+
+    if (typeof order.email === "string" && order.email.includes("@")) {
+      const items = (order.items ?? []).map((item) => {
+        const i = item as unknown as Record<string, unknown>
+        return {
+          title: String(i.title ?? "Item"),
+          quantity: Number(i.quantity ?? 1),
+          price: Number(i.unit_price ?? i.total ?? 0),
+        }
+      })
+      await sendOrderConfirmation({
+        to: order.email,
+        orderId,
+        displayId: typeof order.display_id === "number" ? order.display_id : null,
+        items,
+        total: Number(order.total ?? 0),
+        currency: typeof order.currency_code === "string" ? order.currency_code : "usd",
+      })
+    }
+  } catch (error) {
+    console.error("Failed to create order_paid notification:", error)
+  }
 
   if (getS2bdiyConfig()) {
     try {
       await pushOrderToS2bdiy(container, orderId)
     } catch (error) {
       console.error("S2BDIY push order failed after payment.captured:", error)
+      try {
+        const orderModule = container.resolve(Modules.ORDER)
+        const order = await orderModule.retrieveOrder(orderId)
+        const storeId = readOrderStoreId(order)
+        if (storeId) {
+          const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+          await notifyFulfillmentFailed(storeCore, storeId, {
+            orderId,
+            reason: error instanceof Error ? error.message : "S2BDIY push failed",
+          })
+        }
+      } catch (notifyError) {
+        console.error("Failed to create fulfillment_failed notification:", notifyError)
+      }
     }
   }
 }

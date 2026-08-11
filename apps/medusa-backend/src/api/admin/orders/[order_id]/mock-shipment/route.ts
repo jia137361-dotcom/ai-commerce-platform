@@ -9,6 +9,12 @@ import { FULFILLMENT_ORDERS_MODULE } from "../../../../../modules/fulfillment-or
 import type FulfillmentOrdersModuleService from "../../../../../modules/fulfillment-orders/service"
 import { SHIPMENTS_MODULE } from "../../../../../modules/shipments"
 import type ShipmentsModuleService from "../../../../../modules/shipments/service"
+import { sendShippingNotification } from "../../../../../lib/email"
+import { STORE_CORE_MODULE } from "../../../../../modules/store-core"
+import type StoreCoreModuleService from "../../../../../modules/store-core/service"
+import { getS2bdiyConfig, isS2bdiyEnabled } from "../../../../../modules/suppliers/s2bdiy/config"
+import { S2bdiyClient } from "../../../../../modules/suppliers/s2bdiy/s2bdiy-client"
+import { submitOrderLogisticsClient } from "../../../../../modules/suppliers/s2bdiy/s2bdiy-logistics"
 
 /**
  * 计划：mock 物流回写 — 创建 shipment，订单 fulfillment_status → shipped。
@@ -74,6 +80,40 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       [ORDER_META_FULFILLMENT_STATUS]: "shipped",
     }
     await orderModule.updateOrders(orderId, { metadata: meta })
+
+    if (typeof order.email === "string" && order.email.includes("@")) {
+      await sendShippingNotification({
+        to: order.email,
+        orderId,
+        displayId: typeof order.display_id === "number" ? order.display_id : null,
+        trackingNumber: tracking,
+        carrier,
+        trackingUrl,
+      })
+    }
+
+    if (isS2bdiyEnabled()) {
+      try {
+        const storeCore = req.scope.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+        const supplierOrders = await storeCore.listSupplierOrders({ order_id: [orderId] })
+        const supplierOrder = supplierOrders.find((r) => r.supplier_order_id)
+        if (supplierOrder?.supplier_order_id) {
+          const config = getS2bdiyConfig()
+          if (config) {
+            const client = new S2bdiyClient(config)
+            await submitOrderLogisticsClient(client, {
+              order_id: supplierOrder.supplier_order_id,
+              logistics_platform_id: Number(supplierOrder.logistics_id ?? 1),
+              logistics_no: tracking,
+              logistics_company: carrier,
+            })
+            console.info("[mock-shipment] S2BDIY logistics submitted for order:", supplierOrder.supplier_order_id)
+          }
+        }
+      } catch (error) {
+        console.error("[mock-shipment] S2BDIY logistics submit failed (non-blocking):", error)
+      }
+    }
 
     res.status(200).json({
       order_id: orderId,

@@ -6,6 +6,8 @@ import { CartStoreAccessError, CartStoreMismatchError } from "../../../../../lib
 import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import { getStoreCoreService } from "../../../../_helpers/store-core"
 import { resolveLinkedProductForVariant } from "../../../../../lib/resolve-linked-product"
+import { isProductCartEligible } from "../../../../../lib/product-cart-eligible"
+import { isSkuPurchasable } from "../../../../../lib/product-sku"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
@@ -33,10 +35,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     const linkedProducts = await storeCoreService.listProducts({
       medusa_variant_id: variant_id,
     })
-    const linkedProduct = resolveLinkedProductForVariant(
+    let linkedProduct = resolveLinkedProductForVariant(
       linkedProducts as Record<string, unknown>[],
       { storeId: cartStoreId }
     )
+    if (!linkedProduct) {
+      const productModule = req.scope.resolve(Modules.PRODUCT)
+      const nativeVariant = await productModule.retrieveProductVariant(variant_id)
+      const metadata = nativeVariant.metadata as Record<string, unknown> | null | undefined
+      const mcProductId = typeof metadata?.mc_product_id === "string" ? metadata.mc_product_id : null
+      if (mcProductId) {
+        const rows = await storeCoreService.listProducts({ id: mcProductId })
+        linkedProduct = rows[0] as Record<string, unknown> | undefined
+      }
+    }
 
     if (!linkedProduct) {
       return res.status(400).json({
@@ -47,11 +59,20 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       })
     }
 
-    if (linkedProduct.status !== "published") {
+    if (!isProductCartEligible(linkedProduct as Record<string, unknown>)) {
       return res.status(400).json({
         error: {
           code: "VALIDATION_ERROR",
-          message: "Product must be published",
+          message: "Product is not available for purchase",
+        },
+      })
+    }
+
+    if (!isSkuPurchasable((linkedProduct as Record<string, unknown>).variants, variant_id)) {
+      return res.status(400).json({
+        error: {
+          code: "SKU_DISABLED",
+          message: "This SKU is not available for purchase",
         },
       })
     }

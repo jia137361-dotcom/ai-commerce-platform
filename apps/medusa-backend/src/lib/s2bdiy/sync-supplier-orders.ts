@@ -10,7 +10,7 @@ import {
   ORDER_META_FULFILLMENT_STATUS,
   normalizeOrderMetadata,
 } from "../order-custom-metadata"
-import { requireS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { getS2bdiyConfig, isS2bdiyEnabled, isS2bdiyMockMode } from "../../modules/suppliers/s2bdiy/config"
 import { S2bdiyClient } from "../../modules/suppliers/s2bdiy/s2bdiy-client"
 import { getOrderDetailClient } from "../../modules/suppliers/s2bdiy/s2bdiy-order"
 import {
@@ -19,6 +19,10 @@ import {
   mapS2bPayStatus,
 } from "../../modules/suppliers/s2bdiy/s2bdiy-status-mapper"
 import { toJsonRecord } from "./json-record"
+
+/** Local mock push ids must never hit live S2BDIY order APIs. */
+export const isMockSupplierOrderId = (supplierOrderId: string | null | undefined) =>
+  Boolean(supplierOrderId && /^mock_s2b_/i.test(supplierOrderId.trim()))
 
 export async function syncSupplierOrderById(
   container: MedusaContainer,
@@ -30,8 +34,14 @@ export async function syncSupplierOrderById(
   if (!row?.supplier_order_id) {
     return
   }
+  if (isMockSupplierOrderId(row.supplier_order_id)) {
+    return
+  }
 
-  const config = requireS2bdiyConfig()
+  const config = getS2bdiyConfig()
+  if (!config) {
+    return
+  }
   const client = new S2bdiyClient(config)
   const detail = await getOrderDetailClient(client, row.supplier_order_id)
 
@@ -40,6 +50,7 @@ export async function syncSupplierOrderById(
   const logistics = detail.order_logistics as Record<string, unknown> | undefined
   const tracking =
     (logistics?.logisticss_track_number as string) ??
+    (logistics?.logistics_track_number as string) ??
     (logistics?.tracking_number as string) ??
     null
   const waybillUrl =
@@ -55,6 +66,13 @@ export async function syncSupplierOrderById(
       product_amount: Number(detail.product_amount ?? 0),
       shipping_amount: Number(detail.shipping_amount ?? 0),
       total_amount: Number(detail.total_amount ?? 0),
+      logistics_name: String(
+        logistics?.logistics_name ??
+        logistics?.logisticss_name ??
+        detail.logistics_platform_text ??
+        row.logistics_name ??
+        ""
+      ) || null,
       tracking_number: tracking,
       waybill_url: waybillUrl,
       last_synced_at: new Date(),
@@ -103,14 +121,14 @@ export async function syncSupplierOrderById(
 }
 
 export async function syncPendingSupplierOrders(container: MedusaContainer): Promise<number> {
-  if (!process.env.S2BDIY_API_BASE_URL) {
+  if (!isS2bdiyEnabled() || isS2bdiyMockMode()) {
     return 0
   }
   const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
   const rows = await storeCore.listSupplierOrders({})
   let synced = 0
   for (const row of rows) {
-    if (!row.supplier_order_id) continue
+    if (!row.supplier_order_id || isMockSupplierOrderId(row.supplier_order_id)) continue
     const status =
       row.supplier_status as import("../../modules/suppliers/s2bdiy/s2bdiy-status-mapper").SupplierOrderStatus
     if (isTerminalSupplierOrderStatus(status)) continue

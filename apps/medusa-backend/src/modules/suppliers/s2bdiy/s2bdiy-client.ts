@@ -19,7 +19,11 @@ export type S2bdiyRequestOptions = {
   body?: unknown
   formData?: FormData
   skipAuth?: boolean
+  /** Abort the upstream call after this many ms (default: no timeout). */
+  timeoutMs?: number
 }
+
+const DEFAULT_S2BDIY_TIMEOUT_MS = 30000
 
 // ---- S2bdiyClient class ----
 
@@ -48,10 +52,35 @@ export class S2bdiyClient {
         body = JSON.stringify(options.body)
       }
 
-      const res = await fetch(url.toString(), {
-        method: options.method ?? (options.body || options.formData ? "POST" : "GET"),
-        headers, body,
-      })
+      const timeoutMs =
+        typeof options.timeoutMs === "number" && options.timeoutMs > 0
+          ? options.timeoutMs
+          : DEFAULT_S2BDIY_TIMEOUT_MS
+      const controller = timeoutMs ? new AbortController() : null
+      const timer = controller
+        ? setTimeout(() => controller.abort(), timeoutMs)
+        : null
+
+      let res: Response
+      try {
+        res = await fetch(url.toString(), {
+          method: options.method ?? (options.body || options.formData ? "POST" : "GET"),
+          headers,
+          body,
+          signal: controller?.signal,
+        })
+      } catch (error) {
+        if (controller?.signal.aborted) {
+          throw new S2bDiyError(
+            `S2BDIY ${options.method ?? "GET"} ${path} timed out after ${timeoutMs}ms`,
+            408,
+            { timeout_ms: timeoutMs }
+          )
+        }
+        throw error
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
 
       if (res.status === 401 && retryOn401 && !options.skipAuth) {
         clearS2bdiyTokenCache()
@@ -69,6 +98,13 @@ export class S2bdiyClient {
       }
 
       const envelope = parsed as Record<string, unknown>
+      if (envelope.status_code !== undefined && Number(envelope.status_code) !== 200) {
+        throw new S2bDiyError(
+          `S2BDIY ${options.method ?? "GET"} ${path} failed: ${String(envelope.msg ?? "business error")}`,
+          Number(envelope.status_code) || 400,
+          parsed
+        )
+      }
       return (envelope.data !== undefined ? envelope.data : parsed) as T
     }
     return attempt(true)
@@ -89,18 +125,18 @@ export function unwrapList<T>(data: unknown): T[] {
 // ---- Standalone functions (backward compat) ----
 
 async function getToken(): Promise<string> {
-  const apiBaseUrl = process.env.S2BDIY_API_BASE_URL?.replace(/\/$/, "")
+  const apiBaseUrl = (process.env.S2BDIY_BASE_URL || process.env.S2BDIY_API_BASE_URL)?.replace(/\/$/, "")
   const appKey = process.env.S2BDIY_APP_KEY
   const appSecret = process.env.S2BDIY_APP_SECRET
   if (!apiBaseUrl || !appKey || !appSecret) {
-    throw new Error("S2BDIY credentials not configured")
+    throw new Error("S2BDIY credentials not configured. Set S2BDIY_BASE_URL or S2BDIY_API_BASE_URL, S2BDIY_APP_KEY, and S2BDIY_APP_SECRET.")
   }
   return getS2bdiyAccessToken({ apiBaseUrl, appKey, appSecret, platformId: Number(process.env.S2BDIY_PLATFORM_ID || "99") })
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = await getToken()
-  const baseUrl = process.env.S2BDIY_API_BASE_URL?.replace(/\/$/, "")
+  const baseUrl = (process.env.S2BDIY_BASE_URL || process.env.S2BDIY_API_BASE_URL)?.replace(/\/$/, "")
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
   let fetchBody: BodyInit | undefined
   if (body instanceof FormData) {
@@ -109,7 +145,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers["Content-Type"] = "application/json"
     fetchBody = JSON.stringify(body)
   }
-  const res = await fetch(`${baseUrl}${path}`, { method, headers, body: fetchBody })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), DEFAULT_S2BDIY_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(`${baseUrl}${path}`, { method, headers, body: fetchBody, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
   if (!res.ok) {
     const text = await res.text()
     throw new S2bDiyError(`S2BDIY ${method} ${path} failed: ${res.status}`, res.status, text)

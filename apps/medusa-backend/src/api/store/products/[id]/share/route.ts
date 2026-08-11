@@ -6,6 +6,17 @@ import {
 } from "../../../../_helpers/store-core"
 import { buildShareLinks, buildShareText } from "../../../../../lib/share-links"
 
+const readRequestOrigin = (req: MedusaRequest) => {
+  const forwardedProto = req.headers["x-forwarded-proto"]
+  const forwardedHost = req.headers["x-forwarded-host"]
+  const protocol = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto ?? "http"
+  const host = Array.isArray(forwardedHost)
+    ? forwardedHost[0]
+    : forwardedHost ?? req.headers.host
+  if (!host) return undefined
+  return `${protocol}://${host}`.replace(":9001", ":5174").replace(":9000", ":5174")
+}
+
 /** GET /store/products/:id/share — 获取商品分享链接和文案 */
 export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   // 1. 解析当前店铺上下文（X-Store-Id 请求头 / 域名 / 默认）
@@ -39,9 +50,10 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     (product.design_image_url as string) ||
     null
 
-  // 7. 读取 storefront 基础 URL（环境变量 > 默认值）
+  // 7. 读取 storefront 基础 URL（环境变量 > 当前请求来源 > 默认值）
+  const requestOrigin = readRequestOrigin(req)
   const storefrontBaseUrl: string =
-    process.env.STOREFRONT_BASE_URL || "http://localhost:3000"
+    process.env.STOREFRONT_BASE_URL || requestOrigin || "http://127.0.0.1:5174"
 
   // 8. 构建完整商品页 URL
   //    mc_product 目前没有 handle 字段，统一使用 product_id 生成 URL

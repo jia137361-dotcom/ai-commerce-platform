@@ -7,6 +7,14 @@ export interface S2bBasicProductResponse {
   purchase_price: number; produce_country: string; warehouse_name: string
   deliver_goods_text: string; product_show_master_image: string; transport_types_arr: unknown[]
   colors: S2bColor[]; sizes: S2bSize[]; items: S2bItem[]; views: S2bView[]
+  print_areas: S2bPrintArea[]
+  categorys: Array<{ id: number; name: string; en_name: string }>
+  product_show_images?: Array<{
+    color_id: number
+    color_name?: string
+    tone?: string
+    images: Array<{ src?: string; big_src?: string }>
+  }>
 }
 export interface S2bColor { id: number; name: string }
 export interface S2bSize { id: number; name: string }
@@ -26,6 +34,90 @@ export type BasicProductDetail = Record<string, unknown>
 export type QuickCreateInput = { size_id: number; color_id: number; basic_product_id: number; name: string; material_id: number | string; view_id: number; design_type?: number }
 export type QuickCreateResult = { product_id: number | string; product_name?: string; product_code?: string }
 
+export type S2bdiyEnglishProductInfo = {
+  english_name: string | null
+  english_description: string | null
+  english_material: string | null
+  english_technology: string | null
+  delivery_note: string | null
+  colors: Array<{ id: string; name: string }>
+  sizes: Array<{ id: string; name: string }>
+  views: Array<{ id: string; name: string }>
+  categories: Array<{ id: string; name: string }>
+  images: string[]
+  blank_design_images: string[]
+  produce_area: string | null
+  produce_country: string | null
+  warehouse: string | null
+  variants: Array<Record<string, unknown>>
+  print_areas: Array<Record<string, unknown>>
+}
+
+const englishText = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() ? value.trim() : null
+
+const englishName = (value: unknown): string | null => {
+  if (!value || typeof value !== "object") return null
+  const row = value as Record<string, unknown>
+  return englishText(row.en_name)
+}
+
+const imageUrl = (value: unknown): string | null => {
+  if (typeof value === "string" && /^https?:\/\//.test(value.trim())) return value.trim()
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>
+    return imageUrl(row.src ?? row.image_src ?? row.url)
+  }
+  return null
+}
+
+/** Convert a S2BDIY detail payload into the English-only UI contract. */
+export function normalizeS2bdiyEnglishProduct(
+  product: Record<string, unknown>
+): S2bdiyEnglishProductInfo {
+  const collectImages = (value: unknown): string[] => {
+    const result: string[] = []
+    const visit = (item: unknown) => {
+      if (Array.isArray(item)) return item.forEach(visit)
+      const url = imageUrl(item)
+      if (url && !result.includes(url)) result.push(url)
+      if (item && typeof item === "object") {
+        const row = item as Record<string, unknown>
+        if (row.images) visit(row.images)
+      }
+    }
+    visit(value)
+    return result
+  }
+  const list = (key: string) => Array.isArray(product[key]) ? product[key] : []
+  const mapNames = (key: string) => list(key).flatMap((item) => {
+    const id = item && typeof item === "object" ? (item as Record<string, unknown>).id : null
+    const name = englishName(item)
+    return id != null && name ? [{ id: String(id), name }] : []
+  })
+
+  return {
+    english_name: englishText(product.en_name),
+    english_description: englishText(product.en_desc),
+    english_material: englishText(product.en_product_material_text),
+    english_technology: englishText(product.en_product_technology_text),
+    delivery_note: englishText(product.deliver_goods_text),
+    colors: mapNames("colors"),
+    sizes: mapNames("sizes"),
+    views: mapNames("views"),
+    categories: mapNames("categorys"),
+    images: collectImages(product.product_show_images ?? product.product_show_master_image ?? product.view_image_src),
+    blank_design_images: collectImages(product.blank_design_images ?? product.blank_design_image),
+    // The API's *_text fields are localized Chinese in the current account;
+    // expose stable country/area codes instead of leaking localized text.
+    produce_area: englishText(product.produce_area),
+    produce_country: englishText(product.produce_country),
+    warehouse: englishText(product.warehouse_name),
+    variants: list("items").filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")),
+    print_areas: list("print_areas").filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")),
+  }
+}
+
 // ---- Client-based (Dev2 compat) ----
 export async function listBasicProducts(client: S2bdiyClient, query?: { page?: number; per_page?: number }): Promise<BasicProductDetail[]> {
   const data = await client.request<unknown>("/open/v1/basicProduct", { method: "GET", query: { page: query?.page ?? 1, per_page: query?.per_page ?? 20 } })
@@ -39,39 +131,151 @@ export async function quickCreateProduct(client: S2bdiyClient, input: QuickCreat
   const designType = input.design_type ?? 1
   const body = { size_id: input.size_id, color_id: input.color_id, product_design: { basic_product_id: input.basic_product_id, name: input.name, views: [{ view_id: input.view_id, objects: [{ type: "image", material_id: Number(input.material_id), design_type: designType }] }] } }
   const data = await client.request<QuickCreateResult>("/open/v1/product/quickCreate", { method: "POST", body })
-  const productId = data.product_id ?? (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).product_id
+  const productId = (data.product_id ?? (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).product_id) as string | number
   if (productId === undefined || productId === null) throw new Error(`quickCreate missing product_id: ${JSON.stringify(data)}`)
   return { product_id: productId, product_name: data.product_name, product_code: data.product_code }
 }
 export async function getProductDetail(client: S2bdiyClient, productId: number | string): Promise<Record<string, unknown>> {
   return client.request<Record<string, unknown>>(`/open/v1/product/${productId}`, { method: "GET" })
 }
+
+/** List designed supplier products (newest first when API returns chronological page 1). */
+export async function listDesignedProducts(
+  client: S2bdiyClient,
+  query?: { page?: number; perPage?: number; name?: string }
+): Promise<Array<Record<string, unknown>>> {
+  const data = await client.request<unknown>("/open/v1/product", {
+    method: "GET",
+    query: {
+      page: query?.page ?? 1,
+      per_page: query?.perPage ?? 40,
+      name: query?.name,
+    },
+  })
+  if (data && typeof data === "object") {
+    const root = data as Record<string, unknown>
+    if (Array.isArray(root.data)) return root.data as Array<Record<string, unknown>>
+    const nested = root.data
+    if (nested && typeof nested === "object" && Array.isArray((nested as Record<string, unknown>).data)) {
+      return (nested as Record<string, unknown>).data as Array<Record<string, unknown>>
+    }
+  }
+  return unwrapList<Record<string, unknown>>(data)
+}
+
 export function extractMockupImageUrl(productDetail: Record<string, unknown>): string | null {
+  const gallery = extractProductMockupGalleryFromS2bDetail(productDetail)
+  return gallery[0]?.url ?? null
+}
+
+export type S2bProductGalleryItem = {
+  id: string
+  label: string
+  url: string
+  kind: "mockup" | "design" | "print_file"
+}
+
+const MOCKUP_VIEW_LABELS = ["Front", "Back", "Side", "On-body", "Detail"]
+
+const readImageSrc = (value: unknown): string | null => {
+  if (typeof value === "string" && value.trim()) return value.trim()
+  if (value && typeof value === "object" && typeof (value as Record<string, unknown>).src === "string") {
+    const src = (value as Record<string, unknown>).src as string
+    return src.trim() || null
+  }
+  return null
+}
+
+export function extractProductMockupGalleryFromS2bDetail(
+  productDetail: Record<string, unknown>
+): S2bProductGalleryItem[] {
+  const seen = new Set<string>()
+  const items: S2bProductGalleryItem[] = []
+
+  const pushMockup = (url: string, label?: string) => {
+    if (!url || seen.has(url)) return
+    seen.add(url)
+    const index = items.length
+    items.push({
+      id: index === 0 ? "mockup_front" : `mockup_${index + 1}`,
+      label: label ?? MOCKUP_VIEW_LABELS[index] ?? `View ${index + 1}`,
+      url,
+      kind: "mockup",
+    })
+  }
+
+  const showImages = productDetail.show_images
+  if (Array.isArray(showImages)) {
+    for (const block of showImages) {
+      if (!block || typeof block !== "object") continue
+      const row = block as Record<string, unknown>
+      const colorName =
+        typeof row.color_name === "string" && row.color_name.trim() ? row.color_name.trim() : null
+      const images = row.images
+      if (!Array.isArray(images)) continue
+      images.forEach((image, imageIndex) => {
+        const src = readImageSrc(image)
+        if (!src) return
+        const label =
+          images.length > 1 && colorName
+            ? `${colorName} ${imageIndex + 1}`
+            : colorName ?? undefined
+        pushMockup(src, label)
+      })
+    }
+  }
+
   const variants = productDetail.variants
   if (Array.isArray(variants)) {
     for (const variant of variants) {
       if (!variant || typeof variant !== "object") continue
       const showImages = (variant as Record<string, unknown>).show_images
-      if (typeof showImages === "string" && showImages.length > 0) return showImages
-      if (Array.isArray(showImages) && showImages.length > 0) {
-        const first = showImages[0]
-        if (typeof first === "string") return first
-        if (first && typeof first === "object" && typeof (first as Record<string, unknown>).src === "string") return (first as Record<string, unknown>).src as string
+      const src = readImageSrc(showImages)
+      if (src) pushMockup(src)
+    }
+  }
+
+  return items
+}
+
+export function mergeProductGalleryWithS2bMockups(
+  existingGallery: unknown,
+  mockups: S2bProductGalleryItem[]
+): S2bProductGalleryItem[] {
+  const preserved: S2bProductGalleryItem[] = []
+  if (Array.isArray(existingGallery)) {
+    for (const item of existingGallery) {
+      if (!item || typeof item !== "object") continue
+      const row = item as Record<string, unknown>
+      if (row.kind === "mockup") continue
+      if (
+        typeof row.id === "string" &&
+        typeof row.label === "string" &&
+        typeof row.url === "string" &&
+        (row.kind === "design" || row.kind === "print_file")
+      ) {
+        preserved.push({
+          id: row.id,
+          label: row.label,
+          url: row.url,
+          kind: row.kind,
+        })
       }
     }
   }
-  const showImages = productDetail.show_images
-  if (Array.isArray(showImages) && showImages.length > 0) {
-    const block = showImages[0] as Record<string, unknown> | undefined
-    if (block) {
-      const images = block.images as Array<Record<string, unknown>> | undefined
-      if (Array.isArray(images) && images.length > 0 && typeof images[0]?.src === "string") return images[0].src as string
-    }
-  }
-  return null
+  return [...mockups, ...preserved]
 }
 
 // ---- Standalone (backward compat) ----
-export async function getBasicProduct(id: number): Promise<S2bBasicProductResponse> { return s2bGet(`/open/v1/basicProduct/${id}`) }
-export async function getProduct(id: number): Promise<S2bProductDetailResponse> { return s2bGet(`/open/v1/product/${id}`) }
-export async function quickCreate(params: S2bQuickCreateRequest): Promise<S2bQuickCreateResponse> { return s2bPost("/open/v1/product/quickCreate", params) }
+export async function getBasicProduct(id: number): Promise<S2bBasicProductResponse> {
+  const res = await s2bGet<Record<string, unknown>>(`/open/v1/basicProduct/${id}`)
+  return (res.data ?? res) as S2bBasicProductResponse
+}
+export async function getProduct(id: number): Promise<S2bProductDetailResponse> {
+  const res = await s2bGet<Record<string, unknown>>(`/open/v1/product/${id}`)
+  return (res.data ?? res) as S2bProductDetailResponse
+}
+export async function quickCreate(params: S2bQuickCreateRequest): Promise<S2bQuickCreateResponse> {
+  const res = await s2bPost<Record<string, unknown>>("/open/v1/product/quickCreate", params)
+  return (res.data ?? res) as S2bQuickCreateResponse
+}

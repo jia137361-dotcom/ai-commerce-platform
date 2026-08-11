@@ -22,6 +22,8 @@ async def generate_product(body: GenerateProductRequest) -> GenerateProductRespo
             supplier_variant_id=body.supplier_variant_id,
             print_position=body.print_position,
             base_cost=body.base_cost,
+            generation_request_id=body.generation_request_id,
+            skip_copy=body.skip_copy,
         )
     except Exception as exc:
         logger.exception("generate-product failed")
@@ -31,6 +33,8 @@ async def generate_product(body: GenerateProductRequest) -> GenerateProductRespo
     return GenerateProductResponse(
         ai_job_id=result["ai_job_id"],
         prompt=result["prompt"],
+        artwork_prompt=result.get("artwork_prompt"),
+        visual_prompt=result.get("visual_prompt"),
         platform_product_id=result["platform_product_id"],
         supplier_id=result.get("supplier_id"),
         supplier_product_id=result["supplier_product_id"],
@@ -39,6 +43,7 @@ async def generate_product(body: GenerateProductRequest) -> GenerateProductRespo
         design_image_url=result["design_image_url"],
         print_file_url=result["print_file_url"],
         mockup_image_url=result["mockup_image_url"],
+        gallery=result.get("gallery") or [],
         title=result["title"],
         description=result["description"],
         tags=result["tags"],
@@ -48,4 +53,5 @@ async def generate_product(body: GenerateProductRequest) -> GenerateProductRespo
         ),
         price_suggestion=float(result["price_suggestion"]),
         mock_mode=bool(result.get("mock_mode")),
+        mock_mode_reason=result.get("mock_mode_reason"),
     )

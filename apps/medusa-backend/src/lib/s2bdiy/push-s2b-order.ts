@@ -8,7 +8,7 @@ import {
   ORDER_META_FULFILLMENT_STATUS,
   normalizeOrderMetadata,
 } from "../order-custom-metadata"
-import { requireS2bdiyConfig } from "../../modules/suppliers/s2bdiy/config"
+import { getS2bdiyConfig, isS2bdiyMockMode } from "../../modules/suppliers/s2bdiy/config"
 import { S2bdiyApiError, S2bdiyClient } from "../../modules/suppliers/s2bdiy/s2bdiy-client"
 import {
   calculateLogisticsClient,
@@ -43,7 +43,7 @@ export async function pushOrderToS2bdiy(
   container: MedusaContainer,
   orderId: string
 ): Promise<{ supplier_order_id: string | null; skipped?: boolean }> {
-  if (!process.env.S2BDIY_API_BASE_URL) {
+  if (!isS2bdiyMockMode() && !getS2bdiyConfig()) {
     return { supplier_order_id: null, skipped: true }
   }
 
@@ -64,7 +64,60 @@ export async function pushOrderToS2bdiy(
     process.env.DEFAULT_STORE_ID ??
     "default_store"
 
-  const config = requireS2bdiyConfig()
+  if (isS2bdiyMockMode()) {
+    const mockSupplierOrderId = `mock_s2b_${orderId.slice(-12)}`
+    let supplierOrderRowId = existing[0]?.id
+    if (!supplierOrderRowId) {
+      const created = await storeCore.createSupplierOrders({
+        store_id: storeId,
+        order_id: orderId,
+        supplier_id: S2BDIY_SUPPLIER_ID,
+        third_order_id: `mock_${orderId}`,
+        supplier_order_id: mockSupplierOrderId,
+        supplier_status: "reviewing",
+        supplier_pay_status: "paid",
+        raw_request_json: { mock: true },
+        raw_response_json: { mock: true, supplier_order_id: mockSupplierOrderId },
+      })
+      supplierOrderRowId = created.id
+    } else {
+      await storeCore.updateSupplierOrders({
+        selector: { id: supplierOrderRowId },
+        data: {
+          supplier_order_id: mockSupplierOrderId,
+          supplier_status: "reviewing",
+          supplier_pay_status: "paid",
+        },
+      })
+    }
+
+    const foService = container.resolve(FULFILLMENT_ORDERS_MODULE) as FulfillmentOrdersModuleService
+    const foRows = await foService.listFulfillmentOrders({ order_id: [orderId] })
+    if (foRows[0]) {
+      await foService.updateFulfillmentOrders({
+        id: foRows[0].id,
+        status: "pushed",
+        supplier: "s2bdiy",
+        supplier_order_id: mockSupplierOrderId,
+        pushed_at: new Date(),
+      })
+    }
+
+    const meta = normalizeOrderMetadata(order.metadata as Record<string, unknown> | null)
+    await orderModule.updateOrders(orderId, {
+      metadata: {
+        ...meta,
+        [ORDER_META_FULFILLMENT_STATUS]: "pushed",
+      },
+    })
+
+    return { supplier_order_id: mockSupplierOrderId }
+  }
+
+  const config = getS2bdiyConfig()
+  if (!config) {
+    return { supplier_order_id: null, skipped: true }
+  }
   const client = new S2bdiyClient(config)
 
   const items = order.items ?? []
@@ -292,7 +345,20 @@ export async function retrySupplierOrderPay(
   if (!row?.supplier_order_id) {
     throw new Error("No supplier order to pay")
   }
-  const config = requireS2bdiyConfig()
+  if (isS2bdiyMockMode()) {
+    await storeCore.updateSupplierOrders({
+      selector: { id: row.id },
+      data: {
+        supplier_pay_status: "paid",
+        supplier_status: "reviewing",
+      },
+    })
+    return
+  }
+  const config = getS2bdiyConfig()
+  if (!config) {
+    throw new Error("S2BDIY is not configured")
+  }
   const client = new S2bdiyClient(config)
   await payOrders(client, [row.supplier_order_id])
   await storeCore.updateSupplierOrders({

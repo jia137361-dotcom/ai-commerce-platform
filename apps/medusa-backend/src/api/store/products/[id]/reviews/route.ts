@@ -1,28 +1,42 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
+import { assertBuyerEmailVerified } from "../../../../../lib/buyer-auth-access"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
 import { readOrderStoreId } from "../../../../../lib/order-store-context"
 import {
+  buildReviewMetadata,
   isValidReviewRating,
   maskReviewEmail,
   normalizeProductReview,
+  parseReviewImageUrls,
   parseReviewText,
   readMcProductIdsFromOrder,
+  REVIEW_MAX_IMAGES,
   summarizeProductReviews,
 } from "../../../../../lib/product-reviews"
+import { resolveBuyerOrderFulfillmentStatus } from "../../../../../lib/order-custom-metadata"
+import { isReceiptConfirmed } from "../../../../../lib/order-receipt-confirmation"
 import {
   getStoreCoreService,
   sendError,
 } from "../../../../_helpers/store-core"
+import { isStorefrontCatalogVisible } from "../../../../../lib/storefront-product-visibility"
 
 type CreateReviewBody = {
   email?: string
   order_number?: string | number
   display_id?: string | number
   rating?: unknown
+  logistics_rating?: unknown
+  overall_rating?: unknown
   title?: unknown
   content?: unknown
   customer_name?: unknown
+  image_urls?: unknown
+}
+
+type AuthenticatedRequest = MedusaRequest & {
+  auth_context?: { actor_id?: string }
 }
 
 const parseDisplayId = (value: unknown): number | null => {
@@ -80,11 +94,12 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const products = await storeCoreService.listProducts({
     id: productId,
     store_id: storeId,
-    status: "published",
   })
   const product = products[0]
 
-  if (!product) {
+  // Public reviews follow the store catalog: blanks/ordinary products only.
+  // Buyer custom designs stay private under My Designs.
+  if (!product || !isStorefrontCatalogVisible(product as Record<string, unknown>)) {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
   }
 
@@ -117,15 +132,18 @@ export const POST = async (
   req: MedusaRequest<CreateReviewBody>,
   res: MedusaResponse
 ) => {
+  const customerId = (req as AuthenticatedRequest).auth_context?.actor_id
+  if (customerId && !(await assertBuyerEmailVerified(req, res, customerId))) return
+
   const productId = (req.params.id ?? req.params.product_id) as string
   const { store_id: storeId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
   const body = req.body ?? {}
 
+  // Allow draft/custom-design products: buyers review purchased items, not only catalog listings.
   const products = await storeCoreService.listProducts({
     id: productId,
     store_id: storeId,
-    status: "published",
   })
   const product = products[0]
 
@@ -137,9 +155,12 @@ export const POST = async (
     typeof body.email === "string" ? body.email.trim().toLowerCase() : null
   const displayId = parseDisplayId(body.display_id ?? body.order_number)
   const rating = body.rating
+  const logisticsRating = body.logistics_rating
+  const overallRating = body.overall_rating
   const title = parseReviewText(body.title, 120)
   const content = parseReviewText(body.content, 2000)
   const customerName = parseReviewText(body.customer_name, 120)
+  const imageUrls = parseReviewImageUrls(body.image_urls)
 
   if (!email || !email.includes("@")) {
     return sendError(res, 400, "VALIDATION_ERROR", "email is required")
@@ -155,6 +176,22 @@ export const POST = async (
   if (!isValidReviewRating(rating)) {
     return sendError(res, 400, "VALIDATION_ERROR", "rating must be an integer from 1 to 5")
   }
+  if (!isValidReviewRating(logisticsRating)) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "logistics_rating must be an integer from 1 to 5"
+    )
+  }
+  if (!isValidReviewRating(overallRating)) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "overall_rating must be an integer from 1 to 5"
+    )
+  }
   if (title === undefined) {
     return sendError(res, 400, "VALIDATION_ERROR", "title must be 120 characters or fewer")
   }
@@ -167,6 +204,14 @@ export const POST = async (
       400,
       "VALIDATION_ERROR",
       "customer_name must be 120 characters or fewer"
+    )
+  }
+  if (imageUrls === undefined) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      `image_urls must be an array of up to ${REVIEW_MAX_IMAGES} URLs`
     )
   }
 
@@ -184,6 +229,13 @@ export const POST = async (
       "REVIEW_NOT_ALLOWED",
       "Only verified buyers can review this product"
     )
+  }
+
+  if (resolveBuyerOrderFulfillmentStatus(order.metadata as Record<string, unknown> | null) !== "delivered") {
+    return sendError(res, 403, "REVIEW_NOT_ALLOWED", "Reviews are available only after delivery")
+  }
+  if (!isReceiptConfirmed(order)) {
+    return sendError(res, 403, "REVIEW_NOT_ALLOWED", "Confirm receipt before reviewing this product")
   }
 
   const existing = await (storeCoreService as any).listProductReviews({
@@ -213,7 +265,11 @@ export const POST = async (
     title,
     content,
     status: "published",
-    metadata: {},
+    metadata: buildReviewMetadata({
+      logistics_rating: logisticsRating,
+      overall_rating: overallRating,
+      image_urls: imageUrls ?? [],
+    }),
   })
   const review = Array.isArray(created) ? created[0] : created
 

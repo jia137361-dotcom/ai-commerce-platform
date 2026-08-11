@@ -17,8 +17,20 @@ type PaymentModuleLike = {
   ) => Promise<Array<{ captured_at?: Date | null; captures?: unknown[] }>>
 }
 
+const FULFILLMENT_STATUS_WAITING = "waiting"
+const FULFILLMENT_STATUS_PENDING_CAPTURE = "pending_capture"
+const PROTECTED_FULFILLMENT_STATUSES = new Set([
+  "canceled",
+  "failed",
+  "pushed",
+  "in_production",
+  "shipped",
+  "delivered",
+  "fulfilled",
+])
+
 export function providerDefersPaidUntilCapture(providerId: string): boolean {
-  return providerId.includes("stripe")
+  return providerId.includes("stripe") || providerId.includes("paypal")
 }
 
 function mergeMeta(
@@ -26,6 +38,26 @@ function mergeMeta(
   patch: Record<string, unknown>
 ): Record<string, unknown> {
   return { ...(existing ?? {}), ...patch }
+}
+
+async function listOrderFulfillmentOrders(
+  foService: FulfillmentOrdersModuleService,
+  orderId: string
+) {
+  const rows = await foService.listFulfillmentOrders({ order_id: [orderId] })
+  if (rows.length > 1) {
+    const ids = rows.map((row) => row.id).filter(Boolean).join(", ")
+    throw new Error(`Order ${orderId} has multiple fulfillment orders: ${ids || "unknown ids"}`)
+  }
+  return rows
+}
+
+function canTransitionFulfillmentToWaiting(status: unknown): boolean {
+  return status === FULFILLMENT_STATUS_PENDING_CAPTURE
+}
+
+function shouldPreserveFulfillmentStatus(status: unknown): boolean {
+  return typeof status === "string" && PROTECTED_FULFILLMENT_STATUSES.has(status)
 }
 
 export async function markOrderPaidAndFulfillmentWaiting(
@@ -38,30 +70,43 @@ export async function markOrderPaidAndFulfillmentWaiting(
 
   const order = await orderModule.retrieveOrder(orderId)
   const meta = normalizeOrderMetadata(order.metadata as Record<string, unknown> | null)
+  const existing = await listOrderFulfillmentOrders(foService, orderId)
+  const row = existing[0]
+  const rowStatus = row?.status
 
   if (meta[ORDER_META_PAYMENT_STATUS] === "paid") {
+    if (row && canTransitionFulfillmentToWaiting(rowStatus)) {
+      await foService.updateFulfillmentOrders({
+        id: row.id,
+        status: FULFILLMENT_STATUS_WAITING,
+      })
+    }
     return
   }
 
+  const fulfillmentStatusPatch =
+    shouldPreserveFulfillmentStatus(rowStatus)
+      ? {}
+      : { [ORDER_META_FULFILLMENT_STATUS]: FULFILLMENT_STATUS_WAITING satisfies OrderFulfillmentStatus }
   const nextMeta = mergeMeta(meta, {
     [ORDER_META_PAYMENT_STATUS]: "paid" satisfies OrderPaymentStatus,
-    [ORDER_META_FULFILLMENT_STATUS]: "waiting" satisfies OrderFulfillmentStatus,
+    ...fulfillmentStatusPatch,
     payment_confirmed_at: new Date().toISOString(),
     payment_confirmed_source: source,
   })
 
   await orderModule.updateOrders(orderId, { metadata: nextMeta })
 
-  const existing = await foService.listFulfillmentOrders({ order_id: [orderId] })
-  const row = existing[0]
   if (!row) {
     return
   }
 
-  await foService.updateFulfillmentOrders({
-    id: row.id,
-    status: "waiting",
-  })
+  if (canTransitionFulfillmentToWaiting(rowStatus)) {
+    await foService.updateFulfillmentOrders({
+      id: row.id,
+      status: FULFILLMENT_STATUS_WAITING,
+    })
+  }
 }
 
 export async function seedFulfillmentOrderIfMissing(
@@ -76,7 +121,7 @@ export async function seedFulfillmentOrderIfMissing(
     return
   }
   const foService = container.resolve(FULFILLMENT_ORDERS_MODULE) as FulfillmentOrdersModuleService
-  const existing = await foService.listFulfillmentOrders({ order_id: [input.orderId] })
+  const existing = await listOrderFulfillmentOrders(foService, input.orderId)
   if (existing.length > 0) {
     return
   }
@@ -91,14 +136,19 @@ export async function seedFulfillmentOrderIfMissing(
 
 export async function setOrderPostCompletePendingMetadata(
   container: MedusaContainer,
-  orderId: string
+  orderId: string,
+  storeId?: string
 ): Promise<void> {
   const orderModule = container.resolve(Modules.ORDER)
   const order = await orderModule.retrieveOrder(orderId)
-  const meta = mergeMeta(normalizeOrderMetadata(order.metadata as Record<string, unknown> | null), {
-    [ORDER_META_PAYMENT_STATUS]: "pending" satisfies OrderPaymentStatus,
-    [ORDER_META_FULFILLMENT_STATUS]: "none" satisfies OrderFulfillmentStatus,
-  })
+  const meta = mergeMeta(
+    normalizeOrderMetadata(order.metadata as Record<string, unknown> | null),
+    {
+      ...(storeId ? { store_id: storeId } : {}),
+      [ORDER_META_PAYMENT_STATUS]: "pending" satisfies OrderPaymentStatus,
+      [ORDER_META_FULFILLMENT_STATUS]: "none" satisfies OrderFulfillmentStatus,
+    }
+  )
   await orderModule.updateOrders(orderId, { metadata: meta })
 }
 

@@ -6,7 +6,9 @@ import {
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
 import { Modules } from "@medusajs/framework/utils"
+import { ensureDefaultSalesChannelStockLocation } from "../lib/ensure-native-bridge-cartable"
 import { resolveDefaultRegionId } from "../lib/resolve-default-region"
+import { resolveDefaultSalesChannelId } from "../lib/resolve-default-sales-channel"
 
 export type CreateCartWorkflowInput = {
   store_id: string
@@ -18,14 +20,17 @@ export type CreateCartWorkflowInput = {
 const createCartStep = createStep(
   "create-cart-step",
   async (input: CreateCartWorkflowInput, { container }: { container: MedusaContainer }) => {
+    await ensureDefaultSalesChannelStockLocation(container)
     const cartModule = container.resolve(Modules.CART)
     const currencyCode = input.currency_code || "usd"
     const regionId =
       input.region_id ?? (await resolveDefaultRegionId(container, currencyCode))
+    const salesChannelId = await resolveDefaultSalesChannelId(container)
 
     const cart = await cartModule.createCarts({
       currency_code: currencyCode,
       region_id: regionId,
+      sales_channel_id: salesChannelId,
       email: input.customer_email,
       metadata: {
         store_id: input.store_id,

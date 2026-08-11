@@ -1,7 +1,15 @@
 /** 自定义订单 metadata：与 Medusa Order 并存，供店铺/履约/支付状态展示 */
 
 export const ORDER_META_STORE_ID = "store_id"
+export const ORDER_META_PLATFORM_CHECKOUT_ID = "platform_checkout_id"
+export const ORDER_META_PLATFORM_CHECKOUT_INDEX = "platform_checkout_index"
+export const ORDER_META_PLATFORM_CHECKOUT_COUNT = "platform_checkout_count"
 export const ORDER_META_PAYMENT_STATUS = "payment_status"
+export const ORDER_META_SELLER_PAYOUT_STATUS = "seller_payout_status"
+export const ORDER_META_SELLER_PAYOUT_TRANSFER_ID = "seller_payout_transfer_id"
+export const ORDER_META_SELLER_PAYOUT_AT = "seller_payout_at"
+export const ORDER_META_SELLER_PAYOUT_AMOUNT = "seller_payout_amount"
+export const ORDER_META_SELLER_PAYOUT_ERROR = "seller_payout_error"
 
 /**
  * 平台履约阶段（等待推单 / 已推供应商 / 已发货），勿使用键名 `fulfillment_status`：
@@ -13,7 +21,7 @@ export const ORDER_META_FULFILLMENT_STATUS = "mc_fulfillment_status"
 const LEGACY_ORDER_META_FULFILLMENT_STATUS = "fulfillment_status"
 
 export type OrderPaymentStatus = "pending" | "paid"
-export type OrderFulfillmentStatus = "none" | "waiting" | "pushed" | "shipped"
+export type OrderFulfillmentStatus = "none" | "waiting" | "pushed" | "shipped" | "delivered"
 
 export function normalizeOrderMetadata(
   meta: Record<string, unknown> | null | undefined
@@ -34,6 +42,31 @@ export function readOrderFulfillmentStatusMeta(
 ): unknown {
   if (!meta) return undefined
   return meta[ORDER_META_FULFILLMENT_STATUS] ?? meta[LEGACY_ORDER_META_FULFILLMENT_STATUS]
+}
+
+export function readOrderFulfillmentStatusString(
+  meta: Record<string, unknown> | null | undefined
+): string | null {
+  const value = readOrderFulfillmentStatusMeta(meta)
+  return typeof value === "string" ? value : null
+}
+
+/** Buyer-facing fulfillment: honor delivery evidence when metadata stage lags behind shipments. */
+export function resolveBuyerOrderFulfillmentStatus(
+  meta: Record<string, unknown> | null | undefined
+): string {
+  const stored = readOrderFulfillmentStatusString(meta)
+  if (stored === "delivered" || stored === "shipped") {
+    return stored
+  }
+  if (meta?.mock_delivery_evidence === true) {
+    return "delivered"
+  }
+  const deliveredAt = meta?.delivered_at ?? meta?.mock_delivered_at
+  if (typeof deliveredAt === "string" && deliveredAt.trim()) {
+    return "delivered"
+  }
+  return stored ?? "none"
 }
 
 /** Medusa Admin 订单表的 FulfillmentStatusCell 只接受原生履约枚举字符串 */
@@ -71,6 +104,8 @@ export function toMedusaAdminOrderFulfillmentStatus(
       return "requires_action"
     case "shipped":
       return "shipped"
+    case "delivered":
+      return "delivered"
     default:
       return "not_fulfilled"
   }

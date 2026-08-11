@@ -1,18 +1,41 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { Modules } from "@medusajs/framework/utils"
+import { inspect } from "node:util"
 import { resolveCurrentStore } from "../../../../../lib/store-context"
+import { ensureNativeBridgeCartable } from "../../../../../lib/ensure-native-bridge-cartable"
 import {
+  ensureNativeProductShippingProfile,
+  resolveProductRequiresShipping,
+} from "../../../../../lib/product-shipping"
+import { resolveNativeBridgeForPublish } from "../../../../../lib/native-product-bridge"
+import {
+  productNeedsCartBridgeBackfill,
+  readRecord,
+  readString,
+} from "../../../../../lib/product-cart-bridge"
+import {
+  getMcProductById,
   getStoreCoreService,
   normalizeProduct,
   sendError
 } from "../../../../_helpers/store-core"
+import { ensureCurrentStoreS2bCategoryIds } from "../../../../../lib/s2b-product-categories"
 
-const readString = (value: unknown) => {
-  return typeof value === "string" && value.length > 0 ? value : null
+function bridgeErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (typeof error === "string") {
+    return error
+  }
+  const message = readString(readRecord(error).message)
+  if (message) {
+    return message
+  }
+  return inspect(error, { depth: 8, breakLength: 160 })
 }
 
-const readMetadata = (value: unknown) => {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {}
+function bridgeErrorStack(error: unknown) {
+  return error instanceof Error ? error.stack : undefined
 }
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
@@ -20,8 +43,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   const { store_id: currentStoreId } = resolveCurrentStore(req)
   const storeCoreService = getStoreCoreService(req)
 
-  const products = await storeCoreService.listProducts({ id: productId })
-  const product = products[0]
+  const product = await getMcProductById(storeCoreService, productId, currentStoreId)
 
   if (!product) {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
@@ -36,73 +58,95 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     )
   }
 
-  const medusaVariantId = readString(product.medusa_variant_id)
-  let medusaProductId = readString(product.medusa_product_id)
-
-  if (medusaVariantId) {
-    const productModule = req.scope.resolve(Modules.PRODUCT)
-    let nativeVariant: any = null
-
-    try {
-      nativeVariant = await productModule.retrieveProductVariant(medusaVariantId, {
-        relations: ["product"]
-      })
-    } catch {
-      return sendError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "medusa_variant_id must reference an existing Medusa variant"
-      )
-    }
-
-    const nativeProduct = nativeVariant.product as Record<string, unknown> | undefined
-    const nativeProductId = readString(nativeVariant.product_id) ?? readString(nativeProduct?.id)
-
-    if (medusaProductId && nativeProductId && medusaProductId !== nativeProductId) {
-      return sendError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "medusa_product_id must match the product for medusa_variant_id"
-      )
-    }
-
-    const variantMetadata = readMetadata(nativeVariant.metadata)
-    const productMetadata = readMetadata(nativeProduct?.metadata)
-    const variantStoreId = readString(variantMetadata.store_id)
-    const productStoreId = readString(productMetadata.store_id)
-
-    if (
-      (variantStoreId && variantStoreId !== currentStoreId) ||
-      (productStoreId && productStoreId !== currentStoreId)
-    ) {
-      return sendError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "medusa_variant_id metadata.store_id must match current store"
-      )
-    }
-
-    medusaProductId = medusaProductId ?? nativeProductId
+  if (product.status === "archived") {
+    return sendError(res, 400, "VALIDATION_ERROR", "Cannot publish archived product")
   }
 
-  const [updatedProduct] = await storeCoreService.updateProducts({
+  const existingVariantId = readString(product.medusa_variant_id)
+  if (product.status === "published" && existingVariantId) {
+    return res.json({
+      product_id: product.id,
+      store_id: product.store_id,
+      status: product.status,
+      product: normalizeProduct(product),
+    })
+  }
+
+  const title = readString(product.title)
+  if (!title) {
+    return sendError(res, 400, "VALIDATION_ERROR", "title is required before publish")
+  }
+
+  let bridge
+  try {
+    bridge = await resolveNativeBridgeForPublish(
+      req.scope,
+      product as Record<string, unknown>,
+      currentStoreId
+    )
+    await ensureNativeBridgeCartable(req.scope, bridge)
+    if (resolveProductRequiresShipping(product as Record<string, unknown>)) {
+      await ensureNativeProductShippingProfile(req.scope, bridge.medusaProductId)
+    }
+  } catch (error: unknown) {
+    console.error("product cart bridge publish failed:", {
+      product_id: productId,
+      store_id: currentStoreId,
+      message: bridgeErrorMessage(error),
+      stack: bridgeErrorStack(error),
+    })
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      bridgeErrorMessage(error)
+    )
+  }
+
+  const updateData: Record<string, unknown> = {
+    medusa_product_id: bridge.medusaProductId,
+    medusa_variant_id: bridge.medusaVariantId,
+  }
+  const categoryIds = await ensureCurrentStoreS2bCategoryIds(
+    storeCoreService,
+    currentStoreId,
+    product as Record<string, unknown>
+  )
+  if (categoryIds?.length) updateData.category_ids = categoryIds
+  if (bridge.variantMappings?.length && Array.isArray(product.variants)) {
+    const mappings = new Map(
+      bridge.variantMappings.map((entry) => [entry.supplier_variant_id, entry.medusa_variant_id])
+    )
+    updateData.variants = product.variants.map((value: unknown) => {
+      if (!value || typeof value !== "object") return value
+      const row = value as Record<string, unknown>
+      const supplierVariantId = readString(row.supplier_variant_id)
+      return supplierVariantId && mappings.has(supplierVariantId)
+        ? { ...row, medusa_variant_id: mappings.get(supplierVariantId) }
+        : row
+    })
+  }
+  if (productNeedsCartBridgeBackfill(product) || product.status !== "published") {
+    updateData.status = "published"
+  }
+
+  const updated = await storeCoreService.updateProducts({
     selector: {
       id: productId,
-      store_id: currentStoreId
+      store_id: currentStoreId,
     },
-    data: {
-      status: "published",
-      medusa_product_id: medusaProductId
-    }
+    data: updateData,
   })
+
+  const updatedProduct = Array.isArray(updated) ? updated[0] : updated
+  if (!updatedProduct?.id) {
+    return sendError(res, 500, "VALIDATION_ERROR", "Failed to update product status")
+  }
 
   return res.json({
     product_id: updatedProduct.id,
     store_id: updatedProduct.store_id,
     status: updatedProduct.status,
-    product: normalizeProduct(updatedProduct)
+    product: normalizeProduct(updatedProduct),
   })
 }

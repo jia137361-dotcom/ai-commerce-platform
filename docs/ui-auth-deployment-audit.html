@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ciiverse UI/Auth/Deployment Audit</title>
+  <style>
+    :root{--bg:#f6f7f9;--surface:#fff;--line:#e5e7eb;--text:#111827;--muted:#6b7280;--primary:#ff5a14;--primary2:#e84f10;--ok:#16a34a;--warn:#f59e0b;--bad:#dc2626;--blue:#2563eb;--violet:#7c3aed;--shadow:0 1px 3px rgba(15,23,42,.08)}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}header,main{padding:24px clamp(16px,4vw,44px)}header{background:var(--surface);border-bottom:1px solid var(--line)}h1{margin:0 0 8px;font-size:clamp(26px,4vw,42px);letter-spacing:0}h2{margin:0 0 12px;font-size:20px}h3{margin:0 0 8px;font-size:15px}p{margin:0 0 10px;color:var(--muted)}code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    section{margin:0 0 22px}.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:var(--shadow)}.grid{display:grid;gap:12px}.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.two{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+    .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 8px;background:#fff;color:#374151;font-size:12px;white-space:nowrap}.dot{width:8px;height:8px;border-radius:50%;background:#9ca3af}.MATCH .dot{background:var(--ok)}.CLOSE .dot{background:#22c55e}.FUNCTION_ONLY .dot,.PARTIAL .dot{background:var(--warn)}.UI_ONLY .dot{background:var(--violet)}.MISSING .dot,.BLOCKED .dot,.INSECURE .dot{background:var(--bad)}.NEED_CONFIRMATION .dot,.RUNTIME_UNVERIFIED .dot{background:var(--blue)}
+    .filters{display:grid;grid-template-columns:2fr repeat(3,minmax(150px,1fr));gap:10px;margin-bottom:12px}input,select{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;padding:9px 10px;font:inherit}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}table{width:100%;min-width:1380px;border-collapse:collapse}th,td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left;font-size:12px}th{position:sticky;top:0;background:#f9fafb;color:#374151}tr:hover td{background:#fff7f2}.path{max-width:260px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1d4ed8}.stat strong{display:block;font-size:28px}.issue{border-left:3px solid var(--primary);padding:10px 12px;background:#fff7f2;border-radius:0 8px 8px 0;margin-bottom:10px}.small{font-size:12px;color:var(--muted)}
+    @media(max-width:760px){.filters{grid-template-columns:1fr}table{min-width:1000px}}
+  </style>
+</head>
+<body>
+  <header>
+    <p>Static audit only · no screenshots · no browser · no migrations · no real payments/OAuth/S2BDIY orders</p>
+    <h1>Ciiverse UI/Auth/Deployment Audit</h1>
+    <div id="meta"></div>
+  </header>
+  <main>
+    <section class="grid stats" id="stats"></section>
+    <section class="card">
+      <h2>Executive Summary</h2>
+      <p>The buyer implementation has broad real functionality but does not yet match the final mobile-first Part 5 design. Authentication is partial and not production-mature, especially seller token storage in localStorage. Deployment scaffolding exists, but staging/production hardening still needs domains, secret management, object storage/CDN, monitoring, rate limits, OAuth callback setup, and release gates.</p>
+    </section>
+    <section class="card">
+      <h2>Design File Index</h2>
+      <div class="table-wrap"><table><thead><tr><th>Group</th><th>Files / paths</th><th>Interpretation</th><th>Device/states</th><th>Decision</th></tr></thead><tbody id="designRows"></tbody></table></div>
+    </section>
+    <section class="card">
+      <h2>Page/Auth/Deployment Findings</h2>
+      <div class="filters">
+        <input id="q" placeholder="Search page, route, component, gap..." />
+        <select id="area"><option value="">All areas</option></select>
+        <select id="status"><option value="">All statuses</option></select>
+        <select id="priority"><option value="">All priorities</option></select>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Area</th><th>Name</th><th>Design / source</th><th>Route / env</th><th>Component / API</th><th>Status</th><th>Gaps</th><th>Priority</th><th>Acceptance</th></tr></thead><tbody id="findingRows"></tbody></table></div>
+    </section>
+    <section class="grid two">
+      <div class="card"><h2>Old HTML Corrections</h2><div id="oldFixes"></div></div>
+      <div class="card"><h2>Roadmap</h2><div id="roadmap"></div></div>
+    </section>
+    <section class="card">
+      <h2>Development Demo Cleanup</h2>
+      <div id="demoRisks"></div>
+    </section>
+  </main>
+  <script>
+    const meta={worktree:"/Users/Zhuanz/Downloads/ai-commerce-platform/.worktrees/ciiverse_0714",branch:"codex/ciiverse-0714-web-fixes",head:"6b650152b77776496b3c193af14bed5cf14b5e4b"};
+    const statuses=["MATCH","CLOSE","FUNCTION_ONLY","PARTIAL","UI_ONLY","MISSING","BLOCKED","NEED_CONFIRMATION","INSECURE","RUNTIME_UNVERIFIED"];
+    const designIndex=[
+      ["Homepage","/Users/Zhuanz/Downloads/part 5/Homepage_@ part 1/pc version/With Stores only/快照2-2-1.png; /Users/Zhuanz/Downloads/part 5/Homepage_@ part 1/mobile version/With Stores only/V2/Homepage/快照1-5-3-2.png","Buyer homepage/product grid","Desktop and mobile; default nav, bottom nav, hover targets in notes","Use Part 5 as current"],
+      ["Categories/Filter/Search","/Users/Zhuanz/Downloads/part 5/Homepage_@ part 1/mobile version/With Stores only/V2/Categories/*; Filter/*; Search/*; /Users/Zhuanz/Downloads/part 5/Search/DOC/Search.docx","Buyer discovery","Mobile; initial, selected, drawer, suggestions, result","Use Part 5 V2"],
+      ["Product detail","/Users/Zhuanz/Downloads/part 5/Product details@ part 2/*","PDP with item/size/review/detail/recommend and popups","Mobile; discount, selected, share, country, shipping, 3-dot","Primary action should be Design Now"],
+      ["Cart/Checkout/Payment","/Users/Zhuanz/Downloads/part 5/Cart/Add to cart/*; Buy now/*; Submit order/*","Cart, confirm order, payment method","Mobile; selected items, manage/delete, no address, coupon, disabled/enabled payment","Single-store conversion required"],
+      ["Login/Register","/Users/Zhuanz/Downloads/part 5/Login & register/Register by Email only/*; DOC/Login-Register.docx","Email auth and social login","Mobile; sign in, sign up, reset, remember me, social icons","Phone version marked not applicable"],
+      ["Orders/Tracking/Reviews","/Users/Zhuanz/Downloads/part 5/Orders/*; Reviews/*; Orders/Order-All.docx","Order list/detail/tracking/review","Mobile; all buckets, unpaid, shipped, delivered, refund, pending/reviewed","Use doc taxonomy"],
+      ["Account settings","/Users/Zhuanz/Downloads/part 5/Settings/Buyer/mobile_2_2_2.png; Address/*; Coupon/*; Payment methods/*; Country & region/*; Currency/*; Language/*; Account & security/*","Buyer Me/settings and account capabilities","Mobile; empty/add/edit/manage/delete/selected/security states","Part 5 is current"],
+      ["Seller IA","/Users/Zhuanz/Downloads/part 5/Settings/Seller/mobile_2_2_1.png; /Users/Zhuanz/Downloads/part 5/页面分析.xlsx","Seller dashboard information architecture","Mobile IA only; no desktop admin design","NEED_CONFIRMATION"]
+    ];
+    const findings=[
+      ["Buyer","Homepage","part 5 homepage PC/mobile","/, /store, /shops/:slug","StoreHomePage; /store/settings; /store/products","PARTIAL","Real data exists but nav, hover menus, product cards, mobile density and visual rhythm differ.","P1","Desktop/mobile first viewport and nav states match design."],
+      ["Buyer","Categories","part 5 V2 Categories","/categories","CategoriesPage; /store/product-categories","PARTIAL","Route exists; hierarchy and selected states approximate.","P1","Featured/trending/category states and empty/loading/error accepted."],
+      ["Buyer","Search","part 5 Search + Search.docx","/search","SearchPage; /store/products","PARTIAL","No complete initial/focus/suggestion UX.","P1","Initial, suggestions, results, empty states match."],
+      ["Buyer","Filter","part 5 V2 Filter","/store query/drawer","FilterDrawer; product query","PARTIAL","Missing full taxonomy: material, occasion, ship-from, full price sections.","P1","All designed filters map to API or honest unavailable state."],
+      ["Buyer","Product list","homepage grid","/store, /categories, /search","StoreProductCard/Grid","PARTIAL","Card density, badges, action icons and image handling differ.","P1","2-column mobile and dense desktop grid match."],
+      ["Buyer","Product detail","Product details@ part 2","/products/:id","ProductDetailPage; product/review/share/favorite/cart APIs","FUNCTION_ONLY","Functional but target says Design Now primary; tabs/popups/price/details not exact.","P0","Mobile PDP follows item/size/review/detail/recommend with Design Now."],
+      ["Buyer","Design Now","PDP notes and Cart/Add to cart notes","/design/:productId","DesignerPage; /store/design-sessions/*","PARTIAL","Business flow exists; entry labels and state handoff need alignment.","P0","PDP CTA leads to design flow for customizable products."],
+      ["Buyer","AI Design","Settings IA/Plans","/ai-design, /ai-studio/:productId","AiDesignPage; /store/ai/*","PARTIAL","Functional but final buyer AI studio design incomplete.","P1","Prompt/generate/fail/credit/save states accepted."],
+      ["Buyer","Cart","Cart/Add to cart","/cart","CartPage; /store/carts/*","PARTIAL","Multi-store logic remains although target is single-store; manage/select/delete visual differs.","P0","Single-store cart, selection count, manage/delete match."],
+      ["Buyer","Checkout","Cart/Submit order","/checkout","CheckoutPage; address/shipping/coupon/payment APIs","FUNCTION_ONLY","Real flow, but mobile confirm-order design differs.","P0","Address, coupon, shipping, payment disabled/enabled states accepted."],
+      ["Buyer","Payment","Cart/Buy now","/checkout","CheckoutPaymentPanel; StripePaymentForm","PARTIAL","Stripe static integration; runtime and wallet/card UX unverified.","P0","Test-mode payment works and failures are user-safe."],
+      ["Buyer","Checkout success","Order notes","/checkout/success","CheckoutSuccessPage","CLOSE","Needs final mobile success visual and View order transition polish.","P1","Transaction successful and View order flow accepted."],
+      ["Buyer","Login","Login/Register email-only","/account/sign-in","SignInPage; /auth/customer/emailpass; /auth/session","PARTIAL","Missing remember me, forgot password, Google/social buttons, exact mobile tabs.","P0","Final sign-in design and safe errors accepted."],
+      ["Buyer","Register","Login/Register email-only","/account/register","RegisterPage; /auth/customer/emailpass/register; /store/customers","PARTIAL","UI asks first/last/phone despite target email+password only.","P0","Only email/password required; verification prompt follows."],
+      ["Buyer","Email verification","Account security/auth notes","No dedicated route","/store/customers/me/email-verification; AccountSecurityContent","PARTIAL","API exists but UX/gating/resend placement incomplete.","P0","Send/resend/confirm route and checkout gating accepted."],
+      ["Buyer","Forgot password","CitigooPay-124","Missing","Missing","MISSING","No forgot/reset route or token lifecycle.","P0","Neutral request email, reset token, expiry, password update."],
+      ["Buyer","Reset password","Login doc","Missing","Missing","MISSING","Signed-in change password exists; forgot-reset missing.","P0","Expired/used token handling and session invalidation accepted."],
+      ["Buyer","Account overview","Me/Settings Buyer","/account","AccountHomePage; AccountNavigation","PARTIAL","Functional but mobile settings IA differs.","P1","Me/settings layout matches design."],
+      ["Buyer","Profile","Profile/*","/account/profile","AccountProfilePage; /store/customers/me","PARTIAL","Name/phone only; avatar/email policy incomplete.","P2","Fields/avatar/email policy accepted."],
+      ["Buyer","Orders","Orders/*; Order-All.docx","/account/orders","OrderHistoryPage; /store/customers/me/orders","PARTIAL","Buckets and visual cards differ from design taxonomy.","P1","All/unpaid/shipped/delivered/refund/reviews states accepted."],
+      ["Buyer","Order detail","Orders and 订单详情页面","/account/orders/:id","OrderDetailPage; detail/cancel/refund APIs","PARTIAL","Real data/actions, visual hierarchy partial.","P1","Action availability follows backend evidence."],
+      ["Buyer","Tracking","Orders tracking","/account/orders/:id/tracking","OrderTrackingPage; /store/orders/:id/tracking","PARTIAL","No real carrier provider; timeline partial.","P1","Waiting/shipped/delivered/no-tracking states match."],
+      ["Buyer","Reviews","Reviews/*","Order dialog/product section","OrderReviewDialog; reviews APIs","PARTIAL","Pending/reviewed full pages missing.","P2","Pending/reviewed buckets and photo review accepted."],
+      ["Buyer","Refund","Order refund docs","/account/orders/:id","refund request API/module","PARTIAL","Request exists; return/after-sales tracking missing.","P1","Refund lifecycle states accepted."],
+      ["Buyer","Coupons","Coupon/*","/account/coupons; checkout","AccountCouponsPanel; coupon APIs","PARTIAL","Wallet exists but visual drawer/runtime migration unverified.","P0","Claim, expiry, apply/clear, no duplicate redemption."],
+      ["Buyer","Messages","Messages e-commerce/social","/account/messages","StoreMessagesPage; /store/messages","PARTIAL","Simple thread only; no full chat UI.","P2","Thread list/send/unread/empty/error accepted."],
+      ["Buyer","Notifications","Notifications/*","Missing","Missing buyer notification center","MISSING","Taxonomy exists but no page.","P2","Order/product/account/support notification list/preferences."],
+      ["Buyer","Saved","Saved/*","/saved","SavedPage; /store/favorites","PARTIAL","Route/API exist; visual collection incomplete.","P2","Empty/list/remove/move-to-design accepted."],
+      ["Buyer","Addresses","Address/*","/account/addresses","AddressBook; address APIs","PARTIAL","Real CRUD, mobile manage/add/edit design differs.","P1","Empty/add/edit/delete/default match."],
+      ["Buyer","Payment methods","Payment methods/*","/account/payment-methods","AccountPaymentMethods; Stripe setup APIs","PARTIAL","Depends on Stripe env; design includes more methods visually.","P1","Configured/unconfigured/add/manage/remove states accepted."],
+      ["Buyer","Country & region","Country & region","/account/country-region","PreferenceList","PARTIAL","Preference save exists; availability enforcement partial.","P2","Country drives catalog/checkout availability."],
+      ["Buyer","Language","Language","Missing","locale utilities only","MISSING","English-only noted but route missing.","P3","English selected page or explicit defer."],
+      ["Buyer","Currency","Currency","/account/currency","display preferences","PARTIAL","Display conversion only, not payment currency.","P2","Display-only vs real currency decision clear."],
+      ["Buyer","Account security","Account & security","/account/security","AccountSecurityContent; verification/password APIs","PARTIAL","No reset, OAuth link, sessions, delete/deactivate UX.","P0","Verification/change/reset/social/delete states accepted."],
+      ["Buyer","Plans","Plans notes","/plans","PlansPage; /store/customers/me/plan","UI_ONLY","Metadata/demo-like plan, not real billing.","P2","Confirm display-only or implement billing later."],
+      ["Seller","Login","No final seller design","/login","Login.tsx; /auth/user/emailpass","FUNCTION_ONLY","Token in localStorage; no reset/OAuth/final design.","P0","Production-safe seller session and errors."],
+      ["Seller","Register","No final seller design","/register","Register.tsx; /seller/register","FUNCTION_ONLY","No verification/onboarding policy.","P0","Seller signup/publish gating accepted."],
+      ["Seller","Dashboard","Seller IA only","/","Overview.tsx; admin APIs","FUNCTION_ONLY","Engineering UI, not final visual.","P1","KPIs/alerts/orders/messages/reviews accepted."],
+      ["Seller","Products","No final seller design","/products","ProductList; store-products APIs","FUNCTION_ONLY","Functional but final UX unconfirmed.","P0","Filters/actions/publish visibility accepted."],
+      ["Seller","Product editor","PRD wireframe","/products/:id/edit","EditDraft; ProductEditorPanel","FUNCTION_ONLY","Feature-rich but visually complex; state hierarchy needs design.","P0","Save/publish/provision/variant states accepted."],
+      ["Seller","Categories","Seller IA only","/categories","CategoryManager; category APIs","FUNCTION_ONLY","No final visual.","P1","Tree create/edit/delete accepted."],
+      ["Seller","S2B Import","No final design","/products import workspace","S2bImportWorkspace; s2b-product-import APIs","PARTIAL","CSV/runtime/supplier behavior unverified; final UX missing.","P0","Export/preview/import/drafts/publish accepted."],
+      ["Seller","Orders","Buyer order design only","/orders","OrderList; admin orders APIs","PARTIAL","Mock shipment labels and final seller UX need hardening.","P0","Real/mock states separated."],
+      ["Seller","Coupons","No final seller design","/coupons","CouponsPage; store-coupons APIs","PARTIAL","Runtime depends on migration; visual primitive.","P0","Create/list/archive/eligibility accepted."],
+      ["Seller","Followers","Seller IA only","/followers","FollowersPage; /admin/store-followers","PARTIAL","No final UX.","P2","List/empty/export policy accepted."],
+      ["Seller","AI Studio","PRD wireframe","/ai-studio/create/progress/complete","AI routes/worker","PARTIAL","No final visual; direct local health probe needs cleanup.","P0","pending/running/completed/failed/retry accepted."],
+      ["Seller","Element Library","Seller IA","Missing","Missing","MISSING","IA lists it; no page.","P2","Confirm scope or defer."],
+      ["Seller","Product Selection","Seller IA","/suppliers, /suppliers/:id/catalog","SupplierCatalog/List","PARTIAL","Naming/flow differs from IA.","P1","Route naming and selection workflow accepted."],
+      ["Seller","Design Center","Seller IA","Embedded only","Product editor/design config","PARTIAL","No standalone route.","P2","Standalone vs embedded confirmed."],
+      ["Seller","Trends","Seller IA","Missing","Missing","MISSING","No implementation.","P3","Defer or design."],
+      ["Seller","Store settings","No final seller design","/settings","Settings; store-settings/upload APIs","FUNCTION_ONLY","Local static uploads not production storage.","P0","Media/policy save and storage strategy accepted."],
+      ["Seller","Account security","Seller IA","Missing","Missing dedicated page","INSECURE","No reset/session/verification/OAuth page.","P0","Dedicated seller security controls."],
+      ["Auth","Buyer session","buyer-auth-architecture","/auth/session","BuyerAuthProvider; buyer-api","PARTIAL","Good HttpOnly direction; expiry/CSRF/runtime not verified.","P0","Session cookies, expiry and CSRF posture verified."],
+      ["Auth","Seller token storage","seller-dashboard api-client","localStorage","seller_admin_token","INSECURE","Bearer token in localStorage and logout only clears client.","P0","HttpOnly session or approved hardened alternative."],
+      ["Auth","Google login","Requested design only","Proposed backend routes","Not implemented","MISSING","No OAuth code found.","P0","Separate buyer/seller callbacks and linking rules."],
+      ["Deployment","Docker/prod scripts","infra/docker-compose.prod.yml","prod compose","scripts/prod/*","PARTIAL","Good backup/migrate/health scaffold; no TLS/reverse proxy/secrets manager.","P0","Staging/prod release gate documented and tested."],
+      ["Deployment","Object storage/CDN","static uploads","local static/volumes","upload routes, ai-worker uploads","BLOCKED","Production media storage not ready.","P0","S3/R2-style storage and CDN URL policy."],
+      ["Deployment","Monitoring/rate limit","repo scan","Missing","Missing","MISSING","No central monitoring/rate limits found.","P0","Auth/AI/checkout/upload rate limits and error monitoring."],
+      ["Deployment","Stripe production","env/provider/webhook","/webhooks/stripe","Stripe provider","RUNTIME_UNVERIFIED","No real/test payment run in this audit.","P0","Staging test-mode payment and webhook smoke."],
+      ["Deployment","S2BDIY production","supplier modules/env","S2BDIY APIs","s2bdiy modules/scripts","RUNTIME_UNVERIFIED","No real supplier call/order in this audit.","P0","Read-only credentials/catalog smoke; no accidental live order."]
+    ];
+    const oldFixes=[
+      "Old HTML references an older HEAD; current audited HEAD is 6b650152.",
+      "Coupon should be PARTIAL/BLOCKED, not simply Todo/Done: UI/API/migration exist, runtime DB state unverified.",
+      "Account security should be PARTIAL: email verification and signed-in password change exist, forgot/reset/OAuth/session management do not.",
+      "Buyer login/register is not covered: final design requires Remember me, Forgot password, social login and email-only signup.",
+      "Seller dashboard cannot be visually Done because no final seller desktop design assets were found.",
+      "Stripe/S2BDIY must remain runtime-unverified because this audit did not run real or test payment/supplier calls."
+    ];
+    const roadmap=[
+      ["Phase 0","Confirm final design versions and seller design scope.","Human confirmation required."],
+      ["Phase 1","Unify design tokens and shared UI primitives.","No page polish before tokens."],
+      ["Phase 2","Implement Login/Register/Email Verification/Password Reset.","High-risk auth phase."],
+      ["Phase 3","Add Google Login through backend OAuth callbacks.","Separate buyer/seller callback routes."],
+      ["Phase 4","Align Buyer core UI: homepage, PDP, cart, checkout, orders.","Mobile-first Part 5."],
+      ["Phase 5","Align Seller core UI after design confirmation.","Quiet SaaS admin style unless new assets arrive."],
+      ["Phase 6","Complete empty/error/loading/responsive states.","Remove technical/demo messages."],
+      ["Phase 7","Staging deployment with domains, secrets, storage, Stripe test, OAuth staging.","Release gate required."],
+      ["Phase 8","Production security and deployment hardening.","Monitoring, backups, rollback, legal/data controls."]
+    ];
+    const demoRisks=[
+      ["AI mock/fallback generation","Dev fallback","High","Disable or fail closed in production."],
+      ["Mock shipment/delivery actions","Dev tool","High","Hide with server-side production guard."],
+      ["Static/mock product fallback","User-visible demo risk","High","Show real empty/error states in production."],
+      ["alert() in TranslateButton","Rough UX","Medium","Replace with toast."],
+      ["Hardcoded local AI health URL","Production risk","Medium","Use env/backend proxy."],
+      ["Frontend env setup text in payment methods","User-visible technical text","Medium","Replace with safe user copy."],
+      ["Local static uploads","Data durability risk","High","Move to object storage/CDN."]
+    ];
+    const esc=v=>String(v??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+    const pill=s=>`<span class="pill ${s}"><span class="dot"></span>${esc(s)}</span>`;
+    const pathList=s=>String(s).split(";").map(x=>`<span class="path" title="${esc(x.trim())}">${esc(x.trim())}</span>`).join("<br>");
+    function init(){
+      document.getElementById("meta").innerHTML=Object.entries(meta).map(([k,v])=>`<span class="pill"><b>${esc(k)}</b>: <span class="mono">${esc(v)}</span></span>`).join(" ");
+      const counts={}; findings.forEach(f=>counts[f[5]]=(counts[f[5]]||0)+1);
+      document.getElementById("stats").innerHTML=statuses.map(s=>`<div class="card stat ${s}"><strong>${counts[s]||0}</strong><span>${s}</span></div>`).join("");
+      document.getElementById("designRows").innerHTML=designIndex.map(r=>`<tr><td>${esc(r[0])}</td><td>${pathList(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${esc(r[4])}</td></tr>`).join("");
+      const areas=[...new Set(findings.map(f=>f[0]))].sort(); document.getElementById("area").innerHTML+=areas.map(a=>`<option>${esc(a)}</option>`).join("");
+      document.getElementById("status").innerHTML+=statuses.map(s=>`<option>${s}</option>`).join("");
+      const priorities=[...new Set(findings.map(f=>f[7]))].sort(); document.getElementById("priority").innerHTML+=priorities.map(p=>`<option>${p}</option>`).join("");
+      ["q","area","status","priority"].forEach(id=>document.getElementById(id).addEventListener("input",renderFindings)); renderFindings();
+      document.getElementById("oldFixes").innerHTML=oldFixes.map(x=>`<div class="issue">${esc(x)}</div>`).join("");
+      document.getElementById("roadmap").innerHTML=roadmap.map(r=>`<div class="issue"><h3>${esc(r[0])}: ${esc(r[1])}</h3><p>${esc(r[2])}</p></div>`).join("");
+      document.getElementById("demoRisks").innerHTML=`<div class="table-wrap"><table><thead><tr><th>Finding</th><th>Class</th><th>Risk</th><th>Recommendation</th></tr></thead><tbody>${demoRisks.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join("")}</tbody></table></div>`;
+    }
+    function renderFindings(){
+      const q=document.getElementById("q").value.toLowerCase(), area=document.getElementById("area").value, status=document.getElementById("status").value, priority=document.getElementById("priority").value;
+      const rows=findings.filter(f=>(!q||f.join(" ").toLowerCase().includes(q))&&(!area||f[0]===area)&&(!status||f[5]===status)&&(!priority||f[7]===priority));
+      document.getElementById("findingRows").innerHTML=rows.map(f=>`<tr><td>${esc(f[0])}</td><td><b>${esc(f[1])}</b></td><td>${pathList(f[2])}</td><td>${esc(f[3])}</td><td>${esc(f[4])}</td><td>${pill(f[5])}</td><td>${esc(f[6])}</td><td>${esc(f[7])}</td><td>${esc(f[8])}</td></tr>`).join("");
+    }
+    init();
+  </script>
+</body>
+</html>

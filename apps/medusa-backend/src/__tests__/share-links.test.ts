@@ -14,12 +14,12 @@ describe("buildShareLinks", () => {
     imageUrl: "https://example.com/images/tshirt.png"
   }
 
-  it("返回全部 9 个渠道", () => {
+  it("返回全部 10 个渠道", () => {
     const channels = buildShareLinks(input)
     const keys = Object.keys(channels).sort()
     expect(keys).toEqual([
       "copy_link", "email", "facebook", "instagram",
-      "pinterest", "telegram", "tiktok", "whatsapp", "x"
+      "pinterest", "telegram", "tiktok", "wechat", "whatsapp", "x"
     ])
   })
 
@@ -109,6 +109,14 @@ describe("buildShareLinks", () => {
       expect(channels.tiktok.value).toBe(input.productUrl)
       expect(channels.tiktok.message).toContain("TikTok")
       expect(channels.tiktok.message).toContain("Copy link")
+    })
+
+    it("wechat — 复制标题+链接供粘贴到微信", () => {
+      const channels = buildShareLinks(input)
+      expect(channels.wechat.type).toBe("copy_then_open")
+      expect(channels.wechat.enabled).toBe(true)
+      expect(channels.wechat.value).toBe(buildShareText(input.title, input.productUrl))
+      expect(channels.wechat.message).toContain("WeChat")
     })
   })
 

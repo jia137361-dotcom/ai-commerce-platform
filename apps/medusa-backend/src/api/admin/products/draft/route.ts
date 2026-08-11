@@ -8,6 +8,7 @@ import {
   requireText,
   sendError
 } from "../../../_helpers/store-core"
+import { normalizeShipFromCountryCode } from "../../../../lib/ship-from-country"
 
 type CreateDraftProductBody = {
   store_id?: string
@@ -37,6 +38,8 @@ type CreateDraftProductBody = {
   ai_job_id?: string | null
   prompt?: string | null
   supplier_id?: string | null
+  ship_from_country?: string | null
+  supported_region_ids?: string[]
   metadata?: Record<string, unknown>
 }
 
@@ -110,6 +113,7 @@ export const POST = async (
   let platformProduct: any = null
   let supplierProduct: any = null
   let supplierVariant: any = null
+  let supplier: any = null
 
   if (platformProductId) {
     const platformProducts = await storeCoreService.listPlatformProducts({
@@ -135,7 +139,9 @@ export const POST = async (
       status: "active"
     })
 
-    if (!suppliers.length) {
+    supplier = suppliers[0]
+
+    if (!supplier) {
       return sendError(
         res,
         400,
@@ -217,6 +223,25 @@ export const POST = async (
     supplierProductId ?? platformProduct?.supplier_product_id ?? null
   const inheritedCost =
     cost ?? supplierVariant?.cost ?? supplierProduct?.base_cost ?? platformProduct?.base_cost ?? null
+  const inheritedShipFromCountry = normalizeShipFromCountryCode(
+    body.ship_from_country ?? supplier?.ship_from_country ?? null
+  )
+
+  const existingMeta = body.metadata ?? {}
+  const supplierShipToRegions = Array.isArray(supplier?.ship_to_regions)
+    ? supplier.ship_to_regions
+    : []
+  const requestedRegionIds = Array.isArray(body.supported_region_ids)
+    ? body.supported_region_ids
+    : Array.isArray(existingMeta.supported_region_ids)
+      ? existingMeta.supported_region_ids
+      : null
+  const inheritedRegionIds =
+    requestedRegionIds ?? (supplierShipToRegions.length ? supplierShipToRegions : null)
+  const metadata = {
+    ...existingMeta,
+    ...(inheritedRegionIds ? { supported_region_ids: inheritedRegionIds } : {}),
+  }
 
   const product = await createMcProduct(storeCoreService, {
     store_id: storeId,
@@ -236,6 +261,7 @@ export const POST = async (
     supplier_color_id: supplierColorId,
     view_id: viewId,
     design_type: body.design_type ?? 1,
+    ship_from_country: inheritedShipFromCountry,
     medusa_product_id: medusaProductId,
     medusa_variant_id: medusaVariantId,
     design_image_url: body.design_image_url ?? body.image_url ?? null,
@@ -247,7 +273,7 @@ export const POST = async (
     price,
     cost: inheritedCost,
     variants: Array.isArray(body.variants) ? body.variants : null,
-    metadata: body.metadata ?? {}
+    metadata,
   })
 
   return res.status(201).json({

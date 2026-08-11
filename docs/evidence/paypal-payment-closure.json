@@ -1,0 +1,81 @@
+{
+  "provider": "pp_paypal_paypal",
+  "mode": "sandbox",
+  "cart_id": "cart_01KYXPTEFAR3BAKN5YF650B0FV",
+  "payment_collection_id": "pay_col_01KYXPTFVY5S9JSKGECS3P3DJN",
+  "payment_session_id": "payses_01KYXPTFX1HBG19PF92DBZNX74",
+  "previous_paypal_order_id": "3CN848320C473360L",
+  "previous_paypal_order_status": null,
+  "previous_paypal_order_capture_count": 0,
+  "previous_paypal_order_error": "RESOURCE_NOT_FOUND",
+  "stale_or_unavailable": true,
+  "live_status_retrievable": false,
+  "live_capture_found": false,
+  "replacement_reason": "RESOURCE_NOT_FOUND",
+  "paypal_order_id": "69907622C8410804N",
+  "paypal_capture_id": "1U0155257Y195344J",
+  "paypal_order_status": "COMPLETED",
+  "paypal_intent": "CAPTURE",
+  "paypal_amount": "44.00",
+  "paypal_currency": "USD",
+  "capture_status": "COMPLETED",
+  "captured_amount": "44.00",
+  "captured_currency": "USD",
+  "paypal_capture_count": 1,
+  "paypal_reference_id": "payses_01KYXPTFX1HBG19PF92DBZNX74",
+  "paypal_custom_id": "payses_01KYXPTFX1HBG19PF92DBZNX74",
+  "approval_link_rel": "payer-action",
+  "approval_link_source": "paypal_hateoas",
+  "approval_url_present": true,
+  "return_url_configured": true,
+  "cancel_url_configured": true,
+  "user_action": "PAY_NOW",
+  "medusa_order_id": "order_01KYYYA5T3MQMQA6YA5TP6QBDA",
+  "medusa_order_count": 1,
+  "buyer_order_visible": true,
+  "seller_order_visible": true,
+  "visibility_evidence": {
+    "buyer": "order.customer_id and order.email match the authenticated fixture buyer; store route filters by authenticated customer_id and order metadata.store_id",
+    "seller": "admin orders route scopes by order metadata.store_id; order metadata.store_id matches the fixture store"
+  },
+  "payment_provider": "pp_paypal_paypal",
+  "payment_row_id": "pay_01KYYYA9ACX6BBV1TF5AXQD4S6",
+  "payment_row_count": 1,
+  "payment_capture_count": 1,
+  "capture_row_id": "capt_01KYYYA9DCB3MYEJCXAZAA3NEG",
+  "captured_at_present": true,
+  "captured_sync_verified": true,
+  "captured_sync_evidence": {
+    "order_payment_status": "paid",
+    "order_fulfillment_status": "waiting",
+    "payment_confirmed_source": "payment_capture_detected"
+  },
+  "fulfillment_order_id": "01KYYYAA83XX7ZQE1Y6FBK9WDE",
+  "fulfillment_row_count": 1,
+  "fulfillment_status": "waiting",
+  "duplicate_complete_result": {
+    "database_order_count_after_browser_output": 1,
+    "database_capture_count_after_browser_output": 1,
+    "note": "No additional complete-cart request was sent by Codex after server-side verification."
+  },
+  "duplicate_capture_result": {
+    "paypal_capture_count": 1,
+    "medusa_capture_row_count": 1,
+    "note": "No duplicate capture request was sent by Codex."
+  },
+  "recovery_result": {
+    "browser_recovery_status": "requires_action",
+    "browser_recovery_payment_session_id": "payses_01KYXPTFX1HBG19PF92DBZNX74",
+    "browser_recovery_paypal_order_id": "69907622C8410804N",
+    "reused_existing_paypal_order": true
+  },
+  "controlled_replacement": {
+    "performed": true,
+    "request_id": "paypal-order:payses_01KYXPTFX1HBG19PF92DBZNX74:attempt:2",
+    "old_order_had_capture": false,
+    "medusa_order_existed_before_replacement": false,
+    "medusa_payment_existed_before_replacement": false
+  },
+  "closure_claimed": true,
+  "timestamp": "2026-08-01T15:15:39.982Z"
+}

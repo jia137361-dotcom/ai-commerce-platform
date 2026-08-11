@@ -101,6 +101,8 @@ Fields:
 | `prompt` | text, nullable | AI prompt or generation context. |
 | `platform_product_id` | text, nullable | Optional reference to a global platform product. |
 | `supplier_product_id` | text, nullable | Supplier product id, either provided directly or inherited from a platform product. |
+| `ship_from_country` | text, nullable | ISO-style origin country/region code (e.g. `US`, `CN`, `EU`). Inherited from supplier when not set on draft creation. |
+| `metadata.supported_region_ids` | json, nullable | Array of region IDs where this product can be sold. Inherited from supplier `ship_to_regions` when not provided. |
 | `medusa_product_id` | text, nullable | Explicit bridge to a native Medusa product. |
 | `medusa_variant_id` | text, nullable | Explicit bridge to the native Medusa variant used for cart line items. |
 | `design_image_url` | text, nullable | Design image URL. |
@@ -116,6 +118,7 @@ API-derived fields:
 
 | Field | Type | Notes |
 | --- | --- | --- |
+| `ship_from_label` | string, nullable | Friendly label derived from `ship_from_country` for buyer display. |
 | `is_cart_addable` | boolean | Computed in API responses. True only when `status` is `published` and `medusa_variant_id` is present. Not a database column. |
 
 Indexes currently include `store_id` and `store_id/status` for store-aware queries.

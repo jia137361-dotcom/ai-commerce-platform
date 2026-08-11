@@ -3,6 +3,13 @@ import { STORE_CORE_MODULE } from "../../modules/store-core"
 import StoreCoreModuleService from "../../modules/store-core/service"
 import { ErrorCodes } from "../../lib/errors"
 import { summarizeProductReviews } from "../../lib/product-reviews"
+import { resolveProductRequiresShipping } from "../../lib/product-shipping"
+import { resolveProductSupportedRegionIds } from "../../lib/product-regions"
+import {
+  getShipFromCountryLabel,
+  normalizeShipFromCountryCode,
+} from "../../lib/ship-from-country"
+import { normalizeS2bdiyEnglishProduct } from "../../modules/suppliers/s2bdiy/s2bdiy-product"
 
 export type ProductStatus = "draft" | "published" | "unpublished" | "archived"
 export type ProductSource = "manual" | "ai"
@@ -25,6 +32,20 @@ export const sendError = (
   })
 }
 
+const readStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+}
+
+const resolveProductGalleryImageUrls = (product: any): string[] => {
+  const metadata = product.metadata && typeof product.metadata === "object" ? product.metadata : {}
+  return [
+    ...readStringArray(metadata.image_urls),
+    ...readStringArray(metadata.gallery_image_urls),
+    ...readStringArray(product.image_urls),
+  ].filter((url, index, list) => list.indexOf(url) === index)
+}
+
 export const normalizeProduct = (product: any) => ({
   product_id: product.id,
   store_id: product.store_id,
@@ -44,13 +65,31 @@ export const normalizeProduct = (product: any) => ({
   supplier_color_id: product.supplier_color_id,
   view_id: product.view_id,
   design_type: product.design_type,
+  ship_from_country: normalizeShipFromCountryCode(product.ship_from_country),
+  ship_from_label: getShipFromCountryLabel(product.ship_from_country),
   medusa_product_id: product.medusa_product_id,
   medusa_variant_id: product.medusa_variant_id,
-  is_cart_addable: product.status === "published" && Boolean(product.medusa_variant_id),
+  requires_shipping: resolveProductRequiresShipping(product),
+  supported_region_ids: resolveProductSupportedRegionIds(product),
+  is_cart_addable: (() => {
+    const hasVariant = Boolean(product.medusa_variant_id)
+    if (!hasVariant) return false
+    if (product.status === "published") return true
+    const metadata = product.metadata && typeof product.metadata === "object" ? product.metadata : null
+    return (
+      metadata?.buyer_design === true ||
+      metadata?.design_source === "buyer_sdk" ||
+      (Array.isArray(product.tags) &&
+        product.tags.some(
+          (tag: unknown) => tag === "buyer-diy" || tag === "my-design" || tag === "custom-design"
+        ))
+    )
+  })(),
   design_image_url: product.design_image_url,
   mockup_image_url: product.mockup_image_url,
   print_file_url: product.print_file_url,
   image_url: product.image_url,
+  gallery_image_urls: resolveProductGalleryImageUrls(product),
   tags: product.tags ?? [],
   price: product.price,
   cost: product.cost,
@@ -109,6 +148,8 @@ export const normalizeCategory = (category: any) => ({
   description: category.description,
   parent_id: category.parent_id,
   sort_order: category.sort_order,
+  supplier_category_id: category.supplier_category_id ?? null,
+  level: category.level ?? 1,
   created_at: category.created_at,
   updated_at: category.updated_at
 })
@@ -152,6 +193,9 @@ export const normalizeSupplierProduct = (supplierProduct: any) => ({
   deliver_goods_text: supplierProduct.deliver_goods_text,
   status: supplierProduct.status,
   raw_json: supplierProduct.raw_json ?? {},
+  english: supplierProduct.supplier_id === "sup_s2bdiy"
+    ? normalizeS2bdiyEnglishProduct((supplierProduct.raw_json ?? {}) as Record<string, unknown>)
+    : null,
   created_at: supplierProduct.created_at,
   updated_at: supplierProduct.updated_at
 })
@@ -207,6 +251,25 @@ export const normalizeSupplierPrintSpec = (spec: any) => ({
   updated_at: spec.updated_at
 })
 
+export const loadSupplierProductPresentation = async (
+  storeCoreService: ReturnType<typeof getStoreCoreService>,
+  supplierProductId?: string | null,
+) => {
+  if (!supplierProductId) return null
+  const products = await storeCoreService.listSupplierProducts({ id: supplierProductId })
+  const supplierProduct = products[0]
+  if (!supplierProduct) return null
+  const [variants, printSpecs] = await Promise.all([
+    storeCoreService.listSupplierProductVariants({ supplier_product_id: supplierProduct.id }),
+    storeCoreService.listSupplierPrintSpecs({ supplier_product_id: supplierProduct.id, status: "active" }),
+  ])
+  return {
+    ...normalizeSupplierProduct(supplierProduct),
+    variants: variants.map(normalizeSupplierProductVariant),
+    print_specs: printSpecs.map(normalizeSupplierPrintSpec),
+  }
+}
+
 export const normalizePlatformDesignTemplate = (template: any) => ({
   template_id: template.id,
   platform_product_id: template.platform_product_id,
@@ -237,6 +300,50 @@ export const parseOptionalNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+/** Load one mc_product by id within a store. Prefer retrieveProduct over list filters. */
+export const getMcProductById = async (
+  storeCoreService: StoreCoreModuleService,
+  productId: string,
+  storeId: string
+) => {
+  const svc = storeCoreService as StoreCoreModuleService & {
+    retrieveProduct?: (id: string) => Promise<Record<string, unknown> | null>
+  }
+
+  if (typeof svc.retrieveProduct === "function") {
+    try {
+      const product = await svc.retrieveProduct(productId)
+      if (product && product.store_id === storeId) {
+        return product
+      }
+      if (product) {
+        return null
+      }
+    } catch {
+      // fall through to list-based lookup
+    }
+  }
+
+  const scoped = await storeCoreService.listProducts({
+    id: productId,
+    store_id: storeId,
+  })
+  if (scoped[0]) {
+    return scoped[0]
+  }
+
+  const scopedArray = await storeCoreService.listProducts({
+    id: [productId],
+    store_id: storeId,
+  })
+  if (scopedArray[0]) {
+    return scopedArray[0]
+  }
+
+  const storeProducts = await storeCoreService.listProducts({ store_id: storeId })
+  return storeProducts.find((row: { id?: string }) => row.id === productId) ?? null
+}
+
 /** MedusaService.createProducts expects an array (see phase1-dev2-bootstrap.ts). */
 export const createMcProduct = async (
   storeCoreService: StoreCoreModuleService,
@@ -249,4 +356,3 @@ export const createMcProduct = async (
   }
   return product
 }
-

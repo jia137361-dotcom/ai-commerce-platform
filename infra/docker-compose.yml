@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: medusa
       POSTGRES_DB: ai_commerce
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - ai-commerce-postgres:/var/lib/postgresql/data
 
@@ -19,6 +19,18 @@ services:
     ports:
       - "6379:6379"
 
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: ai-commerce-libretranslate
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      LT_LOAD_ONLY: en,zh,es,fr,de,ja,ko,pt,ar
+    volumes:
+      - ai-commerce-lt-models:/app/db
+
 volumes:
   ai-commerce-postgres:
+  ai-commerce-lt-models:
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
@@ -30,8 +29,41 @@ class Settings(BaseSettings):
     )
 
     fal_key: str = Field(default="", validation_alias="FAL_KEY")
+    fal_model: str = Field(default="fal-ai/flux-2-pro", validation_alias="FAL_MODEL")
+    fal_upscale_model: str = Field(default="fal-ai/esrgan", validation_alias="FAL_UPSCALE_MODEL")
     fal_timeout_seconds: float = Field(default=360.0, validation_alias="FAL_TIMEOUT_SECONDS")
     fal_upscale_scale: int = Field(default=2, validation_alias="FAL_UPSCALE_SCALE")
+
+    image_gen_provider: str = Field(default="fal", validation_alias="IMAGE_GEN_PROVIDER")
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    openai_base_url: str = Field(default="https://api.openai.com", validation_alias="OPENAI_BASE_URL")
+    openai_image_model: str = Field(default="dall-e-3", validation_alias="OPENAI_IMAGE_MODEL")
+    openai_image_size: str = Field(default="1024x1024", validation_alias="OPENAI_IMAGE_SIZE")
+    openai_timeout_seconds: float = Field(default=120.0, validation_alias="OPENAI_TIMEOUT_SECONDS")
+
+    dashscope_api_key: str = Field(default="", validation_alias="DASHSCOPE_API_KEY")
+    dashscope_base_url: str = Field(
+        default="https://dashscope.aliyuncs.com",
+        validation_alias="DASHSCOPE_BASE_URL",
+    )
+    dashscope_image_model: str = Field(
+        default="wan2.7-image-pro",
+        validation_alias="DASHSCOPE_IMAGE_MODEL",
+    )
+    dashscope_image_size: str = Field(default="2K", validation_alias="DASHSCOPE_IMAGE_SIZE")
+    dashscope_image_watermark: bool = Field(default=False, validation_alias="DASHSCOPE_IMAGE_WATERMARK")
+    dashscope_image_thinking_mode: bool = Field(
+        default=False,
+        validation_alias="DASHSCOPE_IMAGE_THINKING_MODE",
+    )
+    dashscope_timeout_seconds: float = Field(default=180.0, validation_alias="DASHSCOPE_TIMEOUT_SECONDS")
+    dashscope_chat_base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        validation_alias="DASHSCOPE_CHAT_BASE_URL",
+    )
+    dashscope_chat_model: str = Field(default="qwen-plus", validation_alias="DASHSCOPE_CHAT_MODEL")
+
+    copy_gen_provider: str = Field(default="deepseek", validation_alias="COPY_GEN_PROVIDER")
 
     deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY")
     deepseek_base_url: str = Field(
@@ -46,9 +78,17 @@ class Settings(BaseSettings):
     deepseek_max_retries: int = Field(default=2, validation_alias="DEEPSEEK_MAX_RETRIES")
 
     mock_generation: bool = Field(default=False, validation_alias="AI_WORKER_MOCK_GENERATION")
-    price_markup_multiplier: float = Field(
-        default=2.5,
-        validation_alias="AI_WORKER_PRICE_MARKUP",
+    usd_cny_rate: float = Field(
+        default=6.77,
+        validation_alias="AI_WORKER_USD_CNY_RATE",
+    )
+    price_markup_min: float = Field(
+        default=2.3,
+        validation_alias="AI_WORKER_PRICE_MARKUP_MIN",
+    )
+    price_markup_max: float = Field(
+        default=3.0,
+        validation_alias="AI_WORKER_PRICE_MARKUP_MAX",
     )
 
     model_config = SettingsConfigDict(
@@ -68,11 +108,41 @@ class Settings(BaseSettings):
             os.environ["FAL_KEY"] = self.fal_key
 
 
-@lru_cache
 def get_settings() -> Settings:
+    """Load settings from apps/medusa-backend/.env (re-read each call for dev)."""
     settings = Settings()
     settings.ensure_fal_env()
-    if not settings.mock_generation:
-        if not settings.fal_key.strip():
-            settings = settings.model_copy(update={"mock_generation": True})
+    return settings
+
+
+def resolve_image_generation_mode(settings: Settings | None = None) -> tuple[bool, str | None]:
+    """
+    Returns (use_mock, reason). reason is set when mock is forced despite AI_WORKER_MOCK_GENERATION=false.
+    """
+    cfg = settings or get_settings()
+    if cfg.mock_generation:
+        return True, "AI_WORKER_MOCK_GENERATION=true"
+
+    provider = (cfg.image_gen_provider or "fal").strip().lower()
+    if provider == "openai":
+        if not cfg.openai_api_key.strip():
+            return True, "OPENAI_API_KEY is not set"
+    elif provider == "dashscope":
+        if not cfg.dashscope_api_key.strip():
+            return True, "DASHSCOPE_API_KEY is not set"
+    elif provider == "fal":
+        if not cfg.fal_key.strip():
+            return True, "FAL_KEY is not set"
+    else:
+        return True, f"Unknown IMAGE_GEN_PROVIDER={provider!r}"
+
+    return False, None
+
+
+def get_effective_settings() -> Settings:
+    """Settings with mock_generation resolved from env + provider key availability."""
+    settings = get_settings()
+    use_mock, _reason = resolve_image_generation_mode(settings)
+    if use_mock and not settings.mock_generation:
+        return settings.model_copy(update={"mock_generation": True})
     return settings
