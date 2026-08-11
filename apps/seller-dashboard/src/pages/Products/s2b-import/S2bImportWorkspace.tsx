@@ -52,17 +52,20 @@ function ExportPanel() {
   const [categoryId, setCategoryId] = useState("")
   const [shippingFrom, setShippingFrom] = useState("")
   const [selected, setSelected] = useState<number[]>([])
+  const [page, setPage] = useState(1)
+  const [jumpPage, setJumpPage] = useState("1")
+  const perPage = 24
 
   const params = new URLSearchParams({
     supplier_id: "sup_s2bdiy",
-    page: "1",
-    per_page: "24",
+    page: String(page),
+    per_page: String(perPage),
   })
   if (search) params.set("keyword", search)
   if (categoryId) params.set("category_id", categoryId)
 
   const catalog = useQuery({
-    queryKey: ["s2b-export-catalog", search, categoryId],
+    queryKey: ["s2b-export-catalog", search, categoryId, page, perPage],
     queryFn: () => fetchS2bCatalog(params),
   })
 
@@ -101,6 +104,19 @@ function ExportPanel() {
     () => flattenS2bCategories(categoryQuery.data?.categories ?? []),
     [categoryQuery.data?.categories]
   )
+  const catalogTotal = catalog.data?.total ?? 0
+  const pageSize = catalog.data?.per_page ?? catalog.data?.data?.length ?? 0
+  const currentPage = catalog.data?.page ?? 1
+  const lastPage = catalog.data?.last_page ?? 1
+  const pageStart = catalogTotal && pageSize ? (currentPage - 1) * pageSize + 1 : 0
+  const pageEnd = catalogTotal && pageSize
+    ? Math.min(pageStart + (catalog.data?.data?.length ?? 0) - 1, catalogTotal)
+    : 0
+  const visibleSkuCount = visibleItems.reduce(
+    (sum, item) => sum + (detailQueries.data?.get(item.id)?.items?.length ?? 0),
+    0
+  )
+  const hasShippingFromFilter = Boolean(shippingFrom.trim())
 
   const exportMutation = useMutation({
     mutationFn: exportS2bCsv,
@@ -123,6 +139,12 @@ function ExportPanel() {
     setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   }
   const allVisibleSelected = visibleItems.length > 0 && visibleItems.every((item) => selected.includes(item.id))
+  const goToPage = (nextPage: number) => {
+    const clamped = Math.min(Math.max(nextPage, 1), Math.max(lastPage, 1))
+    setPage(clamped)
+    setJumpPage(String(clamped))
+    setSelected([])
+  }
 
   return (
     <Card className="p-4">
@@ -131,11 +153,13 @@ function ExportPanel() {
         onSubmit={(event) => {
           event.preventDefault()
           setSearch(keyword.trim())
+          setPage(1)
+          setJumpPage("1")
           setSelected([])
         }}
       >
         <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
-        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+        <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setPage(1); setJumpPage("1"); setSelected([]) }}>
           <option value="">All S2B categories</option>
           {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
         </select>
@@ -144,7 +168,14 @@ function ExportPanel() {
       </form>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
-        <span>{visibleItems.length} products · {visibleItems.reduce((sum, item) => sum + (detailQueries.data?.get(item.id)?.items?.length ?? 0), 0)} SKUs</span>
+        <span>
+          {catalogTotal
+            ? `${catalogTotal} filtered products · showing ${pageStart}-${pageEnd}`
+            : `${visibleItems.length} products`}
+          {hasShippingFromFilter ? ` · ${visibleItems.length} visible after shipping filter` : ""}
+          {" · "}
+          {visibleSkuCount} visible SKUs
+        </span>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setSelected(allVisibleSelected ? [] : visibleItems.map((item) => item.id))}>
             {allVisibleSelected ? "Clear visible" : "Select visible"}
@@ -158,7 +189,9 @@ function ExportPanel() {
             disabled={exportAllMutation.isPending}
             onClick={() => exportAllMutation.mutate()}
           >
-            {exportAllMutation.isPending ? "Exporting all..." : "Export all filtered"}
+            {exportAllMutation.isPending
+              ? "Exporting all..."
+              : `Export all filtered${catalogTotal ? ` (${catalogTotal})` : ""}`}
           </Button>
         </div>
       </div>
@@ -167,45 +200,93 @@ function ExportPanel() {
       {catalog.isError ? <EmptyState title="Could not load S2B catalog" description={catalog.error instanceof Error ? catalog.error.message : "Supplier API unavailable"} /> : null}
       {!catalog.isLoading && !visibleItems.length ? <EmptyState title="No S2B products found" description="Try another keyword or category." /> : null}
       {visibleItems.length ? (
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Pick</th>
-                <th className="px-3 py-2">Product</th>
-                <th className="px-3 py-2">Category</th>
-                <th className="px-3 py-2">SKU count</th>
-                <th className="px-3 py-2">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleItems.map((item: S2bCatalogItem) => {
-                const detail = detailQueries.data?.get(item.id)
-                return (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2"><input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} /></td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        {item.view_image_src || item.blank_design_image ? <img src={item.view_image_src || item.blank_design_image} alt="" className="h-10 w-10 rounded object-cover" /> : null}
-                        <div><strong>{item.en_name || item.name || item.id}</strong><p className="text-xs text-slate-500">S2B #{item.id}</p></div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div>{(item.categorys ?? []).map((category) => category.en_name || category.name).filter(Boolean).join(", ") || "—"}</div>
-                      {item.synced_product ? (
-                        <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                          {item.synced_product.status}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2">{detail?.items?.length ?? "…"}</td>
-                    <td className="px-3 py-2">{item.purchase_price ?? "—"}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="overflow-hidden rounded-lg border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Pick</th>
+                  <th className="px-3 py-2">Product</th>
+                  <th className="px-3 py-2">Category</th>
+                  <th className="px-3 py-2">SKU count</th>
+                  <th className="px-3 py-2">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleItems.map((item: S2bCatalogItem) => {
+                  const detail = detailQueries.data?.get(item.id)
+                  return (
+                    <tr key={item.id} className="border-t border-slate-100">
+                      <td className="px-3 py-2"><input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} /></td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {item.view_image_src || item.blank_design_image ? <img src={item.view_image_src || item.blank_design_image} alt="" className="h-10 w-10 rounded object-cover" /> : null}
+                          <div><strong>{item.en_name || item.name || item.id}</strong><p className="text-xs text-slate-500">S2B #{item.id}</p></div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div>{(item.categorys ?? []).map((category) => category.en_name || category.name).filter(Boolean).join(", ") || "—"}</div>
+                        {item.synced_product ? (
+                          <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                            {item.synced_product.status}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2">{detail?.items?.length ?? "…"}</td>
+                      <td className="px-3 py-2">{item.purchase_price ?? "—"}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+            <span>Page {currentPage} of {lastPage}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={catalog.isFetching || currentPage <= 1}
+                onClick={() => goToPage(currentPage - 1)}
+              >
+                Prev
+              </Button>
+              <form
+                className="flex items-center gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const nextPage = Number(jumpPage)
+                  if (Number.isFinite(nextPage)) goToPage(Math.floor(nextPage))
+                }}
+              >
+                <input
+                  className="h-8 w-20 rounded-lg border border-slate-200 px-2 text-sm"
+                  min={1}
+                  max={lastPage}
+                  type="number"
+                  value={jumpPage}
+                  onChange={(event) => setJumpPage(event.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={catalog.isFetching || !Number.isFinite(Number(jumpPage))}
+                  type="submit"
+                >
+                  Go
+                </Button>
+              </form>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={catalog.isFetching || currentPage >= lastPage}
+                onClick={() => goToPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </>
       ) : null}
     </Card>
   )
