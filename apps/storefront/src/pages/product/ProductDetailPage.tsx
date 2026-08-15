@@ -36,6 +36,7 @@ import type { StoreCart, StoreProduct } from "../../lib/mock-data"
 import { addProductSelectionToCart } from "./product-cart-action"
 import { isReservedCheckoutCartId } from "../../lib/buyer-checkout-reservations"
 import { resolveProductPurchaseState, resolveSelectedProductVariant } from "./product-detail-state"
+import { buildBuyNowHref } from "./product-buy-now"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { buildProductSignInHref } from "./product-auth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
@@ -202,6 +203,8 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
     return [
       selectedImage,
       ...(product.galleryImageUrls ?? []),
+      ...(product.supplierDetails?.images ?? []),
+      ...(product.supplierDetails?.blankDesignImages ?? []),
       product.mockupImageUrl,
       product.imageUrl,
       product.designImageUrl,
@@ -211,16 +214,16 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
   const purchaseState = product
     ? resolveProductPurchaseState(product, selectedVariant)
     : { canAdd: false, availabilityLabel: "Unavailable", availabilityTone: "neutral" as const }
-  const designHref = product?.id ? buildStudioEditorHref(product.id) : undefined
+  const designHref = product?.id && product.hasDesigner ? buildStudioEditorHref(product.id) : undefined
   const showSizeGuide = product ? shouldShowProductSizeGuide(product) : false
   const storeHref = buildProductStoreHref(product, settings)
 
-  const addToCart = async () => {
-    if (!product || !selectedVariant?.id || !purchaseState.canAdd || adding) return
+  const addToCart = async (): Promise<boolean> => {
+    if (!product || !selectedVariant?.id || !purchaseState.canAdd || adding) return false
     if (!auth.customer) {
       const returnTo = `${window.location.pathname}${window.location.search}`
       window.location.assign(buildProductSignInHref(returnTo))
-      return
+      return false
     }
     setAdding(true)
     setAddNotice(undefined)
@@ -250,13 +253,23 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       })
       onCartUpdated(updated)
       setAddNotice({ tone: "success", message: "Added to cart." })
+      return true
     } catch (error) {
       setAddNotice({
         tone: "error",
         message: error instanceof Error ? error.message : "Unable to add this product to cart.",
       })
+      return false
     } finally {
       setAdding(false)
+    }
+  }
+
+  const buyNow = async () => {
+    const added = await addToCart()
+    if (added && product && selectedVariant?.id && purchaseState.canAdd && auth.customer) {
+      const cartStoreId = product.storeId ?? storeFromQuery ?? settings.storeId
+      window.location.assign(buildBuyNowHref(cartStoreId))
     }
   }
 
@@ -286,6 +299,8 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       contentClassName="buyer-product-shell-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} storeHref={storeHref} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
         <a href={storeHref}>Store</a>
@@ -294,11 +309,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
       </nav>
       {notices.length ? (
         <aside className="buyer-product-api-notices" role="status">
-          {notices.map((notice) => (
-            <p key={`${notice.label}-${notice.message}`}>
-              {notice.label} fallback: {notice.message}
-            </p>
-          ))}
+          <p>Some product information is temporarily unavailable.</p>
         </aside>
       ) : null}
 
@@ -334,6 +345,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
               requiresSignIn={!auth.isLoading && !auth.customer}
               addNotice={addNotice}
               onAddToCart={() => void addToCart()}
+              onBuyNow={() => void buyNow()}
               share={share}
               isFavorited={isFavorited}
               onToggleFavorite={() => void toggleFavorite()}

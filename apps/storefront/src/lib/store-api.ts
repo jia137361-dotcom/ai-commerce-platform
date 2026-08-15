@@ -113,24 +113,35 @@ export const storefrontConfig = {
 
 export const cartStorageKey = `citigoo:${storefrontConfig.storeId || "default_store"}:cart_id`
 
-const money = (value: number | string | null | undefined) => {
+/**
+ * Format a dollar amount for display.
+ * Returns "$48.00" as fallback for invalid values (legacy behavior preserved).
+ */
+const money = (value: number | string | null | undefined): string => {
   if (typeof value === "string" && value.trim().startsWith("$")) return value
   const numeric = typeof value === "number" ? value : Number(value)
   if (!Number.isFinite(numeric)) return "$48.00"
-  const amount = numeric > 999 ? numeric / 100 : numeric
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount)
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(numeric)
 }
 
-export const formatMoney = (value: number | undefined, currency = "USD") => {
-  const amount = Number.isFinite(value) ? (value as number) : 0
-  const normalized = amount > 999 ? amount / 100 : amount
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(normalized)
+/**
+ * Format a dollar amount for display.
+ * Returns "Price unavailable" for null/undefined/NaN instead of "$0.00".
+ */
+export const formatMoney = (value: number | undefined | null, currency = "USD"): string => {
+  if (value == null || !Number.isFinite(value)) return "Price unavailable"
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value)
 }
 
-const readNumber = (value: number | string | null | undefined) => {
-  if (typeof value === "number" && Number.isFinite(value)) return value > 999 ? value / 100 : value
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? (numeric > 999 ? numeric / 100 : numeric) : undefined
+/**
+ * Read a dollar amount from API response.
+ * No heuristic conversion — mc_product.price is stored as dollars.
+ * Returns undefined for null/undefined/NaN.
+ */
+const readNumber = (value: number | string | null | undefined): number | undefined => {
+  if (value == null || value === "") return undefined
+  const numeric = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(numeric) ? numeric : undefined
 }
 
 const firstVariantPrice = (product: MedusaProduct) =>

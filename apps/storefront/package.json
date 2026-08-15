@@ -15,9 +15,14 @@
     "@stripe/react-stripe-js": "^6.6.0",
     "@stripe/stripe-js": "^9.8.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "fabric": "^6.6.2",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.9.3",
     "vite": "^5.4.21"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6"
   }
 }

@@ -20,10 +20,11 @@ export type ShareChannelKey =
   | "instagram"
   | "pinterest"
 
+/** Compact product/store share row — no WeChat; Twitter/X + Facebook first. */
 export const PRIMARY_SHARE_CHANNELS: ShareChannelKey[] = [
-  "wechat",
-  "whatsapp",
   "x",
+  "facebook",
+  "whatsapp",
   "tiktok",
   "copy_link",
 ]
@@ -31,7 +32,7 @@ export const PRIMARY_SHARE_CHANNELS: ShareChannelKey[] = [
 export const SHARE_CHANNEL_LABELS: Record<ShareChannelKey, string> = {
   wechat: "WeChat",
   whatsapp: "WhatsApp",
-  x: "X",
+  x: "Twitter",
   tiktok: "TikTok",
   copy_link: "Copy link",
   facebook: "Facebook",

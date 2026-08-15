@@ -107,6 +107,21 @@
   border-top: 1px solid var(--buyer-border);
 }
 
+@media (max-width: 980px) {
+  .buyer-info-page,
+  .buyer-info-card,
+  .buyer-info-body,
+  .buyer-info-sections,
+  .buyer-info-section {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .buyer-info-section-body {
+    overflow-wrap: anywhere;
+  }
+}
+
 @media (max-width: 640px) {
   .buyer-info-card {
     padding: var(--buyer-space-4);
@@ -118,5 +133,11 @@
 
   .buyer-info-actions {
     flex-direction: column;
+  }
+
+  .buyer-info-actions .buyer-ui-button,
+  .buyer-info-actions a {
+    width: 100%;
+    box-sizing: border-box;
   }
 }

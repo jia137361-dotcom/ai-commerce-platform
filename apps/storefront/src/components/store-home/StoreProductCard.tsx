@@ -1,4 +1,5 @@
 import type { StoreProduct } from "../../lib/mock-data"
+import { getShipFromFlagUrl } from "../../lib/ship-from-flag"
 
 type StoreProductCardProps = {
   product: StoreProduct
@@ -7,11 +8,22 @@ type StoreProductCardProps = {
 export function StoreProductCard({ product }: StoreProductCardProps) {
   const canAdd = Boolean(product.isCartAddable && product.medusaVariantId)
   const rating = product.averageRating ? product.averageRating.toFixed(1) : null
+  const flagUrl = getShipFromFlagUrl(product.shipFromCountry)
+  const shipFromLabel = product.shipFromLabel?.trim() || null
 
   return (
     <article className="buyer-product-card">
       <a className="buyer-product-image" href={`/products/${encodeURIComponent(product.id)}`}>
         <img src={product.imageUrl} alt={product.title} />
+        {flagUrl ? (
+          <img
+            className="buyer-shop-product-ship-flag"
+            src={flagUrl}
+            alt={shipFromLabel ? `Ships from ${shipFromLabel}` : "Ship-from country"}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : null}
         {product.badge && <span className="buyer-product-badge">{product.badge}</span>}
         {!canAdd && <span className="buyer-product-unavailable">Unavailable</span>}
       </a>

@@ -5,6 +5,7 @@ import { StoreFooter } from "../../components/layout/StoreFooter"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import {
   fetchBuyerAiJob,
   fetchBuyerAiMaterials,
@@ -69,6 +70,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
   const customerId = auth.customer?.id ?? null
   const materialGuestKey = () => getBuyerDesignGuestKey()
   const { settings } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams()
   const productId = (productIdFromPath || search.get("productId") || "").trim()
   const returnTo = (search.get("returnTo") || "").trim()
@@ -129,7 +131,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
     if (job?.editorPath) return job.editorPath
     if (productId && job?.materialId) return buildStudioEditorHref(productId, job.materialId)
     if (productId) return buildStudioEditorHref(productId)
-    return "/studio"
+    return "/trends"
   }, [job, productId])
 
   const pollJob = (jobId: string) => {
@@ -214,7 +216,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
           prompt: material.prompt,
         })
       }
-      navigateBuyer("/studio")
+      navigateBuyer("/trends")
       return
     }
     setError("This material is not ready for Studio yet.")
@@ -240,7 +242,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
         prompt,
       })
     }
-    navigateBuyer("/studio")
+    navigateBuyer("/trends")
   }
 
   return (
@@ -249,6 +251,8 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
       contentClassName="buyer-ai-studio-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-ai-studio-container">
         <div className="buyer-ai-studio-header">
@@ -268,7 +272,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
           )}
           {returnTo || productId ? (
             <p>
-              <a href={returnTo || (productId ? buildStudioEditorHref(productId) : "/studio")}>
+              <a href={returnTo || (productId ? buildStudioEditorHref(productId) : "/trends")}>
                 {t("aiDesignBackToStudio")}
               </a>
             </p>
@@ -350,6 +354,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
           </div>
 
           <div className="buyer-ai-studio-sidebar">
+            <div id="ai-materials">
             <Card className="buyer-ai-studio-info-card">
               <h3>{t("aiDesignLibraryTitle")}</h3>
               {libraryLoading ? <p>{t("catalogLoading")}</p> : null}
@@ -379,6 +384,7 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
                 </ul>
               )}
             </Card>
+            </div>
 
             <Card className="buyer-ai-studio-tips-card">
               <h3>Tips</h3>
@@ -389,8 +395,8 @@ export function AiDesignPage({ cartCount, productIdFromPath }: AiDesignPageProps
               </ul>
             </Card>
 
-            <a href="/studio" className="buyer-ai-studio-back-link">
-              ← {t("navStudio")}
+            <a href="/trends" className="buyer-ai-studio-back-link">
+              ← Product selection
             </a>
           </div>
         </div>

@@ -44,6 +44,25 @@ describe("PayPal sandbox payment provider", () => {
     expect(normalizePayPalOrderStatus("COMPLETED", null)).toBe("payment_processing")
   })
 
+  it("treats PAYER_ACTION_REQUIRED as awaiting buyer action, not a hard failure", () => {
+    expect(normalizePayPalOrderStatus("PAYER_ACTION_REQUIRED", null)).toBe("awaiting_payment")
+    expect(normalizePayPalOrderStatus("DENIED", null)).toBe("payment_failed")
+  })
+
+  it("keeps PAYER_ACTION_REQUIRED sessions processable for cart complete", async () => {
+    const { provider, client } = createProvider()
+    client.createOrder.mockResolvedValue({ id: "PAYPAL_ORDER_ACTION", status: "PAYER_ACTION_REQUIRED" })
+
+    const result = await provider.initiatePayment({
+      amount: 677,
+      currency_code: "usd",
+      context: { idempotency_key: "attempt_action_required" },
+    })
+
+    expect(result.status).toBe(PaymentSessionStatus.PENDING)
+    expect(result.status).not.toBe(PaymentSessionStatus.ERROR)
+  })
+
   it("creates one PayPal order and reuses an existing provider order", async () => {
     const { provider, client } = createProvider()
     client.createOrder.mockResolvedValue({ id: "PAYPAL_ORDER_1", status: "CREATED" })

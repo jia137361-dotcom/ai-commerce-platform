@@ -21,6 +21,7 @@ import {
 import { readString } from "../product-cart-bridge"
 import { createMcProduct } from "../../api/_helpers/store-core"
 import { resolveBuyerDesignPriceFromS2b } from "./resolve-buyer-design-price"
+import { resolveBuyerDesignShipFromCountry } from "../buyer-design-ship-from"
 
 const DEFAULT_BUYER_DESIGN_PRICE = 29.99
 
@@ -259,12 +260,32 @@ export async function completeBuyerDesignSession(
 
   const preferredSupplierVariantId = `${s2bProductId}_${preferred.sizeId}_${preferred.colorId}`
 
-  const mcProduct = await createMcProduct(storeCoreService, {
+  const inheritedShipFrom = await resolveBuyerDesignShipFromCountry(storeCoreService, {
+    storeId,
+    blankProductId,
+    basicProductId,
+  })
+
+  const designMetadata = {
+    s2b_product_id: s2bProductId,
+    design_source: "buyer_sdk",
+    buyer_design: true,
+    s2b_sdk_saved: true,
+    save_as: saveAs,
+    customer_id: customerId,
+    guest_key: guestKey,
+    blank_product_id: blankProductId,
+    size_name: preferred.sizeName,
+    color_name: preferred.colorName,
+    s2b_purchase_price_cny: s2bCost?.purchasePriceCny ?? null,
+    price_source: s2bCost ? "s2b_basic_product" : "fallback",
+  }
+  const productData = {
     store_id: storeId,
     title: productName,
     description: "Custom design created in Studio",
-    status: "draft",
-    source: "manual",
+    status: "draft" as const,
+    source: "manual" as const,
     basic_product_id: basicProductId,
     supplier_id: "sup_s2bdiy",
     supplier_product_id: s2bProductId,
@@ -275,24 +296,46 @@ export async function completeBuyerDesignSession(
     image_url: mockupUrl ?? undefined,
     price,
     cost: costCny,
+    ship_from_country: inheritedShipFrom,
     tags: ["custom-design", "buyer-diy", "my-design"],
     variants: variantRows,
     category_ids: [],
-    metadata: {
-      s2b_product_id: s2bProductId,
-      design_source: "buyer_sdk",
-      buyer_design: true,
-      s2b_sdk_saved: true,
-      save_as: saveAs,
-      customer_id: customerId,
-      guest_key: guestKey,
-      blank_product_id: blankProductId,
-      size_name: preferred.sizeName,
-      color_name: preferred.colorName,
-      s2b_purchase_price_cny: s2bCost?.purchasePriceCny ?? null,
-      price_source: s2bCost ? "s2b_basic_product" : "fallback",
-    },
+    metadata: designMetadata,
+  }
+
+  // A previous bridge attempt may have persisted mc_product before Medusa's
+  // native product/price links completed. Resume that row instead of creating
+  // a duplicate and permanently excluding the S2B design from claim polling.
+  const existingDesigns = await storeCoreService.listProducts({
+    store_id: storeId,
+    supplier_id: "sup_s2bdiy",
+    supplier_product_id: s2bProductId,
   })
+  const reusableDesign = (Array.isArray(existingDesigns) ? existingDesigns : []).find(
+    (row: { metadata?: Record<string, unknown> }) => {
+      const metadata = row.metadata ?? {}
+      const sameCustomer =
+        Boolean(customerId) && readString(metadata.customer_id) === customerId
+      const sameGuest = Boolean(guestKey) && readString(metadata.guest_key) === guestKey
+      return metadata.buyer_design === true && (sameCustomer || sameGuest)
+    }
+  )
+  let mcProduct: Record<string, any>
+  if (reusableDesign) {
+    const updated = await storeCoreService.updateProducts({
+      selector: { id: reusableDesign.id, store_id: storeId },
+      data: {
+        ...productData,
+        metadata: {
+          ...(reusableDesign.metadata ?? {}),
+          ...designMetadata,
+        },
+      },
+    } as never)
+    mcProduct = (Array.isArray(updated) ? updated[0] : updated) as Record<string, any>
+  } else {
+    mcProduct = (await createMcProduct(storeCoreService, productData)) as Record<string, any>
+  }
 
   const bridge = await resolveNativeBridgeForPublish(
     container,
@@ -316,6 +359,7 @@ export async function completeBuyerDesignSession(
     status: finalStatus,
     medusa_product_id: bridge.medusaProductId,
     medusa_variant_id: mappings.get(preferredSupplierVariantId) ?? bridge.medusaVariantId,
+    ...(inheritedShipFrom ? { ship_from_country: inheritedShipFrom } : {}),
     metadata: {
       ...((mcProduct as { metadata?: Record<string, unknown> }).metadata ?? {}),
       s2b_product_id: s2bProductId,

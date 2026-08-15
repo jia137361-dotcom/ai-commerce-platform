@@ -42,6 +42,7 @@ export function PlatformCheckoutPage({ cartCount }: PlatformCheckoutPageProps) {
         contentClassName="buyer-checkout-shell-content"
         header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode />}
         footer={<StoreFooter />}
+        cartCount={cartCount}
       >
         <ErrorState
           title="No platform checkout session"
@@ -65,6 +66,7 @@ export function PlatformCheckoutPage({ cartCount }: PlatformCheckoutPageProps) {
       contentClassName="buyer-checkout-shell-content"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
     >
       <header className="buyer-checkout-page-header">
         <div>

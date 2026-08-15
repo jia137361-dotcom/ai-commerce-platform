@@ -29,7 +29,7 @@ const readImageUrls = (metadata: Record<string, unknown>) =>
 const productImageUploadDir = (cwd: string = process.cwd()) => `${cwd}/static/product-images`
 
 const productImagePublicUrl = (fileName: string, baseUrl?: string) =>
-  `${(baseUrl ?? "http://127.0.0.1:9000").replace(/\/+$/, "")}/static/product-images/${fileName}`
+  `${(baseUrl ?? "http://127.0.0.1:9001").replace(/\/+$/, "")}/static/product-images/${fileName}`
 
 export const POST = async (
   req: MedusaRequest<ProductImageUploadBody>,

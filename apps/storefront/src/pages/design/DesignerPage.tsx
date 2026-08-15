@@ -548,13 +548,15 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
       contentClassName="designer-content"
       header={fullscreen ? null : <StoreTopBar settings={settings} cartCount={cartCount} />}
       footer={fullscreen ? null : <StoreFooter />}
+      cartCount={cartCount}
+      showMobileBottomNav={false}
     >
       {!fullscreen ? (
         <>
           <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
             <a href="/store">Store</a>
             <span>/</span>
-            <a href="/studio">{t("navStudio")}</a>
+            <a href="/trends">Product selection</a>
             <span>/</span>
             <span>Editor</span>
           </nav>

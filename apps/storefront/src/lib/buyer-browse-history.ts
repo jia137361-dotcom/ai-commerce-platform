@@ -1,5 +1,5 @@
 const HISTORY_KEY = "citigoo:buyer-browse-history"
-const MAX_HISTORY = 8
+const MAX_HISTORY = 24
 
 export type BrowseHistoryItem = {
   id: string

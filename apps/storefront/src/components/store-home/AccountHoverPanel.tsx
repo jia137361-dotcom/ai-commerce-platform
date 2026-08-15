@@ -1,4 +1,5 @@
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { buildStoreMessagesHref } from "../../lib/storefront-links"
 
 type AccountHoverPanelProps = {
   onClose?: () => void
@@ -7,6 +8,7 @@ type AccountHoverPanelProps = {
 export function AccountHoverPanel({ onClose }: AccountHoverPanelProps) {
   const auth = useBuyerAuth()
   const signInHref = "/account/sign-in"
+  const messagesHref = buildStoreMessagesHref()
   const handleSignOut = (redirectTo: string) => {
     onClose?.()
     void auth.signOut().then(() => window.location.assign(redirectTo))
@@ -24,6 +26,12 @@ export function AccountHoverPanel({ onClose }: AccountHoverPanelProps) {
             <a href="/account" onClick={onClose}>
               Account overview
             </a>
+            <a href="/account/orders" onClick={onClose}>
+              Orders
+            </a>
+            <a href="/my-designs" onClick={onClose}>
+              My Designs
+            </a>
             <a href="/account/profile" onClick={onClose}>
               Profile
             </a>
@@ -33,10 +41,13 @@ export function AccountHoverPanel({ onClose }: AccountHoverPanelProps) {
             <a href="/account/security" onClick={onClose}>
               Account security
             </a>
+            <a href={messagesHref} onClick={onClose}>
+              Notifications
+            </a>
             <button type="button" onClick={() => handleSignOut("/account/sign-in")}>
               Switch account
             </button>
-            <button type="button" onClick={() => handleSignOut("/store")}>
+            <button type="button" className="buyer-account-panel-signout" onClick={() => handleSignOut("/store")}>
               Log out
             </button>
           </>

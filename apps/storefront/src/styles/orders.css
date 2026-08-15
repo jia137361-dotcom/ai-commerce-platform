@@ -948,57 +948,6 @@
   font-weight: 900;
 }
 
-@media (max-width: 760px) {
-  .buyer-orders-main {
-    width: min(100% - 28px, 1180px);
-    padding-top: 28px;
-  }
-
-  .buyer-order-lookup-main {
-    padding-top: 32px;
-  }
-
-  .buyer-order-lookup-card,
-  .buyer-order-shipment,
-  .buyer-order-supplier-progress,
-  .buyer-order-timeline,
-  .buyer-order-empty,
-  .buyer-order-actions,
-  .buyer-order-tracking-header {
-    padding: 22px;
-  }
-
-  .buyer-order-tracking-header,
-  .buyer-order-detail-header,
-  .buyer-order-tracking-grid,
-  .buyer-order-detail-grid,
-  .buyer-order-detail-item,
-  .buyer-order-data-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .buyer-order-supplier-progress > header {
-    flex-direction: column;
-  }
-
-  .buyer-order-detail-price {
-    justify-items: start;
-  }
-
-  .buyer-order-lookup-card h1,
-  .buyer-order-empty h1,
-  .buyer-order-tracking-header h1 {
-    font-size: 26px;
-  }
-
-  .buyer-order-history-header {
-    display: grid;
-  }
-
-  .buyer-order-history-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 .buyer-order-tracking-aside { display: grid; align-content: start; gap: 20px; }
 .buyer-order-package-item { display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: center; padding: 16px 0; border-top: 1px solid #e7eaf0; }
 .buyer-order-package-item img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; }
@@ -1665,6 +1614,69 @@
 }
 
 @media (max-width: 980px) {
+  .buyer-orders-main {
+    width: min(100% - 28px, 1180px);
+    padding-top: 28px;
+    min-width: 0;
+  }
+
+  .buyer-order-lookup-main {
+    padding-top: 32px;
+  }
+
+  .buyer-order-lookup-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .buyer-order-tracking-header,
+  .buyer-order-detail-header,
+  .buyer-order-tracking-grid,
+  .buyer-order-detail-grid,
+  .buyer-order-detail-item,
+  .buyer-order-data-grid,
+  .buyer-order-package-item,
+  .buyer-order-history-status,
+  .buyer-order-history-preview-item,
+  .buyer-order-data-grid--temu div {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-order-supplier-progress > header,
+  .buyer-order-history-header,
+  .buyer-order-history-card > header,
+  .buyer-order-history-card > footer {
+    flex-direction: column;
+  }
+
+  .buyer-order-history-header {
+    display: grid;
+  }
+
+  .buyer-order-detail-price {
+    justify-items: start;
+  }
+
+  .buyer-order-timeline,
+  .buyer-order-timeline-list,
+  .buyer-order-refund-timeline,
+  .buyer-order-history-status,
+  .buyer-order-data-grid,
+  .buyer-order-shipment,
+  .buyer-order-supplier-progress {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .buyer-order-history-tabs:not(.buyer-order-history-tabs--grid) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .buyer-order-history-mobile-chrome {
     display: block;
   }
@@ -1674,8 +1686,80 @@
     display: none !important;
   }
 
+  .buyer-order-detail-sticky-bar {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
   .buyer-orders-page--temu .buyer-order-history-main {
     width: min(100% - 24px, 720px);
     padding-top: 8px;
+  }
+
+  .buyer-order-confirm-sheet-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .buyer-orders-main {
+    width: min(100% - 20px, 1180px);
+    padding-top: 20px;
+  }
+
+  .buyer-order-lookup-card,
+  .buyer-order-shipment,
+  .buyer-order-supplier-progress,
+  .buyer-order-timeline,
+  .buyer-order-empty,
+  .buyer-order-actions,
+  .buyer-order-tracking-header,
+  .buyer-order-detail-header,
+  .buyer-order-detail-section {
+    padding: 18px;
+  }
+
+  .buyer-order-lookup-card h1,
+  .buyer-order-empty h1,
+  .buyer-order-tracking-header h1,
+  .buyer-order-history-header h1 {
+    font-size: 26px;
+  }
+
+  .buyer-order-lookup-form,
+  .buyer-order-lookup-form button,
+  .buyer-order-field,
+  .buyer-order-field input,
+  .buyer-order-field select,
+  .buyer-order-field textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .buyer-order-lookup-form button,
+  .buyer-order-actions a,
+  .buyer-order-actions button,
+  .buyer-order-empty a {
+    width: 100%;
+  }
+
+  .buyer-order-history-tabs:not(.buyer-order-history-tabs--grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .buyer-order-modal footer {
+    flex-direction: column;
+  }
+
+  .buyer-order-modal footer button {
+    width: 100%;
+  }
+
+  .buyer-order-refund-item {
+    grid-template-columns: 1fr;
+  }
+
+  .buyer-order-refund-item input[type="number"] {
+    width: 100%;
   }
 }

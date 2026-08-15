@@ -50,11 +50,20 @@ async function ensureCustomerAccount(
   container: ExecArgs["container"],
   authModule: {
     register: (provider: string, data: Record<string, unknown>) => Promise<AuthResponse & { authIdentity?: { id?: string } }>
-    listProviderIdentities: (filters: Record<string, unknown>) => Promise<Array<{ entity_id?: string | null }>>
+    listProviderIdentities: (
+      filters: Record<string, unknown>
+    ) => Promise<Array<{ entity_id?: string | null; auth_identity_id?: string | null }>>
     updateProvider: (provider: string, data: Record<string, unknown>) => Promise<AuthResponse>
-    authenticate: (provider: string, data: Record<string, unknown>) => Promise<AuthResponse>
+    updateAuthIdentities: (data: Record<string, unknown>) => Promise<unknown>
+    authenticate: (
+      provider: string,
+      data: Record<string, unknown>
+    ) => Promise<AuthResponse & { authIdentity?: { id?: string; app_metadata?: Record<string, unknown> } }>
   },
-  customerModule: { listCustomers: (filters: Record<string, unknown>) => Promise<CustomerRecord[]>; createCustomers: (data: Record<string, unknown>) => Promise<CustomerRecord> },
+  customerModule: {
+    listCustomers: (filters: Record<string, unknown>) => Promise<CustomerRecord[]>
+    createCustomers: (data: Record<string, unknown>) => Promise<CustomerRecord>
+  },
   email: string,
   password: string
 ) {
@@ -94,7 +103,44 @@ async function ensureCustomerAccount(
     }
   }
 
-  const verified = await authModule.authenticate("emailpass", { body: { email, password } })
+  const customers = (await customerModule.listCustomers({ email })).filter(
+    (row) => row.email?.toLowerCase() === email
+  )
+  const customer = customers[0]
+  if (!customer?.id) {
+    throw new Error(`Buyer customer missing after ensure for ${email}`)
+  }
+
+  // Same email may already be a Medusa user — then app_metadata only has user_id.
+  // Customer login requires customer_id or JWT actor_id stays empty.
+  const identitiesAfter = await authModule.listProviderIdentities({
+    provider: "emailpass",
+    entity_id: email,
+  })
+  const authIdentityId = identitiesAfter[0]?.auth_identity_id
+  if (authIdentityId) {
+    const opsUsers = (
+      await (
+        container.resolve(Modules.USER) as {
+          listUsers: (filters: Record<string, unknown>) => Promise<UserRecord[]>
+        }
+      ).listUsers({ email })
+    ).filter((row) => row.email?.toLowerCase() === email)
+    const appMetadata: Record<string, string> = { customer_id: customer.id }
+    if (opsUsers[0]?.id) {
+      appMetadata.user_id = opsUsers[0].id
+    }
+    await authModule.updateAuthIdentities({
+      id: authIdentityId,
+      app_metadata: appMetadata,
+    })
+    console.log(`DEV_ACCOUNT_BUYER_CUSTOMER_ID_LINKED=${email} (${customer.id})`)
+  }
+
+  const verified = await authModule.authenticate("emailpass", {
+    body: { email, password },
+    actorType: "customer",
+  })
   if (!verified.success) {
     throw new Error(`Buyer password verification failed for ${email}`)
   }
@@ -145,9 +191,15 @@ export default async function devAccountsBootstrap({ container }: ExecArgs) {
   }
   const authModule = container.resolve(Modules.AUTH) as {
     register: (provider: string, data: Record<string, unknown>) => Promise<AuthResponse & { authIdentity?: { id?: string } }>
-    listProviderIdentities: (filters: Record<string, unknown>) => Promise<Array<{ entity_id?: string | null }>>
+    listProviderIdentities: (
+      filters: Record<string, unknown>
+    ) => Promise<Array<{ entity_id?: string | null; auth_identity_id?: string | null }>>
     updateProvider: (provider: string, data: Record<string, unknown>) => Promise<AuthResponse>
-    authenticate: (provider: string, data: Record<string, unknown>) => Promise<AuthResponse>
+    updateAuthIdentities: (data: Record<string, unknown>) => Promise<unknown>
+    authenticate: (
+      provider: string,
+      data: Record<string, unknown>
+    ) => Promise<AuthResponse & { authIdentity?: { id?: string; app_metadata?: Record<string, unknown> } }>
   }
   const storeCore = container.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
 

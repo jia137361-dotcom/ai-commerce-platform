@@ -34,12 +34,14 @@ export function EmptyState({
   title,
   message,
   action,
+  secondaryAction,
   icon,
   className = "",
 }: {
   title: string
   message?: string
   action?: { label: string; href: string }
+  secondaryAction?: { label: string; href: string }
   icon?: ReactNode
   className?: string
 }) {
@@ -48,7 +50,16 @@ export function EmptyState({
       {icon ?? <div className="empty-illustration buyer-ui-state-icon" aria-hidden="true">0</div>}
       <strong>{title}</strong>
       {message && <p>{message}</p>}
-      {action && <Button href={action.href}>{action.label}</Button>}
+      {action || secondaryAction ? (
+        <div className="buyer-ui-empty-actions">
+          {action ? <Button href={action.href}>{action.label}</Button> : null}
+          {secondaryAction ? (
+            <Button href={secondaryAction.href} variant="secondary">
+              {secondaryAction.label}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

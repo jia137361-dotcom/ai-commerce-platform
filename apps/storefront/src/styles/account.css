@@ -53,15 +53,15 @@
 }
 
 .buyer-account-auth-card {
+  width: 100%;
+  max-width: 100%;
   box-shadow: var(--buyer-shadow-card);
-}
-
-.buyer-account-auth-card {
   overflow: hidden;
 }
 
 .buyer-auth-card {
   width: min(100%, 560px);
+  max-width: 100%;
   margin: 0 auto;
   padding: 28px;
 }
@@ -167,6 +167,98 @@
   color: var(--color-primary);
   font-weight: 750;
   text-decoration: none;
+}
+
+.buyer-auth-linkish {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.buyer-auth-hint,
+.buyer-auth-dev-code,
+.buyer-auth-social-note {
+  margin: -4px 0 12px;
+  color: var(--buyer-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.buyer-auth-social-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.buyer-auth-google-btn {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--buyer-border);
+  border-radius: 10px;
+  background: #fff;
+  color: #17202e;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.buyer-auth-google-btn--primary {
+  min-height: 52px;
+  border-color: #111827;
+  background: #111827;
+  color: #fff;
+  font-size: 16px;
+}
+
+.buyer-auth-google-btn--primary:not(:disabled):hover {
+  border-color: #0b1220;
+  background: #0b1220;
+}
+
+.buyer-auth-google-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.buyer-auth-google-btn:not(:disabled):hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.buyer-auth-google-btn--primary:not(:disabled):hover {
+  border-color: #0b1220;
+  background: #0b1220;
+}
+
+.buyer-auth-primary-google {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-auth-social--secondary {
+  padding-top: 8px;
+  border-top: none;
+}
+
+.buyer-auth-email-secondary {
+  display: grid;
+  gap: 12px;
+}
+
+.buyer-auth-collapse-email {
+  justify-self: center;
+  margin-top: 4px;
+}
+
+.buyer-auth-dev-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #b45309;
 }
 
 .buyer-auth-consent {
@@ -773,7 +865,7 @@
   text-align: left;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 980px) {
   .buyer-account-main {
     width: min(100% - 28px, 620px);
     padding: 32px 0 64px;
@@ -978,11 +1070,6 @@
   font-weight: 700;
 }
 
-@media (max-width: 760px) {
-  .buyer-plans-grid {
-    grid-template-columns: 1fr;
-  }
-}
 
 .buyer-coupons-panel {
   overflow: hidden;
@@ -1182,6 +1269,10 @@
 }
 
 @media (max-width: 640px) {
+  .buyer-plans-grid {
+    grid-template-columns: 1fr;
+  }
+
   .buyer-coupons-claim,
   .buyer-coupon-card {
     grid-template-columns: 1fr;

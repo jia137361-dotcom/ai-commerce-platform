@@ -1,7 +1,7 @@
 # Production-oriented compose template.
 # Usage:
 #   PROD_ENV_FILE=apps/medusa-backend/.env \
-#   HEALTHCHECK_URLS="http://127.0.0.1:9000/health http://127.0.0.1:5173/login http://127.0.0.1:3000/" \
+#   HEALTHCHECK_URLS="http://127.0.0.1:9001/health http://127.0.0.1:5173/login http://127.0.0.1:3000/" \
 #   scripts/prod/deploy.sh
 #
 # Rules enforced by scripts/prod/*.sh:
@@ -52,7 +52,7 @@ services:
       MEDUSA_ADMIN_DISABLE: ${MEDUSA_ADMIN_DISABLE:-true}
       DATABASE_SSL: ${DATABASE_SSL:-false}
     ports:
-      - "${MEDUSA_HOST_PORT:-9000}:9000"
+      - "${MEDUSA_HOST_PORT:-9001}:9000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,7 +105,7 @@ services:
       dockerfile: apps/seller-dashboard/Dockerfile
       provenance: false
       args:
-        VITE_MEDUSA_URL: ${VITE_MEDUSA_URL:-http://127.0.0.1:9000}
+        VITE_MEDUSA_URL: ${VITE_MEDUSA_URL:-http://127.0.0.1:9001}
         VITE_STOREFRONT_URL: ${VITE_STOREFRONT_URL:-http://127.0.0.1:3000}
         VITE_STORE_ID: ${VITE_STORE_ID:-default_store}
         VITE_PUBLISHABLE_API_KEY: ${VITE_PUBLISHABLE_API_KEY:-}
@@ -122,7 +122,7 @@ services:
       dockerfile: apps/storefront/Dockerfile
       provenance: false
       args:
-        VITE_MEDUSA_BASE_URL: ${VITE_MEDUSA_BASE_URL:-http://127.0.0.1:9000}
+        VITE_MEDUSA_BASE_URL: ${VITE_MEDUSA_BASE_URL:-http://127.0.0.1:9001}
         VITE_STORE_ID: ${VITE_STORE_ID:-default_store}
         VITE_PUBLISHABLE_API_KEY: ${VITE_PUBLISHABLE_API_KEY:-}
     restart: unless-stopped

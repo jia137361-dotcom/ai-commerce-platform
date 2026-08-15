@@ -1,0 +1,32 @@
+{
+  "created_at": "2026-07-30T07:34:30.792Z",
+  "tables": {
+    "mc_product": {
+      "count": 1594,
+      "files": [
+        "mc_product-005.json",
+        "mc_product-006.json",
+        "mc_product-007.json",
+        "mc_product-008.json"
+      ]
+    },
+    "mc_product_asset": {
+      "count": 0,
+      "files": []
+    },
+    "mc_product_category": {
+      "count": 192,
+      "files": [
+        "mc_product_category-001.json"
+      ]
+    },
+    "mc_product_favorite": {
+      "count": 0,
+      "files": []
+    },
+    "mc_product_review": {
+      "count": 0,
+      "files": []
+    }
+  }
+}

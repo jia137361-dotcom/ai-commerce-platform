@@ -1,6 +1,33 @@
-import { defineConfig, loadEnv } from "@medusajs/framework/utils"
+import { defineConfig, loadEnv, Modules, ContainerRegistrationKeys } from "@medusajs/framework/utils"
 
 loadEnv(process.env.NODE_ENV || "development", process.cwd())
+
+const googleAuthConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim()
+)
+
+const authProviders = [
+  {
+    resolve: "@medusajs/medusa/auth-emailpass",
+    id: "emailpass",
+  },
+  ...(googleAuthConfigured
+    ? [
+        {
+          resolve: "@medusajs/medusa/auth-google",
+          id: "google",
+          options: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            callbackUrl:
+              process.env.GOOGLE_CALLBACK_URL ||
+              process.env.GOOGLE_BUYER_CALLBACK_URL ||
+              "http://127.0.0.1:5174/auth/google/callback",
+          },
+        },
+      ]
+    : []),
+]
 
 const stripePaymentProviders =
   process.env.STRIPE_API_KEY && process.env.STRIPE_API_KEY.length > 0
@@ -44,15 +71,17 @@ const paypalPaymentProviders =
     : []
 
 const disableAdmin = process.env.MEDUSA_ADMIN_DISABLE === "true"
-const databaseSslDisabled = process.env.DATABASE_SSL === "false"
 
 export default defineConfig({
   ...(disableAdmin ? { admin: { disable: true } } : {}),
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
-    ...(databaseSslDisabled
-      ? { databaseDriverOptions: { connection: { ssl: false } } }
-      : {}),
+    databaseDriverOptions: {
+      connection: process.env.DATABASE_SSL === "false" ? { ssl: false } : {},
+      // The remote development database resets bursts of concurrent startup transactions.
+      // A small pool keeps Medusa module initialization stable without changing data behavior.
+      pool: { min: 0, max: 2 },
+    },
     redisUrl: process.env.REDIS_URL,
     http: {
       storeCors:
@@ -106,6 +135,19 @@ export default defineConfig({
       resolve: "@medusajs/medusa/payment",
       options: {
         providers: [...stripePaymentProviders, ...paypalPaymentProviders],
+      },
+    },
+    {
+      resolve: "@medusajs/medusa/auth",
+      dependencies: [Modules.CACHE, ContainerRegistrationKeys.LOGGER],
+      options: {
+        mfa: {
+          encryption_key:
+            process.env.AUTH_MFA_ENCRYPTION_KEY ||
+            process.env.COOKIE_SECRET ||
+            "development-auth-mfa-encryption-key",
+        },
+        providers: authProviders,
       },
     },
   ]

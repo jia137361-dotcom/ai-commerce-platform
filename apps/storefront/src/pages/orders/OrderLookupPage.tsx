@@ -5,6 +5,7 @@ import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import { lookupOrder } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 
 type OrderLookupPageProps = {
   cartCount: number
@@ -12,6 +13,7 @@ type OrderLookupPageProps = {
 
 export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const [email, setEmail] = useState("")
   const [displayId, setDisplayId] = useState("")
   const [loading, setLoading] = useState(false)
@@ -50,6 +52,8 @@ export function OrderLookupPage({ cartCount }: OrderLookupPageProps) {
       contentClassName="buyer-orders-main buyer-order-lookup-main"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
         <OrderLookupForm
           email={email}

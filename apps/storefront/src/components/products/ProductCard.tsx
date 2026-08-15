@@ -1,5 +1,6 @@
 import type { StoreProduct } from "../../lib/mock-data"
 import { buildProductDetailHref } from "../../lib/storefront-links"
+import { getShipFromFlagUrl } from "../../lib/ship-from-flag"
 import { Card } from "../ui/Card"
 import { MoneyText } from "../ui/MoneyText"
 import { StatusBadge } from "../ui/StatusBadge"
@@ -14,6 +15,8 @@ export function ProductCard({ product }: ProductCardProps) {
   const href = buildProductDetailHref(product)
   const available = Boolean(product.isCartAddable && product.medusaVariantId)
   const rating = product.averageRating ? product.averageRating.toFixed(1) : null
+  const flagUrl = getShipFromFlagUrl(product.shipFromCountry)
+  const shipFromLabel = product.shipFromLabel?.trim() || null
 
   return (
     <Card as="article" className="buyer-shop-product-card">
@@ -25,6 +28,15 @@ export function ProductCard({ product }: ProductCardProps) {
             Image unavailable
           </span>
         )}
+        {flagUrl ? (
+          <img
+            className="buyer-shop-product-ship-flag"
+            src={flagUrl}
+            alt={shipFromLabel ? `Ships from ${shipFromLabel}` : "Ship-from country"}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : null}
         {product.badge ? (
           <StatusBadge tone="success">{product.badge}</StatusBadge>
         ) : null}
@@ -39,9 +51,9 @@ export function ProductCard({ product }: ProductCardProps) {
           </span>
           {rating ? <small>{product.reviewCount ?? 0} reviews</small> : null}
         </div>
-        {product.shipFromLabel ? (
+        {shipFromLabel ? (
           <span className="buyer-shop-product-ship-from">
-            Ships from {product.shipFromLabel}
+            Ships from {shipFromLabel}
           </span>
         ) : null}
         <MoneyText

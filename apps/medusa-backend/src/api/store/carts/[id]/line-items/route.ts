@@ -7,6 +7,7 @@ import { readWorkflowErrorMessage } from "../../../../../lib/workflow-error"
 import { getStoreCoreService } from "../../../../_helpers/store-core"
 import { resolveLinkedProductForVariant } from "../../../../../lib/resolve-linked-product"
 import { isProductCartEligible } from "../../../../../lib/product-cart-eligible"
+import { isSkuPurchasable } from "../../../../../lib/product-sku"
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
@@ -63,6 +64,15 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         error: {
           code: "VALIDATION_ERROR",
           message: "Product is not available for purchase",
+        },
+      })
+    }
+
+    if (!isSkuPurchasable((linkedProduct as Record<string, unknown>).variants, variant_id)) {
+      return res.status(400).json({
+        error: {
+          code: "SKU_DISABLED",
+          message: "This SKU is not available for purchase",
         },
       })
     }

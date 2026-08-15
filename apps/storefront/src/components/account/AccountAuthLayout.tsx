@@ -7,18 +7,32 @@ export function AccountAuthLayout({
   settings,
   cartCount,
   marketplaceMode = false,
+  storeHref,
+  showMobileBottomNav = true,
   children,
 }: {
   settings: BuyerStoreSettings
   cartCount: number
   marketplaceMode?: boolean
+  storeHref?: string
+  showMobileBottomNav?: boolean
   children: ReactNode
 }) {
   return (
     <PageShell
       className="buyer-account-page"
       contentClassName="buyer-account-main"
-      header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
+      cartCount={cartCount}
+      storeHref={storeHref}
+      showMobileBottomNav={showMobileBottomNav}
+      header={
+        <StoreTopBar
+          settings={settings}
+          cartCount={cartCount}
+          marketplaceMode={marketplaceMode}
+          storeHref={storeHref}
+        />
+      }
     >
       {children}
     </PageShell>

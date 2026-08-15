@@ -11,7 +11,7 @@ export async function enforceActiveStoreMiddleware(
   // particular, Marketplace is a virtual browsing context rather than an
   // `mc_store` row, so account registration must not require that context to
   // resolve as a physical store.
-  if (req.path === "/store/customers" || req.path.startsWith("/store/customers/me")) {
+  if (req.path === "/store/customers" || req.path.startsWith("/store/customers/me") || req.path.startsWith("/store/auth/")) {
     return next()
   }
 

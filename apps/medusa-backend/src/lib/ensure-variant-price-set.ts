@@ -13,14 +13,42 @@ export async function ensureVariantHasPriceSet(
   input: EnsureVariantPriceSetInput
 ): Promise<string> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
-  const { data } = (await query.graph({
-    entity: "variant",
-    fields: ["id", "price_set.id"],
-    filters: { id: [input.variantId] },
-  })) as { data: Array<{ id: string; price_set?: { id?: string } | null }> }
+  let data: Array<{ id: string; price_set?: { id?: string } | null }> = []
+  let lastQueryError: unknown
+  // A variant created by createProductsWorkflow can briefly be visible before
+  // its cross-module pricing link is queryable. Retry that transient window.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const result = (await query.graph({
+        entity: "variant",
+        fields: ["id", "price_set.id"],
+        filters: { id: input.variantId },
+      })) as { data: Array<{ id: string; price_set?: { id?: string } | null }> }
+      data = result.data
+      lastQueryError = undefined
+      break
+    } catch (error) {
+      lastQueryError = error
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)))
+      }
+    }
+  }
+  if (lastQueryError) throw lastQueryError
 
   const existingPriceSetId = data[0]?.price_set?.id
   if (existingPriceSetId) {
+    const pricingModule = container.resolve(Modules.PRICING) as {
+      updatePriceSets?: (
+        data: { id: string; prices: Array<{ amount: number; currency_code: string }> }
+      ) => Promise<unknown>
+    }
+    if (typeof pricingModule.updatePriceSets === "function") {
+      await pricingModule.updatePriceSets({
+        id: existingPriceSetId,
+        prices: [{ amount: input.amount, currency_code: input.currencyCode }],
+      })
+    }
     return existingPriceSetId
   }
 

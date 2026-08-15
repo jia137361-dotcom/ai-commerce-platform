@@ -77,6 +77,64 @@ export function resolveS2bProductId(product: Record<string, unknown>): string | 
   return /^\d+$/.test(supplierProductId) ? supplierProductId : null
 }
 
+const readNonEmptyId = (value: unknown): string | null => {
+  if (value == null) return null
+  const id = String(value).trim()
+  return id || null
+}
+
+export function resolveS2bEditorSelection(
+  product: Record<string, unknown>,
+  basicProductId: string
+): {
+  sizeId: string | null
+  colorId: string | null
+  viewId: string | null
+} {
+  const variants = Array.isArray(product.variants)
+    ? product.variants.filter(
+        (variant): variant is Record<string, unknown> =>
+          Boolean(variant) && typeof variant === "object"
+      )
+    : []
+  const selectedVariantId = readNonEmptyId(product.supplier_variant_id)
+  const variant =
+    variants.find(
+      (row) =>
+        selectedVariantId &&
+        [row.supplier_variant_id, row.id].some(
+          (value) => readNonEmptyId(value) === selectedVariantId
+        )
+    ) ??
+    variants.find(
+      (row) =>
+        readNonEmptyId(row.supplier_size_id) && readNonEmptyId(row.supplier_color_id)
+    ) ??
+    variants[0]
+
+  // Test IDs describe one specific fixture product. Applying them to every catalog
+  // blank can produce an invalid SDK URL (for example color 6 on product 3000).
+  const mayUseTestDefaults =
+    readNonEmptyId(process.env.S2BDIY_TEST_BASIC_PRODUCT_ID) === basicProductId
+  const testDefault = (key: "SIZE" | "COLOR" | "VIEW") =>
+    mayUseTestDefaults ? readNonEmptyId(process.env[`S2BDIY_TEST_${key}_ID`]) : null
+
+  return {
+    sizeId:
+      readNonEmptyId(product.supplier_size_id) ??
+      readNonEmptyId(variant?.supplier_size_id) ??
+      testDefault("SIZE"),
+    colorId:
+      readNonEmptyId(product.supplier_color_id) ??
+      readNonEmptyId(variant?.supplier_color_id) ??
+      testDefault("COLOR"),
+    viewId:
+      readNonEmptyId(product.view_id) ??
+      readNonEmptyId(variant?.view_id) ??
+      testDefault("VIEW"),
+  }
+}
+
 export function resolveS2bEditorMode(
   product: Record<string, unknown>,
   s2bProductId: string | null
@@ -176,18 +234,10 @@ export async function buildProductDesignConfig(
   }
 
   const s2bProductId = resolveS2bProductId(resolvedProduct)
-  const sizeId =
-    resolvedProduct.supplier_size_id != null && String(resolvedProduct.supplier_size_id).trim()
-      ? String(resolvedProduct.supplier_size_id)
-      : process.env.S2BDIY_TEST_SIZE_ID ?? null
-  const colorId =
-    resolvedProduct.supplier_color_id != null && String(resolvedProduct.supplier_color_id).trim()
-      ? String(resolvedProduct.supplier_color_id)
-      : process.env.S2BDIY_TEST_COLOR_ID ?? null
-  const viewId =
-    resolvedProduct.view_id != null && String(resolvedProduct.view_id).trim()
-      ? String(resolvedProduct.view_id)
-      : process.env.S2BDIY_TEST_VIEW_ID ?? null
+  const { sizeId, colorId, viewId } = resolveS2bEditorSelection(
+    resolvedProduct,
+    basicProductId
+  )
   const materialId =
     resolvedProduct.supplier_material_id != null &&
     String(resolvedProduct.supplier_material_id).trim()

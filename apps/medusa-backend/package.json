@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "medusa develop",
+    "dev": "medusa develop --port 9001",
     "build": "medusa build",
-    "start": "medusa start",
+    "start": "medusa start --port 9001",
     "db:generate": "medusa db:generate store_core",
     "db:migrate": "medusa db:migrate",
     "seed": "medusa exec ./src/scripts/seed.ts",

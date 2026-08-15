@@ -1,0 +1,500 @@
+{
+  "created_at": "2026-07-30T07:11:41.394Z",
+  "database": {
+    "database": "citigoo",
+    "user": "citigoo",
+    "server_ip": "172.18.0.6/32"
+  },
+  "tables": {
+    "mc_supplier": {
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "code",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "country",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "raw_json",
+          "data_type": "jsonb",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "api_base_url",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "test_api_base_url",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "ship_from_country",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "ship_to_regions",
+          "data_type": "jsonb",
+          "is_nullable": "YES"
+        }
+      ],
+      "row_count": 2,
+      "rows": [
+        {
+          "id": "sup_s2bdiy",
+          "code": "s2bdiy",
+          "name": "S2BDIY",
+          "country": "US",
+          "status": "active",
+          "raw_json": {
+            "note": "S2BDIY print-on-demand supplier",
+            "phase": "2B"
+          },
+          "created_at": "2026-07-18T09:22:11.690Z",
+          "updated_at": "2026-07-18T09:22:11.690Z",
+          "deleted_at": null,
+          "api_base_url": null,
+          "test_api_base_url": null,
+          "ship_from_country": "US",
+          "ship_to_regions": [
+            "us"
+          ]
+        },
+        {
+          "id": "sup_citigoo_mock",
+          "code": "citigoo_mock",
+          "name": "CitiGoo Mock Supplier",
+          "country": "US",
+          "status": "active",
+          "raw_json": {
+            "note": "Mock supplier",
+            "phase": "2A"
+          },
+          "created_at": "2026-07-18T09:22:11.946Z",
+          "updated_at": "2026-07-18T09:22:11.946Z",
+          "deleted_at": null,
+          "api_base_url": null,
+          "test_api_base_url": null,
+          "ship_from_country": "US",
+          "ship_to_regions": [
+            "us"
+          ]
+        }
+      ]
+    },
+    "mc_supplier_product": {
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "supplier_id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "supplier_product_id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "platform_product_id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "category",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "base_cost",
+          "data_type": "real",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "currency",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "raw_json",
+          "data_type": "jsonb",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "basic_product_id",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "basic_product_code",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "basic_product_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "basic_product_en_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "purchase_price",
+          "data_type": "real",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "supplier_product_code",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "supplier_product_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "product_show_master_image",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "supplier_mockup_image_url",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "produce_country",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "warehouse_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "deliver_goods_text",
+          "data_type": "text",
+          "is_nullable": "YES"
+        }
+      ],
+      "row_count": 0,
+      "rows": []
+    },
+    "mc_supplier_product_variant": {
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "supplier_product_id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "supplier_variant_id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "color",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "size",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "sku",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "cost",
+          "data_type": "real",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "stock_status",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "raw_json",
+          "data_type": "jsonb",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "basic_product_id",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "supplier_variant_code",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "supplier_size_id",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "supplier_color_id",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "size_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "color_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "weight",
+          "data_type": "real",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "length",
+          "data_type": "real",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "width",
+          "data_type": "real",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "height",
+          "data_type": "real",
+          "is_nullable": "YES"
+        }
+      ],
+      "row_count": 0,
+      "rows": []
+    },
+    "mc_supplier_print_spec": {
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "supplier_product_id",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "supplier_variant_id",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "print_position",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "print_file_width",
+          "data_type": "integer",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "print_file_height",
+          "data_type": "integer",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "dpi",
+          "data_type": "integer",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "accepted_formats",
+          "data_type": "ARRAY",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "background_required",
+          "data_type": "boolean",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "safe_margin",
+          "data_type": "integer",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "bleed",
+          "data_type": "integer",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "color_mode",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "basic_product_id",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "view_id",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "view_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "view_en_name",
+          "data_type": "text",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "design_area_width",
+          "data_type": "integer",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "design_area_height",
+          "data_type": "integer",
+          "is_nullable": "YES"
+        },
+        {
+          "column_name": "design_area_unit",
+          "data_type": "text",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "design_type",
+          "data_type": "integer",
+          "is_nullable": "NO"
+        },
+        {
+          "column_name": "tip_level",
+          "data_type": "text",
+          "is_nullable": "YES"
+        }
+      ],
+      "row_count": 0,
+      "rows": []
+    }
+  }
+}

@@ -13,6 +13,7 @@ import {
   TermsContent,
 } from "../../components/info/StaticInfoContent"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { type ReactNode } from "react"
 
 type InfoPageProps = {
@@ -24,12 +25,15 @@ type InfoPageProps = {
 
 export function InfoPage({ cartCount, title, sourceLabel, children }: InfoPageProps) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
 
   return (
     <PageShell
       className="buyer-info-page"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <Card as="article" className="buyer-info-card">
         <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">

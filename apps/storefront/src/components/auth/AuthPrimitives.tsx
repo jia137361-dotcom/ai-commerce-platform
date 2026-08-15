@@ -3,8 +3,31 @@ import { FormField } from "../ui/FormField"
 
 export const BUYER_PASSWORD_MIN_LENGTH = 8
 
+const BUYER_LOGIN_ALLOWED_DOMAINS = [
+  "gmail.com",
+  "googlemail.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "privaterelay.appleid.com",
+] as const
+
+const DEFAULT_TEST_EMAILS = ["1355026750@qq.com"]
+
 export const isValidAuthEmail = (value: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+
+export const normalizeAuthEmail = (value: string) => value.trim().toLowerCase()
+
+export const isAllowedBuyerAuthEmail = (value: string) => {
+  const email = normalizeAuthEmail(value)
+  if (!isValidAuthEmail(email)) return false
+  if (DEFAULT_TEST_EMAILS.includes(email)) return true
+  const domain = email.slice(email.lastIndexOf("@") + 1)
+  return (BUYER_LOGIN_ALLOWED_DOMAINS as readonly string[]).includes(domain)
+}
+
+export const buyerAuthEmailHint = "Use a Gmail or Apple account email."
 
 export function PasswordField({
   label = "Password",
@@ -56,18 +79,53 @@ export function AuthLegalCopy() {
   )
 }
 
-export function DisabledSocialAuth() {
-  const providers = ["G", "f", "Apple", "X"]
+export function SocialAuthSection({
+  googleEnabled = false,
+  googleLoading = false,
+  onGoogleClick,
+  error,
+  googleUnavailableReason = "coming_soon",
+}: {
+  googleEnabled?: boolean
+  googleLoading?: boolean
+  onGoogleClick?: () => void
+  error?: string
+  googleUnavailableReason?: "coming_soon" | "unavailable"
+}) {
   return (
-    <div className="buyer-auth-social" aria-label="Social sign-in options are not available yet">
-      <div><span /> <p>Or continue with other ways</p><span /></div>
-      <div className="buyer-auth-social-buttons">
-        {providers.map((provider) => (
-          <button key={provider} type="button" disabled aria-disabled="true" title="Social login is not available yet">
-            {provider}
-          </button>
-        ))}
+    <div className="buyer-auth-social">
+      <div>
+        <span />
+        or
+        <span />
       </div>
+      {googleEnabled ? (
+        <button
+          type="button"
+          className="buyer-auth-google-btn"
+          disabled={googleLoading}
+          onClick={() => onGoogleClick?.()}
+        >
+          {googleLoading ? "Redirecting to Google…" : "Continue with Google"}
+        </button>
+      ) : (
+        <p className="buyer-auth-social-note">
+          {googleUnavailableReason === "unavailable"
+            ? "Google sign-in is unavailable in this environment."
+            : "Google one-tap sign-in is coming soon."}
+        </p>
+      )}
+      <p className="buyer-auth-social-note">Apple one-tap sign-in is coming soon.</p>
+      {error ? <p className="buyer-auth-social-error">{error}</p> : null}
     </div>
+  )
+}
+
+/** @deprecated Prefer SocialAuthSection; kept for older tests/call sites. */
+export function DisabledSocialAuth() {
+  return (
+    <p className="buyer-auth-social-note">
+      Google and Apple one-tap sign-in are coming soon. For now, sign in with an email verification code.
+    </p>
   )
 }

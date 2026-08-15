@@ -1,51 +1,44 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import { SectionHeader } from "../../components/layout/SectionHeader"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
-import {
-  fetchMarketplaceStores,
-  marketplaceBuyerSettings,
-  type MarketplaceStore,
-} from "../../lib/buyer-api"
-import { enterMarketplaceContext } from "../../lib/buyer-store-context"
+import { useBuyerAuth } from "../../auth/useBuyerAuth"
+import { marketplaceBuyerSettings } from "../../lib/buyer-api"
+import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
+import { readBrowseHistory, type BrowseHistoryItem } from "../../lib/buyer-browse-history"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 
 type MarketplaceHomePageProps = {
   cartCount: number
 }
 
 export function MarketplaceHomePage({ cartCount }: MarketplaceHomePageProps) {
-  const [stores, setStores] = useState<MarketplaceStore[]>([])
-  const [storeQuery, setStoreQuery] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string>()
-
-  const loadMarketplace = useCallback(async (isActive: () => boolean) => {
-    setLoading(true)
-    setError(undefined)
-    const storesResult = await fetchMarketplaceStores(storeQuery)
-    if (!isActive()) return
-    setStores(storesResult.data)
-    setError(storesResult.error)
-    setLoading(false)
-  }, [storeQuery])
+  const auth = useBuyerAuth()
+  const [history, setHistory] = useState<BrowseHistoryItem[]>([])
+  const [query, setQuery] = useState("")
 
   useEffect(() => {
-    enterMarketplaceContext()
-    let active = true
-    void loadMarketplace(() => active)
-    return () => {
-      active = false
-    }
-  }, [loadMarketplace])
+    // History uses marketplace chrome; keep cart/messages on the default store.
+    enterLegacyDefaultStoreContext()
+  }, [])
 
-  const visibleStores = useMemo(() => {
-    const normalized = storeQuery.trim().toLowerCase()
-    if (!normalized) return stores
-    return stores.filter((store) =>
-      `${store.name} ${store.brandName} ${store.slug}`.toLowerCase().includes(normalized)
+  useEffect(() => {
+    setHistory(
+      readBrowseHistory({
+        customerId: auth.customer?.id,
+        email: auth.customer?.email,
+      })
     )
-  }, [storeQuery, stores])
+  }, [auth.customer?.id, auth.customer?.email])
+
+  const visible = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    if (!normalized) return history
+    return history.filter((item) => item.title.toLowerCase().includes(normalized))
+  }, [history, query])
+
+  const storeHref = buildSettingsStoreHref(marketplaceBuyerSettings)
 
   return (
     <PageShell
@@ -53,53 +46,59 @@ export function MarketplaceHomePage({ cartCount }: MarketplaceHomePageProps) {
       contentClassName="buyer-shop-shell-content"
       header={<StoreTopBar settings={marketplaceBuyerSettings} cartCount={cartCount} marketplaceMode />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <section className="buyer-marketplace-hero">
-        <p className="buyer-marketplace-eyebrow">Stores</p>
-        <h1>Shop independent CitiGoo stores</h1>
-        <p>Choose a store to browse its published products, policies, follow button, and seller profile.</p>
+        <p className="buyer-marketplace-eyebrow">History</p>
+        <h1>Browsing history</h1>
+        <p>
+          {auth.customer
+            ? "Products you recently viewed while signed in."
+            : "Products you recently viewed on this device."}
+        </p>
       </section>
 
       <section className="buyer-marketplace-section">
-        <SectionHeader eyebrow="Shops" title="Active stores" description={`${visibleStores.length} stores`} />
+        <SectionHeader
+          eyebrow="Recently viewed"
+          title="Your history"
+          description={`${visible.length} ${visible.length === 1 ? "item" : "items"}`}
+        />
         <div className="buyer-marketplace-search-row">
           <input
             type="search"
-            value={storeQuery}
-            onChange={(event) => setStoreQuery(event.target.value)}
-            placeholder="Search store name or slug"
-            aria-label="Search stores"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search history"
+            aria-label="Search browsing history"
           />
         </div>
-        {loading ? <p className="buyer-marketplace-status">Loading stores…</p> : null}
-        {!loading && visibleStores.length === 0 ? (
-          <p className="buyer-marketplace-status">No visible stores yet.</p>
+        {!visible.length ? (
+          <p className="buyer-marketplace-status">
+            No browsing history yet. Open a product in{" "}
+            <a href="/store?store_id=default_store">ciiverse</a> to start building it.
+          </p>
         ) : (
-          <div className="buyer-marketplace-store-grid">
-            {visibleStores.map((store) => {
-              const href = store.slug
-                ? `/shops/${encodeURIComponent(store.slug)}`
-                : `/store?store_id=${encodeURIComponent(store.storeId)}`
-              return (
-              <a key={store.storeId} className="buyer-marketplace-store-card" href={href}>
+          <div className="buyer-marketplace-store-grid buyer-marketplace-history-grid">
+            {visible.map((item) => (
+              <a key={item.id} className="buyer-marketplace-store-card" href={item.href}>
                 <div className="buyer-marketplace-store-media">
-                  {store.bannerUrl || store.logoUrl ? (
-                    <img src={store.bannerUrl ?? store.logoUrl} alt={store.brandName} loading="lazy" />
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" loading="lazy" />
                   ) : (
-                    <span>{store.brandName.slice(0, 1).toUpperCase()}</span>
+                    <span>{item.title.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div className="buyer-marketplace-store-body">
-                  <h3>{store.brandName}</h3>
-                  <p>{store.description ?? store.name}</p>
-                  <small>{store.productCount} 件商品</small>
+                  <h3>{item.title}</h3>
+                  {item.price != null ? <p>${item.price.toFixed(2)}</p> : <p>View product</p>}
                 </div>
               </a>
-            )})}
+            ))}
           </div>
         )}
       </section>
-      {error ? <p className="buyer-marketplace-error" role="alert">{error}</p> : null}
     </PageShell>
   )
 }

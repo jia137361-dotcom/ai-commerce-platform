@@ -27,6 +27,7 @@ import {
 } from "../../lib/buyer-my-designs"
 import { isReservedCheckoutCartId } from "../../lib/buyer-checkout-reservations"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 
 type MyDesignsPageProps = {
   cartCount: number
@@ -49,6 +50,7 @@ export function MyDesignsPage({ cartCount, onCartUpdated }: MyDesignsPageProps) 
   const { t } = useBuyerLocale()
   const auth = useBuyerAuth()
   const { settings } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const [designs, setDesigns] = useState<UnifiedDesign[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -180,6 +182,8 @@ export function MyDesignsPage({ cartCount, onCartUpdated }: MyDesignsPageProps) 
       contentClassName="buyer-my-designs-content"
       header={<StoreTopBar settings={settings as BuyerStoreSettings} cartCount={cartCount} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <header className="buyer-my-designs-hero">
         <p className="buyer-studio-landing-kicker">{t("navMyDesigns")}</p>
@@ -192,8 +196,8 @@ export function MyDesignsPage({ cartCount, onCartUpdated }: MyDesignsPageProps) 
       {!loading && !designs.length ? (
         <div className="buyer-my-designs-empty">
           <p>{t("myDesignsEmpty")}</p>
-          <a className="buyer-ui-button buyer-ui-button--primary" href="/studio">
-            {t("navStudio")}
+          <a className="buyer-ui-button buyer-ui-button--primary" href="/trends">
+            Product selection
           </a>
         </div>
       ) : null}

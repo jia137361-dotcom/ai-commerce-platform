@@ -8,9 +8,10 @@ import { FilterDrawer, type FilterState } from "../../components/store-home/Filt
 import { ProductCard } from "../../components/products/ProductCard"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { fetchProducts } from "../../lib/buyer-api"
-import { clearSearchHistory, pushSearchHistory, readSearchHistory } from "../../lib/buyer-search-history"
+import { clearSearchHistory, pushSearchHistory, readSearchHistory, removeSearchHistory } from "../../lib/buyer-search-history"
 import { getScopedBuyerStoreId, setActiveBuyerStoreId } from "../../lib/buyer-store-context"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import type { StoreProduct } from "../../lib/mock-data"
 
 type SearchPageProps = { cartCount: number }
@@ -20,6 +21,7 @@ export function SearchPage({ cartCount }: SearchPageProps) {
   const storeFromQuery = new URLSearchParams(window.location.search).get("store_id") ?? new URLSearchParams(window.location.search).get("store")
   const scopedStoreId = getScopedBuyerStoreId(storeFromQuery)
   const { settings } = useBuyerPageSettings({ storeId: scopedStoreId })
+  const storeHref = buildSettingsStoreHref(settings)
   const [debouncedQuery, setDebouncedQuery] = useState(query)
   const [items, setItems] = useState<StoreProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -92,6 +94,16 @@ export function SearchPage({ cartCount }: SearchPageProps) {
     })
   }, [filters.maxPrice, filters.minPrice, items, sort])
 
+  const activeFilterCount = [
+    filters.minPrice,
+    filters.maxPrice,
+    filters.shipsFrom,
+    filters.color,
+    filters.material,
+    filters.size,
+    filters.occasion,
+  ].filter((value) => value !== undefined && value !== "").length
+
   const sortLabel =
     sort === "price-asc"
       ? "Price low to high"
@@ -117,11 +129,13 @@ export function SearchPage({ cartCount }: SearchPageProps) {
           onSearchSubmit={() => setDebouncedQuery(query.trim())}
         />
       }
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-search-mobile-body">
         <div className="buyer-search-filter-chips" aria-label="Filters">
           <button type="button" onClick={() => setFilterOpen(true)}>
-            Filters
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
           </button>
           <button type="button" className={sortOpen ? "active" : ""} onClick={() => setSortOpen((v) => !v)}>
             {sortLabel} ▾
@@ -179,14 +193,47 @@ export function SearchPage({ cartCount }: SearchPageProps) {
             <ul>
               {history.map((term) => (
                 <li key={term}>
-                  <button type="button" onClick={() => setQuery(term)}>
+                  <button
+                    type="button"
+                    className="buyer-search-history-term"
+                    onClick={() => {
+                      setQuery(term)
+                      setDebouncedQuery(term)
+                    }}
+                  >
                     {term}
+                  </button>
+                  <button
+                    type="button"
+                    className="buyer-search-history-remove"
+                    aria-label={`Remove ${term} from recent searches`}
+                    onClick={() => setHistory(removeSearchHistory(term))}
+                  >
+                    ×
                   </button>
                 </li>
               ))}
             </ul>
           </section>
         ) : null}
+
+        <header className="buyer-search-results-header">
+          <div>
+            <p>{debouncedQuery ? `Results for “${debouncedQuery}”` : "Discover products"}</p>
+            <strong>{sortedItems.length} items</strong>
+          </div>
+          {debouncedQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("")
+                setDebouncedQuery("")
+              }}
+            >
+              Clear search
+            </button>
+          ) : null}
+        </header>
 
         {error ? (
           <p className="buyer-mhome-error" role="alert">

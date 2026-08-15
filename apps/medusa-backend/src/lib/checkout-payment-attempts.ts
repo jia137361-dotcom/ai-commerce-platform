@@ -97,7 +97,12 @@ export const normalizePayPalOrderStatus = (
     case "CANCELED":
     case "CANCELLED":
       return "cancelled"
+    case "CREATED":
     case "PAYER_ACTION_REQUIRED":
+      // Sandbox/live Checkout leaves the order here until the buyer approves.
+      // Treating this as payment_failed orphans the PayPal order and forces a
+      // second payment session that complete-cart then rejects.
+      return "awaiting_payment"
     case "DENIED":
       return "payment_failed"
     default:

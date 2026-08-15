@@ -1,6 +1,6 @@
 import { parseCsv, rowsToCsv, S2B_IMPORT_CSV_COLUMNS } from "../lib/s2b-product-import/csv"
 import { importS2bDrafts, previewS2bImport } from "../lib/s2b-product-import/service"
-import { isStorefrontProductVisible } from "../lib/storefront-product-visibility"
+import { isStorefrontCatalogVisible } from "../lib/storefront-product-visibility"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 
@@ -188,7 +188,8 @@ describe("s2b product import csv", () => {
       supported_region_ids: ["reg_us", "reg_intl"],
       source_product_id: "1001",
     })
-    expect(isStorefrontProductVisible(fake.products[0])).toBe(false)
+    // Fresh CSV imports stay draft until the seller publishes them.
+    expect(isStorefrontCatalogVisible(fake.products[0])).toBe(false)
   })
 
   it("keeps existing variants on partial re-import and avoids duplicate products", async () => {
@@ -255,6 +256,6 @@ describe("s2b product import csv", () => {
       price: 31.5,
     })
     expect((fake.products[0].variants as Array<Record<string, unknown>>)[0].price).toBe(31.5)
-    expect(isStorefrontProductVisible(fake.products[0])).toBe(true)
+    expect(isStorefrontCatalogVisible(fake.products[0])).toBe(true)
   })
 })

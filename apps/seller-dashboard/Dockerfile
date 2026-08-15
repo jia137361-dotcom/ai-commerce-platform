@@ -8,7 +8,7 @@ RUN npm ci
 
 COPY apps/seller-dashboard/ ./apps/seller-dashboard/
 
-ARG VITE_MEDUSA_URL=http://127.0.0.1:9000
+ARG VITE_MEDUSA_URL=http://127.0.0.1:9001
 ARG VITE_STOREFRONT_URL=http://127.0.0.1:3000
 ARG VITE_STORE_ID=default_store
 ARG VITE_PUBLISHABLE_API_KEY=

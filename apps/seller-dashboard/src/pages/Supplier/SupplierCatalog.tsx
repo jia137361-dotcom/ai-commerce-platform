@@ -39,6 +39,18 @@ type S2bProductDetail = {
   produce_country?: string
   warehouse_name?: string
   deliver_goods_text?: string
+  items?: Array<{
+    id: number
+    code?: string
+    sku?: string
+    color_id?: number
+    size_id?: number
+    price?: string | number
+    weight?: string | number
+    length?: string | number
+    width?: string | number
+    height?: string | number
+  }>
 }
 
 type SyncResult = {
@@ -354,6 +366,40 @@ export function SupplierCatalogPage() {
                   ))}
                 </div>
               </div>
+
+              {det.items?.length ? (
+                <div className="mb-3 overflow-x-auto">
+                  <h3 className="mb-1 text-xs font-semibold text-gray-700">Supplier SKUs</h3>
+                  <table className="w-full min-w-[680px] text-left text-[11px]">
+                    <thead className="border-b text-gray-500">
+                      <tr>
+                        <th className="px-2 py-1">SKU</th>
+                        <th className="px-2 py-1">Color</th>
+                        <th className="px-2 py-1">Size</th>
+                        <th className="px-2 py-1">Cost</th>
+                        <th className="px-2 py-1">Weight</th>
+                        <th className="px-2 py-1">Dimensions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {det.items.map((item) => {
+                        const color = det.colors.find((entry) => entry.id === item.color_id)
+                        const size = det.sizes.find((entry) => entry.id === item.size_id)
+                        return (
+                          <tr key={item.id} className="border-b last:border-0">
+                            <td className="px-2 py-1 font-medium">{item.sku || item.code || item.id}</td>
+                            <td className="px-2 py-1">{color?.en_name || color?.name || "—"}</td>
+                            <td className="px-2 py-1">{size?.name || "—"}</td>
+                            <td className="px-2 py-1">{item.price ?? "—"}</td>
+                            <td className="px-2 py-1">{item.weight ?? "—"}</td>
+                            <td className="px-2 py-1">{[item.length, item.width, item.height].every((v) => v != null) ? `${item.length} × ${item.width} × ${item.height}` : "—"}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
 
               <div className="mb-3">
                 <h3 className="mb-1 text-xs font-semibold text-gray-700">Sizes</h3>

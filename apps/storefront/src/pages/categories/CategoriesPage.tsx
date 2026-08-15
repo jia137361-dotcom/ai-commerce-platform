@@ -15,6 +15,7 @@ import {
   type BuyerStoreSettings,
 } from "../../lib/buyer-api"
 import { enterLegacyDefaultStoreContext } from "../../lib/buyer-store-context"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import type { StoreProduct } from "../../lib/mock-data"
 
 type CategoriesPageProps = { cartCount: number }
@@ -83,6 +84,9 @@ export function CategoriesPage({ cartCount }: CategoriesPageProps) {
   ]
 
   const shopByCircles = categories.slice(0, 9)
+  const activeCategory = sideItems.find((item) => item.id === activeSideId) ?? sideItems[0]
+  const activeCategoryHref =
+    activeSideId === "featured" ? "/store" : `/store?category=${encodeURIComponent(activeSideId)}`
 
   const displayItems = (() => {
     let list = [...items]
@@ -106,11 +110,15 @@ export function CategoriesPage({ cartCount }: CategoriesPageProps) {
     return list
   })()
 
+  const storeHref = buildSettingsStoreHref(settings)
+
   return (
     <PageShell
       className="buyer-store-page buyer-categories-page"
       contentClassName="buyer-categories-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
       <div className="buyer-categories-layout">
         <aside className="buyer-categories-sidebar" aria-label="Categories">
@@ -148,11 +156,18 @@ export function CategoriesPage({ cartCount }: CategoriesPageProps) {
 
           <section className="buyer-categories-trending">
             <header>
-              <h2>Trending items</h2>
-              <button type="button" aria-label="Filters" onClick={() => setFilterOpen(true)}>
-                ☰
-              </button>
+              <div>
+                <p>{activeCategory?.label ?? "Featured"}</p>
+                <h2>Trending items</h2>
+              </div>
+              <div className="buyer-categories-heading-actions">
+                <a href={activeCategoryHref}>View All</a>
+                <button type="button" aria-label="Filters" onClick={() => setFilterOpen(true)}>
+                  ☰
+                </button>
+              </div>
             </header>
+            <p className="buyer-categories-result-count">{displayItems.length} items</p>
             {error ? (
               <p className="buyer-mhome-error" role="alert">
                 {error}

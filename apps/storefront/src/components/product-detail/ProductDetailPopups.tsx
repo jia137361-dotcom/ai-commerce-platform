@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { BuyerShareInfo } from "../../lib/buyer-api"
 import { Modal } from "../ui/Modal"
 import { ProductSharePanel } from "./ProductSharePanel"
@@ -12,8 +12,34 @@ type ProductDetailPopupsProps = {
 }
 
 export function ProductDetailPopups({ share, productTitle, storeHref, onToggleFavorite, isFavorited = false }: ProductDetailPopupsProps) {
-  const [open, setOpen] = useState<"share" | "shipping" | "country" | "menu" | null>(null)
+  const [open, setOpen] = useState<"share" | "shipping" | "country" | "qr" | "menu" | null>(null)
   const [shipRegion, setShipRegion] = useState("United States")
+  const [qrDataUrl, setQrDataUrl] = useState("")
+  const [qrError, setQrError] = useState<string>()
+
+  useEffect(() => {
+    if (open !== "qr") return
+    let active = true
+    setQrError(undefined)
+    void import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(window.location.href, {
+          width: 280,
+          margin: 2,
+          errorCorrectionLevel: "M",
+          color: { dark: "#111827", light: "#ffffff" },
+        })
+      )
+      .then((dataUrl) => {
+        if (active) setQrDataUrl(dataUrl)
+      })
+      .catch(() => {
+        if (active) setQrError("Unable to generate the product QR code.")
+      })
+    return () => {
+      active = false
+    }
+  }, [open])
 
   const copyLink = async () => {
     try {
@@ -68,6 +94,19 @@ export function ProductDetailPopups({ share, productTitle, storeHref, onToggleFa
         <p className="buyer-filter-mock-note">Region selection is UI-only in this batch; checkout still uses account preferences.</p>
       </Modal>
 
+      <Modal open={open === "qr"} title="Product QR Code" onClose={() => setOpen(null)} className="buyer-product-popup">
+        <div className="buyer-product-qr">
+          {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${productTitle}`} /> : null}
+          {!qrDataUrl && !qrError ? <p role="status">Generating QR code…</p> : null}
+          {qrError ? <p role="alert">{qrError}</p> : null}
+          <strong>{productTitle}</strong>
+          <p>Scan to open this product page.</p>
+          <button type="button" onClick={copyLink}>
+            Copy link
+          </button>
+        </div>
+      </Modal>
+
       <Modal open={open === "menu"} title="More actions" onClose={() => setOpen(null)} className="buyer-product-popup buyer-product-popup-menu">
         <button type="button" onClick={() => { setOpen("share"); }}>
           Share
@@ -77,18 +116,21 @@ export function ProductDetailPopups({ share, productTitle, storeHref, onToggleFa
             {isFavorited ? "Unsave" : "Save"}
           </button>
         ) : null}
-        <button type="button" onClick={copyLink}>
-          Copy link
+        <button type="button" onClick={() => setOpen("qr")}>
+          Product QR Code
         </button>
+        <a href="/account/orders">My Order</a>
+        <a href="/cart">Cart</a>
+        <button type="button" onClick={copyLink}>
+          Copy Link
+        </button>
+        <a href="/help#report">Report</a>
         <button type="button" onClick={() => setOpen("shipping")}>
           Shipping policy
         </button>
         <button type="button" onClick={() => setOpen("country")}>
           Country &amp; region
         </button>
-        <a href="/account/orders">My orders</a>
-        <a href="/cart">Cart</a>
-        <a href="/help">Report</a>
       </Modal>
     </>
   )

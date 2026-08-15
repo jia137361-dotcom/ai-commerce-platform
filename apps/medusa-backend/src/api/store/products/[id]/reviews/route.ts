@@ -20,7 +20,7 @@ import {
   getStoreCoreService,
   sendError,
 } from "../../../../_helpers/store-core"
-import { isStorefrontProductVisible } from "../../../../../lib/storefront-product-visibility"
+import { isStorefrontCatalogVisible } from "../../../../../lib/storefront-product-visibility"
 
 type CreateReviewBody = {
   email?: string
@@ -97,7 +97,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   })
   const product = products[0]
 
-  if (!product || !isStorefrontProductVisible(product as Record<string, unknown>)) {
+  // Public reviews follow the store catalog: blanks/ordinary products only.
+  // Buyer custom designs stay private under My Designs.
+  if (!product || !isStorefrontCatalogVisible(product as Record<string, unknown>)) {
     return sendError(res, 404, "PRODUCT_NOT_FOUND", "Product not found")
   }
 

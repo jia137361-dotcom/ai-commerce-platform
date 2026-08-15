@@ -11,22 +11,29 @@ export function SignInPage({ cartCount }: { cartCount: number }) {
   const { settings, marketplaceMode } = useBuyerPageSettings()
   const params = new URLSearchParams(window.location.search)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | undefined>(params.get("expired") === "1" ? "Your session expired. Sign in again to continue." : undefined)
+  const [error, setError] = useState<string | undefined>(
+    params.get("expired") === "1" ? "Your session expired. Sign in again to continue." : undefined
+  )
   const auth = useBuyerAuth()
 
-  const submit = async (email: string, password: string) => {
+  const submit = async (input: { email: string; code?: string; password?: string; rememberMe: boolean }) => {
     setLoading(true)
     setError(undefined)
     try {
-      const customer = await auth.signIn({ email, password })
+      const customer = await auth.signIn({
+        email: input.email,
+        code: input.code,
+        password: input.password,
+        rememberMe: input.rememberMe,
+      })
       const returnTo = safeReturnTo()
       if (!isBuyerEmailVerified(customer.metadata)) {
         window.location.assign(`/account/verify-email?returnTo=${encodeURIComponent(returnTo)}`)
         return
       }
       window.location.assign(returnTo)
-    } catch {
-      setError("Unable to sign in with those credentials.")
+    } catch (signInError) {
+      setError(signInError instanceof Error ? signInError.message : "Unable to sign in with those credentials.")
     } finally {
       setLoading(false)
     }
@@ -38,14 +45,16 @@ export function SignInPage({ cartCount }: { cartCount: number }) {
         <section className="buyer-account-auth-intro">
           <p>Buyer account</p>
           <h1>Welcome back</h1>
-          <span>Sign in to view your orders and profile. This session is separate from seller dashboard access.</span>
+          <span>Continue with Google for the fastest sign-in. Email and password stay available as a backup.</span>
         </section>
         <Card as="section" className="buyer-account-auth-card">
-        <div className="buyer-account-auth-tabs">
-          <a className="active" href="/account/sign-in">Sign in</a>
-          <a href="/account/register">Sign up</a>
-        </div>
-        <SignInForm loading={loading} error={error} onSubmit={submit} />
+          <div className="buyer-account-auth-tabs">
+            <a className="active" href="/account/sign-in">
+              Sign in
+            </a>
+            <a href="/account/register">Sign up</a>
+          </div>
+          <SignInForm loading={loading} error={error} onSubmit={submit} />
         </Card>
       </div>
     </AccountAuthLayout>

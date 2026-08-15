@@ -29,6 +29,7 @@ import {
   type BuyerRefundRequest,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
+import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { resolveOrderDetailActions } from "./order-detail-state"
 import { collectReorderLinesFromDetail, orderAgainHref } from "./order-history-display"
 import {
@@ -62,6 +63,7 @@ const readSessionEmail = (orderId: string, storeId?: string) => {
 export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const auth = useBuyerAuth()
   const { settings, marketplaceMode } = useBuyerPageSettings()
+  const storeHref = buildSettingsStoreHref(settings)
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
@@ -287,6 +289,8 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
       contentClassName="buyer-orders-main buyer-order-detail-main-shell"
       header={<StoreTopBar settings={settings} cartCount={cartCount} marketplaceMode={marketplaceMode} />}
       footer={<StoreFooter />}
+      cartCount={cartCount}
+      storeHref={storeHref}
     >
         {loading ? (
           <LoadingState label="Loading order..." />

@@ -71,7 +71,10 @@ const statusForOrder = (order: PayPalOrder) => {
   if (status === "COMPLETED") return PaymentSessionStatus.PENDING_AUTHORIZATION
   if (status === "APPROVED") return PaymentSessionStatus.REQUIRES_MORE
   if (["VOIDED", "CANCELED", "CANCELLED"].includes(status)) return PaymentSessionStatus.CANCELED
-  if (["PAYER_ACTION_REQUIRED", "FAILED", "DENIED"].includes(status)) return PaymentSessionStatus.ERROR
+  // Buyer still needs to approve in PayPal Checkout. Keep the Medusa session
+  // processable so complete-cart can authorize after onApprove.
+  if (status === "PAYER_ACTION_REQUIRED" || status === "CREATED") return PaymentSessionStatus.PENDING
+  if (["FAILED", "DENIED"].includes(status)) return PaymentSessionStatus.ERROR
   return PaymentSessionStatus.PENDING
 }
 

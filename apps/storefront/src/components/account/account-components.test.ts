@@ -6,6 +6,20 @@ import { AccountProfileForm } from "./AccountProfileForm"
 import { RegisterForm } from "./RegisterForm"
 import { SignInForm } from "./SignInForm"
 
+jest.mock("../../lib/buyer-google-auth", () => ({
+  isGoogleAuthUiEnabled: () => true,
+  resolveBuyerGoogleCallbackUrl: () => "http://127.0.0.1:5174/auth/google/callback",
+  stashBuyerGoogleAuthContext: () => undefined,
+  clearBuyerGoogleAuthContext: () => undefined,
+  readBuyerGoogleAuthContext: () => ({ returnTo: "/account", rememberMe: true }),
+}))
+
+jest.mock("../../lib/buyer-api", () => ({
+  sendBuyerLoginOtp: jest.fn(async () => ({ sent: true, email: "user@gmail.com" })),
+  getBuyerGoogleAuthStatus: jest.fn(async () => ({ enabled: true })),
+  startBuyerGoogleAuth: jest.fn(async () => ({ location: "https://accounts.google.com" })),
+}))
+
 const customer = { id: "cus_1", email: "buyer@example.com" }
 
 describe("buyer account components", () => {
@@ -59,27 +73,31 @@ describe("buyer account components", () => {
     expect(html).toContain('role="alert"')
   })
 
-  it("register only asks for email and password", () => {
+  it("register starts with email code and consent; password appears after code is sent", () => {
     const html = renderToStaticMarkup(createElement(RegisterForm, {
       loading: false,
       onSubmit: async () => undefined,
     }))
     expect(html).toContain("Email")
-    expect(html).toContain("Password")
+    expect(html).toContain("Send verification code")
     expect(html).toContain("Terms of Use")
     expect(html).toContain("Privacy Policy")
+    expect(html).toContain("Keep me signed in")
+    expect(html).not.toContain("Create a password")
     expect(html).not.toContain("First name")
     expect(html).not.toContain("Last name")
     expect(html).not.toContain("Phone")
   })
 
-  it("sign-in shows forgot password and disabled social auth", () => {
+  it("sign-in leads with Google and keeps email as a secondary entry", () => {
     const html = renderToStaticMarkup(createElement(SignInForm, {
       loading: false,
       onSubmit: async () => undefined,
     }))
-    expect(html).toContain('href="/account/forgot-password"')
-    expect(html).toContain("Or continue with other ways")
-    expect(html).toContain("disabled")
+    expect(html).toContain("Continue with Google")
+    expect(html).toContain("Sign in with email")
+    expect(html).toContain("Keep me signed in")
+    expect(html).toContain("or use email")
+    expect(html).not.toContain("Forgot password?")
   })
 })
