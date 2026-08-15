@@ -61,5 +61,11 @@ export async function stripeApiRequest<T>(
 
 export const isStripeResourceNotFoundError = (error: unknown) => {
   const candidate = error as { status?: unknown; stripeCode?: unknown } | null
-  return candidate?.status === 404 || candidate?.stripeCode === "resource_missing"
+  return (
+    candidate?.status === 404 ||
+    candidate?.stripeCode === "resource_missing" ||
+    // Stripe uses account_invalid when a Connect account was deleted or this
+    // platform's access to it was revoked. Both require re-onboarding.
+    candidate?.stripeCode === "account_invalid"
+  )
 }

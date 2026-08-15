@@ -1,6 +1,6 @@
 import type { MedusaRequest } from "@medusajs/framework/http"
 
-export const DEFAULT_STORE_ID = process.env.DEFAULT_STORE_ID || "default_store"
+export const DEFAULT_STORE_ID = process.env.DEFAULT_STORE_ID || "01KX2P21ZPPSRYY6VJJERRBQYG"
 
 export type StoreContext = {
   store_id: string
@@ -32,4 +32,3 @@ export const resolveCurrentStore = (req: MedusaRequest): StoreContext => {
     source: "default"
   }
 }
-

@@ -7,6 +7,7 @@ import { evaluateRefundPolicy } from "../../../../../lib/refund-policy"
 import { executeApprovedRefund } from "../../../../../lib/refund-execution"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../../modules/buyer-refund-requests"
 import { serializeBuyerRefundRequest, type BuyerRefundRequestRecord } from "../../../../../lib/order-refund-request"
+import { RefundPaymentContextError } from "../../../../../lib/refund-payment-context"
 import { sendError } from "../../../../_helpers/store-core"
 
 const numeric = (value: unknown) => {
@@ -15,6 +16,7 @@ const numeric = (value: unknown) => {
 }
 
 export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
+  try {
   const userId = resolveAdminUserId(req)
   if (!userId) return sendError(res, 401, "UNAUTHORIZED", "Seller authentication required")
   const session = await resolveSellerSession(req.scope, userId)
@@ -89,4 +91,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     note: request.note,
   })
   return res.status(200).json({ refund_request: serializeBuyerRefundRequest(executed) })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to process the refund request"
+    const code = error instanceof RefundPaymentContextError ? error.code : "REFUND_DECISION_FAILED"
+    console.error("[seller-refund-decision] failed", {
+      refund_request_id: req.params.id,
+      code,
+      message,
+    })
+    return res.status(error instanceof RefundPaymentContextError ? 409 : 500).json({
+      error: { code, message },
+    })
+  }
 }

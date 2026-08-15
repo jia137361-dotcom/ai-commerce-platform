@@ -310,7 +310,7 @@ export type BuyerPaymentAttempt = {
   status: BuyerPaymentAttemptStatus | string
   expiresAt: string | null
   lastError: string | null
-  recoveryAction: "confirm_payment" | "complete_order" | "wait" | "completed"
+  recoveryAction: "confirm_payment" | "complete_order" | "wait" | "completed" | "expired"
 }
 
 export type BuyerPaymentRecovery = {
@@ -479,6 +479,8 @@ type ApiOrderDetailResponse = {
   status?: string | null
   payment_status?: string | null
   fulfillment_status?: string | null
+  receipt_confirmation_required?: boolean
+  receipt_confirmed_at?: string | null
   created_at?: string | null
   currency_code?: string | null
   items?: ApiOrderDetailItem[]
@@ -773,6 +775,8 @@ export type BuyerOrderDetail = {
   status?: string | null
   paymentStatus?: string | null
   fulfillmentStatus?: string | null
+  receiptConfirmationRequired?: boolean
+  receiptConfirmedAt?: string | null
   createdAt?: string | null
   currencyCode?: string | null
   items: BuyerOrderDetailItem[]
@@ -909,7 +913,9 @@ const isPlaceholderValue = (value: string) =>
   !value || value.includes("replace_me") || value.includes("<") || value.includes(">")
 
 const config = {
-  backendUrl: import.meta.env.DEV && typeof window !== "undefined" && window.location.port === "5174"
+  // Route every development origin through Vite's proxy. This keeps checkout
+  // working when local Vite is exposed through a temporary HTTPS tunnel.
+  backendUrl: import.meta.env.DEV && typeof window !== "undefined"
     ? window.location.origin
     : readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
   publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
@@ -1785,17 +1791,18 @@ export const createCart = async (options?: {
   regionId?: string
   storeId?: string
 }) => {
-  let regionId = options?.regionId
-  if (!regionId) {
-    const regions = await listStoreRegions()
-    regionId = resolveStoreRegionId(regions, options?.countryCode ?? "us")
-  }
+  const regions = await listStoreRegions()
+  const region = options?.regionId
+    ? regions.find((entry) => entry.region_id === options.regionId)
+    : resolveStoreRegion(regions, options?.countryCode ?? "us")
+  const regionId = region?.region_id ?? options?.regionId
+  const currencyCode = region?.currency_code ?? "usd"
   const cart = await storeScopedFetch<ApiCart>(
     "/store/carts",
     {
       method: "POST",
       body: JSON.stringify({
-        currency_code: "usd",
+        currency_code: currencyCode,
         ...(regionId ? { region_id: regionId } : {}),
       }),
     },
@@ -1817,9 +1824,12 @@ export const listStoreRegions = async (): Promise<StoreRegionSummary[]> => {
 }
 
 export const resolveStoreRegionId = (regions: StoreRegionSummary[], countryCode: string) => {
+  return resolveStoreRegion(regions, countryCode)?.region_id ?? regions[0]?.region_id
+}
+
+export const resolveStoreRegion = (regions: StoreRegionSummary[], countryCode: string) => {
   const normalized = countryCode.trim().toLowerCase()
-  const matched = regions.find((region) => region.country_codes.includes(normalized))
-  return matched?.region_id ?? regions[0]?.region_id
+  return regions.find((region) => region.country_codes.includes(normalized)) ?? regions[0]
 }
 
 export const fetchCart = async (cartId: string, options?: StoreScopedRequestOptions) => {
@@ -1894,7 +1904,13 @@ export const reorderItemsToCheckout = async (input: {
 
   return {
     cart,
-    checkoutHref: `/checkout?store=${encodeURIComponent(input.storeId)}`,
+    // Checkout must use the cart rebuilt above. Falling back to the stored
+    // cart can select an older checkout reservation and route the buyer back
+    // to an empty cart instead of displaying this reorder's checkout.
+    checkoutHref: `/checkout?${new URLSearchParams({
+      store: input.storeId,
+      cart_id: cart.id,
+    }).toString()}`,
   }
 }
 
@@ -2445,6 +2461,8 @@ const normalizeOrderDetail = (payload: ApiOrderDetailResponse, orderId: string):
     status: payload.status ?? null,
     paymentStatus: payload.payment_status ?? null,
     fulfillmentStatus: payload.fulfillment_status ?? null,
+    receiptConfirmationRequired: Boolean(payload.receipt_confirmation_required),
+    receiptConfirmedAt: payload.receipt_confirmed_at ?? null,
     createdAt: payload.created_at ?? null,
     currencyCode: payload.currency_code ?? undefined,
     items: (payload.items ?? []).map((item, index) => ({

@@ -101,6 +101,19 @@ describe("seller refund request routes", () => {
     })
   })
 
+  it("filters the seller refund list to a requested order", async () => {
+    const { req, refundService } = createReq()
+    req.query = { order_id: "order_1" } as never
+    const res = createRes()
+
+    await listRefundRequests(req, res)
+
+    expect(refundService.listBuyerRefundRequests).toHaveBeenCalledWith(
+      { store_id: ["store_1"], order_id: ["order_1"] },
+      expect.anything()
+    )
+  })
+
   it("returns not found instead of approving another store's request", async () => {
     const { req, refundService } = createReq([])
     req.body = { action: "approve" } as never

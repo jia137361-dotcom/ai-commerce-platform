@@ -3,6 +3,7 @@ export type NotificationType =
   | "ai_failed"
   | "order_paid"
   | "fulfillment_failed"
+  | "refund_request"
 
 export const parseNotificationsListQuery = (query: Record<string, unknown>) => {
   const limit = Math.min(Math.max(Number(query.limit ?? 20) || 20, 1), 100)

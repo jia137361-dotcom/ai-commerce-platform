@@ -12,7 +12,11 @@ import { ensureVariantHasPriceSet } from "../lib/ensure-variant-price-set"
 import { buildLineItemProductionMetadata } from "../lib/line-item-production-metadata"
 import { findStoreCoreVariantRow } from "../lib/native-product-variants"
 import { resolveProductRequiresShipping } from "../lib/product-shipping"
-import { isProductAvailableInRegion } from "../lib/product-regions"
+import {
+  convertUsdPriceToMarketCurrency,
+  isProductAvailableInMarketRegion,
+  listMarketRegionSummaries,
+} from "../lib/product-regions"
 import { resolveLinkedProductForVariant } from "../lib/resolve-linked-product"
 import { isProductCartEligible } from "../lib/product-cart-eligible"
 import { STORE_CORE_MODULE } from "../modules/store-core"
@@ -175,7 +179,10 @@ const addLineItemStep = createStep(
 
     const cartRegionId =
       typeof cart.region_id === "string" && cart.region_id.length > 0 ? cart.region_id : null
-    if (!isProductAvailableInRegion(linkedProduct as Record<string, unknown>, cartRegionId)) {
+    const cartRegion = cartRegionId
+      ? (await listMarketRegionSummaries(container)).find((region) => region.region_id === cartRegionId)
+      : null
+    if (!isProductAvailableInMarketRegion(linkedProduct as Record<string, unknown>, cartRegion)) {
       throw new Error("Product is not available in the cart region")
     }
 
@@ -185,21 +192,37 @@ const addLineItemStep = createStep(
       : typeof linkedProduct.price === "number" && linkedProduct.price > 0
         ? linkedProduct.price
         : 19.99
+    const cartCurrencyCode = cart.currency_code || "usd"
+    const convertedUnitPrice = Math.round(convertUsdPriceToMarketCurrency(linkedPrice, cartCurrencyCode) * 100)
     const priceSetId = await ensureVariantHasPriceSet(container, {
       variantId: input.variant_id,
-      amount: Math.round(linkedPrice * 100),
-      currencyCode: cart.currency_code || "usd",
+      amount: convertedUnitPrice,
+      currencyCode: cartCurrencyCode,
     })
 
     const quantity = input.quantity ?? 1
-    const calculatedUnitPrice =
+    let calculatedUnitPrice =
       typeof input.unit_price === "number" && Number.isFinite(input.unit_price)
         ? input.unit_price
-        : await calculateVariantUnitPrice(container, {
-            priceSetId,
-            cart: cart as unknown as Record<string, unknown>,
-            quantity,
-          })
+        : convertedUnitPrice
+    if (input.unit_price == null) {
+      try {
+        calculatedUnitPrice = await calculateVariantUnitPrice(container, {
+          priceSetId,
+          cart: cart as unknown as Record<string, unknown>,
+          quantity,
+        })
+      } catch (error) {
+        // Pricing can briefly lag behind a newly-added regional price. The
+        // converted catalog price is already stored in the target currency.
+        console.warn("[add-line-item] falling back to converted regional price", {
+          variant_id: input.variant_id,
+          currency_code: cartCurrencyCode,
+          price_set_id: priceSetId,
+          error: error instanceof Error ? error.message : error,
+        })
+      }
+    }
 
     const productionMetadata = await buildLineItemProductionMetadata(
       storeCoreService,

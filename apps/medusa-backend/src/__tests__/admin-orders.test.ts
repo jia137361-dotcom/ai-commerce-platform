@@ -27,6 +27,7 @@ describe("serializeAdminOrderSummary", () => {
       display_id: 8,
       payment_status: "captured",
       payment_method_label: "VISA ···· 4242",
+      metadata: { payment_status: "paid", payment_method_label: "VISA ···· 4242" },
       supplier: {
         supplier_id: "mock",
         supplier_order_id: "MOCK-SUP-abc",

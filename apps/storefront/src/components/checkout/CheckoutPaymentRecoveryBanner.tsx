@@ -43,6 +43,14 @@ export function CheckoutPaymentRecoveryBanner({
         allowRetry: true,
       }
     }
+    if (action === "expired") {
+      return {
+        title: "Payment window expired.",
+        copy: "This unpaid order remains in your orders. Re-add its items from there to start a new checkout.",
+        remaining: "00:00",
+        allowRetry: false,
+      }
+    }
     if (attempt.status === "payment_failed" || attempt.status === "requires_action") {
       return {
         title: "Payment was not completed.",

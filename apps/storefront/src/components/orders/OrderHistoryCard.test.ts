@@ -40,7 +40,7 @@ describe("OrderHistoryCard design-system integration", () => {
     jest.restoreAllMocks()
   })
 
-  it("shows buyer status and logistic actions for shipped orders", () => {
+  it("shows buyer status and order-detail actions for shipped orders", () => {
     const html = renderToStaticMarkup(
       createElement(OrderHistoryCard, {
         order: {
@@ -61,9 +61,9 @@ describe("OrderHistoryCard design-system integration", () => {
       })
     )
 
-    expect(html).toContain('href="/account/orders/order_123/tracking"')
+    expect(html).toContain('href="/account/orders/order_123"')
     expect(html).toContain("Delivered, pending confirmation")
-    expect(html).toContain("View logistic")
+    expect(html).toContain("Order details")
     expect(html).toContain("Confirm delivery")
     expect(html).toContain("buyer-ui-card")
   })

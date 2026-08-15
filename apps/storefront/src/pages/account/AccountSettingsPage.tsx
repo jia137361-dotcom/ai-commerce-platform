@@ -34,6 +34,7 @@ const currencies = [
   { code: "eur", label: "EUR", symbol: "€" },
   { code: "gbp", label: "GBP", symbol: "£" },
   { code: "cny", label: "CNY", symbol: "¥" },
+  { code: "hkd", label: "HKD", symbol: "HK$" },
   { code: "cad", label: "CAD", symbol: "C$" },
   { code: "aud", label: "AUD", symbol: "A$" },
   { code: "jpy", label: "JPY", symbol: "¥" },

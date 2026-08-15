@@ -108,10 +108,10 @@ const isPlaceholderValue = (value: string) =>
 export const storefrontConfig = {
   backendUrl: readEnv("VITE_MEDUSA_BASE_URL", readEnv("NEXT_PUBLIC_MEDUSA_BACKEND_URL", "http://127.0.0.1:9000")),
   publishableKey: readEnv("VITE_PUBLISHABLE_API_KEY", readEnv("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY")),
-  storeId: readEnv("VITE_DEFAULT_STORE_ID", readEnv("NEXT_PUBLIC_STORE_ID", "default_store")),
+  storeId: readEnv("VITE_DEFAULT_STORE_ID", readEnv("NEXT_PUBLIC_STORE_ID", "01KX2P21ZPPSRYY6VJJERRBQYG")),
 }
 
-export const cartStorageKey = `citigoo:${storefrontConfig.storeId || "default_store"}:cart_id`
+export const cartStorageKey = `citigoo:${storefrontConfig.storeId || "01KX2P21ZPPSRYY6VJJERRBQYG"}:cart_id`
 
 /**
  * Format a dollar amount for display.

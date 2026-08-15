@@ -49,7 +49,7 @@ type PaymentCollectionRecord = {
   refunded_amount?: unknown
   raw_refunded_amount?: unknown
   payments?: PaymentRecord[] | null
-  payment_sessions?: Array<{ status?: unknown }> | null
+  payment_sessions?: Array<{ status?: unknown; provider_id?: unknown; data?: Record<string, unknown> | null }> | null
 }
 
 type FulfillmentRecord = {

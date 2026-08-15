@@ -2,7 +2,13 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { resolveCurrentStore } from "../../../lib/store-context"
 import { resolveProductRequiresShipping } from "../../../lib/product-shipping"
 import { attachSupportedRegionsToProducts } from "../../../lib/product-regions"
-import { ensureMarketRegions, isProductAvailableInRegion, resolveRegionIdForCountry } from "../../../lib/product-regions"
+import {
+  ensureMarketRegions,
+  isProductAvailableInMarketRegion,
+  isProductAvailableInRegion,
+  listMarketRegionSummaries,
+  resolveRegionIdForCountry,
+} from "../../../lib/product-regions"
 import {
   getProductReviewSummaries,
   getStoreCoreService,
@@ -26,9 +32,15 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
   const shipFrom = req.shipFromFilter ?? (req.query.ship_from as string | undefined)
   const countryCode = typeof req.query.country_code === "string" ? req.query.country_code.trim().toLowerCase() : ""
   let requestedRegionId = typeof req.query.region_id === "string" ? req.query.region_id.trim() : ""
+  let requestedRegion = null as Awaited<ReturnType<typeof listMarketRegionSummaries>>[number] | null
   if (countryCode && !requestedRegionId) {
     const regions = await ensureMarketRegions(req.scope)
     requestedRegionId = resolveRegionIdForCountry(regions, countryCode) ?? ""
+    requestedRegion = regions.find((region) => region.region_id === requestedRegionId) ?? null
+  } else if (requestedRegionId) {
+    requestedRegion = (await listMarketRegionSummaries(req.scope)).find(
+      (region) => region.region_id === requestedRegionId
+    ) ?? null
   }
 
   const filters: Record<string, unknown> = {
@@ -66,7 +78,9 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     return (
       isStorefrontCatalogVisible(product as Record<string, unknown>) &&
       countryAllowed &&
-      isProductAvailableInRegion(product, requestedRegionId)
+      (requestedRegion
+        ? isProductAvailableInMarketRegion(product, requestedRegion)
+        : isProductAvailableInRegion(product, requestedRegionId))
     )
   })
 

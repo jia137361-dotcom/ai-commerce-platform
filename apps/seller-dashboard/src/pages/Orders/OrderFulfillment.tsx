@@ -1,17 +1,40 @@
+import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router-dom"
 import { apiFetch } from "../../lib/api-client"
 import {
   formatCustomerLabel,
   formatPaymentLabel,
+  formatMinorMoney,
   formatSupplierLabel,
 } from "../../lib/order-display"
 import { useToast } from "../../components/ToastProvider"
 import { Button } from "../../components/ui/Button"
+import { Badge } from "../../components/ui/Badge"
 import { Card, CardTitle } from "../../components/ui/Card"
 import { Skeleton } from "../../components/ui/EmptyState"
+import { Input } from "../../components/ui/Input"
 import { VerticalStepper } from "../../components/ui/Stepper"
 import type { FulfillmentTimelineStep } from "@ai-commerce/shared-types"
+import { canReviewRefund, parsePartialRefundAmount } from "./refund-review-state"
+
+type RefundRequest = {
+  id: string
+  order_id: string
+  reason: string
+  note?: string | null
+  status: string
+  requested_amount: number
+  eligible_amount?: number | null
+  approved_amount?: number | null
+  currency_code?: string | null
+  policy_result?: string | null
+  decision_type?: string | null
+  decision_reason?: string | null
+  provider_status?: string | null
+  external_refund_id?: string | null
+  created_at?: string | null
+}
 
 function mapTimelineSteps(steps: FulfillmentTimelineStep[]) {
   return steps.map((step, index) => ({
@@ -32,12 +55,14 @@ export function OrderFulfillmentPage() {
   const { orderId } = useParams<{ orderId: string }>()
   const queryClient = useQueryClient()
   const toast = useToast()
+  const [partialAmounts, setPartialAmounts] = useState<Record<string, string>>({})
 
   const detailQuery = useQuery({
     queryKey: ["order", orderId],
     enabled: Boolean(orderId),
     queryFn: () => apiFetch<Record<string, unknown>>(`/admin/orders/${orderId}`),
     staleTime: 0,
+    refetchInterval: 10000,
   })
 
   const timelineQuery = useQuery({
@@ -50,6 +75,29 @@ export function OrderFulfillmentPage() {
         fulfillment_order?: Record<string, unknown> | null
       }>(`/admin/orders/${orderId}/fulfillment`),
     staleTime: 0,
+    refetchInterval: 10000,
+  })
+
+  const refundsQuery = useQuery({
+    queryKey: ["seller-refund-requests", orderId],
+    enabled: Boolean(orderId),
+    queryFn: () => apiFetch<{ refund_requests: RefundRequest[] }>(`/seller/refund-requests?order_id=${encodeURIComponent(orderId!)}`),
+    staleTime: 0,
+    refetchInterval: 10000,
+  })
+
+  const refundDecision = useMutation({
+    mutationFn: (input: { id: string; action: "approve" | "reject" | "request_information"; amount?: number }) =>
+      apiFetch(`/seller/refund-requests/${encodeURIComponent(input.id)}/decision`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["seller-refund-requests"] })
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] })
+      toast.push("Refund status updated", "success")
+    },
+    onError: (err: unknown) => toast.push(err instanceof Error ? err.message : "Refund decision failed", "error"),
   })
 
   const pushMutation = useMutation({
@@ -88,6 +136,16 @@ export function OrderFulfillmentPage() {
     },
   })
 
+  const settlementMutation = useMutation({
+    mutationFn: () => apiFetch<{ seller_payout?: unknown }>(`/admin/orders/${orderId}/release-seller-payout`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] })
+      queryClient.invalidateQueries({ queryKey: ["order-fulfillment", orderId] })
+      toast.push("Settlement status refreshed", "success")
+    },
+    onError: (err: unknown) => toast.push(err instanceof Error ? err.message : "Unable to release settlement", "error"),
+  })
+
   const order = detailQuery.data
   const summary =
     (timelineQuery.data?.order_summary as Record<string, unknown> | undefined) ?? order
@@ -113,6 +171,19 @@ export function OrderFulfillmentPage() {
     summary?.payment_status as string | undefined,
     summary?.payment_method_label as string | undefined
   )
+  const orderMetadata = (summary?.metadata ?? order?.metadata) as Record<string, unknown> | null | undefined
+  const payoutStatus = typeof orderMetadata?.seller_payout_status === "string"
+    ? orderMetadata.seller_payout_status
+    : "not_released"
+  const payoutError = typeof orderMetadata?.seller_payout_error === "string"
+    ? orderMetadata.seller_payout_error
+    : null
+  const payoutAmount = typeof orderMetadata?.seller_payout_amount === "number"
+    ? orderMetadata.seller_payout_amount
+    : null
+  const payoutCurrency = typeof orderMetadata?.seller_payout_currency === "string"
+    ? orderMetadata.seller_payout_currency.toUpperCase()
+    : null
   const timelineSteps = timelineQuery.data?.steps ?? []
   const shippedComplete = timelineSteps.some(
     (step) => step.key === "shipped" && step.status === "completed"
@@ -121,6 +192,7 @@ export function OrderFulfillmentPage() {
     (step) => step.key === "delivered" && step.status === "completed"
   )
   const showMockDelivered = import.meta.env.DEV && shippedComplete && !deliveredComplete
+  const refundRequests = refundsQuery.data?.refund_requests ?? []
 
   return (
     <div>
@@ -165,6 +237,57 @@ export function OrderFulfillmentPage() {
               <p className="text-sm text-slate-500">No timeline data</p>
             )}
           </Card>
+
+          <Card>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <CardTitle>Refunds</CardTitle>
+              <Link to={`/refund-requests?order_id=${encodeURIComponent(orderId ?? "")}`} className="text-sm text-brand hover:underline">
+                View refund request
+              </Link>
+            </div>
+            {refundsQuery.isLoading ? <Skeleton className="h-24" /> : refundRequests.length === 0 ? (
+              <p className="text-sm text-slate-500">No refund request for this order.</p>
+            ) : (
+              <div className="space-y-4">
+                {refundRequests.map((request) => {
+                  const eligibleAmount = request.eligible_amount ?? request.requested_amount
+                  const partialAmount = parsePartialRefundAmount(partialAmounts[request.id] ?? "", eligibleAmount)
+                  const busy = refundDecision.isPending && refundDecision.variables?.id === request.id
+                  return (
+                    <div key={request.id} className="rounded-lg border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium capitalize">{request.reason.replaceAll("_", " ")}</p>
+                        <Badge label={request.status} />
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">Requested: {formatMinorMoney(request.requested_amount, request.currency_code)}</p>
+                      <p className="mt-1 text-xs text-slate-500">Policy: {request.policy_result?.replaceAll("_", " ") ?? "manual review"}{request.decision_type ? ` · ${request.decision_type.replaceAll("_", " ")}` : ""}</p>
+                      {request.decision_reason ? <p className="mt-1 text-xs text-slate-500">{request.decision_reason}</p> : null}
+                      {request.external_refund_id ? <p className="mt-1 text-xs text-slate-500">Refund reference: {request.external_refund_id}</p> : null}
+                      {canReviewRefund(request.status) ? (
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <Input
+                            aria-label={`Partial refund amount for ${request.id}`}
+                            className="w-36"
+                            type="number"
+                            min="0.01"
+                            max={eligibleAmount / 100}
+                            step="0.01"
+                            placeholder="Partial amount"
+                            value={partialAmounts[request.id] ?? ""}
+                            onChange={(event) => setPartialAmounts((current) => ({ ...current, [request.id]: event.target.value }))}
+                          />
+                          <Button size="sm" disabled={busy} onClick={() => refundDecision.mutate({ id: request.id, action: "approve" })}>Approve full</Button>
+                          <Button size="sm" variant="outline" disabled={busy || partialAmount == null} onClick={() => partialAmount != null && refundDecision.mutate({ id: request.id, action: "approve", amount: partialAmount })}>Approve partial</Button>
+                          <Button size="sm" variant="outline" disabled={busy} onClick={() => refundDecision.mutate({ id: request.id, action: "request_information" })}>Request info</Button>
+                          <Button size="sm" variant="ghost" disabled={busy} onClick={() => refundDecision.mutate({ id: request.id, action: "reject" })}>Reject</Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
         </div>
 
         <Card>
@@ -202,6 +325,26 @@ export function OrderFulfillmentPage() {
               <p>
                 <span className="text-slate-500">Payment:</span> {paymentLabel}
               </p>
+              <div className="border-t pt-3">
+                <p className="flex items-center justify-between gap-2">
+                  <span className="text-slate-500">Seller settlement:</span>
+                  <Badge label={payoutStatus.replaceAll("_", " ")} />
+                </p>
+                {payoutAmount != null ? <p className="mt-1 text-xs text-slate-500">{formatMinorMoney(payoutAmount, payoutCurrency)}</p> : null}
+                {payoutError ? <p className="mt-1 text-xs text-red-600">{payoutError}</p> : null}
+                {payoutStatus === "not_released" ? <p className="mt-1 text-xs text-slate-500">Settlement is released after the buyer confirms receipt.</p> : null}
+                {(["not_released", "pending_account", "failed"] as string[]).includes(payoutStatus) ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3"
+                    disabled={settlementMutation.isPending}
+                    onClick={() => settlementMutation.mutate()}
+                  >
+                    {settlementMutation.isPending ? "Releasing…" : "Release settlement"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           )}
         </Card>

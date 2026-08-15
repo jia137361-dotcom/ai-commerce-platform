@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import type { BuyerShareInfo } from "../../lib/buyer-api"
 import { Modal } from "../ui/Modal"
 import { ProductSharePanel } from "./ProductSharePanel"
+import { CHECKOUT_COUNTRIES } from "../../pages/checkout/checkout-countries"
 
 type ProductDetailPopupsProps = {
   share?: BuyerShareInfo | null
@@ -9,11 +10,12 @@ type ProductDetailPopupsProps = {
   storeHref: string
   onToggleFavorite?: () => void
   isFavorited?: boolean
+  countryCode?: string
+  onCountryChange?: (countryCode: string) => void
 }
 
-export function ProductDetailPopups({ share, productTitle, storeHref, onToggleFavorite, isFavorited = false }: ProductDetailPopupsProps) {
+export function ProductDetailPopups({ share, productTitle, storeHref, onToggleFavorite, isFavorited = false, countryCode = "us", onCountryChange }: ProductDetailPopupsProps) {
   const [open, setOpen] = useState<"share" | "shipping" | "country" | "qr" | "menu" | null>(null)
-  const [shipRegion, setShipRegion] = useState("United States")
   const [qrDataUrl, setQrDataUrl] = useState("")
   const [qrError, setQrError] = useState<string>()
 
@@ -84,14 +86,11 @@ export function ProductDetailPopups({ share, productTitle, storeHref, onToggleFa
       <Modal open={open === "country"} title="Country & region" onClose={() => setOpen(null)} className="buyer-product-popup">
         <label className="buyer-product-region-field">
           <span>Ship to</span>
-          <select value={shipRegion} onChange={(event) => setShipRegion(event.target.value)}>
-            <option>United States</option>
-            <option>Canada</option>
-            <option>United Kingdom</option>
-            <option>Australia</option>
+          <select value={countryCode} onChange={(event) => onCountryChange?.(event.target.value)}>
+            {CHECKOUT_COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
           </select>
         </label>
-        <p className="buyer-filter-mock-note">Region selection is UI-only in this batch; checkout still uses account preferences.</p>
+        <p className="buyer-filter-mock-note">Product availability, display currency, and the next cart use this destination.</p>
       </Modal>
 
       <Modal open={open === "qr"} title="Product QR Code" onClose={() => setOpen(null)} className="buyer-product-popup">

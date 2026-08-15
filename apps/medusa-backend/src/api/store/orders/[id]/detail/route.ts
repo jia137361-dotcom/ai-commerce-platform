@@ -12,6 +12,7 @@ import {
   ORDER_META_PAYMENT_STATUS,
   resolveBuyerOrderFulfillmentStatus,
 } from "../../../../../lib/order-custom-metadata"
+import { canConfirmReceipt, readReceiptConfirmed } from "../../../../../lib/buyer-order-display"
 import {
   cancellationResponse,
   evaluateCancellationEligibility,
@@ -256,6 +257,13 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       status: retrievedOrder.status ?? null,
       payment_status: metadata?.[ORDER_META_PAYMENT_STATUS] ?? null,
       fulfillment_status: resolveBuyerOrderFulfillmentStatus(metadata),
+      receipt_confirmation_required: canConfirmReceipt({
+        fulfillmentStatus: resolveBuyerOrderFulfillmentStatus(metadata),
+        receiptConfirmed: readReceiptConfirmed(retrievedOrder),
+      }),
+      receipt_confirmed_at: typeof metadata?.buyer_confirmed_received_at === "string"
+        ? metadata.buyer_confirmed_received_at
+        : null,
       created_at: retrievedOrder.created_at ?? null,
       currency_code: retrievedOrder.currency_code ?? null,
       items: displayItems.map(normalizeItem),

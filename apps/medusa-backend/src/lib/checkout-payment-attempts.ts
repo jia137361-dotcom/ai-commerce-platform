@@ -32,6 +32,8 @@ export type CheckoutPaymentAttemptRecord = {
 
 export type StripePaymentIntent = {
   id: string
+  amount?: number | null
+  currency?: string | null
   status?: string | null
   client_secret?: string | null
   payment_method?: string | { type?: string; card?: { brand?: string; last4?: string; wallet?: { type?: string | null } | null } | null } | null
@@ -177,19 +179,34 @@ export const formatPaymentAttemptError = (error: unknown) => {
   return "Payment provider did not return an error message"
 }
 
-export async function readActiveCheckoutPaymentAttempt(
+export async function readCheckoutPaymentAttempts(
   container: MedusaContainer,
   input: { cartId: string; storeId: string }
-): Promise<CheckoutPaymentAttemptRecord | null> {
+): Promise<CheckoutPaymentAttemptRecord[]> {
   const service = container.resolve(CHECKOUT_PAYMENT_ATTEMPTS_MODULE) as CheckoutPaymentAttemptsModuleService
-  const attempts = (await service.listCheckoutPaymentAttempts(
+  return (await service.listCheckoutPaymentAttempts(
     {
       cart_id: [input.cartId],
       store_id: [input.storeId],
     },
     { order: { created_at: "DESC" }, take: 5 }
   )) as CheckoutPaymentAttemptRecord[]
+}
+
+export async function readActiveCheckoutPaymentAttempt(
+  container: MedusaContainer,
+  input: { cartId: string; storeId: string }
+): Promise<CheckoutPaymentAttemptRecord | null> {
+  const attempts = await readCheckoutPaymentAttempts(container, input)
   return attempts.find((attempt) => isActiveCheckoutPaymentAttemptStatus(attempt.status ?? null)) ?? null
+}
+
+export async function readLatestCheckoutPaymentAttempt(
+  container: MedusaContainer,
+  input: { cartId: string; storeId: string }
+): Promise<CheckoutPaymentAttemptRecord | null> {
+  const attempts = await readCheckoutPaymentAttempts(container, input)
+  return attempts[0] ?? null
 }
 
 export async function readCheckoutPaymentAttemptById(

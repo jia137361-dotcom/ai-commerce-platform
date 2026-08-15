@@ -4,9 +4,14 @@ import { BUYER_REFUND_REQUESTS_MODULE } from "../modules/buyer-refund-requests"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
 
 const mockRefundWorkflowRun = jest.fn()
+const mockStripeApiRequest = jest.fn()
 
 jest.mock("@medusajs/core-flows", () => ({
   refundPaymentWorkflow: () => ({ run: (...args: unknown[]) => mockRefundWorkflowRun(...args) }),
+}))
+
+jest.mock("../lib/stripe-client", () => ({
+  stripeApiRequest: (...args: unknown[]) => mockStripeApiRequest(...args),
 }))
 
 const createFixture = ({
@@ -16,6 +21,8 @@ const createFixture = ({
   captured = 20,
   refunded = 0,
   providerRefundStatus = "COMPLETED",
+  providerId = "pp_paypal_paypal",
+  hasCaptureRecord = true,
 }: {
   requestStatus?: string
   decisionType?: string
@@ -23,6 +30,8 @@ const createFixture = ({
   captured?: number
   refunded?: number
   providerRefundStatus?: string
+  providerId?: string
+  hasCaptureRecord?: boolean
 } = {}) => {
   let request: Record<string, unknown> = {
     id: "brr_1",
@@ -51,15 +60,19 @@ const createFixture = ({
       currency_code: "usd",
       payments: [{
         id: "pay_1",
-        provider_id: "pp_paypal_paypal",
+        provider_id: providerId,
         amount: captured,
         currency_code: "usd",
         captured_at: "now",
-        captures: [{ id: "capture_1", amount: captured, data: { paypal_capture_id: "CAPTURE_1" } }],
+        captures: hasCaptureRecord
+          ? [{ id: "capture_1", amount: captured, data: { paypal_capture_id: "CAPTURE_1" } }]
+          : [],
         refunds: beforeRefunds,
-        data: { paypal_order_id: "ORDER_1", paypal_capture_id: "CAPTURE_1", currency: "usd" },
+        data: providerId === "pp_paypal_paypal"
+          ? { paypal_order_id: "ORDER_1", paypal_capture_id: "CAPTURE_1", currency: "usd" }
+          : { id: "pi_1", currency: "usd" },
       }],
-      payment_sessions: [{ id: "payses_1", provider_id: "pp_paypal_paypal", data: { paypal_order_id: "ORDER_1" } }],
+      payment_sessions: [{ id: "payses_1", provider_id: providerId, data: { paypal_order_id: "ORDER_1" } }],
     }],
     fulfillments: [],
   }
@@ -75,12 +88,14 @@ const createFixture = ({
       })
       .mockResolvedValue({
         id: "pay_1",
-        captures: [{ id: "capture_1", amount: captured }],
+        captures: hasCaptureRecord ? [{ id: "capture_1", amount: captured }] : [],
         refunds: [...beforeRefunds, { id: "refund_new", amount: 5 }],
-        data: {
-          paypal_refund_id: "PAYPAL_REFUND_1",
-          paypal_refund_status: providerRefundStatus,
-        },
+        data: providerId === "pp_paypal_paypal"
+          ? {
+              paypal_refund_id: "PAYPAL_REFUND_1",
+              paypal_refund_status: providerRefundStatus,
+            }
+          : {},
       }),
   }
   const locking = { execute: jest.fn(async (_key: string, job: () => Promise<unknown>) => job()) }
@@ -106,6 +121,7 @@ describe("approved refund execution", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockRefundWorkflowRun.mockResolvedValue({ result: {} })
+    mockStripeApiRequest.mockResolvedValue({ id: "re_1", status: "succeeded" })
   })
 
   it("executes a full provider refund once under the distributed lock", async () => {
@@ -132,6 +148,28 @@ describe("approved refund execution", () => {
       amount: 5,
     })
     expect(result.status).toBe("partially_refunded")
+  })
+
+  it("executes a Stripe refund using the order's captured Stripe payment", async () => {
+    const fixture = createFixture({ providerId: "pp_stripe_stripe", hasCaptureRecord: false })
+    const result = await executeApprovedRefund({
+      container: fixture.container as never,
+      refundRequestId: "brr_1",
+      orderId: "order_1",
+      storeId: "default_store",
+      amount: 20,
+    })
+
+    expect(mockRefundWorkflowRun).not.toHaveBeenCalled()
+    expect(mockStripeApiRequest).toHaveBeenCalledWith(
+      "/refunds",
+      expect.objectContaining({ params: { payment_intent: "pi_1", amount: 20 } })
+    )
+    expect(result).toMatchObject({
+      status: "refunded",
+      payment_provider_id: "pp_stripe_stripe",
+      external_refund_id: "re_1",
+    })
   })
 
   it("does not describe a PayPal pending response as completed", async () => {

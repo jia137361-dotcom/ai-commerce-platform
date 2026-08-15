@@ -5,6 +5,7 @@ describe("buyer display preferences", () => {
     expect(resolveAutoCurrency("US")).toBe("usd")
     expect(resolveAutoCurrency("cn")).toBe("cny")
     expect(resolveAutoCurrency("DE")).toBe("eur")
+    expect(resolveAutoCurrency("HK")).toBe("hkd")
   })
 
   it("allows an explicit currency to override auto", () => {

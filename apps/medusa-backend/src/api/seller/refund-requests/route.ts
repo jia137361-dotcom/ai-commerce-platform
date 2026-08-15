@@ -15,8 +15,10 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     listBuyerRefundRequests: (filters: Record<string, unknown>, config?: Record<string, unknown>) => Promise<BuyerRefundRequestRecord[]>
   }
   const status = typeof req.query?.status === "string" ? req.query.status : undefined
+  const orderId = typeof req.query?.order_id === "string" ? req.query.order_id : undefined
   const filters: Record<string, unknown> = { store_id: [session.store_id] }
   if (status) filters.status = [status]
+  if (orderId) filters.order_id = [orderId]
   const requests = await service.listBuyerRefundRequests(filters, { order: { created_at: "DESC" }, take: 100 })
   const orderIds = [...new Set(requests.map((request) => request.order_id).filter((id): id is string => Boolean(id)))]
   const orderModule = req.scope.resolve(Modules.ORDER) as unknown as {

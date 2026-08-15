@@ -3,8 +3,8 @@ import { canReviewRefund, parsePartialRefundAmount } from "./refund-review-state
 
 describe("seller refund review state", () => {
   it("accepts a partial amount only within the eligible balance", () => {
-    expect(parsePartialRefundAmount("5.50", 20)).toBe(5.5)
-    expect(parsePartialRefundAmount("21", 20)).toBeNull()
+    expect(parsePartialRefundAmount("5.50", 2000)).toBe(550)
+    expect(parsePartialRefundAmount("21", 2000)).toBeNull()
     expect(parsePartialRefundAmount("0", 20)).toBeNull()
   })
 

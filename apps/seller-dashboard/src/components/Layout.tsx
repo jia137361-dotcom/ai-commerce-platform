@@ -22,6 +22,9 @@ const NAV: Array<{ to: string; label: string; end?: boolean }> = [
 
 function notificationHref(notification: StoreNotification): string | null {
   const type = String(notification.type || "").toLowerCase()
+  const metadata = (notification as StoreNotification & { metadata?: Record<string, unknown> }).metadata
+  const orderId = typeof metadata?.order_id === "string" ? metadata.order_id : null
+  if (type.includes("refund")) return orderId ? `/orders/${encodeURIComponent(orderId)}/fulfillment` : "/refund-requests"
   if (type.includes("message") || type.includes("inbox")) return "/messages"
   if (type.includes("review")) return "/reviews"
   if (type.includes("order") || type.includes("fulfill") || type.includes("shipment")) {

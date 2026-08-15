@@ -3,10 +3,11 @@ const readEnv = (key: string, fallback = "") =>
 
 export const MARKETPLACE_STORE_ID = "marketplace"
 export const ACTIVE_STORE_STORAGE_KEY = "citigoo:active_store_id"
+const RETIRED_DEFAULT_STORE_ID = "default_store"
 
 const legacyDefaultStoreId = readEnv(
   "VITE_DEFAULT_STORE_ID",
-  readEnv("NEXT_PUBLIC_STORE_ID", "default_store")
+  readEnv("NEXT_PUBLIC_STORE_ID", "01KX2P21ZPPSRYY6VJJERRBQYG")
 )
 
 let runtimeStoreId: string | null = null
@@ -15,7 +16,8 @@ const readPersistedStoreId = (): string | null => {
   if (typeof window === "undefined") return null
   try {
     const value = window.localStorage.getItem(ACTIVE_STORE_STORAGE_KEY)?.trim()
-    return value || null
+    // Move browsers that remembered the retired bootstrap store to Ciiverse.
+    return value === RETIRED_DEFAULT_STORE_ID ? legacyDefaultStoreId : value || null
   } catch {
     return null
   }

@@ -44,6 +44,21 @@ const COMPLETABLE_STRIPE_STATUSES = new Set(["succeeded", "processing", "require
 export const STRIPE_ORDER_CREATION_FAILED_MESSAGE =
   "支付已确认，订单正在恢复。请不要再次付款；如订单稍后仍未显示，请联系支持。"
 
+/**
+ * Stripe has accepted the payment, but the separate cart-completion request
+ * failed. Treat this differently from a declined card: confirming the same
+ * PaymentIntent again is invalid and can surface as a Stripe processing error.
+ */
+export class StripePaymentConfirmedOrderRecoveryError extends Error {
+  readonly completionError: unknown
+
+  constructor(completionError: unknown) {
+    super(STRIPE_ORDER_CREATION_FAILED_MESSAGE)
+    this.name = "StripePaymentConfirmedOrderRecoveryError"
+    this.completionError = completionError
+  }
+}
+
 type StripeWithPaymentMethodLookup = Pick<Stripe, "confirmPayment"> & {
   retrievePaymentMethod?: (paymentMethod: string) => Promise<{
     paymentMethod?: {
@@ -86,8 +101,8 @@ export async function confirmStripePaymentAndComplete<T>(input: {
   try {
     const orderResult = await input.complete(paymentMethodLabel)
     return { result: orderResult, paymentMethodLabel }
-  } catch {
-    throw new Error(STRIPE_ORDER_CREATION_FAILED_MESSAGE)
+  } catch (error) {
+    throw new StripePaymentConfirmedOrderRecoveryError(error)
   }
 }
 

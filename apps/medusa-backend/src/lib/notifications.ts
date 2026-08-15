@@ -5,6 +5,7 @@ export type NotificationType =
   | "ai_failed"
   | "order_paid"
   | "fulfillment_failed"
+  | "refund_request"
 
 export const createStoreNotification = async (
   storeCoreService: StoreCoreModuleService,
@@ -80,6 +81,29 @@ export const notifyFulfillmentFailed = async (
     title: "Fulfillment push failed",
     body: input.reason,
     metadata: { order_id: input.orderId },
+  })
+}
+
+export const notifySellerRefundRequest = async (
+  storeCoreService: StoreCoreModuleService,
+  storeId: string,
+  input: { orderId: string; displayId?: number | string | null; status: string; autoProcessed: boolean }
+) => {
+  const label = input.displayId != null ? `#${input.displayId}` : input.orderId
+  const settled = ["refunded", "partially_refunded", "processed"].includes(input.status)
+  return createStoreNotification(storeCoreService, {
+    store_id: storeId,
+    type: "refund_request",
+    title: settled ? "退款已自动处理" : "收到退款申请",
+    body: settled
+      ? `订单 ${label} 的退款已自动完成。`
+      : `订单 ${label} 有一笔退款申请需要处理。`,
+    metadata: {
+      order_id: input.orderId,
+      display_id: input.displayId ?? null,
+      refund_status: input.status,
+      auto_processed: input.autoProcessed,
+    },
   })
 }
 

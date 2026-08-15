@@ -221,6 +221,7 @@ export function OrderListPage() {
     queryKey: ["orders", offset, search],
     queryFn: () =>
       apiFetch<{ orders: OrderRow[]; count: number }>(`/admin/orders?${queryString.toString()}`),
+    refetchInterval: 10000,
   })
 
   const onSearch = (e: FormEvent) => {

@@ -1,5 +1,6 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { existsSync, readFileSync } from "node:fs"
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import { Pool } from "pg"
@@ -7,7 +8,8 @@ import dotenv from "dotenv"
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(rootDir, "../medusa-backend/.env") })
-const sellerEnv = dotenv.parse(await import("node:fs").then(({ readFileSync }) => readFileSync(path.join(rootDir, ".env"))))
+const sellerEnvPath = path.join(rootDir, ".env")
+const sellerEnv = existsSync(sellerEnvPath) ? dotenv.parse(readFileSync(sellerEnvPath)) : {}
 
 const localProductApi = () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })

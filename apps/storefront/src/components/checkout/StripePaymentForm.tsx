@@ -11,7 +11,11 @@ import {
   resolveStripeWalletPresentationOptions,
   type StripeWalletAvailability,
 } from "../../lib/stripe-wallet"
-import { confirmStripePaymentAndComplete, confirmStripeWalletPaymentAndComplete } from "../../pages/checkout/checkout-payment"
+import {
+  confirmStripePaymentAndComplete,
+  confirmStripeWalletPaymentAndComplete,
+  StripePaymentConfirmedOrderRecoveryError,
+} from "../../pages/checkout/checkout-payment"
 import { StripeTestModeHint } from "./StripeTestModeHint"
 import { Button } from "../ui/Button"
 
@@ -32,6 +36,7 @@ export function StripePaymentForm({
   const elements = useElements()
   const [error, setError] = useState<string>()
   const [confirming, setConfirming] = useState(false)
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [elementReady, setElementReady] = useState(false)
   const [walletAvailability, setWalletAvailability] = useState<StripeWalletAvailability>(() => normalizeStripeWalletAvailability())
   const [walletAvailabilityKnown, setWalletAvailabilityKnown] = useState(false)
@@ -77,7 +82,7 @@ export function StripePaymentForm({
   }
 
   const submit = async () => {
-    if (!stripe || !elements || !elementReady || !canSubmit || confirming || placing) return
+    if (!stripe || !elements || !elementReady || !canSubmit || confirming || placing || paymentConfirmed) return
     setConfirming(true)
     setError(undefined)
     try {
@@ -92,6 +97,9 @@ export function StripePaymentForm({
         complete: (paymentMethodLabel) => onComplete(paymentMethodLabel),
       })
     } catch (value) {
+      if (value instanceof StripePaymentConfirmedOrderRecoveryError) {
+        setPaymentConfirmed(true)
+      }
       setError(value instanceof Error ? value.message : "Stripe payment confirmation failed.")
     } finally {
       setConfirming(false)
@@ -99,7 +107,7 @@ export function StripePaymentForm({
   }
 
   const submitWallet = async (event: StripeExpressCheckoutElementConfirmEvent) => {
-    if (!stripe || !elements || !canSubmit || confirming || placing) {
+    if (!stripe || !elements || !canSubmit || confirming || placing || paymentConfirmed) {
       event.paymentFailed({ message: "Finish checkout details before paying." })
       return
     }
@@ -114,6 +122,9 @@ export function StripePaymentForm({
       })
     } catch (value) {
       const message = value instanceof Error ? value.message : "Stripe wallet confirmation failed."
+      if (value instanceof StripePaymentConfirmedOrderRecoveryError) {
+        setPaymentConfirmed(true)
+      }
       setError(message)
       event.paymentFailed({ message })
     } finally {
@@ -182,8 +193,8 @@ export function StripePaymentForm({
       />
       <StripeTestModeHint />
       {error ? <p className="buyer-checkout-inline-error" role="alert">{error}</p> : null}
-      <Button loading={confirming || placing} disabled={!stripe || !elements || !elementReady || !canSubmit || confirming || placing} onClick={() => void submit()}>
-        {placing ? "Finalizing order..." : confirming ? "Confirming payment..." : "Pay now"}
+      <Button loading={confirming || placing || paymentConfirmed} disabled={!stripe || !elements || !elementReady || !canSubmit || confirming || placing || paymentConfirmed} onClick={() => void submit()}>
+        {paymentConfirmed ? "Restoring order..." : placing ? "Finalizing order..." : confirming ? "Confirming payment..." : "Pay now"}
       </Button>
     </div>
   )

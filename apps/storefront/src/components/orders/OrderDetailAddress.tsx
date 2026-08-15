@@ -8,11 +8,9 @@ const read = (address: OrderAddress, key: string) => {
 export function OrderDetailAddress({
   address,
   email,
-  trackingHref,
 }: {
   address: OrderAddress
   email?: string | null
-  trackingHref?: string
 }) {
   const receiver = [read(address, "first_name"), read(address, "last_name")].filter(Boolean).join(" ")
   const phone = read(address, "phone")
@@ -35,13 +33,7 @@ export function OrderDetailAddress({
         </div>
         <div>
           <dt>Track number</dt>
-          <dd>
-            {trackingHref ? (
-              <a href={trackingHref}>View logistics</a>
-            ) : (
-              "—"
-            )}
-          </dd>
+          <dd>—</dd>
         </div>
         <div>
           <dt>Shipping method</dt>

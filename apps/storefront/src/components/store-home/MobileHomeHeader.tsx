@@ -20,7 +20,7 @@ export function MobileHomeHeader({
   shipToOptions = [],
   stores = [],
   currentStoreId = "",
-  currentStoreHref = "/marketplace",
+  currentStoreHref = "/shops/ciiverse",
   currentStoreName = "All stores",
   onStoreChange,
 }: MobileHomeHeaderProps) {
@@ -94,7 +94,7 @@ export function MobileHomeHeader({
             </nav>
           ) : null}
         </div>
-        <a className="buyer-mhome-brand" href="/marketplace" aria-label={`${brand} all stores`}>
+        <a className="buyer-mhome-brand" href="/shops/ciiverse" aria-label={`${brand} home`}>
           {brand}
         </a>
         <label className="buyer-mhome-ship">

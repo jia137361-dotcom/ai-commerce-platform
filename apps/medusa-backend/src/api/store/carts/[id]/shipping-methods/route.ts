@@ -11,6 +11,7 @@ import {
   buildS2bShippingQuoteMetadata,
   quoteS2bShippingForCart,
 } from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
+import { convertUsdPriceToMarketCurrency } from "../../../../../lib/product-regions"
 
 type ShippingMethodBody = {
   option_id?: string
@@ -110,12 +111,15 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         if (!shippingMethodId) return fresh
 
         // Cart module only accepts UpdateShippingMethodDTO[] (not id + data overload).
+        const cartCurrencyCode = typeof fresh.currency_code === "string" ? fresh.currency_code : "usd"
+        const localizedAmount = convertUsdPriceToMarketCurrency(s2bQuote.amountUsd, cartCurrencyCode)
         await cartModule.updateShippingMethods([
           {
             id: shippingMethodId,
-            amount: s2bQuote.amountMinor,
+            amount: Math.round(localizedAmount * 100),
             data: {
               pricing_source: s2bQuote.source,
+              s2b_amount_usd: s2bQuote.amountUsd,
               s2b_amount_cny: s2bQuote.amountCny,
               s2b_logistics_name: s2bQuote.logisticsName,
               s2b_logistics_platform_id: s2bQuote.logisticsPlatformId,

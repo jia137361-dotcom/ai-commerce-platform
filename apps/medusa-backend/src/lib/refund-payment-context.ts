@@ -110,8 +110,9 @@ export type RefundPaymentContext = {
   refunded_amount: number
   remaining_refundable_amount: number
   payment_session_id: string | null
+  provider_payment_id: string | null
   paypal_order_id: string | null
-  paypal_capture_id: string
+  paypal_capture_id: string | null
   capture_count: number
   refund_count: number
 }
@@ -121,7 +122,12 @@ export type ResolveRefundPaymentContextInput = {
   orderId: string
   requestedAmount?: unknown
   requestedCurrency?: string | null
-  expectedProviderId: string
+  /**
+   * Restrict resolution when a caller knows the provider. When omitted, the
+   * single captured payment on the order is authoritative. This lets the
+   * seller refund flow support both native Stripe and PayPal payments.
+   */
+  expectedProviderId?: string | null
 }
 
 const fail = (code: RefundPaymentContextErrorCode, message: string): never => {
@@ -315,6 +321,19 @@ const readPayPalIds = (
   }
 }
 
+const isPayPalProvider = (providerId: string) => providerId === "pp_paypal_paypal"
+
+const readStripePaymentIntentId = (...records: Array<JsonRecord | null | undefined>) => {
+  for (const record of records) {
+    const direct = normalizeString(record?.id)
+    if (direct.startsWith("pi_")) return direct
+    const nested = record?.payment_intent
+    if (typeof nested === "string" && nested.startsWith("pi_")) return nested
+    if (isObject(nested) && normalizeString(nested.id).startsWith("pi_")) return normalizeString(nested.id)
+  }
+  return null
+}
+
 const validateCurrencyAgreement = (input: {
   orderCurrency: string
   collectionCurrency: string
@@ -392,9 +411,10 @@ export async function resolveRefundPaymentContext({
     fail("PAYMENT_COLLECTION_NOT_FOUND", "Payment collection is missing for this order")
   }
 
-  const providerCollections = collections.filter((collection) =>
-    collectionMatchesProvider(collection, expectedProviderId)
-  )
+  const normalizedExpectedProviderId = normalizeString(expectedProviderId)
+  const providerCollections = normalizedExpectedProviderId
+    ? collections.filter((collection) => collectionMatchesProvider(collection, normalizedExpectedProviderId))
+    : []
   const eligibleCollections = providerCollections.length
     ? providerCollections
     : collections.filter(collectionHasPaymentEvidence)
@@ -413,9 +433,9 @@ export async function resolveRefundPaymentContext({
     !isCanceledStatus(payment.status) &&
     hasCaptureEvidence(payment)
   )
-  const providerPayments = capturedPayments.filter((payment) =>
-    paymentMatchesProvider(payment, expectedProviderId)
-  )
+  const providerPayments = normalizedExpectedProviderId
+    ? capturedPayments.filter((payment) => paymentMatchesProvider(payment, normalizedExpectedProviderId))
+    : capturedPayments
   if (providerPayments.length === 0) {
     if (capturedPayments.length > 0) {
       fail("PAYMENT_PROVIDER_MISMATCH", "Captured payment provider does not match the expected provider")
@@ -429,7 +449,16 @@ export async function resolveRefundPaymentContext({
   const payment = only(providerPayments)!
   if (!payment.id) fail("PAYMENT_NOT_FOUND", "Eligible payment is missing an ID")
 
-  const captures = completedCaptures(payment)
+  const persistedCaptures = completedCaptures(payment)
+  // The native Stripe provider can persist `captured_at` on the payment
+  // without creating a separate capture record. A refund still has an
+  // authoritative payment amount in that case. PayPal remains stricter
+  // because it needs the provider capture id for its refund API.
+  const captures = persistedCaptures.length
+    ? persistedCaptures
+    : !isPayPalProvider(normalizeString(payment.provider_id)) && hasCaptureEvidence(payment)
+      ? [{ amount: paymentAmount(payment), status: "completed" }]
+      : []
   if (captures.length === 0) {
     fail("PAYMENT_CAPTURE_NOT_FOUND", "No authoritative completed capture is available")
   }
@@ -479,10 +508,14 @@ export async function resolveRefundPaymentContext({
     requestedCurrency,
   })
 
+  const providerId = normalizeString(payment.provider_id)
+  if (!providerId) fail("PAYMENT_NOT_FOUND", "Eligible payment provider is missing")
   const session = only((collection.payment_sessions ?? []).filter((item) =>
-    sessionMatchesProvider(item, expectedProviderId)
+    sessionMatchesProvider(item, providerId)
   )) ?? payment.payment_session ?? null
-  const paypalIds = readPayPalIds(payment, capture, session)
+  const paypalIds = isPayPalProvider(providerId)
+    ? readPayPalIds(payment, capture, session)
+    : { paypal_order_id: null, paypal_capture_id: null }
 
   return {
     order_id: String(order.id),
@@ -491,12 +524,15 @@ export async function resolveRefundPaymentContext({
     payment_collection_id: String(collection.id),
     payment_collection_status: collection.status ?? null,
     payment_id: String(payment.id),
-    provider_id: expectedProviderId,
+    provider_id: providerId,
     payment_amount: currentPaymentAmount,
     captured_amount: capturedAmount,
     refunded_amount: currentRefundedAmount,
     remaining_refundable_amount: remaining,
     payment_session_id: session?.id ? String(session.id) : null,
+    provider_payment_id: isPayPalProvider(providerId)
+      ? paypalIds.paypal_capture_id
+      : readStripePaymentIntentId(payment.data, payment.provider_transaction_data, session?.data, session?.provider_transaction_data),
     paypal_order_id: paypalIds.paypal_order_id,
     paypal_capture_id: paypalIds.paypal_capture_id,
     capture_count: captures.length,

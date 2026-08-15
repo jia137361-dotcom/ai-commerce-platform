@@ -9,6 +9,7 @@ export const ORDER_META_SELLER_PAYOUT_STATUS = "seller_payout_status"
 export const ORDER_META_SELLER_PAYOUT_TRANSFER_ID = "seller_payout_transfer_id"
 export const ORDER_META_SELLER_PAYOUT_AT = "seller_payout_at"
 export const ORDER_META_SELLER_PAYOUT_AMOUNT = "seller_payout_amount"
+export const ORDER_META_SELLER_PAYOUT_CURRENCY = "seller_payout_currency"
 export const ORDER_META_SELLER_PAYOUT_ERROR = "seller_payout_error"
 
 /**

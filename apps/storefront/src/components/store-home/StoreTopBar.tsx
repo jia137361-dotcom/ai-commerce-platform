@@ -3,6 +3,7 @@ import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { useBuyerLocale } from "../../lib/locale"
 import {
   fetchMarketplaceStores,
+  updateBuyerPreferences,
   type BuyerStoreSettings,
   type MarketplaceStore,
   type SupplierCatalogCategory,
@@ -34,13 +35,22 @@ type StoreTopBarProps = {
 }
 
 const SHIP_TO_OPTIONS = CHECKOUT_COUNTRIES.map((country) => ({ code: country.code, label: country.name }))
+const MVP_SWITCHER_STORE_IDS = new Set(["default_store"])
+const MVP_SWITCHER_STORE_SLUGS = new Set(["default-store", "ciiverse"])
 
-const CitigooLogo = () => (
-  <span className="buyer-platform-logo">
-    <span>Citi</span>
-    <strong>goo</strong>
-  </span>
-)
+const isMvpSwitcherStore = (store: MarketplaceStore) =>
+  MVP_SWITCHER_STORE_IDS.has(store.storeId) ||
+  MVP_SWITCHER_STORE_SLUGS.has(store.slug.trim().toLowerCase())
+
+const CiiverseLogo = ({ src }: { src?: string }) =>
+  src ? (
+    <img className="buyer-store-logo-img" src={src} alt="Ciiverse" />
+  ) : (
+    <span className="buyer-platform-logo">
+      <span>Cii</span>
+      <strong>verse</strong>
+    </span>
+  )
 
 export function StoreTopBar({
   settings,
@@ -88,9 +98,10 @@ export function StoreTopBar({
   useEffect(() => {
     let active = true
     void fetchMarketplaceStores().then((result) => {
-      // Single-store MVP: only the default/ciiverse shop appears in the switcher.
+      // Keep the buyer switcher focused on the official stores, excluding
+      // fixture and payment-runtime stores returned by the local database.
       if (active) {
-        setStores(result.data.filter((store) => store.storeId === "default_store" || store.slug === "default-store"))
+        setStores(result.data.filter(isMvpSwitcherStore))
       }
     })
     return () => {
@@ -149,6 +160,12 @@ export function StoreTopBar({
 
   const updateShipTo = (countryCode: string) => {
     writeBuyerDisplayPreferences({ countryCode })
+    window.dispatchEvent(new CustomEvent("citigoo:buyer-country-changed", { detail: { countryCode } }))
+    if (auth.customer) {
+      void updateBuyerPreferences({ countryCode }).then(() => auth.refreshCustomer()).catch((error) => {
+        console.warn("[store-top-bar] unable to save buyer country preference", error)
+      })
+    }
     onShipToCountryChange?.(countryCode)
   }
 
@@ -183,7 +200,7 @@ export function StoreTopBar({
     <header className="buyer-store-chrome">
       <div className="buyer-chrome-mobile">
         <MobileHomeHeader
-          brandName="Citigoo"
+          brandName="Ciiverse"
           shipToCountry={shipTo.code}
           onShipToCountryChange={updateShipTo}
           shipToOptions={SHIP_TO_OPTIONS}
@@ -198,8 +215,8 @@ export function StoreTopBar({
 
       <div className="buyer-chrome-desktop">
         <div className="buyer-store-topbar buyer-store-topbar--temu">
-          <a className="buyer-store-logo buyer-store-logo--indie" href="/marketplace" aria-label="Citigoo all stores">
-            <CitigooLogo />
+          <a className="buyer-store-logo buyer-store-logo--indie" href="/shops/ciiverse" aria-label="Ciiverse home">
+            <CiiverseLogo src={settings.logoUrl} />
           </a>
 
           <div className="buyer-store-ship" aria-label="Ship to">

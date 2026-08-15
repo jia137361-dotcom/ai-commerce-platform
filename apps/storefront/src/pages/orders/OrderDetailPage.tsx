@@ -5,6 +5,10 @@ import { OrderDetailEmptyState } from "../../components/orders/OrderDetailEmptyS
 import { OrderDetailHeader } from "../../components/orders/OrderDetailHeader"
 import { OrderDetailItems } from "../../components/orders/OrderDetailItems"
 import { OrderDetailSummary } from "../../components/orders/OrderDetailSummary"
+import { ConfirmDeliverySheet } from "../../components/orders/ConfirmDeliverySheet"
+import { OrderTrackingShipment } from "../../components/orders/OrderTrackingShipment"
+import { OrderTrackingTimeline } from "../../components/orders/OrderTrackingTimeline"
+import { OrderTrackingSupplierStatus } from "../../components/orders/OrderTrackingSupplierStatus"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
@@ -13,13 +17,16 @@ import { Modal } from "../../components/ui/Modal"
 import { SelectField } from "../../components/ui/SelectField"
 import { TextArea } from "../../components/ui/TextArea"
 import { ErrorState, LoadingState } from "../../components/ui/States"
+import { Card } from "../../components/ui/Card"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import {
   cancelAuthenticatedOrder,
+  confirmOrderReceived,
   createRefundRequest,
   getBuyerStoreId,
   getAuthenticatedOrderDetail,
   getOrderDetail,
+  getOrderTracking,
   listRefundRequests,
   formatBuyerMoney,
   updateRefundRequest,
@@ -27,6 +34,7 @@ import {
   reorderItemsToCheckout,
   type BuyerOrderDetail,
   type BuyerRefundRequest,
+  type BuyerOrderTracking,
 } from "../../lib/buyer-api"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 import { buildSettingsStoreHref } from "../../lib/storefront-links"
@@ -60,14 +68,28 @@ const readSessionEmail = (orderId: string, storeId?: string) => {
   return undefined
 }
 
+const FULFILLMENT_STEPS = ["Waiting", "Pushed", "In production", "Shipped", "Delivered"]
+const fulfillmentStepIndex = (status?: string | null) => {
+  const normalized = status?.toLowerCase() ?? ""
+  if (normalized === "delivered" || normalized === "fulfilled") return 4
+  if (normalized === "shipped" || normalized === "partially_shipped") return 3
+  if (normalized === "in_production") return 2
+  if (normalized === "pushed") return 1
+  return 0
+}
+
 export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
   const auth = useBuyerAuth()
   const { settings, marketplaceMode } = useBuyerPageSettings()
   const storeHref = buildSettingsStoreHref(settings)
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null)
+  const [tracking, setTracking] = useState<BuyerOrderTracking | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [confirmationError, setConfirmationError] = useState<string>()
   const [cancelReason, setCancelReason] = useState("")
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
   const [cancelError, setCancelError] = useState<string | undefined>()
@@ -104,11 +126,13 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
         return
       }
       try {
-        const result = auth.customer
-          ? await getAuthenticatedOrderDetail(orderId)
-          : await getOrderDetail(orderId, email)
+        const [result, trackingResult] = await Promise.all([
+          auth.customer ? getAuthenticatedOrderDetail(orderId) : getOrderDetail(orderId, email),
+          getOrderTracking(orderId, email).catch(() => null),
+        ])
         if (!active) return
         setOrder(result)
+        setTracking(trackingResult)
         if (auth.customer) {
           try {
             const requests = await listRefundRequests(orderId)
@@ -134,11 +158,6 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
     }
   }, [auth.customer, auth.isLoading, email, orderId])
 
-  const trackingParams = new URLSearchParams()
-  if (guestEmail && !auth.customer) trackingParams.set("email", guestEmail)
-  if (order?.displayId) trackingParams.set("display_id", order.displayId)
-  const trackingQuery = trackingParams.toString()
-  const trackingHref = auth.customer || guestEmail ? `/account/orders/${encodeURIComponent(orderId)}/tracking${trackingQuery ? `?${trackingQuery}` : ""}` : "/orders/lookup"
   const actionState = resolveOrderDetailActions({
     isAuthenticated: Boolean(auth.customer),
     orderStatus: order?.status,
@@ -174,6 +193,26 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
         reorderError instanceof Error ? reorderError.message : "Unable to prepare the cart for reorder."
       )
       setOrderAgainLoading(false)
+    }
+  }
+
+  const confirmReceipt = async () => {
+    if (!order || confirming) return
+    setConfirming(true)
+    setConfirmationError(undefined)
+    try {
+      const result = await confirmOrderReceived(order.orderId)
+      setOrder((current) => current ? {
+        ...current,
+        status: result.status ?? current.status,
+        receiptConfirmationRequired: false,
+        receiptConfirmedAt: result.confirmed_at,
+      } : current)
+      setConfirmOpen(false)
+    } catch (confirmError) {
+      setConfirmationError(confirmError instanceof Error ? confirmError.message : "Unable to confirm receipt.")
+    } finally {
+      setConfirming(false)
     }
   }
 
@@ -305,12 +344,24 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
             {/* Merchant Info intentionally omitted per 页面分析 annotation */}
             <section className="buyer-order-detail-stack">
               <OrderDetailItems order={order} />
-              <OrderDetailAddress address={order.shippingAddress} email={order.email} trackingHref={trackingHref} />
+              <OrderDetailAddress address={order.shippingAddress} email={order.email} />
+              <Card as="section" className="buyer-order-card buyer-order-detail-section buyer-order-fulfillment-workflow">
+                <header><h2>Fulfillment workflow</h2></header>
+                <ol>
+                  {FULFILLMENT_STEPS.map((label, index) => {
+                    const current = fulfillmentStepIndex(order.fulfillmentStatus)
+                    const complete = index <= current
+                    return <li key={label} className={complete ? "is-complete" : ""}><span>{complete ? "✓" : index + 1}</span><strong>{label}</strong></li>
+                  })}
+                </ol>
+              </Card>
+              {tracking?.supplierOrders.length ? <OrderTrackingSupplierStatus supplierOrders={tracking.supplierOrders} /> : null}
+              {tracking ? <OrderTrackingShipment shipment={tracking.shipments[0]} /> : null}
+              {tracking ? <OrderTrackingTimeline events={tracking.events} /> : null}
               <OrderDetailSummary order={order} />
               <OrderDetailActions
                 order={order}
                 isAuthenticated={Boolean(auth.customer)}
-                trackingHref={trackingHref}
                 orderAgainHref={
                   order.items.find((item) => item.productId)?.productId
                     ? orderAgainHref({
@@ -335,6 +386,10 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
                   setCancelOpen(true)
                   setCancelError(undefined)
                   setCancelSuccess(undefined)
+                }}
+                onConfirmReceipt={() => {
+                  setConfirmationError(undefined)
+                  setConfirmOpen(true)
                 }}
                 onRequestRefund={() => {
                   setRefundQuantities(Object.fromEntries(order.items.map((item) => [item.id, item.quantity])))
@@ -394,6 +449,27 @@ export function OrderDetailPage({ orderId, cartCount }: OrderDetailPageProps) {
             </section>
           </>
         )}
+      {order ? (
+        <ConfirmDeliverySheet
+          open={confirmOpen}
+          order={{
+            orderId: order.orderId,
+            itemCount: order.items.length,
+            previewItems: order.items.map((item) => ({
+              title: item.title,
+              thumbnail: item.thumbnail,
+              quantity: item.quantity,
+              productId: item.productId,
+              variantId: item.variantId,
+            })),
+          }}
+          confirming={confirming}
+          error={confirmationError}
+          onClose={() => setConfirmOpen(false)}
+          onConfirm={() => void confirmReceipt()}
+          onConfirmAndReview={() => void confirmReceipt()}
+        />
+      ) : null}
       {order ? (
         <Modal
           open={cancelOpen}

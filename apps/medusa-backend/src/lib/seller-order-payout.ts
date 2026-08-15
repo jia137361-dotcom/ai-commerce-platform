@@ -3,15 +3,16 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import {
   ORDER_META_SELLER_PAYOUT_AMOUNT,
   ORDER_META_SELLER_PAYOUT_AT,
+  ORDER_META_SELLER_PAYOUT_CURRENCY,
   ORDER_META_SELLER_PAYOUT_ERROR,
   ORDER_META_SELLER_PAYOUT_STATUS,
   ORDER_META_SELLER_PAYOUT_TRANSFER_ID,
 } from "./order-custom-metadata"
 import type { CancellationOrder } from "./order-cancellation"
-import { resolveRefundableAmount } from "./order-refund-request"
 import { readOrderStoreId } from "./order-store-context"
 import { isConnectAccountReady, retrieveConnectAccount } from "./seller-stripe-connect"
 import { isStripeConfigured, stripeApiRequest } from "./stripe-client"
+import { readPaymentAttemptPaymentIntentId } from "./checkout-payment-attempts"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 import { createStoreNotification } from "./notifications"
@@ -29,19 +30,6 @@ export type SellerPayoutResult = {
   amount?: number | null
   currency_code?: string | null
   error?: string | null
-}
-
-/**
- * Ensure an amount is in minor units (cents) for Stripe payout.
- * If the amount is already > 999, assume it's in cents (already minor).
- * Otherwise treat as dollars and convert to cents.
- *
- * NOTE: This heuristic is preserved for backward compatibility with existing
- * payout records. New code should use explicit unit conversion.
- */
-const readMinorAmount = (amount: number): number => {
-  if (!Number.isFinite(amount) || amount <= 0) return 0
-  return amount > 999 ? Math.round(amount) : Math.round(amount * 100)
 }
 
 const loadOrderForPayout = async (container: MedusaContainer, orderId: string) => {
@@ -72,6 +60,7 @@ const loadOrderForPayout = async (container: MedusaContainer, orderId: string) =
       "payment_collections.payments.captures.raw_amount",
       "payment_collections.payment_sessions.provider_id",
       "payment_collections.payment_sessions.status",
+      "payment_collections.payment_sessions.data",
     ],
     filters: { id: orderId },
     options: { throwIfKeyNotFound: false },
@@ -91,6 +80,57 @@ const orderUsesStripePayment = (order: CancellationOrder) => {
   return false
 }
 
+type StripePaymentIntentForTransfer = {
+  latest_charge?: string | { id?: string | null } | null
+}
+
+type StripeChargeForTransfer = {
+  balance_transaction?: string | { id?: string | null } | null
+}
+
+type StripeBalanceTransactionForTransfer = {
+  amount?: number | null
+  currency?: string | null
+}
+
+const readLatestChargeId = (intent: StripePaymentIntentForTransfer) => {
+  const value = intent.latest_charge
+  if (typeof value === "string" && value.startsWith("ch_")) return value
+  if (value && typeof value === "object" && typeof value.id === "string" && value.id.startsWith("ch_")) return value.id
+  return null
+}
+
+const readStripeResourceId = (value: string | { id?: string | null } | null | undefined, prefix: string) => {
+  if (typeof value === "string" && value.startsWith(prefix)) return value
+  if (value && typeof value === "object" && typeof value.id === "string" && value.id.startsWith(prefix)) return value.id
+  return null
+}
+
+const resolveOrderStripeCharge = async (order: CancellationOrder) => {
+  for (const collection of order.payment_collections ?? []) {
+    for (const session of collection.payment_sessions ?? []) {
+      if (typeof session.provider_id !== "string" || !session.provider_id.includes("stripe")) continue
+      const paymentIntentId = readPaymentAttemptPaymentIntentId(session)
+      if (!paymentIntentId) continue
+      const intent = await stripeApiRequest<StripePaymentIntentForTransfer>(`/payment_intents/${paymentIntentId}`)
+      const chargeId = readLatestChargeId(intent)
+      if (!chargeId) continue
+      const charge = await stripeApiRequest<StripeChargeForTransfer>(`/charges/${chargeId}`)
+      const balanceTransactionId = readStripeResourceId(charge.balance_transaction, "txn_")
+      if (!balanceTransactionId) continue
+      const balanceTransaction = await stripeApiRequest<StripeBalanceTransactionForTransfer>(
+        `/balance_transactions/${balanceTransactionId}`
+      )
+      const amount = Number(balanceTransaction.amount)
+      const currency = typeof balanceTransaction.currency === "string"
+        ? balanceTransaction.currency.toLowerCase()
+        : null
+      if (Number.isFinite(amount) && amount > 0 && currency) return { id: chargeId, amount: Math.round(amount), currency }
+    }
+  }
+  return null
+}
+
 const persistPayoutMetadata = async (
   container: MedusaContainer,
   orderId: string,
@@ -105,6 +145,7 @@ const persistPayoutMetadata = async (
       [ORDER_META_SELLER_PAYOUT_TRANSFER_ID]: result.transfer_id ?? null,
       [ORDER_META_SELLER_PAYOUT_AT]: result.status === "completed" ? new Date().toISOString() : metadata[ORDER_META_SELLER_PAYOUT_AT] ?? null,
       [ORDER_META_SELLER_PAYOUT_AMOUNT]: result.amount ?? null,
+      [ORDER_META_SELLER_PAYOUT_CURRENCY]: result.currency_code ?? null,
       [ORDER_META_SELLER_PAYOUT_ERROR]: result.error ?? null,
     },
   } as never)
@@ -190,16 +231,22 @@ export async function releaseSellerPayout(
     return result
   }
 
-  const refundable = resolveRefundableAmount(order)
-  if (!refundable || refundable.amount <= 0) {
-    const result: SellerPayoutResult = { status: "failed", error: "No captured payment amount found" }
+  let sourceTransaction: { id: string; amount: number; currency: string } | null = null
+  try {
+    sourceTransaction = await resolveOrderStripeCharge(order)
+  } catch (error) {
+    const result: SellerPayoutResult = {
+      status: "failed",
+      error: error instanceof Error ? error.message : "Unable to read the Stripe charge for this order",
+    }
     await persistPayoutMetadata(container, orderId, metadata, result)
     return result
   }
-
-  const transferAmount = readMinorAmount(refundable.amount)
-  if (transferAmount <= 0) {
-    const result: SellerPayoutResult = { status: "failed", error: "Transfer amount must be greater than zero" }
+  if (!sourceTransaction) {
+    const result: SellerPayoutResult = {
+      status: "failed",
+      error: "Stripe charge is unavailable for this order; seller payout was not created.",
+    }
     await persistPayoutMetadata(container, orderId, metadata, result)
     return result
   }
@@ -207,11 +254,14 @@ export async function releaseSellerPayout(
   try {
     const transfer = await stripeApiRequest<{ id: string }>("/transfers", {
       method: "POST",
-      idempotencyKey: `seller_payout_${orderId}`,
+      idempotencyKey: `seller_payout_${orderId}_${stripeAccountId}_${sourceTransaction.id}_${sourceTransaction.currency}_${sourceTransaction.amount}`,
       params: {
-        amount: transferAmount,
-        currency: refundable.currencyCode,
+        // Stripe requires source_transaction transfers to match the original settlement transaction.
+        amount: sourceTransaction.amount,
+        currency: sourceTransaction.currency,
         destination: stripeAccountId,
+        source_transaction: sourceTransaction.id,
+        transfer_group: `order_${orderId}`,
         "metadata[order_id]": orderId,
         "metadata[store_id]": storeId,
         "metadata[payout_source]": source,
@@ -221,8 +271,8 @@ export async function releaseSellerPayout(
     const result: SellerPayoutResult = {
       status: "completed",
       transfer_id: transfer.id,
-      amount: transferAmount,
-      currency_code: refundable.currencyCode,
+      amount: sourceTransaction.amount,
+      currency_code: sourceTransaction.currency,
     }
     await persistPayoutMetadata(container, orderId, metadata, result)
 
@@ -231,12 +281,12 @@ export async function releaseSellerPayout(
         store_id: storeId,
         type: "order_paid",
         title: "订单款项已到账",
-        body: `订单 ${order.display_id != null ? `#${order.display_id}` : orderId} 买家确认收货后，$${(transferAmount / 100).toFixed(2)} 已转入您的 Stripe 收款账号。`,
+        body: `订单 ${order.display_id != null ? `#${order.display_id}` : orderId} 买家确认收货后，${sourceTransaction.currency.toUpperCase()} ${(sourceTransaction.amount / 100).toFixed(2)} 已转入您的 Stripe 收款账号。`,
         metadata: {
           order_id: orderId,
           payout_status: "completed",
           transfer_id: transfer.id,
-          amount: transferAmount,
+          amount: sourceTransaction.amount,
         },
       })
     } catch {
@@ -267,7 +317,15 @@ export async function retryPendingSellerPayoutsForStore(
   const pending = orders.filter((order) => {
     if (!order.id || readOrderStoreId(order) !== storeId) return false
     const status = order.metadata?.[ORDER_META_SELLER_PAYOUT_STATUS]
-    return status === "pending_account" && !order.metadata?.[ORDER_META_SELLER_PAYOUT_TRANSFER_ID]
+    const error = order.metadata?.[ORDER_META_SELLER_PAYOUT_ERROR]
+    const retryablePayoutFailure =
+      status === "failed" &&
+      typeof error === "string" &&
+      (error.toLowerCase().includes("restricted outside of your platform's region") ||
+        error.toLowerCase().includes("insufficient available funds") ||
+        error.toLowerCase().includes("idempotent requests can only be used") ||
+        error.toLowerCase().includes("currency of source_transaction"))
+    return (status === "pending_account" || retryablePayoutFailure) && !order.metadata?.[ORDER_META_SELLER_PAYOUT_TRANSFER_ID]
   })
 
   const results: SellerPayoutResult[] = []

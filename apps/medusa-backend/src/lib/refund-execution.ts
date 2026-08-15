@@ -7,6 +7,10 @@ import type { BuyerRefundRequestRecord } from "./order-refund-request"
 import type { CancellationContext, CancellationOrder } from "./order-cancellation"
 import { evaluateRefundPolicy } from "./refund-policy"
 import { resolveRefundPaymentContext } from "./refund-payment-context"
+import { stripeApiRequest } from "./stripe-client"
+import {
+  ORDER_META_SELLER_PAYOUT_TRANSFER_ID,
+} from "./order-custom-metadata"
 
 type RefundRequestService = {
   listBuyerRefundRequests: (filters: Record<string, unknown>, config?: Record<string, unknown>) => Promise<BuyerRefundRequestRecord[]>
@@ -67,11 +71,43 @@ const loadProductionContext = async (
   }
 }
 
-const providerRefundState = (payment: PaymentRecord) => {
+const providerRefundState = (payment: PaymentRecord, providerId: string) => {
+  // Stripe's Medusa provider persists a completed refund record directly.
+  // PayPal additionally exposes its provider-side asynchronous status here.
+  if (providerId !== "pp_paypal_paypal") return "completed"
   const status = String(payment.data?.paypal_refund_status ?? "").toUpperCase()
   if (status === "PENDING") return "pending"
   if (["FAILED", "DENIED", "CANCELLED", "CANCELED"].includes(status)) return "failed"
   return "completed"
+}
+
+const executeStripeRefund = async (input: {
+  container: MedusaContainer
+  paymentIntentId: string
+  amount: number
+  refundRequestId: string
+  orderId: string
+}) => {
+  const refund = await stripeApiRequest<{ id?: string; status?: string }>("/refunds", {
+    method: "POST",
+    idempotencyKey: `refund-request:${input.refundRequestId}`,
+    params: { payment_intent: input.paymentIntentId, amount: input.amount },
+  })
+  if (!refund.id) throw new Error("Stripe did not return a refund ID")
+
+  const orderModule = input.container.resolve(Modules.ORDER) as {
+    retrieveOrder: (id: string) => Promise<{ metadata?: Record<string, unknown> | null }>
+  }
+  const order = await orderModule.retrieveOrder(input.orderId)
+  const transferId = order.metadata?.[ORDER_META_SELLER_PAYOUT_TRANSFER_ID]
+  if (typeof transferId === "string" && transferId.startsWith("tr_")) {
+    await stripeApiRequest(`/transfers/${transferId}/reversals`, {
+      method: "POST",
+      idempotencyKey: `refund-transfer-reversal:${input.refundRequestId}`,
+      params: { amount: input.amount },
+    })
+  }
+  return refund
 }
 
 export async function executeApprovedRefund(input: {
@@ -99,7 +135,9 @@ export async function executeApprovedRefund(input: {
       orderId: input.orderId,
       requestedAmount: input.amount,
       requestedCurrency: null,
-      expectedProviderId: "pp_paypal_paypal",
+      // An order has one authoritative captured payment. Do not constrain this
+      // to PayPal: seller review must also be able to refund Stripe payments.
+      expectedProviderId: request.payment_provider_id ?? null,
     })
     if (paymentContext.store_id !== input.storeId) throw new Error("Order does not belong to this store")
 
@@ -154,6 +192,25 @@ export async function executeApprovedRefund(input: {
 
     const previousRefundIds = new Set((paymentBeforeRefund.refunds ?? []).map((refund) => String(refund.id ?? "")))
     try {
+      if (paymentContext.provider_id === "pp_stripe_stripe") {
+        if (!paymentContext.provider_payment_id) throw new Error("Stripe PaymentIntent is missing for refund")
+        const stripeRefund = await executeStripeRefund({
+          container: input.container,
+          paymentIntentId: paymentContext.provider_payment_id,
+          amount,
+          refundRequestId: request.id,
+          orderId: input.orderId,
+        })
+        return updateRequest(service, request.id, {
+          status: amount < remaining ? "partially_refunded" : "refunded",
+          provider_status: String(stripeRefund.status ?? "succeeded").toLowerCase(),
+          external_refund_id: stripeRefund.id,
+          external_transaction_id: stripeRefund.id,
+          processed_at: new Date(),
+          failed_at: null,
+          failure_reason: null,
+        })
+      }
       await paymentModule.updatePayment({
         id: paymentContext.payment_id,
         data: {
@@ -176,10 +233,10 @@ export async function executeApprovedRefund(input: {
       const newRefund = (updatedPayment.refunds ?? []).find((refund) => !previousRefundIds.has(String(refund.id ?? "")))
       if (!newRefund?.id) throw new Error("Medusa did not persist a refund after provider execution")
 
-      const providerState = providerRefundState(updatedPayment)
+      const providerState = providerRefundState(updatedPayment, paymentContext.provider_id)
       const providerRefundId = typeof updatedPayment.data?.paypal_refund_id === "string"
         ? updatedPayment.data.paypal_refund_id
-        : null
+        : String(newRefund.id)
       if (providerState === "pending") {
         return updateRequest(service, request.id, {
           status: "refund_pending",

@@ -23,7 +23,7 @@ import {
   getMyOrders,
   getBuyerCartStorageKey,
   getScopedBuyerStoreId,
-  readBuyerPreferences,
+  updateBuyerPreferences,
   setActiveBuyerStoreId,
   checkProductFavorite,
   toggleProductFavorite,
@@ -32,6 +32,7 @@ import {
   type BuyerStoreSettings,
   type DataSource,
 } from "../../lib/buyer-api"
+import { readBuyerDisplayPreferences, writeBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
 import { addProductSelectionToCart } from "./product-cart-action"
 import { isReservedCheckoutCartId } from "../../lib/buyer-checkout-reservations"
@@ -40,6 +41,7 @@ import { buildBuyNowHref } from "./product-buy-now"
 import { useBuyerAuth } from "../../auth/useBuyerAuth"
 import { buildProductSignInHref } from "./product-auth"
 import { getBuyerCartIdentity } from "../../lib/buyer-cart-storage"
+import { unregisterStoreCart } from "../../lib/buyer-platform-cart"
 import { buildStudioEditorHref } from "../../lib/buyer-design-handoff"
 import { pushBrowseHistory } from "../../lib/buyer-browse-history"
 import { buildProductDetailHref, buildProductStoreHref } from "../../lib/storefront-links"
@@ -243,7 +245,7 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
         createCart: () =>
           createCart({
             storeId: cartStoreId,
-            countryCode: readBuyerPreferences(auth.customer).countryCode,
+            countryCode: readBuyerDisplayPreferences().countryCode,
           }),
         addLineItem: (cartId, variantId, qty) => addCartLineItem(cartId, variantId, qty, { storeId: cartStoreId }),
         isCartReservedForCheckout: async (cartId) => {
@@ -323,6 +325,15 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
             storeHref={storeHref}
             isFavorited={isFavorited}
             onToggleFavorite={() => void toggleFavorite()}
+            countryCode={readBuyerDisplayPreferences().countryCode}
+            onCountryChange={(countryCode) => {
+              writeBuyerDisplayPreferences({ countryCode })
+              const cartStoreId = product.storeId ?? storeFromQuery ?? settings.storeId
+              const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+              unregisterStoreCart(window.localStorage, cartIdentity, cartStoreId)
+              if (auth.customer) void updateBuyerPreferences({ countryCode }).then(() => auth.refreshCustomer())
+              setLoadVersion((version) => version + 1)
+            }}
           />
           <ProductDetailTabs active={activeTab} onChange={setActiveTab} showSizeGuide={showSizeGuide} />
           <section className="buyer-product-logistics-row">

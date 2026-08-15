@@ -21,15 +21,82 @@ const ISO_SHIPPING_COUNTRY_CODES = `af ax al dz as ad ao ai ag ar am aq aw au at
 
 export const S2B_SHIPPING_COUNTRY_CODES = ISO_SHIPPING_COUNTRY_CODES.split(" ")
 
+const MARKET_CURRENCY_COUNTRIES: Record<string, string[]> = {
+  usd: ["us"],
+  cny: ["cn"],
+  hkd: ["hk"],
+  eur: ["at", "be", "cy", "ee", "fi", "fr", "de", "gr", "ie", "it", "lv", "lt", "lu", "mt", "nl", "pt", "sk", "si", "es", "ad", "mc", "sm", "va", "xk"],
+  gbp: ["gb", "gg", "im", "je"],
+  cad: ["ca"],
+  aud: ["au", "cx", "cc", "ki", "nf", "nr", "tv", "hm"],
+  nzd: ["nz", "ck", "nu", "pn", "tk"],
+  jpy: ["jp"],
+  krw: ["kr"],
+  twd: ["tw"],
+  sgd: ["sg"],
+  myr: ["my"],
+  inr: ["in"],
+  idr: ["id"],
+  thb: ["th"],
+  php: ["ph"],
+  vnd: ["vn"],
+  brl: ["br"],
+  mxn: ["mx"],
+  aed: ["ae"],
+  sar: ["sa"],
+  zar: ["za"],
+  chf: ["ch", "li"],
+  sek: ["se"],
+  nok: ["no", "sj", "bv"],
+  dkk: ["dk", "fo", "gl"],
+  pln: ["pl"],
+  czk: ["cz"],
+  huf: ["hu"],
+  ron: ["ro"],
+  ils: ["il"],
+  try: ["tr"],
+}
+
+const MARKET_CURRENCY_NAMES: Record<string, string> = {
+  usd: "United States", cny: "China", hkd: "Hong Kong", eur: "Euro", gbp: "United Kingdom",
+  cad: "Canada", aud: "Australia", nzd: "New Zealand", jpy: "Japan", krw: "South Korea", twd: "Taiwan",
+  sgd: "Singapore", myr: "Malaysia", inr: "India", idr: "Indonesia", thb: "Thailand", php: "Philippines",
+  vnd: "Vietnam", brl: "Brazil", mxn: "Mexico", aed: "United Arab Emirates", sar: "Saudi Arabia",
+  zar: "South Africa", chf: "Switzerland", sek: "Sweden", nok: "Norway", dkk: "Denmark", pln: "Poland",
+  czk: "Czechia", huf: "Hungary", ron: "Romania", ils: "Israel", try: "Turkey",
+}
+
+const configuredMarketCountries = new Set(Object.values(MARKET_CURRENCY_COUNTRIES).flat())
+
+// Checkout currencies are real Medusa regions, not a display-only preference.
+// Countries without a supported local payment/pricing currency remain explicitly
+// grouped in the USD market until that currency is enabled end-to-end.
 export const MARKET_REGION_DEFINITIONS = [
-  { name: "United States", currency_code: "usd", countries: ["us"] },
-  { name: "China", currency_code: "cny", countries: ["cn"] },
+  ...Object.entries(MARKET_CURRENCY_COUNTRIES).map(([currency_code, countries]) => ({
+    name: MARKET_CURRENCY_NAMES[currency_code] ?? currency_code.toUpperCase(),
+    currency_code,
+    countries,
+  })),
   {
     name: "International",
     currency_code: "usd",
-    countries: S2B_SHIPPING_COUNTRY_CODES.filter((code) => code !== "us" && code !== "cn"),
+    countries: S2B_SHIPPING_COUNTRY_CODES.filter((code) => !configuredMarketCountries.has(code)),
   },
 ]
+
+// Fixed development conversion table. Replace this with a versioned FX source
+// before production so catalog prices, carts, payments, and refunds use the same rate.
+const USD_TO_MARKET_CURRENCY: Record<string, number> = {
+  usd: 1, cny: 7.2, hkd: 7.8, eur: 0.92, gbp: 0.79, cad: 1.37, aud: 1.52, nzd: 1.65,
+  jpy: 153, krw: 1370, twd: 32.4, sgd: 1.35, myr: 4.7, inr: 83, idr: 16200, thb: 36,
+  php: 58, vnd: 25400, brl: 5.05, mxn: 16.8, aed: 3.67, sar: 3.75, zar: 18.4, chf: 0.9,
+  sek: 10.5, nok: 10.7, dkk: 6.87, pln: 3.98, czk: 23.3, huf: 360, ron: 4.58, ils: 3.7, try: 32.2,
+}
+
+export const convertUsdPriceToMarketCurrency = (usdMajorAmount: number, currencyCode: string) => {
+  const rate = USD_TO_MARKET_CURRENCY[currencyCode.trim().toLowerCase()] ?? 1
+  return Math.round(usdMajorAmount * rate * 100) / 100
+}
 
 const readCountryCode = (country: RegionCountry) => {
   if (typeof country === "string") return country.trim().toLowerCase()
@@ -86,6 +153,31 @@ export const isProductAvailableInRegion = (
   const supported = resolveProductSupportedRegionIds(product)
   if (!supported.length) return true
   return supported.includes(regionId)
+}
+
+const resolveProductSellableCountryCodes = (product: {
+  metadata?: Record<string, unknown> | null
+}) => {
+  const raw = product.metadata?.sellable_country_codes
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((country): country is string => typeof country === "string")
+    .map((country) => country.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+// Supplier country-level delivery data is the source of truth. Region ids are
+// derived data and can become stale when checkout markets are added or split.
+export const isProductAvailableInMarketRegion = (
+  product: { metadata?: Record<string, unknown> | null },
+  region?: RegionSummary | null
+) => {
+  if (!region) return true
+  const sellableCountries = resolveProductSellableCountryCodes(product)
+  if (sellableCountries.length) {
+    return region.country_codes.some((country) => sellableCountries.includes(country))
+  }
+  return isProductAvailableInRegion(product, region.region_id)
 }
 
 export async function listMarketRegionSummaries(
@@ -147,6 +239,20 @@ export async function ensureMarketRegions(
   const regionModule = container.resolve(Modules.REGION) as RegionModuleService
 
   let summaries = await listMarketRegionSummaries(container)
+
+  // Older installations have a single International region containing every
+  // country. Shrink it before creating local-currency regions, otherwise
+  // Medusa rejects the new regions because a country can belong to only one.
+  const internationalDefinition = MARKET_REGION_DEFINITIONS.find(
+    (definition) => definition.name === "International"
+  )
+  const existingInternational = summaries.find((region) => region.name === "International")
+  if (internationalDefinition && existingInternational && !regionCountriesMatchDefinition(existingInternational, internationalDefinition)) {
+    await regionModule.updateRegions(existingInternational.region_id, {
+      countries: [...internationalDefinition.countries],
+    })
+    summaries = await listMarketRegionSummaries(container)
+  }
 
   for (const definition of MARKET_REGION_DEFINITIONS) {
     const existing = summaries.find((region) => regionMatchesDefinition(region, definition))

@@ -13,10 +13,13 @@ import { OrderStoreAccessError } from "../../../../../../../lib/order-store-erro
 import { resolveCurrentStore } from "../../../../../../../lib/store-context"
 import { evaluateRefundPolicy } from "../../../../../../../lib/refund-policy"
 import { executeApprovedRefund } from "../../../../../../../lib/refund-execution"
+import { notifySellerRefundRequest } from "../../../../../../../lib/notifications"
 import {
   BUYER_REFUND_REQUESTS_MODULE,
 } from "../../../../../../../modules/buyer-refund-requests"
 import type BuyerRefundRequestsModuleService from "../../../../../../../modules/buyer-refund-requests/service"
+import { STORE_CORE_MODULE } from "../../../../../../../modules/store-core"
+import type StoreCoreModuleService from "../../../../../../../modules/store-core/service"
 
 type AuthenticatedRequest = MedusaRequest & {
   auth_context?: { actor_id?: string }
@@ -388,6 +391,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           note: text.note,
         })
       : created
+
+    try {
+      const storeCore = req.scope.resolve(STORE_CORE_MODULE) as StoreCoreModuleService
+      await notifySellerRefundRequest(storeCore, storeId, {
+        orderId,
+        displayId: Number.isFinite(displayId) ? displayId : null,
+        status: String(finalRequest.status ?? initialStatus),
+        autoProcessed: policy.decision === "auto_approve",
+      })
+    } catch {
+      // A seller alert must not prevent the buyer's refund request from being recorded.
+    }
 
     if (process.env.NODE_ENV !== "production") {
       console.info("[buyer-refund-request] created", {

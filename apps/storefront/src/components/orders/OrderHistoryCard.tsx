@@ -14,7 +14,6 @@ import {
   buyerOrderDisplayStatusLabel,
   canConfirmReceipt,
   canRequestRefund,
-  canTrackOrder,
   canViewReview,
   collectReorderLinesFromSummary,
   formatOrderTime,
@@ -318,15 +317,7 @@ export function OrderHistoryCard({
 
             {isAwaitingReceipt ? (
               <>
-                {canTrackOrder(order) ? (
-                  <Button variant="secondary" href={`/account/orders/${encodeURIComponent(order.orderId)}/tracking`}>
-                    View logistic
-                  </Button>
-                ) : (
-                  <Button variant="secondary" href={detailHref}>
-                    Order details
-                  </Button>
-                )}
+                <Button variant="secondary" href={detailHref}>Order details</Button>
                 {canConfirmReceipt(order) && onConfirmReceipt ? (
                   <Button
                     variant="secondary"
@@ -343,6 +334,7 @@ export function OrderHistoryCard({
 
             {isReceivedLike ? (
               <>
+                <Button variant="secondary" href={detailHref}>Order details</Button>
                 {order.reviewEligible && order.previewItems[0]?.productId && customerEmail ? (
                   <Button variant="secondary" onClick={() => setReviewOpen(true)}>
                     Reviews
@@ -366,7 +358,7 @@ export function OrderHistoryCard({
               </>
             ) : null}
 
-            {isTerminal ? orderAgainButton : null}
+            {isTerminal ? <><Button variant="secondary" href={detailHref}>Order details</Button>{orderAgainButton}</> : null}
 
             {displayStatus === "refunding" ? (
               <>

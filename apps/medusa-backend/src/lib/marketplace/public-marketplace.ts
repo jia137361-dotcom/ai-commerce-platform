@@ -10,8 +10,14 @@ import { resolveProductRequiresShipping } from "../product-shipping"
 import { enrichBuyerDesignShipFromCountries } from "../buyer-design-ship-from"
 
 const ACTIVE_STORE_STATUSES = new Set(["active"])
+const MVP_PUBLIC_STORE_IDS = new Set(["default_store"])
+const MVP_PUBLIC_STORE_SLUGS = new Set(["default-store", "ciiverse"])
 
 export const isPublicStoreVisible = (status: string) => ACTIVE_STORE_STATUSES.has(status)
+
+export const isMvpPublicStore = (store: Record<string, unknown>) =>
+  MVP_PUBLIC_STORE_IDS.has(String(store.id)) ||
+  MVP_PUBLIC_STORE_SLUGS.has(String(store.slug ?? "").trim().toLowerCase())
 
 const parseBoundedInt = (value: unknown, fallback: number, max: number) => {
   const parsed = typeof value === "string" ? Number.parseInt(value, 10) : Number.NaN
@@ -47,10 +53,11 @@ export async function listPublicStores(container: MedusaContainer, options: List
     brandByStore.set(row.store_id, row.brand_name ?? null)
   }
 
-  // Current MVP is single-store: only default_store / ciiverse is public.
+  // Keep test and payment-fixture stores out of the buyer switcher, while
+  // preserving both official MVP storefront identities.
   let filtered = (stores as Array<Record<string, unknown>>).filter((store) =>
     isPublicStoreVisible(String(store.status ?? "")) &&
-    String(store.id) === "default_store"
+    isMvpPublicStore(store)
   )
 
   if (q) {

@@ -1,11 +1,16 @@
-import { isStripeConfigured, stripeApiRequest } from "./stripe-client"
+import { isStripeConfigured, isStripeResourceNotFoundError, stripeApiRequest } from "./stripe-client"
 
 export type StripeConnectAccount = {
   id: string
+  country?: string | null
   charges_enabled?: boolean
   payouts_enabled?: boolean
   details_submitted?: boolean
   email?: string | null
+  requirements?: {
+    disabled_reason?: string | null
+    currently_due?: string[] | null
+  } | null
 }
 
 export type SellerStripeConnectStatus = {
@@ -17,7 +22,16 @@ export type SellerStripeConnectStatus = {
   details_submitted: boolean
   onboarding_required: boolean
   dashboard_url?: string | null
+  requirements_due?: string[]
+  requirements_disabled_reason?: string | null
+  account_country?: string | null
+  platform_country?: string | null
+  country_mismatch: boolean
+  account_missing: boolean
+  test_mode: boolean
 }
+
+const isStripeTestMode = () => process.env.STRIPE_API_KEY?.startsWith("sk_test_") ?? false
 
 export const readSellerDashboardBaseUrl = () =>
   (process.env.SELLER_DASHBOARD_URL ?? "http://127.0.0.1:5173").replace(/\/+$/, "")
@@ -38,12 +52,13 @@ export async function retrieveConnectAccount(accountId: string) {
 export async function createExpressConnectAccount(input: {
   storeId: string
   email?: string | null
+  country?: string | null
 }) {
   return stripeApiRequest<StripeConnectAccount>("/accounts", {
     method: "POST",
     params: {
       type: "express",
-      country: process.env.STRIPE_CONNECT_COUNTRY ?? "US",
+      country: input.country ?? process.env.STRIPE_CONNECT_COUNTRY ?? "US",
       email: input.email ?? undefined,
       "metadata[store_id]": input.storeId,
       capabilities: {
@@ -53,6 +68,11 @@ export async function createExpressConnectAccount(input: {
     },
   })
 }
+
+const normalizeCountry = (country?: string | null) => country?.trim().toUpperCase() || null
+
+export const retrieveStripePlatformAccount = () =>
+  stripeApiRequest<Pick<StripeConnectAccount, "id" | "country">>("/account")
 
 export async function createConnectAccountLink(input: {
   accountId: string
@@ -87,6 +107,9 @@ export async function resolveSellerStripeConnectStatus(
       payouts_enabled: false,
       details_submitted: false,
       onboarding_required: true,
+      country_mismatch: false,
+      account_missing: false,
+      test_mode: isStripeTestMode(),
     }
   }
 
@@ -99,11 +122,46 @@ export async function resolveSellerStripeConnectStatus(
       payouts_enabled: false,
       details_submitted: false,
       onboarding_required: true,
+      country_mismatch: false,
+      account_missing: false,
+      test_mode: isStripeTestMode(),
     }
   }
 
-  const account = await retrieveConnectAccount(stripeAccountId)
-  const ready = isConnectAccountReady(account)
+  let account: StripeConnectAccount
+  try {
+    account = await retrieveConnectAccount(stripeAccountId)
+  } catch (error) {
+    if (!isStripeResourceNotFoundError(error)) throw error
+    let platformCountry: string | null = null
+    try {
+      platformCountry = normalizeCountry((await retrieveStripePlatformAccount()).country)
+    } catch {
+      // Rebinding remains possible even if the platform country lookup fails.
+    }
+    return {
+      configured: true,
+      connected: false,
+      account_id: maskStripeAccountId(stripeAccountId),
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+      onboarding_required: true,
+      country_mismatch: false,
+      account_missing: true,
+      platform_country: platformCountry,
+      test_mode: isStripeTestMode(),
+    }
+  }
+  const accountCountry = normalizeCountry(account.country)
+  let platformCountry: string | null = null
+  try {
+    platformCountry = normalizeCountry((await retrieveStripePlatformAccount()).country)
+  } catch {
+    // Account readiness remains useful if the platform account cannot be read.
+  }
+  const countryMismatch = Boolean(accountCountry && platformCountry && accountCountry !== platformCountry)
+  const ready = isConnectAccountReady(account) && !countryMismatch
   let dashboardUrl: string | null = null
   if (ready) {
     try {
@@ -123,6 +181,15 @@ export async function resolveSellerStripeConnectStatus(
     details_submitted: Boolean(account.details_submitted),
     onboarding_required: !ready,
     dashboard_url: dashboardUrl,
+    requirements_due: Array.isArray(account.requirements?.currently_due)
+      ? account.requirements.currently_due
+      : [],
+    requirements_disabled_reason: account.requirements?.disabled_reason ?? null,
+    account_country: accountCountry,
+    platform_country: platformCountry,
+    country_mismatch: countryMismatch,
+    account_missing: false,
+    test_mode: isStripeTestMode(),
   }
 }
 
@@ -131,7 +198,7 @@ export const formatStripeConnectSetupError = (error: unknown) => {
   const normalized = message.toLowerCase()
 
   if (normalized.includes("signed up for connect")) {
-    return "Stripe Connect is not enabled on the platform Stripe account. Open https://dashboard.stripe.com/test/connect (test mode) or https://dashboard.stripe.com/connect (live mode), complete Connect setup, then retry."
+    return "Stripe Connect is not enabled on the platform Stripe account. In the same Stripe account as STRIPE_API_KEY, first complete the platform account activation and Connect platform profile at https://dashboard.stripe.com/test/connect (test mode) or https://dashboard.stripe.com/connect (live mode), then retry."
   }
 
   if (normalized.includes("stripe_api_key is not configured")) {
@@ -145,6 +212,7 @@ export async function ensureSellerConnectOnboardingLink(input: {
   storeId: string
   stripeAccountId?: string | null
   supportEmail?: string | null
+  country?: string | null
   persistAccountId?: (accountId: string) => Promise<void>
 }) {
   let accountId = input.stripeAccountId ?? null
@@ -152,6 +220,7 @@ export async function ensureSellerConnectOnboardingLink(input: {
     const created = await createExpressConnectAccount({
       storeId: input.storeId,
       email: input.supportEmail,
+      country: normalizeCountry(input.country),
     })
     accountId = created.id
     if (input.persistAccountId) {

@@ -18,6 +18,8 @@ import {
   getBuyerCartStorageKey,
   preparePlatformCheckout,
   readBuyerPreferences,
+  listStoreRegions,
+  resolveStoreRegion,
   setActiveBuyerStoreId,
   updateCartLineItem,
 } from "../../lib/buyer-api"
@@ -26,6 +28,7 @@ import {
   fetchPlatformCart,
   parsePlatformLineKey,
   registerStoreCart,
+  unregisterStoreCart,
   type PlatformCartGroup,
 } from "../../lib/buyer-platform-cart"
 import type { StoreCart, StoreProduct } from "../../lib/mock-data"
@@ -74,12 +77,42 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     setLoading(true)
     setLoadError(undefined)
     try {
-      const platformCart = await fetchPlatformCart(window.localStorage, cartIdentity)
+      let platformCart = await fetchPlatformCart(window.localStorage, cartIdentity)
       const unpaidOrders = auth.customer
         ? await getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 }).catch(() => null)
         : null
       if (!isActive()) return
       const reservedCartIds = collectReservedCheckoutCartIds(unpaidOrders?.orders ?? [])
+      for (const group of platformCart.groups) {
+        if (reservedCartIds.has(group.cart.id)) {
+          unregisterStoreCart(window.localStorage, cartIdentity, group.storeId)
+        }
+      }
+      const targetRegion = resolveStoreRegion(
+        await listStoreRegions(),
+        readBuyerPreferences(auth.customer).countryCode
+      )
+      if (targetRegion) {
+        const migratedGroups = await Promise.all(platformCart.groups.map(async (group) => {
+          if (reservedCartIds.has(group.cart.id) || group.cart.currencyCode.toLowerCase() === targetRegion.currency_code.toLowerCase()) {
+            return group
+          }
+          let replacement = await createCart({
+            storeId: group.storeId,
+            regionId: targetRegion.region_id,
+          })
+          for (const item of group.cart.items) {
+            if (!item.variantId) throw new Error("A cart item cannot be repriced because its variant is unavailable.")
+            replacement = await addCartLineItem(replacement.id, item.variantId, item.quantity, { storeId: group.storeId })
+          }
+          registerStoreCart(window.localStorage, cartIdentity, group.storeId, replacement.id, {
+            storeName: group.storeName,
+            storeSlug: group.storeSlug,
+          })
+          return { ...group, cart: replacement }
+        }))
+        platformCart = { ...platformCart, groups: migratedGroups }
+      }
       const visibleGroups = platformCart.groups.filter((group) => !reservedCartIds.has(group.cart.id))
       setGroups(visibleGroups)
       const allLineKeys = visibleGroups.flatMap((group) =>
@@ -124,6 +157,12 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
       active = false
     }
   }, [loadCart, loadVersion])
+
+  useEffect(() => {
+    const reloadForCountry = () => setLoadVersion((version) => version + 1)
+    window.addEventListener("citigoo:buyer-country-changed", reloadForCountry)
+    return () => window.removeEventListener("citigoo:buyer-country-changed", reloadForCountry)
+  }, [])
 
   const itemCount = groups.reduce(
     (sum, group) => sum + group.cart.items.reduce((inner, item) => inner + item.quantity, 0),
@@ -250,7 +289,7 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
     setPreparingCheckoutStoreId(group.storeId)
     try {
       let checkoutCart = group.cart
-      let checkoutHref = `/checkout?store=${encodeURIComponent(group.storeId)}`
+      let checkoutHref = ""
       if (selectedItems.length !== group.cart.items.length) {
         let sourceCart = group.cart
         checkoutCart = await createCart({
@@ -273,10 +312,11 @@ export function CartPage({ onCartUpdated }: CartPageProps) {
         })
         registerStoreCart(window.localStorage, cartIdentity, group.storeId, sourceCart.id)
         onCartUpdated(sourceCart)
-        checkoutHref = `/checkout?store=${encodeURIComponent(group.storeId)}&cart_id=${encodeURIComponent(checkoutCart.id)}`
       } else {
         window.localStorage.setItem(getBuyerCartStorageKey(group.storeId, cartIdentity), checkoutCart.id)
       }
+      // Passing the cart id avoids a storage/auth race while the checkout page mounts.
+      checkoutHref = `/checkout?store=${encodeURIComponent(group.storeId)}&cart_id=${encodeURIComponent(checkoutCart.id)}`
       setActiveBuyerStoreId(group.storeId)
       window.location.assign(checkoutHref)
     } catch (error) {

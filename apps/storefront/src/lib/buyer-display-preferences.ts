@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react"
 export const BUYER_DISPLAY_PREFERENCES_KEY = "citigoo:buyer_display_preferences"
 export const BUYER_DISPLAY_PREFERENCES_EVENT = "citigoo:buyer-display-preferences"
 
-export type DisplayCurrencyCode = "auto" | "usd" | "eur" | "gbp" | "cny" | "cad" | "aud" | "jpy" | "sgd" | "myr"
+export type DisplayCurrencyCode = string
 
 export type BuyerDisplayPreferences = {
   countryCode: string
@@ -11,11 +11,12 @@ export type BuyerDisplayPreferences = {
 }
 
 const DEFAULT_PREFERENCES: BuyerDisplayPreferences = { countryCode: "us", currencyCode: "auto" }
-const DISPLAY_CURRENCIES = new Set<DisplayCurrencyCode>(["auto", "usd", "eur", "gbp", "cny", "cad", "aud", "jpy", "sgd", "myr"])
+const DISPLAY_CURRENCIES = new Set(["auto", "usd", "eur", "gbp", "cny", "hkd", "cad", "aud", "nzd", "jpy", "krw", "twd", "sgd", "myr", "inr", "idr", "thb", "php", "vnd", "brl", "mxn", "aed", "sar", "zar", "chf", "sek", "nok", "dkk", "pln", "czk", "huf", "ron", "ils", "try"])
 
-const COUNTRY_CURRENCIES: Record<string, Exclude<DisplayCurrencyCode, "auto">> = {
+const COUNTRY_CURRENCIES: Record<string, string> = {
   us: "usd",
   cn: "cny",
+  hk: "hkd",
   gb: "gbp",
   it: "eur",
   fr: "eur",
@@ -25,10 +26,13 @@ const COUNTRY_CURRENCIES: Record<string, Exclude<DisplayCurrencyCode, "auto">> =
   jp: "jpy",
   sg: "sgd",
   my: "myr",
+  nz: "nzd", kr: "krw", tw: "twd", in: "inr", id: "idr", th: "thb", ph: "php", vn: "vnd",
+  br: "brl", mx: "mxn", ae: "aed", sa: "sar", za: "zar", ch: "chf", se: "sek", no: "nok",
+  dk: "dkk", pl: "pln", cz: "czk", hu: "huf", ro: "ron", il: "ils", tr: "try",
 }
 
 // Display-only fallback rates relative to USD. Checkout remains in the cart's region currency.
-const USD_RATES: Record<Exclude<DisplayCurrencyCode, "auto">, number> = {
+const USD_RATES: Record<string, number> = {
   usd: 1,
   eur: 0.92,
   gbp: 0.79,
@@ -38,6 +42,9 @@ const USD_RATES: Record<Exclude<DisplayCurrencyCode, "auto">, number> = {
   jpy: 153,
   sgd: 1.35,
   myr: 4.7,
+  hkd: 7.8, nzd: 1.65, krw: 1370, twd: 32.4, inr: 83, idr: 16200, thb: 36, php: 58,
+  vnd: 25400, brl: 5.05, mxn: 16.8, aed: 3.67, sar: 3.75, zar: 18.4, chf: 0.9,
+  sek: 10.5, nok: 10.7, dkk: 6.87, pln: 3.98, czk: 23.3, huf: 360, ron: 4.58, ils: 3.7, try: 32.2,
 }
 
 export const resolveAutoCurrency = (countryCode: string) =>
@@ -49,8 +56,8 @@ export const resolveDisplayCurrency = (preferences: BuyerDisplayPreferences) =>
     : preferences.currencyCode
 
 export const convertDisplayAmount = (amount: number, sourceCurrency: string, targetCurrency: string) => {
-  const source = sourceCurrency.trim().toLowerCase() as Exclude<DisplayCurrencyCode, "auto">
-  const target = targetCurrency.trim().toLowerCase() as Exclude<DisplayCurrencyCode, "auto">
+  const source = sourceCurrency.trim().toLowerCase()
+  const target = targetCurrency.trim().toLowerCase()
   const sourceRate = USD_RATES[source]
   const targetRate = USD_RATES[target]
   if (!sourceRate || !targetRate) return amount

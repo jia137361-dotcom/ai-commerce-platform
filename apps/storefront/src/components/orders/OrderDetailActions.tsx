@@ -6,12 +6,12 @@ import { StatusBadge } from "../ui/StatusBadge"
 type OrderDetailActionsProps = {
   order: BuyerOrderDetail
   isAuthenticated: boolean
-  trackingHref: string
   orderAgainHref?: string
   onOrderAgain?: () => void
   orderAgainLoading?: boolean
   orderAgainError?: string
   onCancel: () => void
+  onConfirmReceipt?: () => void
   onRequestRefund: () => void
   cancelSuccess?: string
   cancelError?: string
@@ -22,12 +22,12 @@ type OrderDetailActionsProps = {
 export function OrderDetailActions({
   order,
   isAuthenticated,
-  trackingHref,
   orderAgainHref,
   onOrderAgain,
   orderAgainLoading = false,
   orderAgainError,
   onCancel,
+  onConfirmReceipt,
   onRequestRefund,
   cancelSuccess,
   cancelError,
@@ -44,9 +44,11 @@ export function OrderDetailActions({
   return (
     <>
       <section className="buyer-order-actions buyer-order-actions--inline">
-        <Button variant="secondary" href={trackingHref}>
-          View logistic
-        </Button>
+        {isAuthenticated && order.receiptConfirmationRequired && !order.receiptConfirmedAt && onConfirmReceipt ? (
+          <Button variant="primary" onClick={onConfirmReceipt}>
+            Confirm delivery
+          </Button>
+        ) : null}
         {actionState.showCancel ? (
           <Button variant="secondary" onClick={onCancel}>
             Cancel order

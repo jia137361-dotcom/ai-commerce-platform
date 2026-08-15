@@ -43,6 +43,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   }
 
   const store = stores[0] as { stripe_account_id?: string | null }
+  const body = (req.body ?? {}) as { replace?: boolean; country?: string }
+  const replaceAccount = body.replace === true
+  const country = typeof body.country === "string" ? body.country.trim().toUpperCase() : undefined
+  if (country && !/^[A-Z]{2}$/.test(country)) {
+    return sendError(res, 400, "VALIDATION_ERROR", "country must be a two-letter ISO country code.")
+  }
   const settings = await storeCoreService.listStoreSettings({ store_id: storeId })
   const supportEmail =
     typeof settings[0]?.support_email === "string" ? settings[0].support_email : null
@@ -50,20 +56,19 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   try {
     const onboarding = await ensureSellerConnectOnboardingLink({
       storeId,
-      stripeAccountId: store.stripe_account_id ?? null,
+      stripeAccountId: replaceAccount ? null : store.stripe_account_id ?? null,
       supportEmail,
-      persistAccountId: store.stripe_account_id
-        ? undefined
-        : async (accountId) => {
-            const updated = await storeCoreService.updateStores({
-              selector: { id: storeId },
-              data: { stripe_account_id: accountId },
-            })
-            const saved = Array.isArray(updated) ? updated[0] : updated
-            if (!saved?.id) {
-              throw new Error("Stripe Connect account was created but could not be saved to the store record.")
-            }
-          },
+      country,
+      persistAccountId: async (accountId) => {
+        const updated = await storeCoreService.updateStores({
+          selector: { id: storeId },
+          data: { stripe_account_id: accountId },
+        })
+        const saved = Array.isArray(updated) ? updated[0] : updated
+        if (!saved?.id) {
+          throw new Error("Stripe Connect account was created but could not be saved to the store record.")
+        }
+      },
     })
 
     return res.status(200).json({

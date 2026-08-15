@@ -27,7 +27,7 @@ type CheckoutPaymentPanelProps = {
   onSavedPaymentMethodChange?: (paymentMethodId: string | null) => void
   onStripeComplete?: (paymentMethodLabel?: string) => Promise<void>
   onPayPalComplete?: () => Promise<void>
-  recoveryAction?: "confirm_payment" | "complete_order" | "wait" | "completed"
+  recoveryAction?: "confirm_payment" | "complete_order" | "wait" | "completed" | "expired"
   onPaymentError?: (message: string) => void
 }
 
@@ -90,6 +90,7 @@ export function CheckoutPaymentPanel({
   const usingSavedMethod = Boolean(selectedSavedPaymentMethodId)
   const recoveringOrder = recoveryAction === "complete_order"
   const waitingForPayment = recoveryAction === "wait"
+  const expiredReservation = recoveryAction === "expired"
   const [stripeLifecycle, setStripeLifecycle] = useState<StripeLifecycle>("idle")
   const [stripeLoadRevision, setStripeLoadRevision] = useState(0)
   const onPaymentErrorRef = useRef(onPaymentError)
@@ -218,6 +219,11 @@ export function CheckoutPaymentPanel({
               checkout has a valid shipping total.
             </p>
           </div>
+        ) : expiredReservation ? (
+          <div className="buyer-checkout-payment-message">
+            <strong>Payment window expired</strong>
+            <p>Open the unpaid order to re-add these items before starting a new payment.</p>
+          </div>
         ) : recoveringOrder ? (
           <div className="buyer-checkout-payment-message">
             <strong>Payment confirmed</strong>
@@ -325,6 +331,11 @@ export function CheckoutPaymentPanel({
             <strong>Confirm delivery first</strong>
             <p>PayPal will appear after the delivery address and shipping total are confirmed.</p>
           </div>
+        ) : expiredReservation ? (
+          <div className="buyer-checkout-payment-message">
+            <strong>Payment window expired</strong>
+            <p>Open the unpaid order to re-add these items before starting a new payment.</p>
+          </div>
         ) : recoveringOrder ? (
           <div className="buyer-checkout-payment-message">
             <strong>Payment confirmed</strong>
@@ -366,9 +377,9 @@ export function CheckoutPaymentPanel({
       ) : (
         <div className="buyer-checkout-payment-message">
           <strong>Development fallback only</strong>
-          <p>Stripe is not enabled for this region yet. Set `STRIPE_API_KEY` on Medusa, restart the backend, then run:</p>
+          <p>Stripe or PayPal is not available for this checkout region. The backend synchronizes configured providers automatically when the market is loaded.</p>
           <p>
-            <code>npm --workspace apps/medusa-backend run stripe:region:setup</code>
+            Restart Medusa after changing server payment credentials, then reload checkout.
           </p>
           <p>
             The local provider authorizes when the order is placed. It does not collect card details or prove captured

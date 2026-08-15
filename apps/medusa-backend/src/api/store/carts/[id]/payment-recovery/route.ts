@@ -13,6 +13,7 @@ import {
   normalizePayPalOrderStatus,
   normalizeStripePaymentIntentStatus,
   readActiveCheckoutPaymentAttempt,
+  readLatestCheckoutPaymentAttempt,
   readAttemptPaymentSession,
   readPayPalOrderId,
   readPayPalCaptureStatus,
@@ -25,7 +26,7 @@ import { ensureCartPaymentReady, findCartPaymentSession, readCartPaymentCollecti
 import { CHECKOUT_PAYMENT_ATTEMPTS_MODULE } from "../../../../../modules/checkout-payment-attempts"
 import type CheckoutPaymentAttemptsModuleService from "../../../../../modules/checkout-payment-attempts/service"
 import { getConfiguredPayPalClient, isPayPalResourceNotFoundError } from "../../../../../modules/paypal/client"
-import { isStripeResourceNotFoundError } from "../../../../../lib/stripe-client"
+import { isStripeResourceNotFoundError, stripeApiRequest } from "../../../../../lib/stripe-client"
 
 type AuthenticatedRequest = MedusaRequest & {
   auth_context?: {
@@ -66,8 +67,9 @@ const validateHeaders = (req: MedusaRequest) => {
   return null
 }
 
-const statusRecoveryAction = (status: CheckoutPaymentAttemptStatus | string): "confirm_payment" | "complete_order" | "wait" | "completed" => {
+const statusRecoveryAction = (status: CheckoutPaymentAttemptStatus | string): "confirm_payment" | "complete_order" | "wait" | "completed" | "expired" => {
   if (status === "completed") return "completed"
+  if (status === "expired") return "expired"
   if (status === "payment_succeeded" || status === "order_completion_failed") return "complete_order"
   if (status === "payment_processing") return "wait"
   return "confirm_payment"
@@ -201,6 +203,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     const service = req.scope.resolve(CHECKOUT_PAYMENT_ATTEMPTS_MODULE) as AttemptService
     let attempt = await readActiveCheckoutPaymentAttempt(req.scope, { cartId, storeId })
+    if (!attempt) {
+      const latestAttempt = await readLatestCheckoutPaymentAttempt(req.scope, { cartId, storeId })
+      if (latestAttempt?.status === "expired") {
+        return res.status(200).json(buildResponse({
+          cartId,
+          attempt: latestAttempt,
+          status: "expired",
+        }))
+      }
+    }
     let providerId = requestedProviderId || attempt?.provider_id || DEFAULT_PAYMENT_PROVIDER
 
     if (attempt?.provider_id && requestedProviderId && attempt.provider_id !== requestedProviderId) {
@@ -288,11 +300,15 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         })
         providerId = attempt.provider_id ?? providerId
       } else {
-        await patchAttempt(service, attempt, {
+        const expiredAttempt = await patchAttempt(service, attempt, {
           status: "expired",
           last_error: attempt.last_error ?? "Payment recovery window expired.",
         })
-        attempt = null
+        return res.status(200).json(buildResponse({
+          cartId,
+          attempt: expiredAttempt,
+          status: "expired",
+        }))
       }
     }
 
@@ -401,6 +417,37 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       } catch (error) {
         if (!isPayPalResourceNotFoundError(error)) throw error
         await replaceMissingExternalPayment()
+      }
+    }
+
+    if (session?.id && isStripeProviderId(providerId)) {
+      const paymentIntentId = readPaymentAttemptPaymentIntentId(session)
+      const amount = Number(session.amount)
+      if (paymentIntentId && Number.isSafeInteger(amount) && amount > 0) {
+        try {
+          const currentIntent = await readStripePaymentIntentForAttempt(req.scope, {
+            ...attempt,
+            provider_payment_id: paymentIntentId,
+          }, session)
+          // Medusa's Stripe provider expects a major-unit amount and multiplies it
+          // by 100. This application stores Medusa cart/payment amounts in minor
+          // units, so correct an unconfirmed PaymentIntent before exposing its
+          // client secret. A succeeded PaymentIntent must never be modified while
+          // the checkout page is recovering its order.
+          if (
+            currentIntent?.amount !== amount &&
+            ["requires_payment_method", "requires_confirmation", "requires_action"].includes(currentIntent?.status ?? "")
+          ) {
+            await stripeApiRequest(`/payment_intents/${paymentIntentId}`, {
+              method: "POST",
+              idempotencyKey: `checkout-stripe-amount:${session.id}:${amount}`,
+              params: { amount },
+            })
+          }
+        } catch (error) {
+          if (!isStripeResourceNotFoundError(error)) throw error
+          await replaceMissingExternalPayment()
+        }
       }
     }
 

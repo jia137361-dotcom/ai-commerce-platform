@@ -296,6 +296,9 @@ export const serializeAdminOrderSummary = (input: {
     order_id: input.order.id,
     display_id: input.order.display_id ?? null,
     email: input.order.email ?? null,
+    // Seller fulfillment reads payout fields from this order metadata after
+    // buyer receipt confirmation triggers the Connect transfer.
+    metadata: meta ?? {},
     shipping_address: input.order.shipping_address ?? null,
     payment_status: toMedusaAdminOrderPaymentStatus(mcPayment),
     payment_method_label: paymentMethodLabel,

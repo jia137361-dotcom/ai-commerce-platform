@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link, useSearchParams } from "react-router-dom"
 import { apiFetch } from "../../lib/api-client"
 import { PageHeader } from "../../components/PageHeader"
 import { EmptyState, TableSkeleton } from "../../components/ui/EmptyState"
@@ -7,6 +8,7 @@ import { Button } from "../../components/ui/Button"
 import { Badge } from "../../components/ui/Badge"
 import { Input } from "../../components/ui/Input"
 import { canReviewRefund, parsePartialRefundAmount } from "./refund-review-state"
+import { formatMinorMoney } from "../../lib/order-display"
 
 type RefundRequest = {
   id: string
@@ -32,10 +34,13 @@ type RefundRequest = {
 
 export function RefundRequestsPage() {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const orderId = searchParams.get("order_id")
   const [partialAmounts, setPartialAmounts] = useState<Record<string, string>>({})
   const query = useQuery({
-    queryKey: ["seller-refund-requests"],
-    queryFn: () => apiFetch<{ refund_requests: RefundRequest[] }>("/seller/refund-requests"),
+    queryKey: ["seller-refund-requests", orderId],
+    queryFn: () => apiFetch<{ refund_requests: RefundRequest[] }>(`/seller/refund-requests${orderId ? `?order_id=${encodeURIComponent(orderId)}` : ""}`),
+    refetchInterval: 10000,
   })
   const decision = useMutation({
     mutationFn: (input: { id: string; action: string; amount?: number }) =>
@@ -49,7 +54,7 @@ export function RefundRequestsPage() {
 
   return (
     <div>
-      <PageHeader title="Refund requests" description="Review requests for this store and approve only eligible refunds." />
+      <PageHeader title="Refund requests" description={orderId ? "Refund requests for the selected order. This list refreshes automatically." : "Review requests for this store and approve only eligible refunds."} />
       {query.isLoading ? <TableSkeleton /> : requests.length === 0 ? <EmptyState title="No refund requests" description="Buyer requests will appear here." /> : (
         <div className="overflow-x-auto rounded-card border border-slate-200 bg-white shadow-card">
           <table className="min-w-full text-sm">
@@ -64,7 +69,7 @@ export function RefundRequestsPage() {
                 const partialAmount = parsePartialRefundAmount(partialAmounts[request.id] ?? "", amount)
                 return (
                   <tr key={request.id} className="border-t border-slate-100 align-top">
-                    <td className="px-4 py-4 font-medium">#{request.display_id ?? request.order_id}</td>
+                    <td className="px-4 py-4 font-medium"><Link className="text-brand hover:underline" to={`/orders/${encodeURIComponent(request.order_id)}/fulfillment`}>#{request.display_id ?? request.order_id}</Link></td>
                     <td className="max-w-xs px-4 py-4">
                       <p>{request.reason.replaceAll("_", " ")}</p>
                       <p className="mt-1 text-xs text-slate-500">Buyer {request.customer_id ? `…${request.customer_id.slice(-8)}` : "unavailable"}</p>
@@ -76,7 +81,7 @@ export function RefundRequestsPage() {
                       <p className="mt-1 text-xs text-slate-500">Fulfillment: {request.fulfillment_status ?? "unknown"}</p>
                       <p className="mt-1 text-xs text-slate-500">Policy: {request.policy_result?.replaceAll("_", " ") ?? "manual review"}</p>
                     </td>
-                    <td className="px-4 py-4">{new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount)}</td>
+                    <td className="px-4 py-4">{formatMinorMoney(amount, currency)}</td>
                     <td className="px-4 py-4"><Badge label={request.status} /><p className="mt-1 text-xs text-slate-500">{request.payment_provider_id ?? "Provider pending"}</p></td>
                     <td className="px-4 py-4 text-right">
                       {canReviewRefund(request.status) ? (
@@ -85,7 +90,7 @@ export function RefundRequestsPage() {
                             aria-label={`Partial refund amount for ${request.id}`}
                             type="number"
                             min="0.01"
-                            max={amount}
+                            max={amount / 100}
                             step="0.01"
                             placeholder="Partial amount"
                             value={partialAmounts[request.id] ?? ""}

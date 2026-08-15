@@ -2,7 +2,7 @@ import type { DisplayCurrencyCode } from "./buyer-display-preferences"
 
 export type BuyerPreferences = { countryCode: string; currencyCode: DisplayCurrencyCode }
 
-const DISPLAY_CURRENCIES = new Set<DisplayCurrencyCode>(["auto", "usd", "eur", "gbp", "cny", "cad", "aud", "jpy", "sgd", "myr"])
+const DISPLAY_CURRENCIES = new Set<DisplayCurrencyCode>(["auto", "usd", "eur", "gbp", "cny", "hkd", "cad", "aud", "nzd", "jpy", "krw", "twd", "sgd", "myr", "inr", "idr", "thb", "php", "vnd", "brl", "mxn", "aed", "sar", "zar", "chf", "sek", "nok", "dkk", "pln", "czk", "huf", "ron", "ils", "try"])
 
 export const readBuyerPreferencesFromMetadata = (metadata?: Record<string, unknown> | null): BuyerPreferences => {
   const raw = metadata?.buyer_preferences

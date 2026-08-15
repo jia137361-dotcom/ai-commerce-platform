@@ -6,6 +6,7 @@ import { CheckoutCompleteError } from "../../components/checkout/CheckoutComplet
 import { CheckoutPageStatus } from "../../components/checkout/CheckoutPageStatus"
 import { CheckoutPaymentPanel } from "../../components/checkout/CheckoutPaymentPanel"
 import { CheckoutPaymentRecoveryBanner } from "../../components/checkout/CheckoutPaymentRecoveryBanner"
+import { CheckoutExpiredPaymentModal } from "../../components/checkout/CheckoutExpiredPaymentModal"
 import { CheckoutSummaryCard } from "../../components/checkout/CheckoutSummaryCard"
 import { PageShell } from "../../components/layout/PageShell"
 import { StoreFooter } from "../../components/layout/StoreFooter"
@@ -21,6 +22,7 @@ import {
   getCartShippingOptions,
   getScopedBuyerStoreId,
   getPayPalClientId,
+  getMyOrders,
   getStripePublishableKey,
   initializeCartPaymentRecovery,
   listCartPaymentProviders,
@@ -29,6 +31,7 @@ import {
   payCartWithSavedPaymentMethod,
   readBuyerPreferences,
   reserveCheckoutPayment,
+  reorderItemsToCheckout,
   selectCartShippingMethod,
   setActiveBuyerStoreId,
   updateCartAddress,
@@ -46,6 +49,7 @@ import {
   type BuyerStoreSettings,
   type BuyerCustomerAddress,
   type BuyerCustomerAddressInput,
+  type BuyerOrderSummary,
   type CheckoutPricingBreakdown,
 } from "../../lib/buyer-api"
 import { buildSettingsStoreHref } from "../../lib/storefront-links"
@@ -61,6 +65,7 @@ import {
   readPlatformCheckoutSession,
 } from "../../lib/platform-checkout-session"
 import { isCheckoutCountryCode, shippingUnavailableMessage } from "./checkout-countries"
+import { collectReorderLinesFromSummary } from "../orders/order-history-display"
 import {
   chooseDefaultPaymentProvider,
   hasValidStripeClientSecret,
@@ -136,10 +141,16 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
   const [checkoutPricing, setCheckoutPricing] = useState<CheckoutPricingBreakdown | null>(null)
   const [couponError, setCouponError] = useState<string | undefined>()
   const [checkoutHeaderCartCount, setCheckoutHeaderCartCount] = useState(0)
+  const [expiredReservationOrder, setExpiredReservationOrder] = useState<BuyerOrderSummary | null>(null)
+  const [expiredReservationLoading, setExpiredReservationLoading] = useState(false)
+  const [expiredReservationError, setExpiredReservationError] = useState<string>()
+  const [expiredReservationReordering, setExpiredReservationReordering] = useState(false)
   const skipAddressResetRef = useRef(false)
   const shippingSelectGenerationRef = useRef(0)
   const autoAppliedAddressRef = useRef("")
   const placeOrderInFlightRef = useRef(false)
+  const recoveredCompletionAttemptRef = useRef("")
+  const expiredAttemptRefreshRef = useRef("")
 
   const applyShippingOption = async (cartId: string, optionId: string) => {
     const generation = ++shippingSelectGenerationRef.current
@@ -303,7 +314,13 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
           if (!active) return
           const providers = availableProviders.length ? availableProviders : [{ id: "pp_system_default", isStripe: false }]
           setPaymentProviders(providers)
-          setSelectedPaymentProviderId(chooseDefaultPaymentProvider(providers, stripePublishableKey))
+          // Provider discovery runs again when checkout data is refreshed. Do
+          // not silently replace an active PayPal choice with Stripe.
+          setSelectedPaymentProviderId((current) =>
+            providers.some((provider) => provider.id === current)
+              ? current
+              : chooseDefaultPaymentProvider(providers, stripePublishableKey)
+          )
           setPaymentError(undefined)
         } catch (providerError) {
           if (!active) return
@@ -385,6 +402,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       .then((recovery) => {
         if (!active) return
         setPaymentRecovery(recovery)
+        window.dispatchEvent(new Event("citigoo:cart-reserved"))
       })
       .catch((reason) => {
         if (!active) return
@@ -442,6 +460,56 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       .finally(() => { if (active) setPaymentPreparing(false) })
     return () => { active = false }
   }, [cart?.id, cart?.total, checkoutStoreId, paypalSelected, platformCheckoutActive, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
+
+  useEffect(() => {
+    if (recoveryAction !== "expired" || !cart?.id || !auth.customer) return
+    let active = true
+    setExpiredReservationLoading(true)
+    setExpiredReservationError(undefined)
+    void getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 })
+      .then((page) => {
+        if (!active) return
+        setExpiredReservationOrder(page.orders.find((order) => order.checkoutCartId === cart.id) ?? null)
+      })
+      .catch((reason) => {
+        if (!active) return
+        setExpiredReservationOrder(null)
+        setExpiredReservationError(reason instanceof Error ? reason.message : "Unable to find the unpaid order.")
+      })
+      .finally(() => {
+        if (active) setExpiredReservationLoading(false)
+      })
+    return () => { active = false }
+  }, [auth.customer, cart?.id, recoveryAction])
+
+  useEffect(() => {
+    const attempt = paymentRecovery?.paymentAttempt
+    const expiresAt = attempt?.expiresAt
+    if (
+      !cart?.id ||
+      !expiresAt ||
+      recoveryAction === "expired" ||
+      recoveryAction === "completed" ||
+      recoveryAction === "complete_order"
+    ) {
+      return undefined
+    }
+    const expiresAtMs = Date.parse(expiresAt)
+    if (!Number.isFinite(expiresAtMs)) return undefined
+    const refreshKey = `${attempt.id}:${expiresAt}`
+    const refreshExpiredAttempt = () => {
+      if (expiredAttemptRefreshRef.current === refreshKey) return
+      expiredAttemptRefreshRef.current = refreshKey
+      void initializeCartPaymentRecovery(cart.id, selectedPaymentProviderId, { storeId: checkoutStoreId })
+        .then((recovery) => {
+          setPaymentRecovery(recovery)
+          setPaymentSession(recovery.paymentSession)
+        })
+        .catch((reason) => console.warn("[checkout] unable to mark payment attempt expired", reason))
+    }
+    const timeout = window.setTimeout(refreshExpiredAttempt, Math.max(0, expiresAtMs - Date.now()) + 50)
+    return () => window.clearTimeout(timeout)
+  }, [cart?.id, checkoutStoreId, paymentRecovery?.paymentAttempt, recoveryAction, selectedPaymentProviderId])
 
   useEffect(() => {
     if (!auth.customer || contactTouched || contact.email || contact.name || contact.phone) return
@@ -871,6 +939,15 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       if (platformCheckoutActive) successParams.set("platform_checkout", "1")
       window.location.assign(`/checkout/success?${successParams.toString()}`)
     } catch (completeErrorValue) {
+      if (propagateCompleteError && cart && isStripeProviderId(providerId)) {
+        try {
+          const recovery = await initializeCartPaymentRecovery(cart.id, providerId, { storeId: checkoutStoreId })
+          setPaymentRecovery(recovery)
+          setPaymentSession(recovery.paymentSession)
+        } catch (recoveryError) {
+          console.error("[checkout] unable to refresh confirmed Stripe payment", recoveryError)
+        }
+      }
       const message = propagateCompleteError
         ? STRIPE_ORDER_CREATION_FAILED_MESSAGE
         : completeErrorValue instanceof Error
@@ -884,6 +961,14 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       placeOrderInFlightRef.current = false
     }
   }
+
+  useEffect(() => {
+    if (!cart || recoveryAction !== "complete_order" || placeOrderInFlightRef.current) return
+    const attemptId = paymentRecovery?.paymentAttempt.id
+    if (!attemptId || recoveredCompletionAttemptRef.current === attemptId) return
+    recoveredCompletionAttemptRef.current = attemptId
+    void handlePlaceOrder(selectedPaymentProviderId)
+  }, [cart, paymentRecovery?.paymentAttempt.id, recoveryAction, selectedPaymentProviderId])
 
   const handlePayWithSavedMethod = async (paymentMethodId: string) => {
     if (placeOrderInFlightRef.current || !cart || placingOrder || !canPlaceOrder) return
@@ -906,6 +991,33 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     setPlacingOrder(false)
     placeOrderInFlightRef.current = false
     await handlePlaceOrder(selectedPaymentProviderId, true, paymentMethodLabel)
+  }
+
+  const returnFromExpiredCheckout = () => {
+    window.location.assign("/account/orders")
+  }
+
+  const reorderExpiredCheckout = async () => {
+    if (!expiredReservationOrder || expiredReservationReordering) return
+    const lines = collectReorderLinesFromSummary(expiredReservationOrder)
+    if (!lines.length) {
+      setExpiredReservationError("This unpaid order has no purchasable items to reorder.")
+      return
+    }
+    setExpiredReservationReordering(true)
+    setExpiredReservationError(undefined)
+    try {
+      const { checkoutHref } = await reorderItemsToCheckout({
+        storeId: expiredReservationOrder.storeId?.trim() || checkoutStoreId,
+        countryCode: readBuyerPreferences(auth.customer).countryCode,
+        items: lines,
+        customerId: auth.customer?.id ?? null,
+      })
+      window.location.assign(checkoutHref)
+    } catch (reason) {
+      setExpiredReservationError(reason instanceof Error ? reason.message : "Unable to prepare reorder.")
+      setExpiredReservationReordering(false)
+    }
   }
 
   const storeHref = buildSettingsStoreHref(settings)
@@ -1038,6 +1150,15 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
               />
               <CheckoutPaymentRecoveryBanner
                 attempt={paymentRecovery?.paymentAttempt ?? null}
+              />
+              <CheckoutExpiredPaymentModal
+                open={recoveryAction === "expired"}
+                order={expiredReservationOrder}
+                loading={expiredReservationLoading}
+                error={expiredReservationError}
+                reordering={expiredReservationReordering}
+                onReturn={returnFromExpiredCheckout}
+                onReorder={() => void reorderExpiredCheckout()}
               />
             </div>
           </section>

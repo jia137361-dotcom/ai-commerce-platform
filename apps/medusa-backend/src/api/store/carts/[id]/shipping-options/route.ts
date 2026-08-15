@@ -12,6 +12,7 @@ import {
   buildS2bShippingQuoteMetadata,
   quoteS2bShippingForCart,
 } from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
+import { convertUsdPriceToMarketCurrency } from "../../../../../lib/product-regions"
 
 /** Medusa calculated_amount / S2B amount_minor → major USD for storefront MoneyText. */
 const minorToMajor = (value: number | null | undefined) =>
@@ -128,7 +129,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
       const medusaMinor =
         option.amount ?? option.calculated_price?.calculated_amount ?? null
       const amountMajor = s2bQuote
-        ? s2bQuote.amountUsd
+        ? convertUsdPriceToMarketCurrency(s2bQuote.amountUsd, currency_code ?? "usd")
         : minorToMajor(typeof medusaMinor === "number" ? medusaMinor : null)
       return {
         id: option.id,
@@ -136,7 +137,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
         // Storefront expects major USD (e.g. 1.46), not minor cents (146).
         amount: amountMajor,
         amount_minor: s2bQuote
-          ? s2bQuote.amountMinor
+          ? Math.round(amountMajor * 100)
           : typeof medusaMinor === "number"
             ? Math.round(medusaMinor)
             : null,
@@ -149,6 +150,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
           ...(s2bQuote
             ? {
                 pricing_source: s2bQuote.source,
+                s2b_amount_usd: s2bQuote.amountUsd,
                 s2b_amount_cny: s2bQuote.amountCny,
                 s2b_logistics_name: s2bQuote.logisticsName,
               }

@@ -1,5 +1,7 @@
 import {
   isProductAvailableInRegion,
+  isProductAvailableInMarketRegion,
+  MARKET_REGION_DEFINITIONS,
   mergeSupportedRegionIdsIntoMetadata,
   resolveProductSupportedRegionIds,
   resolveRegionIdForCountry,
@@ -33,6 +35,27 @@ describe("product-regions", () => {
     expect(isProductAvailableInRegion(product, "reg_us")).toBe(false)
   })
 
+  it("uses supplier delivery countries when checkout regions are recreated", () => {
+    const product = {
+      metadata: {
+        sellable_country_codes: ["HK", "US"],
+        supported_region_ids: ["obsolete_international_region"],
+      },
+    }
+    expect(isProductAvailableInMarketRegion(product, {
+      region_id: "reg_hk",
+      name: "Hong Kong",
+      currency_code: "hkd",
+      country_codes: ["hk"],
+    })).toBe(true)
+    expect(isProductAvailableInMarketRegion(product, {
+      region_id: "reg_cn",
+      name: "China",
+      currency_code: "cny",
+      country_codes: ["cn"],
+    })).toBe(false)
+  })
+
   it("resolves region id from country code", () => {
     const regions = [
       { region_id: "reg_us", name: "United States", currency_code: "usd", country_codes: ["us"] },
@@ -40,6 +63,12 @@ describe("product-regions", () => {
     ]
     expect(resolveRegionIdForCountry(regions, "cn")).toBe("reg_cn")
     expect(resolveRegionIdForCountry(regions, "us")).toBe("reg_us")
+  })
+
+  it("gives Hong Kong its own HKD checkout market", () => {
+    expect(MARKET_REGION_DEFINITIONS).toContainEqual(
+      expect.objectContaining({ name: "Hong Kong", currency_code: "hkd", countries: ["hk"] })
+    )
   })
 
   it("merges supported_region_ids into metadata", () => {

@@ -75,6 +75,7 @@ type AuthenticatedRequest = MedusaRequest & {
 
 type CompleteCart = CartWithPaymentCollection & {
   customer_id?: string | null
+  total?: number | string | null
   shipping_address?: unknown | null
   shipping_methods?: unknown[] | null
   items?: Array<{ requires_shipping?: boolean | null }> | null
@@ -341,6 +342,21 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           error: {
             code: "STRIPE_PAYMENT_SESSION_REQUIRED",
             message: "Initialize and confirm a Stripe payment session before completing this cart.",
+          },
+        })
+      }
+      const paymentIntent = await readStripePaymentIntentForAttempt(req.scope, {
+        id: "",
+        cart_id: cartId,
+        store_id: storeId,
+        provider_id: providerId,
+      }, stripeSession)
+      const cartTotal = Number(cart.total)
+      if (paymentIntent && Number.isSafeInteger(paymentIntent.amount) && Number.isSafeInteger(cartTotal) && paymentIntent.amount !== cartTotal) {
+        return res.status(409).json({
+          error: {
+            code: "STRIPE_PAYMENT_AMOUNT_MISMATCH",
+            message: "Checkout total changed. Refresh checkout before confirming payment.",
           },
         })
       }

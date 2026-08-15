@@ -20,7 +20,6 @@ import { OrderDetailPage } from "./pages/orders/OrderDetailPage"
 import { StoreMessagesPage } from "./pages/account/StoreMessagesPage"
 import { OrderHistoryPage } from "./pages/orders/OrderHistoryPage"
 import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
-import { OrderTrackingPage } from "./pages/orders/OrderTrackingPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { SearchPage } from "./pages/search/SearchPage"
 import { CategoriesPage } from "./pages/categories/CategoriesPage"
@@ -33,8 +32,10 @@ import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
 import { AboutPage, CookiesPage, HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
 import { PlansPage } from "./pages/account/PlansPage"
 import { useBuyerAuth } from "./auth/useBuyerAuth"
-import { countPlatformCartItems } from "./lib/buyer-platform-cart"
+import { fetchPlatformCart, unregisterStoreCart } from "./lib/buyer-platform-cart"
 import { getBuyerCartIdentity } from "./lib/buyer-cart-storage"
+import { getMyOrders } from "./lib/buyer-api"
+import { collectReservedCheckoutCartIds } from "./pages/cart/cart-reservations"
 import { hydrateBuyerStoreContext, syncRouteStoreContext } from "./lib/buyer-store-context"
 import {
   BUYER_NAVIGATE_EVENT,
@@ -114,8 +115,20 @@ function App() {
   const refreshCartCount = async () => {
     const identity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
     try {
-      const total = await countPlatformCartItems(window.localStorage, identity)
-      setCartCount(total)
+      const platformCart = await fetchPlatformCart(window.localStorage, identity)
+      const unpaid = auth.customer
+        ? await getMyOrders({ bucket: "unpaid", scope: "platform", limit: 100, offset: 0 }).catch(() => null)
+        : null
+      const reservedCartIds = collectReservedCheckoutCartIds(unpaid?.orders ?? [])
+      const visibleGroups = platformCart.groups.filter((group) => {
+        if (!reservedCartIds.has(group.cart.id)) return true
+        unregisterStoreCart(window.localStorage, identity, group.storeId)
+        return false
+      })
+      setCartCount(visibleGroups.reduce(
+        (total, group) => total + group.cart.items.reduce((sum, item) => sum + item.quantity, 0),
+        0
+      ))
     } catch {
       setCartCount(0)
     }
@@ -123,6 +136,12 @@ function App() {
 
   useEffect(() => {
     void refreshCartCount()
+  }, [auth.customer?.id])
+
+  useEffect(() => {
+    const onCartReserved = () => { void refreshCartCount() }
+    window.addEventListener("citigoo:cart-reserved", onCartReserved)
+    return () => window.removeEventListener("citigoo:cart-reserved", onCartReserved)
   }, [auth.customer?.id])
 
   useEffect(() => {
@@ -220,7 +239,9 @@ function App() {
     const storeId = new URLSearchParams(window.location.search).get("store_id") ?? undefined
     page = <StoreMessagesPage cartCount={cartCount} orderId={orderId} storeId={storeId} />
   } else if (location.pathname.startsWith("/account/orders/") && location.pathname.endsWith("/tracking")) {
-    page = <OrderTrackingPage orderId={decodeURIComponent(location.pathname.split("/")[3] ?? "")} cartCount={cartCount} />
+    const orderId = decodeURIComponent(location.pathname.split("/")[3] ?? "")
+    window.history.replaceState({}, "", `/account/orders/${encodeURIComponent(orderId)}${window.location.search}`)
+    page = <OrderDetailPage orderId={orderId} cartCount={cartCount} />
   } else if (location.pathname.startsWith("/account/orders/")) {
     page = <OrderDetailPage orderId={decodeURIComponent(location.pathname.split("/")[3] ?? "")} cartCount={cartCount} />
   } else if (location.pathname.startsWith("/account/orders")) {

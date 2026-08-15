@@ -26,7 +26,7 @@ const paidStripeOrder = {
     captured_amount: 2999,
     currency_code: "usd",
     payments: [{ status: "captured", captured_at: "2026-06-24T00:00:00.000Z", amount: 2999 }],
-    payment_sessions: [{ provider_id: "pp_stripe_stripe", status: "captured" }],
+    payment_sessions: [{ provider_id: "pp_stripe_stripe", status: "captured", data: { id: "pi_123" } }],
   }],
 }
 
@@ -65,7 +65,12 @@ describe("releaseSellerPayout", () => {
       payouts_enabled: true,
       details_submitted: true,
     })
-    ;(stripeApiRequest as jest.Mock).mockResolvedValue({ id: "tr_123" })
+    ;(stripeApiRequest as jest.Mock).mockImplementation((path: string) => {
+      if (path === "/payment_intents/pi_123") return Promise.resolve({ latest_charge: "ch_123" })
+      if (path === "/charges/ch_123") return Promise.resolve({ balance_transaction: "txn_123" })
+      if (path === "/balance_transactions/txn_123") return Promise.resolve({ amount: 2999, currency: "usd" })
+      return Promise.resolve({ id: "tr_123" })
+    })
   })
 
   it("transfers captured funds to the seller connect account on receipt confirmation", async () => {
@@ -85,6 +90,8 @@ describe("releaseSellerPayout", () => {
           amount: 2999,
           currency: "usd",
           destination: "acct_seller",
+          source_transaction: "ch_123",
+          transfer_group: "order_order_1",
         }),
       })
     )
