@@ -16,7 +16,6 @@ import {
   confirmStripeWalletPaymentAndComplete,
   StripePaymentConfirmedOrderRecoveryError,
 } from "../../pages/checkout/checkout-payment"
-import { StripeTestModeHint } from "./StripeTestModeHint"
 import { Button } from "../ui/Button"
 
 const WALLET_READINESS_TIMEOUT_MS = 5000
@@ -41,7 +40,10 @@ export function StripePaymentForm({
   const [walletAvailability, setWalletAvailability] = useState<StripeWalletAvailability>(() => normalizeStripeWalletAvailability())
   const [walletAvailabilityKnown, setWalletAvailabilityKnown] = useState(false)
   const isDevelopment = import.meta.env.DEV
-  const walletOptions = resolveStripeWalletPresentationOptions(isDevelopment)
+  const walletOptions = useMemo(
+    () => resolveStripeWalletPresentationOptions(isDevelopment),
+    [isDevelopment]
+  )
   const walletRuntime = useMemo(
     () =>
       getStripeWalletRuntimeDiagnostic({
@@ -150,7 +152,7 @@ export function StripePaymentForm({
   return (
     <div className="buyer-checkout-stripe-form">
       <div className={resolveStripeWalletContainerClass(walletAvailabilityKnown, walletAvailability)}>
-        <strong className="buyer-checkout-wallet-heading">Quick pay</strong>
+        <strong className="buyer-checkout-wallet-heading">Express checkout</strong>
         <ExpressCheckoutElement
           options={walletOptions}
           onReady={handleWalletReady}
@@ -179,7 +181,6 @@ export function StripePaymentForm({
           reportPaymentElementError(event.error.message || "Unable to load the Stripe payment form.")
         }}
       />
-      <StripeTestModeHint />
       {error ? <p className="buyer-checkout-inline-error" role="alert">{error}</p> : null}
       <Button loading={confirming || placing || paymentConfirmed} disabled={!stripe || !elements || !elementReady || !canSubmit || confirming || placing || paymentConfirmed} onClick={() => void submit()}>
         {paymentConfirmed ? "Restoring order..." : placing ? "Finalizing order..." : confirming ? "Confirming payment..." : "Pay now"}

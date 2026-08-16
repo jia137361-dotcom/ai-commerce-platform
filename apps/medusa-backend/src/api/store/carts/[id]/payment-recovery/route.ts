@@ -49,6 +49,14 @@ type AttemptService = CheckoutPaymentAttemptsModuleService & {
 }
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
+const PAYPAL_ZERO_DECIMAL_CURRENCIES = new Set(["bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf"])
+
+const paypalAmountValue = (amount: unknown, currencyCode: string) => {
+  const numeric = typeof amount === "number" ? amount : Number(amount)
+  if (!Number.isFinite(numeric) || numeric < 0) throw new Error("Payment session amount is invalid.")
+  const digits = PAYPAL_ZERO_DECIMAL_CURRENCIES.has(currencyCode.toLowerCase()) ? 0 : 2
+  return (numeric / 10 ** digits).toFixed(digits)
+}
 
 const isMissingExternalPaymentResource = (error: unknown) =>
   isPayPalResourceNotFoundError(error) || isStripeResourceNotFoundError(error)
@@ -358,6 +366,30 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         })
         paypalOrderId = order.id
         paypalOrderStatus = order.status ?? null
+      } else {
+        const existingOrder = await client.retrieveOrder(paypalOrderId)
+        const purchaseUnit = existingOrder.purchase_units?.[0]
+        const expectedAmount = paypalAmountValue(session.amount, session.currency_code)
+        const currentAmount = purchaseUnit?.amount?.value
+        const currentCurrency = purchaseUnit?.amount?.currency_code?.toUpperCase()
+        if (
+          existingOrder.status === "CREATED" &&
+          currentAmount != null &&
+          currentCurrency != null &&
+          (currentAmount !== expectedAmount || currentCurrency !== session.currency_code.toUpperCase())
+        ) {
+          const updatedOrder = await client.updateOrder(paypalOrderId, {
+            amount: session.amount,
+            currencyCode: session.currency_code,
+            customId: session.id,
+            customIdExists: Boolean(purchaseUnit?.custom_id),
+            referenceId: purchaseUnit?.reference_id ?? attempt.id,
+            requestId: `paypal-order-amount:${session.id}:${session.amount}:${session.currency_code}`,
+          })
+          paypalOrderStatus = updatedOrder.status ?? null
+        } else {
+          paypalOrderStatus = existingOrder.status ?? null
+        }
       }
       if (!paypalOrderId) throw new Error("PayPal did not return an order id")
       const linkedData = {
@@ -429,12 +461,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
             ...attempt,
             provider_payment_id: paymentIntentId,
           }, session)
+          if (currentIntent?.status === "canceled") {
+            await replaceMissingExternalPayment()
+          }
           // Medusa's Stripe provider expects a major-unit amount and multiplies it
           // by 100. This application stores Medusa cart/payment amounts in minor
           // units, so correct an unconfirmed PaymentIntent before exposing its
           // client secret. A succeeded PaymentIntent must never be modified while
           // the checkout page is recovering its order.
           if (
+            currentIntent?.status !== "canceled" &&
             currentIntent?.amount !== amount &&
             ["requires_payment_method", "requires_confirmation", "requires_action"].includes(currentIntent?.status ?? "")
           ) {

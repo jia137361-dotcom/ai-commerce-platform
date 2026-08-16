@@ -26,6 +26,7 @@ type CheckoutPaymentPanelProps = {
   savedPaymentMethods?: BuyerPaymentMethod[]
   selectedSavedPaymentMethodId?: string | null
   onSavedPaymentMethodChange?: (paymentMethodId: string | null) => void
+  onRequestNewCard?: () => void
   onPayWithSavedPaymentMethod?: (paymentMethodId: string) => void
   onStripeComplete?: (paymentMethodLabel?: string) => Promise<void>
   onPayPalComplete?: () => Promise<void>
@@ -75,6 +76,7 @@ export function CheckoutPaymentPanel({
   savedPaymentMethods = [],
   selectedSavedPaymentMethodId = null,
   onSavedPaymentMethodChange,
+  onRequestNewCard,
   onPayWithSavedPaymentMethod,
   onStripeComplete = async () => undefined,
   onPayPalComplete = async () => undefined,
@@ -102,6 +104,7 @@ export function CheckoutPaymentPanel({
   const expiredReservation = recoveryAction === "expired"
   const [stripeLifecycle, setStripeLifecycle] = useState<StripeLifecycle>("idle")
   const [stripeLoadRevision, setStripeLoadRevision] = useState(0)
+  const terminalStripeSessionsRef = useRef(new Set<string>())
   const onPaymentErrorRef = useRef(onPaymentError)
   onPaymentErrorRef.current = onPaymentError
   const reportPaymentError = useCallback((message: string) => onPaymentErrorRef.current?.(message), [])
@@ -155,6 +158,16 @@ export function CheckoutPaymentPanel({
       return
     }
     const safeMessage = message || "Unable to load the Stripe payment form."
+    if (
+      /PaymentIntent is in a terminal state/i.test(safeMessage) &&
+      session?.id &&
+      !terminalStripeSessionsRef.current.has(session.id)
+    ) {
+      terminalStripeSessionsRef.current.add(session.id)
+      reportPaymentError("Refreshing an expired card payment session…")
+      onRequestNewCard?.()
+      return
+    }
     console.info("payment_element_error", { payment_session_id: session?.id ?? null, message: safeMessage })
     reportPaymentError(safeMessage)
   }, [reportPaymentError, session?.id])
@@ -204,7 +217,7 @@ export function CheckoutPaymentPanel({
               onProviderChange?.(provider.id)
             }}
           >
-            <strong>{provider.isStripe || isStripeProviderId(provider.id) ? "Card & wallets" : "PayPal"}</strong>
+            <strong>{provider.isStripe || isStripeProviderId(provider.id) ? "Credit card, debit card, and express wallets" : "PayPal"}</strong>
           </button>
         ))}
       </div>
@@ -276,23 +289,18 @@ export function CheckoutPaymentPanel({
                   role="radio"
                   aria-checked={!selectedSavedPaymentMethodId}
                   className={!selectedSavedPaymentMethodId ? "active" : ""}
-                  onClick={() => onSavedPaymentMethodChange?.(null)}
+                  onClick={() => {
+                    onSavedPaymentMethodChange?.(null)
+                    onRequestNewCard?.()
+                  }}
                 >
                   <span>
                     <strong>Use a new card</strong>
                     <small>Enter card details below</small>
                   </span>
                 </button>
-                <p className="buyer-checkout-card-copy">
-                  Manage cards in <a href="/account/payment-methods">Account → Payment methods</a>.
-                </p>
               </div>
-            ) : (
-              <p className="buyer-checkout-card-copy">
-                No saved cards yet. You can add one in{" "}
-                <a href="/account/payment-methods">Account → Payment methods</a>, or pay with a new card below.
-              </p>
-            )}
+            ) : null}
 
             {usingSavedMethod ? (
               <div className="buyer-checkout-saved-payment-submit">
@@ -372,6 +380,13 @@ export function CheckoutPaymentPanel({
           </div>
         ) : usingSavedMethod ? (
           <div className="buyer-checkout-saved-payment-submit">
+            <button
+              type="button"
+              className="buyer-checkout-saved-payment-back"
+              onClick={() => onSavedPaymentMethodChange?.(null)}
+            >
+              Use another PayPal account
+            </button>
             <p className="buyer-checkout-card-copy">
               {selectedSavedMethod?.label ?? "Selected PayPal account"} will be charged when you continue.
             </p>
@@ -400,16 +415,10 @@ export function CheckoutPaymentPanel({
                   <span><strong>{method.label}</strong>{method.isDefault ? <small>Default</small> : null}</span>
                 </button>
               ))}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={!selectedSavedPaymentMethodId}
-                className={!selectedSavedPaymentMethodId ? "active" : ""}
-                onClick={() => onSavedPaymentMethodChange?.(null)}
-              >
-                <span><strong>Use another PayPal account</strong><small>Sign in with PayPal</small></span>
-              </button>
             </div>
+          ) : null}
+          {paypalSavedPaymentMethods.length ? (
+            <p className="buyer-checkout-card-copy">Use another account or use PayPal card below.</p>
           ) : null}
           <PayPalPaymentButton
             clientId={paypalClientId}

@@ -31,7 +31,9 @@ export const resolveStripeWalletContainerClass = (
     ? "buyer-checkout-wallets"
     : "buyer-checkout-wallets buyer-checkout-wallets-hidden"
 
-export const resolveStripeWalletPresentationOptions = (isDevelopment: boolean) => {
+export const resolveStripeWalletPresentationOptions = (
+  isDevelopment: boolean
+): StripeExpressCheckoutElementOptions => {
   const mode: "always" | "auto" = isDevelopment ? "always" : "auto"
   return {
     buttonHeight: 44,
@@ -59,3 +61,4 @@ export const getStripeWalletRuntimeDiagnostic = (input: {
   isHttps: input.protocol === "https:",
   browserFamily: resolveBrowserFamily(input.userAgent || ""),
 })
+import type { StripeExpressCheckoutElementOptions } from "@stripe/stripe-js"

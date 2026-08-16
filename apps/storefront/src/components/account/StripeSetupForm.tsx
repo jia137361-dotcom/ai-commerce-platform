@@ -1,6 +1,5 @@
 import { PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
 import { useState } from "react"
-import { StripeTestModeHint } from "../checkout/StripeTestModeHint"
 import { Button } from "../ui/Button"
 
 export function StripeSetupForm({
@@ -51,7 +50,6 @@ export function StripeSetupForm({
           setError(event.error.message || "Unable to load the Stripe payment form.")
         }}
       />
-      <StripeTestModeHint />
       <p className="buyer-account-setting-note">
         Choose Card (Visa/Mastercard), Apple Pay, or Google Pay. Wallet tabs appear when your browser and Stripe test account support them.
       </p>

@@ -2157,6 +2157,7 @@ export const payCartWithSavedPaymentMethod = async (
     provider_id?: string
     payment_intent_id?: string
     payment_intent_status?: string
+    client_secret?: string
     payment_method_id?: string
     payment_method_label?: string
   }>(

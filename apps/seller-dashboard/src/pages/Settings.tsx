@@ -10,6 +10,7 @@ import { PageHeader } from "../components/PageHeader"
 import { StorePolicyPresetsSection } from "../components/StorePolicyPresetsSection"
 import { StoreSettingsMediaFields } from "../components/StoreSettingsMediaFields"
 import { SellerStripeConnectSection } from "../components/SellerStripeConnectSection"
+import { PlatformPayPalBusinessSection } from "../components/PlatformPayPalBusinessSection"
 import { useToast } from "../components/ToastProvider"
 import { Button } from "../components/ui/Button"
 import { Card } from "../components/ui/Card"
@@ -146,6 +147,7 @@ export function SettingsPage() {
         </form>
       </Card>
       <SellerStripeConnectSection />
+      <PlatformPayPalBusinessSection />
     </div>
   )
 }

@@ -55,6 +55,7 @@ import {
 } from "../../lib/buyer-api"
 import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
+import { getStripePromise } from "../../lib/stripe-loader"
 import type { StoreCart } from "../../lib/mock-data"
 import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
 import { resolveCheckoutState } from "./checkout-state"
@@ -260,6 +261,26 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     return true
   }
 
+  const discardCachedPaymentRecovery = (providerId: string) => {
+    delete paymentRecoveryCacheRef.current[providerId]
+  }
+
+  const refreshPaymentSession = async (providerId: string) => {
+    if (!cart || paymentPreparing || placingOrder) return
+    setPaymentPreparing(true)
+    setPaymentError(undefined)
+    try {
+      const recovery = await initializeCartPaymentRecovery(cart.id, providerId, { storeId: checkoutStoreId })
+      cachePaymentRecovery(providerId, recovery)
+      setPaymentRecovery(recovery)
+      setPaymentSession(recovery.paymentSession)
+    } catch (reason) {
+      setPaymentError(reason instanceof Error ? reason.message : "Unable to refresh the payment session.")
+    } finally {
+      setPaymentPreparing(false)
+    }
+  }
+
   useEffect(() => {
     let active = true
 
@@ -413,7 +434,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     return () => {
       active = false
     }
-  }, [auth.customer, checkoutCartIdParam, loadVersion, onCartUpdated])
+  }, [auth.customer?.id, checkoutCartIdParam, loadVersion, onCartUpdated])
 
   useEffect(() => {
     if (skipAddressResetRef.current) {
@@ -1035,6 +1056,35 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
             storeId: checkoutStoreId,
             providerId: selectedPaymentProviderId,
           })
+      if (method?.provider !== "paypal") {
+        if (!paid.client_secret) throw new Error("Saved card payment is not ready because Stripe did not return a client secret.")
+        const stripe = await getStripePromise(stripePublishableKey)
+        if (!stripe) throw new Error("Unable to load Stripe for saved-card payment.")
+        let confirmation = paid.payment_intent_status === "requires_action"
+          ? await stripe.handleNextAction(paid.client_secret)
+          : await stripe.confirmCardPayment(paid.client_secret, {
+              payment_method: paymentMethodId,
+              return_url: `${window.location.origin}/checkout`,
+            }, { handleActions: true })
+        // Stripe normally handles this inside confirmCardPayment. Keep an
+        // explicit fallback for intents restored from an interrupted checkout.
+        if (!confirmation.error && confirmation.paymentIntent?.status === "requires_action") {
+          confirmation = await stripe.handleNextAction(paid.client_secret)
+        }
+        if (confirmation.error) throw new Error(confirmation.error.message || "Saved-card payment failed.")
+        let savedCardStatus = confirmation.paymentIntent?.status
+        if (savedCardStatus === "requires_confirmation") {
+          const finalized = await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
+            storeId: checkoutStoreId,
+            providerId: selectedPaymentProviderId,
+            returnUrl: `${window.location.origin}/checkout`,
+          })
+          savedCardStatus = finalized.payment_intent_status
+        }
+        if (!savedCardStatus || !["succeeded", "processing", "requires_capture"].includes(savedCardStatus)) {
+          throw new Error("Saved-card payment did not complete.")
+        }
+      }
       paymentMethodLabel = paid.payment_method_label
     } catch (reason) {
       setCompleteError(reason instanceof Error ? reason.message : "Unable to pay with saved card.")
@@ -1178,7 +1228,14 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
                 onProviderChange={(providerId) => {
                   if (providerId === selectedPaymentProviderId) return
                   setSelectedPaymentProviderId(providerId)
-                  if (!restoreCachedPaymentRecovery(providerId)) {
+                  // A Stripe PaymentIntent can become terminal while PayPal is
+                  // open. Always revalidate Stripe instead of remounting an old
+                  // cached client secret into Elements.
+                  if (isStripeProviderId(providerId)) {
+                    discardCachedPaymentRecovery(providerId)
+                    setPaymentSession(null)
+                    setPaymentRecovery(null)
+                  } else if (!restoreCachedPaymentRecovery(providerId)) {
                     setPaymentSession(null)
                     setPaymentRecovery(null)
                   }
@@ -1197,6 +1254,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
                 savedPaymentMethods={savedPaymentMethods}
                 selectedSavedPaymentMethodId={selectedSavedPaymentMethodId}
                 onSavedPaymentMethodChange={setSelectedSavedPaymentMethodId}
+                onRequestNewCard={() => void refreshPaymentSession(selectedPaymentProviderId)}
                 onPayWithSavedPaymentMethod={(paymentMethodId) => void handlePayWithSavedMethod(paymentMethodId)}
                 recoveryAction={recoveryAction}
                 onStripeComplete={(paymentMethodLabel) =>

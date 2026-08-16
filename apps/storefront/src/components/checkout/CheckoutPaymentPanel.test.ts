@@ -17,7 +17,7 @@ describe("CheckoutPaymentPanel", () => {
       selectedProviderId: "pp_stripe_stripe",
     }))
     expect(html).not.toContain("pp_system_default")
-    expect(html.match(/>Card &amp; wallets</g)).toHaveLength(1)
+    expect(html).toContain("Credit card, debit card, and express wallets")
     expect(html.match(/>PayPal</g)).toHaveLength(1)
     expect(html).toContain("PayPal")
     expect(html).not.toContain("Card number")

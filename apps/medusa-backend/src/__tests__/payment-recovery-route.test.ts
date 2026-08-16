@@ -12,6 +12,7 @@ const mockReadCartPaymentCollectionId = jest.fn()
 const mockDeletePaymentSessionsRun = jest.fn()
 const mockRetrievePayPalOrder = jest.fn()
 const mockCreatePayPalOrder = jest.fn()
+const mockUpdatePayPalOrder = jest.fn()
 const mockIsCheckoutPaymentAttemptExpired = jest.fn()
 const mockStripeApiRequest = jest.fn()
 
@@ -20,7 +21,11 @@ jest.mock("@medusajs/core-flows", () => ({
 }))
 
 jest.mock("../modules/paypal/client", () => ({
-  getConfiguredPayPalClient: () => ({ retrieveOrder: mockRetrievePayPalOrder, createOrder: mockCreatePayPalOrder }),
+  getConfiguredPayPalClient: () => ({
+    retrieveOrder: mockRetrievePayPalOrder,
+    createOrder: mockCreatePayPalOrder,
+    updateOrder: mockUpdatePayPalOrder,
+  }),
   isPayPalResourceNotFoundError: (error: unknown) =>
     Boolean(error && typeof error === "object" && (error as { status?: unknown }).status === 404),
 }))
@@ -163,6 +168,7 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     mockDeletePaymentSessionsRun.mockResolvedValue({})
     mockRetrievePayPalOrder.mockResolvedValue({ id: "PAYPAL_ORDER_1", status: "CREATED" })
     mockCreatePayPalOrder.mockResolvedValue({ id: "PAYPAL_ORDER_CREATED", status: "CREATED" })
+    mockUpdatePayPalOrder.mockResolvedValue({ id: "PAYPAL_ORDER_1", status: "CREATED" })
   })
 
   it("returns a Stripe payment session with client_secret so Elements can render", async () => {
@@ -412,6 +418,49 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     })
   })
 
+  it("synchronizes an unapproved PayPal Order with the payment session amount", async () => {
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_1",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      customer_id: "cus_1",
+      provider_id: "pp_paypal_paypal",
+      payment_collection_id: "paycol_1",
+      payment_session_id: "ps_paypal",
+      provider_payment_id: "PAYPAL_ORDER_1",
+      status: "awaiting_payment",
+      expires_at: new Date(Date.now() + 15 * 60 * 1000),
+    })
+    mockReadAttemptPaymentSession.mockResolvedValue({
+      id: "ps_paypal",
+      provider_id: "pp_paypal_paypal",
+      amount: 18044,
+      currency_code: "hkd",
+      data: { paypal_order_id: "PAYPAL_ORDER_1" },
+    })
+    mockRetrievePayPalOrder.mockResolvedValue({
+      id: "PAYPAL_ORDER_1",
+      status: "CREATED",
+      purchase_units: [{
+        reference_id: "cpa_1",
+        custom_id: "ps_paypal",
+        amount: { currency_code: "HKD", value: "238.92" },
+      }],
+    })
+    const { req } = createReq()
+    req.body = { provider_id: "pp_paypal_paypal" } as never
+    const res = createRes()
+
+    await recoverPayment(req, res)
+
+    expect(mockUpdatePayPalOrder).toHaveBeenCalledWith("PAYPAL_ORDER_1", expect.objectContaining({
+      amount: 18044,
+      currencyCode: "hkd",
+      referenceId: "cpa_1",
+    }))
+    expect(res.status).toHaveBeenCalledWith(200)
+  })
+
   it("allows an unapproved PayPal order to switch back to Stripe", async () => {
     mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
       id: "cpa_1",
@@ -545,6 +594,49 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     expect(res.body).toMatchObject({
       status: "awaiting_payment",
       payment_attempt: { payment_session_id: "ps_fresh", provider_payment_id: "pi_fresh" },
+      payment_session: { id: "ps_fresh", client_secret: "pi_fresh_secret" },
+    })
+  })
+
+  it("replaces a canceled Stripe PaymentIntent before the card form is rendered", async () => {
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_1",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      customer_id: "cus_1",
+      provider_id: "pp_stripe_stripe",
+      payment_collection_id: "paycol_1",
+      payment_session_id: "ps_cancelled",
+      provider_payment_id: "pi_cancelled",
+      status: "payment_failed",
+      expires_at: new Date(Date.now() + 15 * 60 * 1000),
+    })
+    mockReadAttemptPaymentSession.mockResolvedValue({
+      id: "ps_cancelled",
+      provider_id: "pp_stripe_stripe",
+      amount: 1243,
+      currency_code: "usd",
+      data: { id: "pi_cancelled", client_secret: "pi_cancelled_secret" },
+    })
+    mockFindCartPaymentSession.mockResolvedValue({
+      id: "ps_fresh",
+      provider_id: "pp_stripe_stripe",
+      amount: 1243,
+      currency_code: "usd",
+      data: { id: "pi_fresh", client_secret: "pi_fresh_secret" },
+    })
+    mockReadStripePaymentIntentForAttempt
+      .mockResolvedValueOnce({ id: "pi_cancelled", status: "canceled", amount: 1243 })
+      .mockResolvedValue({ id: "pi_fresh", status: "requires_payment_method", amount: 1243 })
+    mockReadPaymentAttemptPaymentIntentId.mockReturnValue("pi_fresh")
+    const { req } = createReq()
+    const res = createRes()
+
+    await recoverPayment(req, res)
+
+    expect(mockDeletePaymentSessionsRun).toHaveBeenCalledWith({ input: { ids: ["ps_cancelled"] } })
+    expect(mockEnsureCartPaymentReady).toHaveBeenCalledWith(expect.anything(), "cart_1", "pp_stripe_stripe")
+    expect(res.body).toMatchObject({
       payment_session: { id: "ps_fresh", client_secret: "pi_fresh_secret" },
     })
   })

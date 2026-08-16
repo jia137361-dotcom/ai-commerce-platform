@@ -52,6 +52,19 @@ export async function listPaymentSessions(
   return data
 }
 
+export const selectPaymentSessionForProvider = (
+  sessions: PaymentSessionRow[],
+  providerId: string
+) =>
+  sessions.find(
+    (session) =>
+      session.provider_id === providerId &&
+      typeof session.status === "string" &&
+      PROCESSABLE_STATUSES.has(session.status)
+  ) ??
+  sessions.find((session) => session.provider_id === providerId) ??
+  null
+
 export async function findCartPaymentSession(
   container: MedusaContainer,
   cartId: string,
@@ -60,7 +73,7 @@ export async function findCartPaymentSession(
   const paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
   if (!paymentCollectionId) return null
   const sessions = await listPaymentSessions(container, paymentCollectionId)
-  return sessions.find((session) => session.provider_id === providerId) ?? null
+  return selectPaymentSessionForProvider(sessions, providerId)
 }
 
 function hasProcessableSessionForProvider(

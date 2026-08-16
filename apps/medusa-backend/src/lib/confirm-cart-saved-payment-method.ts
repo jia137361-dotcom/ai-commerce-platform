@@ -206,30 +206,40 @@ export async function confirmCartWithSavedPaymentMethod(
     stripeCustomerId,
   })
 
-  // PaymentIntents created with Dashboard automatic methods may include redirects.
-  // Stripe requires return_url even when confirming a saved card on-session.
-  const confirmed = await stripeApiRequest<StripePaymentIntent>(
-    `/payment_intents/${paymentIntentId}/confirm`,
-    {
+  const existing = await stripeApiRequest<StripePaymentIntent>(`/payment_intents/${paymentIntentId}`)
+  const existingStatus = existing.status ?? ""
+  let paymentIntent = existing
+
+  if (existingStatus === "requires_payment_method") {
+    // Medusa creates Stripe intents with manual confirmation. This first
+    // confirmation can return requires_action, which Stripe.js handles next.
+    paymentIntent = await stripeApiRequest<StripePaymentIntent>(`/payment_intents/${paymentIntentId}/confirm`, {
       method: "POST",
       params: {
         payment_method: input.paymentMethodId,
-        "off_session": false,
+        off_session: false,
         return_url: resolveCheckoutReturnUrl(input.returnUrl),
       },
-    }
-  )
+    })
+  } else if (existingStatus === "requires_confirmation") {
+    // After handleNextAction succeeds, manual confirmation requires this
+    // second server-side confirmation before the intent becomes succeeded.
+    paymentIntent = await stripeApiRequest<StripePaymentIntent>(`/payment_intents/${paymentIntentId}/confirm`, {
+      method: "POST",
+      params: { return_url: resolveCheckoutReturnUrl(input.returnUrl) },
+    })
+  }
 
-  const status = confirmed.status ?? ""
-  if (!["succeeded", "processing", "requires_capture"].includes(status)) {
+  const status = paymentIntent.status ?? ""
+  if (!["succeeded", "processing", "requires_capture", "requires_action", "requires_confirmation"].includes(status)) {
     throw new Error(`Saved-card payment is not ready (${status || "unknown"})`)
   }
 
   return {
     provider_id: providerId,
-    payment_intent_id: confirmed.id,
+    payment_intent_id: paymentIntent.id,
     payment_intent_status: status,
-    client_secret: confirmed.client_secret ?? readClientSecret(session.data ?? undefined),
+    client_secret: paymentIntent.client_secret ?? readClientSecret(session.data ?? undefined),
     payment_method_id: input.paymentMethodId,
     payment_method_label: saved.label || formatStripePaymentMethodLabel({ id: saved.id, type: saved.type }),
   }

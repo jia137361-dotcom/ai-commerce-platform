@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useEffect, useState } from "react"
+import { cloneElement, isValidElement, useCallback, useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import type { StoreCart } from "./lib/mock-data"
 import { CartPage } from "./pages/cart/CartPage"
@@ -153,9 +153,9 @@ function App() {
     }
   }, [location.hash, location.pathname, location.search])
 
-  const onCartUpdated = (cart: StoreCart | null) => {
+  const onCartUpdated = useCallback((cart: StoreCart | null) => {
     setCartCount(cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
-  }
+  }, [])
 
   const routeKey = `${location.pathname}${location.search}${location.hash}`
   let page: ReactNode = <StoreHomePage cartCount={cartCount} />
