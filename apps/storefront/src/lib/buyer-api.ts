@@ -2175,6 +2175,23 @@ export const payCartWithSavedPaymentMethod = async (
   )
 }
 
+export const payCartWithSavedPayPalPaymentMethod = async (
+  cartId: string,
+  paymentMethodId: string,
+  options?: StoreScopedRequestOptions & { providerId?: string }
+) => storeScopedFetch<{
+  provider_id?: string
+  payment_method_id?: string
+  payment_method_label?: string
+}>(
+  `/store/carts/${encodeURIComponent(cartId)}/paypal/use-saved-payment-method`,
+  {
+    method: "POST",
+    body: JSON.stringify({ payment_method_id: paymentMethodId, provider_id: options?.providerId }),
+  },
+  options
+)
+
 export const completeCart = async (
   cartId: string,
   options?: {
@@ -2851,6 +2868,7 @@ export const deleteCustomerAddress = async (addressId: string) => {
 
 export type BuyerPaymentMethod = {
   id: string
+  provider?: "stripe" | "paypal"
   type: string
   brand?: string
   last4?: string
@@ -2863,6 +2881,7 @@ export type BuyerPaymentMethod = {
 
 type ApiPaymentMethod = {
   id?: string
+  provider?: "stripe" | "paypal"
   type?: string
   brand?: string
   last4?: string
@@ -2881,6 +2900,7 @@ const normalizePaymentMethod = (method: ApiPaymentMethod): BuyerPaymentMethod | 
   if (!method.id) return null
   return {
     id: method.id,
+    provider: method.provider === "paypal" ? "paypal" : "stripe",
     type: method.type ?? "card",
     brand: method.brand,
     last4: method.last4,
@@ -2895,6 +2915,7 @@ const normalizePaymentMethod = (method: ApiPaymentMethod): BuyerPaymentMethod | 
 export const listCustomerPaymentMethods = async () => {
   const payload = await apiFetch<{
     stripe_configured?: boolean
+    paypal_vault_configured?: boolean
     default_payment_method_id?: string | null
     payment_methods?: ApiPaymentMethod[]
   }>("/store/customers/me/payment-methods")
@@ -2905,9 +2926,42 @@ export const listCustomerPaymentMethods = async () => {
 
   return {
     stripeConfigured: Boolean(payload.stripe_configured),
+    paypalVaultConfigured: Boolean(payload.paypal_vault_configured),
     defaultPaymentMethodId: payload.default_payment_method_id ?? null,
     paymentMethods,
   }
+}
+
+export const createPayPalVaultSetup = async () => {
+  const payload = await apiFetch<{
+    setup_token_id?: string
+    user_id_token?: string
+    client_token?: string
+    merchant_id?: string
+    approval_url?: string
+  }>(
+    "/store/customers/me/payment-methods/paypal/setup",
+    { method: "POST", body: JSON.stringify({}) }
+  )
+  if (!payload.setup_token_id) throw new Error("PayPal did not return an authorization token.")
+  if (!payload.user_id_token && payload.client_token) {
+    throw new Error("Medusa is still returning the legacy PayPal client token. Restart the Medusa backend so /paypal/setup returns user_id_token.")
+  }
+  if (!payload.user_id_token) throw new Error("PayPal did not return a user id token.")
+  return {
+    setupTokenId: payload.setup_token_id,
+    userIdToken: payload.user_id_token,
+    merchantId: payload.merchant_id ?? "",
+    approvalUrl: payload.approval_url ?? "",
+  }
+}
+
+export const completePayPalVaultSetup = async (setupTokenId: string) => {
+  await apiFetch("/store/customers/me/payment-methods/paypal/complete", {
+    method: "POST",
+    body: JSON.stringify({ setup_token_id: setupTokenId }),
+  })
+  return listCustomerPaymentMethods()
 }
 
 export const createCustomerPaymentMethodSetup = async () => {

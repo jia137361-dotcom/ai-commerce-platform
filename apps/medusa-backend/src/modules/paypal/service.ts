@@ -119,6 +119,7 @@ export default class PayPalPaymentProviderService extends AbstractPaymentProvide
       brandName: this.options_.brandName,
       returnUrl: this.options_.returnUrl,
       cancelUrl: this.options_.cancelUrl,
+      vaultId: typeof input.data?.paypal_vault_id === "string" ? input.data.paypal_vault_id : undefined,
       requestId: input.context?.idempotency_key,
     })
     return {

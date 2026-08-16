@@ -274,6 +274,57 @@ describe("PayPal sandbox payment provider", () => {
     )
   })
 
+  it("creates an Orders v2 payload with a saved PayPal vault token", async () => {
+    const client = new PayPalClient({
+      clientId: "sandbox-client",
+      clientSecret: "sandbox-secret",
+      environment: "sandbox",
+    })
+    const request = jest.spyOn(client, "request").mockResolvedValue({ id: "PAYPAL_ORDER_1", status: "CREATED" })
+
+    await client.createOrder({
+      amount: 4400,
+      currencyCode: "usd",
+      referenceId: "cpa_1",
+      vaultId: "vlt_example",
+    })
+
+    expect(request).toHaveBeenCalledWith(
+      "/v2/checkout/orders",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"vault_id":"vlt_example"'),
+      }),
+      undefined
+    )
+  })
+
+  it("requests a PayPal Vault user id token for buyer account binding", async () => {
+    const client = new PayPalClient({
+      clientId: "sandbox-client",
+      clientSecret: "sandbox-secret",
+      environment: "sandbox",
+    })
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ id_token: "id_token_1" }),
+    } as Response)
+
+    const token = await client.createVaultUserIdToken({
+      targetCustomerId: "PAYPAL_CUSTOMER_1",
+    })
+
+    expect(token.id_token).toBe("id_token_1")
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api-m.sandbox.paypal.com/v1/oauth2/token",
+      expect.objectContaining({
+        method: "POST",
+        body: "grant_type=client_credentials&response_type=id_token&target_customer_id=PAYPAL_CUSTOMER_1",
+      })
+    )
+    fetchMock.mockRestore()
+  })
+
   it("uses the refund request as the stable PayPal request key", async () => {
     const { provider, client } = createProvider()
     client.refundCapture.mockResolvedValue({ id: "REFUND_1", status: "PENDING" })

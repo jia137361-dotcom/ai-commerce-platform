@@ -16,6 +16,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     const result = await listCustomerPaymentMethodRecords(req.scope, customerId)
     return res.json({
       stripe_configured: result.stripeConfigured,
+      paypal_vault_configured: result.paypalVaultConfigured,
       default_payment_method_id: result.defaultPaymentMethodId,
       payment_methods: result.paymentMethods,
       count: result.paymentMethods.length,

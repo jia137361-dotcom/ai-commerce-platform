@@ -7,7 +7,7 @@ jest.mock("./StripePaymentForm", () => ({
 }))
 
 describe("CheckoutPaymentPanel", () => {
-  it("shows Card and PayPal choices without claiming Stripe payment", () => {
+  it("shows card and wallet plus PayPal choices without claiming Stripe payment", () => {
     const html = renderToStaticMarkup(createElement(CheckoutPaymentPanel, {
       providers: [
         { id: "pp_system_default", isStripe: false },
@@ -17,11 +17,57 @@ describe("CheckoutPaymentPanel", () => {
       selectedProviderId: "pp_stripe_stripe",
     }))
     expect(html).not.toContain("pp_system_default")
-    expect(html.match(/>Card</g)).toHaveLength(1)
+    expect(html.match(/>Card &amp; wallets</g)).toHaveLength(1)
     expect(html.match(/>PayPal</g)).toHaveLength(1)
     expect(html).toContain("PayPal")
     expect(html).not.toContain("Card number")
     expect(html).not.toContain("Payment captured")
+  })
+
+  it("puts a Pay now action beside the selected saved card", () => {
+    const html = renderToStaticMarkup(createElement(CheckoutPaymentPanel, {
+      providers: [{ id: "pp_stripe_stripe", isStripe: true }],
+      selectedProviderId: "pp_stripe_stripe",
+      stripePublishableKey: "pk_test_example",
+      session: {
+        id: "ps_1",
+        providerId: "pp_stripe_stripe",
+        clientSecret: "pi_1_secret_test",
+      },
+      savedPaymentMethods: [{
+        id: "pm_1",
+        type: "card",
+        label: "Visa ending in 4242",
+        isDefault: true,
+      }],
+      selectedSavedPaymentMethodId: "pm_1",
+      canSubmit: true,
+    }))
+
+    expect(html).toContain("Visa ending in 4242")
+    expect(html).toContain("Pay now")
+  })
+
+  it("puts a Pay now action beside the selected saved PayPal account", () => {
+    const html = renderToStaticMarkup(createElement(CheckoutPaymentPanel, {
+      providers: [{ id: "pp_paypal_paypal", isPayPal: true }],
+      selectedProviderId: "pp_paypal_paypal",
+      paypalClientId: "sandbox-client-id",
+      session: { id: "ps_1", providerId: "pp_paypal_paypal", paypalOrderId: "ORDER_1" },
+      savedPaymentMethods: [{
+        id: "paypal_1",
+        provider: "paypal",
+        type: "paypal",
+        label: "PayPal (buyer@example.com)",
+        isDefault: true,
+      }],
+      selectedSavedPaymentMethodId: "paypal_1",
+      canSubmit: true,
+    }))
+
+    expect(html).toContain("PayPal (buyer@example.com)")
+    expect(html).toContain("Pay now")
+    expect(html).not.toContain("PayPal Sandbox payment")
   })
 
   it("does not render a fake Stripe form without client_secret", () => {

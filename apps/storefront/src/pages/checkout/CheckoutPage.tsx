@@ -29,6 +29,7 @@ import {
   listCustomerAddresses,
   listCustomerPaymentMethods,
   payCartWithSavedPaymentMethod,
+  payCartWithSavedPayPalPaymentMethod,
   readBuyerPreferences,
   reserveCheckoutPayment,
   reorderItemsToCheckout,
@@ -977,10 +978,16 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     setCompleteError(undefined)
     let paymentMethodLabel: string | undefined
     try {
-      const paid = await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
-        storeId: checkoutStoreId,
-        providerId: selectedPaymentProviderId,
-      })
+      const method = savedPaymentMethods.find((item) => item.id === paymentMethodId)
+      const paid = method?.provider === "paypal"
+        ? await payCartWithSavedPayPalPaymentMethod(cart.id, paymentMethodId, {
+            storeId: checkoutStoreId,
+            providerId: selectedPaymentProviderId,
+          })
+        : await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
+            storeId: checkoutStoreId,
+            providerId: selectedPaymentProviderId,
+          })
       paymentMethodLabel = paid.payment_method_label
     } catch (reason) {
       setCompleteError(reason instanceof Error ? reason.message : "Unable to pay with saved card.")
@@ -1077,7 +1084,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
                   (!stripeSelected ||
                     (Boolean(selectedSavedPaymentMethodId) && recoveryAction === "confirm_payment"))
                 }
-                showPayButton={!paypalSelected && (!stripeSelected || (Boolean(selectedSavedPaymentMethodId) && recoveryAction === "confirm_payment"))}
+                showPayButton={!paypalSelected && !stripeSelected}
                 onPlaceOrder={() => {
                   if (selectedSavedPaymentMethodId) {
                     void handlePayWithSavedMethod(selectedSavedPaymentMethodId)
@@ -1141,6 +1148,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
                 savedPaymentMethods={savedPaymentMethods}
                 selectedSavedPaymentMethodId={selectedSavedPaymentMethodId}
                 onSavedPaymentMethodChange={setSelectedSavedPaymentMethodId}
+                onPayWithSavedPaymentMethod={(paymentMethodId) => void handlePayWithSavedMethod(paymentMethodId)}
                 recoveryAction={recoveryAction}
                 onStripeComplete={(paymentMethodLabel) =>
                   handlePlaceOrder(selectedPaymentProviderId, true, paymentMethodLabel)

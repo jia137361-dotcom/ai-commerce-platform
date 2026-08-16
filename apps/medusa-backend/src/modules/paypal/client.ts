@@ -1,5 +1,14 @@
 import { createHash } from "node:crypto"
-import type { PayPalEnvironment, PayPalOrder, PayPalProviderOptions, PayPalRefund, PayPalWebhookEvent } from "./types"
+import type {
+  PayPalEnvironment,
+  PayPalOrder,
+  PayPalProviderOptions,
+  PayPalRefund,
+  PayPalUserIdToken,
+  PayPalVaultPaymentToken,
+  PayPalVaultSetupToken,
+  PayPalWebhookEvent,
+} from "./types"
 
 const REQUEST_TIMEOUT_MS = 20_000
 
@@ -104,10 +113,18 @@ export class PayPalClient {
       if (stableRequestId && response.status >= 500 && attempt === 0) {
         return this.request<T>(path, init, stableRequestId, attempt + 1)
       }
-      const detail = body && typeof body === "object" ? (body as { details?: Array<{ issue?: string }> }).details?.[0]?.issue : undefined
-      throw Object.assign(new Error(detail || `PayPal request failed (${response.status})`), {
+      const detail = body && typeof body === "object"
+        ? (body as { details?: Array<{ issue?: string; field?: string; description?: string }> }).details?.[0]
+        : undefined
+      const message = [
+        detail?.issue,
+        detail?.field ? `field=${detail.field}` : null,
+        detail?.description,
+      ].filter(Boolean).join(" - ")
+      throw Object.assign(new Error(message || `PayPal request failed (${response.status})`), {
         status: response.status,
-        paypalIssue: detail,
+        paypalIssue: detail?.issue,
+        paypalField: detail?.field,
       })
     }
     return body
@@ -121,6 +138,7 @@ export class PayPalClient {
     brandName?: string
     returnUrl?: string
     cancelUrl?: string
+    vaultId?: string
     requestId?: string
   }) {
     const currency = input.currencyCode.toUpperCase()
@@ -138,17 +156,19 @@ export class PayPalClient {
             ...(input.customId ? { custom_id: input.customId } : {}),
             amount: { currency_code: currency, value: decimalAmount(input.amount, currency) },
           }],
-          payment_source: {
-            paypal: {
-              experience_context: {
-                brand_name: input.brandName || "CiiVerse",
-                ...(input.returnUrl ? { return_url: input.returnUrl } : {}),
-                ...(input.cancelUrl ? { cancel_url: input.cancelUrl } : {}),
-                user_action: "PAY_NOW",
-                shipping_preference: "NO_SHIPPING",
+          payment_source: input.vaultId
+            ? { paypal: { vault_id: input.vaultId } }
+            : {
+                paypal: {
+                  experience_context: {
+                    brand_name: input.brandName || "CiiVerse",
+                    ...(input.returnUrl ? { return_url: input.returnUrl } : {}),
+                    ...(input.cancelUrl ? { cancel_url: input.cancelUrl } : {}),
+                    user_action: "PAY_NOW",
+                    shipping_preference: "NO_SHIPPING",
+                  },
+                },
               },
-            },
-          },
         }),
       },
       input.requestId
@@ -209,6 +229,93 @@ export class PayPalClient {
     }, input.requestId)
   }
 
+  createVaultSetupToken(input: { returnUrl: string; cancelUrl: string; requestId?: string }) {
+    return this.request<PayPalVaultSetupToken>(
+      "/v3/vault/setup-tokens",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          payment_source: {
+            paypal: {
+              usage_type: "MERCHANT",
+              usage_pattern: "IMMEDIATE",
+              customer_type: "CONSUMER",
+              experience_context: {
+                brand_name: this.options.brandName || "CiiVerse",
+                return_url: input.returnUrl,
+                cancel_url: input.cancelUrl,
+              },
+            },
+          },
+        }),
+      },
+      input.requestId
+    )
+  }
+
+  async createVaultUserIdToken(input: { targetCustomerId: string }) {
+    const encoded = Buffer.from(`${this.options.clientId}:${this.options.clientSecret}`).toString("base64")
+    const body = new URLSearchParams({
+      grant_type: "client_credentials",
+      response_type: "id_token",
+      target_customer_id: input.targetCustomerId,
+    })
+    const response = await fetch(`${this.baseUrl}/v1/oauth2/token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${encoded}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+    const payload = (await response.json().catch(() => ({}))) as PayPalUserIdToken & {
+      details?: Array<{ issue?: string; field?: string; description?: string }>
+    }
+    if (!response.ok || !payload.id_token) {
+      const detail = payload.details?.[0]
+      const payloadKeys = Object.keys(payload).filter((key) => !/token/i.test(key))
+      const message = [
+        detail?.issue,
+        detail?.field ? `field=${detail.field}` : null,
+        detail?.description,
+        response.ok && !payload.id_token ? `keys=${payloadKeys.join(",") || "none"}` : null,
+      ].filter(Boolean).join(" - ")
+      throw Object.assign(new Error(message || `PayPal user id token request failed (${response.status})`), {
+        status: response.status,
+        paypalIssue: detail?.issue,
+        paypalField: detail?.field,
+      })
+    }
+    return payload
+  }
+
+  getMerchantId() {
+    return this.options.merchantId
+  }
+
+  createVaultPaymentToken(setupTokenId: string, requestId?: string) {
+    return this.request<PayPalVaultPaymentToken>(
+      "/v3/vault/payment-tokens",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          payment_source: { token: { id: setupTokenId, type: "SETUP_TOKEN" } },
+        }),
+      },
+      requestId
+    )
+  }
+
+  deleteVaultPaymentToken(vaultId: string, requestId?: string) {
+    return this.request<void>(
+      `/v3/vault/payment-tokens/${encodeURIComponent(vaultId)}`,
+      { method: "DELETE" },
+      requestId
+    )
+  }
+
   async verifyWebhook(input: { rawData: string | Buffer; headers: Record<string, unknown> }) {
     if (!this.options.webhookId) throw new Error("PayPal webhook verification is not configured")
     const raw = rawString(input.rawData)
@@ -246,6 +353,7 @@ export const getConfiguredPayPalClient = () => {
     clientId,
     clientSecret,
     environment: "sandbox",
+    merchantId: process.env.PAYPAL_MERCHANT_ID?.trim() || undefined,
     webhookId: process.env.PAYPAL_WEBHOOK_ID?.trim() || undefined,
     brandName: process.env.PAYPAL_BRAND_NAME?.trim() || "CiiVerse",
     returnUrl:

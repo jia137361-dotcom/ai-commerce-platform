@@ -5,6 +5,7 @@ import { getStripePromise } from "../../lib/stripe-loader"
 import { hasValidStripeClientSecret, isPayPalProviderId, isStripeProviderId, isValidStripePublishableKey } from "../../pages/checkout/checkout-payment"
 import { StripePaymentForm } from "./StripePaymentForm"
 import { PayPalPaymentButton } from "./PayPalPaymentButton"
+import { Button } from "../ui/Button"
 import { Card } from "../ui/Card"
 import { StatusBadge } from "../ui/StatusBadge"
 
@@ -25,6 +26,7 @@ type CheckoutPaymentPanelProps = {
   savedPaymentMethods?: BuyerPaymentMethod[]
   selectedSavedPaymentMethodId?: string | null
   onSavedPaymentMethodChange?: (paymentMethodId: string | null) => void
+  onPayWithSavedPaymentMethod?: (paymentMethodId: string) => void
   onStripeComplete?: (paymentMethodLabel?: string) => Promise<void>
   onPayPalComplete?: () => Promise<void>
   recoveryAction?: "confirm_payment" | "complete_order" | "wait" | "completed" | "expired"
@@ -73,6 +75,7 @@ export function CheckoutPaymentPanel({
   savedPaymentMethods = [],
   selectedSavedPaymentMethodId = null,
   onSavedPaymentMethodChange,
+  onPayWithSavedPaymentMethod,
   onStripeComplete = async () => undefined,
   onPayPalComplete = async () => undefined,
   recoveryAction = "confirm_payment",
@@ -87,7 +90,13 @@ export function CheckoutPaymentPanel({
   const selectableProviders = providers.filter((provider) =>
     provider.isStripe || provider.isPayPal || isStripeProviderId(provider.id) || isPayPalProviderId(provider.id)
   )
-  const usingSavedMethod = Boolean(selectedSavedPaymentMethodId)
+  const stripeSavedPaymentMethods = savedPaymentMethods.filter((method) => method.provider !== "paypal")
+  const paypalSavedPaymentMethods = savedPaymentMethods.filter((method) => method.provider === "paypal")
+  const selectedSavedMethod = savedPaymentMethods.find((method) => method.id === selectedSavedPaymentMethodId) ?? null
+  const usingSavedMethod = Boolean(
+    selectedSavedMethod &&
+    ((stripeSelected && selectedSavedMethod.provider !== "paypal") || (paypalSelected && selectedSavedMethod.provider === "paypal"))
+  )
   const recoveringOrder = recoveryAction === "complete_order"
   const waitingForPayment = recoveryAction === "wait"
   const expiredReservation = recoveryAction === "expired"
@@ -191,10 +200,11 @@ export function CheckoutPaymentPanel({
             className={selectedProviderId === provider.id ? "active" : ""}
             onClick={() => {
               if (!shouldChangePaymentProvider(selectedProviderId, provider.id)) return
+              onSavedPaymentMethodChange?.(null)
               onProviderChange?.(provider.id)
             }}
           >
-            <strong>{provider.isStripe || isStripeProviderId(provider.id) ? "Card" : "PayPal"}</strong>
+            <strong>{provider.isStripe || isStripeProviderId(provider.id) ? "Card & wallets" : "PayPal"}</strong>
           </button>
         ))}
       </div>
@@ -236,10 +246,10 @@ export function CheckoutPaymentPanel({
           </div>
         ) : (
           <>
-            {savedPaymentMethods.length ? (
+            {stripeSavedPaymentMethods.length ? (
               <div className="buyer-checkout-saved-payments" role="radiogroup" aria-label="Saved payment methods">
                 <strong>Saved cards</strong>
-                {savedPaymentMethods.map((method) => (
+                {stripeSavedPaymentMethods.map((method) => (
                   <button
                     key={method.id}
                     type="button"
@@ -285,9 +295,18 @@ export function CheckoutPaymentPanel({
             )}
 
             {usingSavedMethod ? (
-              <p className="buyer-checkout-card-copy">
-                Selected saved card will be charged when you click <strong>Pay now</strong>.
-              </p>
+              <div className="buyer-checkout-saved-payment-submit">
+                <p className="buyer-checkout-card-copy">
+                  {selectedSavedMethod?.label ?? "Selected saved card"} will be charged when you continue.
+                </p>
+                <Button
+                  loading={placing}
+                  disabled={!canSubmit || placing || !selectedSavedPaymentMethodId}
+                  onClick={() => selectedSavedPaymentMethodId && onPayWithSavedPaymentMethod?.(selectedSavedPaymentMethodId)}
+                >
+                  {placing ? "Processing payment..." : "Pay now"}
+                </Button>
+              </div>
             ) : preparing ? (
               <p className="buyer-checkout-card-copy">
                 Creating the Stripe payment session… This contacts Stripe and can take longer on slow networks.
@@ -351,7 +370,47 @@ export function CheckoutPaymentPanel({
             <strong>Preparing PayPal Sandbox</strong>
             <p>PayPal will appear when the backend payment session is ready.</p>
           </div>
+        ) : usingSavedMethod ? (
+          <div className="buyer-checkout-saved-payment-submit">
+            <p className="buyer-checkout-card-copy">
+              {selectedSavedMethod?.label ?? "Selected PayPal account"} will be charged when you continue.
+            </p>
+            <Button
+              loading={placing}
+              disabled={!canSubmit || placing || !selectedSavedPaymentMethodId}
+              onClick={() => selectedSavedPaymentMethodId && onPayWithSavedPaymentMethod?.(selectedSavedPaymentMethodId)}
+            >
+              {placing ? "Processing payment..." : "Pay now"}
+            </Button>
+          </div>
         ) : (
+          <>
+          {paypalSavedPaymentMethods.length ? (
+            <div className="buyer-checkout-saved-payments" role="radiogroup" aria-label="Saved PayPal accounts">
+              <strong>Saved PayPal accounts</strong>
+              {paypalSavedPaymentMethods.map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedSavedPaymentMethodId === method.id}
+                  className={selectedSavedPaymentMethodId === method.id ? "active" : ""}
+                  onClick={() => onSavedPaymentMethodChange?.(method.id)}
+                >
+                  <span><strong>{method.label}</strong>{method.isDefault ? <small>Default</small> : null}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!selectedSavedPaymentMethodId}
+                className={!selectedSavedPaymentMethodId ? "active" : ""}
+                onClick={() => onSavedPaymentMethodChange?.(null)}
+              >
+                <span><strong>Use another PayPal account</strong><small>Sign in with PayPal</small></span>
+              </button>
+            </div>
+          ) : null}
           <PayPalPaymentButton
             clientId={paypalClientId}
             currencyCode={currencyCode}
@@ -362,12 +421,13 @@ export function CheckoutPaymentPanel({
             onApprove={onPayPalComplete}
             onError={reportPaymentError}
           />
+          </>
         )
       ) : stripeAvailable ? (
         <div className="buyer-checkout-payment-message">
-          <strong>Card payments are available</strong>
+          <strong>Card and wallet payments are available</strong>
           <p>
-            Select <em>Card</em> above. If it stays on the fallback, configure `VITE_STRIPE_PK`
+            Select <em>Card &amp; wallets</em> above. If it stays on the fallback, configure `VITE_STRIPE_PK`
             in the storefront and restart Medusa after setting `STRIPE_API_KEY`.
           </p>
           <p>

@@ -2,9 +2,13 @@ import type { MedusaContainer } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { formatStripePaymentMethodLabel } from "./stripe-payment-method-label"
 import { isStripeConfigured, stripeApiRequest } from "./stripe-client"
+import { getConfiguredPayPalClient } from "../modules/paypal/client"
 
 const STRIPE_CUSTOMER_METADATA_KEY = "stripe_customer_id"
 const DEFAULT_PAYMENT_METHOD_METADATA_KEY = "default_payment_method_id"
+const PAYPAL_VAULT_PAYMENT_METHODS_METADATA_KEY = "paypal_vault_payment_methods"
+const PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY = "paypal_vault_default_payment_method_id"
+const PAYPAL_VAULT_PENDING_SETUP_TOKEN_METADATA_KEY = "paypal_vault_pending_setup_token_id"
 
 type StripeCard = {
   brand?: string
@@ -39,6 +43,7 @@ type StripeCustomer = {
 
 export type CustomerPaymentMethodRecord = {
   id: string
+  provider: "stripe" | "paypal"
   type: string
   brand?: string
   last4?: string
@@ -56,6 +61,7 @@ const normalizePaymentMethod = (
   defaultPaymentMethodId?: string | null
 ): CustomerPaymentMethodRecord => ({
   id: method.id,
+  provider: "stripe",
   type: method.type ?? "card",
   brand: method.card?.brand ?? undefined,
   last4: method.card?.last4 ?? undefined,
@@ -64,6 +70,35 @@ const normalizePaymentMethod = (
   walletType: method.card?.wallet?.type ?? null,
   isDefault: Boolean(defaultPaymentMethodId && method.id === defaultPaymentMethodId),
   label: formatPaymentMethodLabel(method),
+})
+
+type StoredPayPalVaultPaymentMethod = {
+  id: string
+  vault_id: string
+  label?: string
+  email?: string
+  created_at?: string
+}
+
+const readStoredPayPalVaultPaymentMethods = (metadata?: Record<string, unknown> | null) => {
+  const raw = metadata?.[PAYPAL_VAULT_PAYMENT_METHODS_METADATA_KEY]
+  if (!Array.isArray(raw)) return [] as StoredPayPalVaultPaymentMethod[]
+  return raw.filter((value): value is StoredPayPalVaultPaymentMethod => {
+    if (!value || typeof value !== "object") return false
+    const candidate = value as Partial<StoredPayPalVaultPaymentMethod>
+    return Boolean(candidate.id && candidate.vault_id)
+  })
+}
+
+const normalizePayPalVaultPaymentMethod = (
+  method: StoredPayPalVaultPaymentMethod,
+  defaultPaymentMethodId?: string | null
+): CustomerPaymentMethodRecord => ({
+  id: method.id,
+  provider: "paypal",
+  type: "paypal",
+  isDefault: Boolean(defaultPaymentMethodId && method.id === defaultPaymentMethodId),
+  label: method.label || (method.email ? `PayPal (${method.email})` : "PayPal account"),
 })
 
 const getCustomerModule = (container: MedusaContainer) =>
@@ -123,16 +158,27 @@ export async function ensureStripeCustomerId(container: MedusaContainer, custome
 }
 
 export async function listCustomerPaymentMethodRecords(container: MedusaContainer, customerId: string) {
+  const customerModule = getCustomerModule(container)
+  const customer = await customerModule.retrieveCustomer(customerId)
+  const paypalConfigured = Boolean(getConfiguredPayPalClient())
+  const paypalDefaultPaymentMethodId =
+    typeof customer.metadata?.[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY] === "string"
+      ? customer.metadata[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY]
+      : null
+  const paypalMethods = paypalConfigured
+    ? readStoredPayPalVaultPaymentMethods(customer.metadata).map((method) =>
+        normalizePayPalVaultPaymentMethod(method, paypalDefaultPaymentMethodId)
+      )
+    : []
+
   if (!isStripeConfigured()) {
     return {
       stripeConfigured: false,
-      paymentMethods: [] as CustomerPaymentMethodRecord[],
-      defaultPaymentMethodId: null as string | null,
+      paypalVaultConfigured: paypalConfigured,
+      paymentMethods: paypalMethods,
+      defaultPaymentMethodId: paypalDefaultPaymentMethodId,
     }
   }
-
-  const customerModule = getCustomerModule(container)
-  const customer = await customerModule.retrieveCustomer(customerId)
   const stripeCustomerId =
     typeof customer.metadata?.[STRIPE_CUSTOMER_METADATA_KEY] === "string"
       ? customer.metadata[STRIPE_CUSTOMER_METADATA_KEY]
@@ -145,8 +191,9 @@ export async function listCustomerPaymentMethodRecords(container: MedusaContaine
   if (!stripeCustomerId) {
     return {
       stripeConfigured: true,
-      paymentMethods: [],
-      defaultPaymentMethodId,
+      paypalVaultConfigured: paypalConfigured,
+      paymentMethods: paypalMethods,
+      defaultPaymentMethodId: defaultPaymentMethodId ?? paypalDefaultPaymentMethodId,
     }
   }
 
@@ -160,11 +207,99 @@ export async function listCustomerPaymentMethodRecords(container: MedusaContaine
 
   return {
     stripeConfigured: true,
-    paymentMethods: (payload.data ?? []).map((method) =>
-      normalizePaymentMethod(method, defaultPaymentMethodId)
-    ),
+    paypalVaultConfigured: paypalConfigured,
+    paymentMethods: [
+      ...(payload.data ?? []).map((method) => normalizePaymentMethod(method, defaultPaymentMethodId)),
+      ...paypalMethods,
+    ],
     defaultPaymentMethodId,
   }
+}
+
+export async function createPayPalVaultSetup(container: MedusaContainer, customerId: string, origin?: string) {
+  const client = getConfiguredPayPalClient()
+  if (!client) throw new Error("PayPal Vault is not configured on the server")
+  await getCustomerModule(container).retrieveCustomer(customerId)
+  const base = origin && /^https?:\/\//i.test(origin)
+    ? origin.replace(/\/+$/, "")
+    : (process.env.STOREFRONT_BASE_URL || "http://127.0.0.1:5174").replace(/\/+$/, "")
+  const setup = await client.createVaultSetupToken({
+    returnUrl: `${base}/account/payment-methods`,
+    cancelUrl: `${base}/account/payment-methods?paypal_vault_cancel=1`,
+    requestId: `paypal-vault-setup:${customerId}:${Date.now()}`,
+  })
+  if (!setup.id) throw new Error("PayPal did not create a Vault setup token")
+  const approvalUrl = setup.links?.find((link) => link.rel === "approve")?.href
+  if (!setup.customer?.id) throw new Error("PayPal did not return a Vault customer id")
+  const userIdToken = await client.createVaultUserIdToken({
+    targetCustomerId: setup.customer.id,
+  })
+  if (!userIdToken.id_token) throw new Error("PayPal did not create a Vault user id token")
+  const customerModule = getCustomerModule(container)
+  const customer = await customerModule.retrieveCustomer(customerId)
+  await customerModule.updateCustomers(customerId, {
+    metadata: {
+      ...(customer.metadata ?? {}),
+      [PAYPAL_VAULT_PENDING_SETUP_TOKEN_METADATA_KEY]: setup.id,
+    },
+  })
+  return {
+    setupTokenId: setup.id,
+    userIdToken: userIdToken.id_token,
+    merchantId: client.getMerchantId(),
+    approvalUrl,
+  }
+}
+
+export async function completePayPalVaultSetup(
+  container: MedusaContainer,
+  customerId: string,
+  setupTokenId: string
+) {
+  const client = getConfiguredPayPalClient()
+  if (!client) throw new Error("PayPal Vault is not configured on the server")
+  const customerModule = getCustomerModule(container)
+  const customer = await customerModule.retrieveCustomer(customerId)
+  if (customer.metadata?.[PAYPAL_VAULT_PENDING_SETUP_TOKEN_METADATA_KEY] !== setupTokenId) {
+    throw new Error("PayPal authorization does not match this account")
+  }
+  const token = await client.createVaultPaymentToken(setupTokenId, `paypal-vault-complete:${customerId}:${setupTokenId}`)
+  if (!token.id) throw new Error("PayPal did not return a Vault payment token")
+
+  const stored = readStoredPayPalVaultPaymentMethods(customer.metadata)
+  const existing = stored.find((method) => method.vault_id === token.id)
+  const email = token.payment_source?.paypal?.email_address?.trim() || undefined
+  const record = existing ?? {
+    id: `paypal_${crypto.randomUUID()}`,
+    vault_id: token.id,
+    label: email ? `PayPal (${email})` : "PayPal account",
+    email,
+    created_at: new Date().toISOString(),
+  }
+  const metadata = {
+    ...(customer.metadata ?? {}),
+    [PAYPAL_VAULT_PAYMENT_METHODS_METADATA_KEY]: existing
+      ? stored.map((method) => method.vault_id === token.id ? record : method)
+      : [...stored, record],
+    [PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY]:
+      typeof customer.metadata?.[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY] === "string"
+        ? customer.metadata[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY]
+        : record.id,
+    [PAYPAL_VAULT_PENDING_SETUP_TOKEN_METADATA_KEY]: null,
+  }
+  await customerModule.updateCustomers(customerId, { metadata })
+  return listCustomerPaymentMethodRecords(container, customerId)
+}
+
+export async function resolvePayPalVaultPaymentMethod(
+  container: MedusaContainer,
+  customerId: string,
+  paymentMethodId: string
+) {
+  const customer = await getCustomerModule(container).retrieveCustomer(customerId)
+  const method = readStoredPayPalVaultPaymentMethods(customer.metadata).find((item) => item.id === paymentMethodId)
+  if (!method) throw new Error("PayPal payment method not found on this account")
+  return method
 }
 
 export async function createCustomerPaymentMethodSetupIntent(
@@ -199,6 +334,19 @@ export async function detachCustomerPaymentMethod(
 ) {
   const customerModule = getCustomerModule(container)
   const customer = await customerModule.retrieveCustomer(customerId)
+  const paypalMethods = readStoredPayPalVaultPaymentMethods(customer.metadata)
+  const paypalMethod = paypalMethods.find((method) => method.id === paymentMethodId)
+  if (paypalMethod) {
+    const client = getConfiguredPayPalClient()
+    if (client) await client.deleteVaultPaymentToken(paypalMethod.vault_id, `paypal-vault-delete:${customerId}:${paymentMethodId}`)
+    const metadata = { ...(customer.metadata ?? {}) }
+    metadata[PAYPAL_VAULT_PAYMENT_METHODS_METADATA_KEY] = paypalMethods.filter((method) => method.id !== paymentMethodId)
+    if (metadata[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY] === paymentMethodId) {
+      metadata[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY] = null
+    }
+    await customerModule.updateCustomers(customerId, { metadata })
+    return listCustomerPaymentMethodRecords(container, customerId)
+  }
   const stripeCustomerId =
     typeof customer.metadata?.[STRIPE_CUSTOMER_METADATA_KEY] === "string"
       ? customer.metadata[STRIPE_CUSTOMER_METADATA_KEY]
@@ -236,6 +384,15 @@ export async function setDefaultCustomerPaymentMethod(
   }
 
   const customer = await customerModule.retrieveCustomer(customerId)
+  if (methods.paymentMethods.find((method) => method.id === paymentMethodId)?.provider === "paypal") {
+    await customerModule.updateCustomers(customerId, {
+      metadata: {
+        ...(customer.metadata ?? {}),
+        [PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY]: paymentMethodId,
+      },
+    })
+    return listCustomerPaymentMethodRecords(container, customerId)
+  }
   const stripeCustomerId =
     typeof customer.metadata?.[STRIPE_CUSTOMER_METADATA_KEY] === "string"
       ? customer.metadata[STRIPE_CUSTOMER_METADATA_KEY]

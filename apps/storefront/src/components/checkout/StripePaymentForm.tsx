@@ -169,18 +169,6 @@ export function StripePaymentForm({
         />
       </div>
       {walletAvailable ? <p className="buyer-checkout-payment-divider"><span>or pay with card</span></p> : null}
-      {isDevelopment ? (
-        <aside className="buyer-checkout-wallet-diagnostic" aria-label="Wallet availability">
-          <strong>Wallet availability</strong>
-          <dl>
-            <div><dt>Apple Pay</dt><dd>{walletAvailabilityKnown ? (walletAvailability.applePay ? "Available" : "Unavailable") : "Checking"}</dd></div>
-            <div><dt>Google Pay</dt><dd>{walletAvailabilityKnown ? (walletAvailability.googlePay ? "Available" : "Unavailable") : "Checking"}</dd></div>
-            <div><dt>HTTPS</dt><dd>{walletRuntime.isHttps ? "Yes" : "No"}</dd></div>
-            <div><dt>Browser</dt><dd>{walletRuntime.browserFamily}</dd></div>
-            <div><dt>Origin</dt><dd>{walletRuntime.origin}</dd></div>
-          </dl>
-        </aside>
-      ) : null}
       <PaymentElement
         options={{ layout: "tabs" }}
         onReady={() => {

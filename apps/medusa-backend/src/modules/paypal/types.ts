@@ -4,6 +4,7 @@ export type PayPalProviderOptions = {
   clientId: string
   clientSecret: string
   environment: PayPalEnvironment
+  merchantId?: string
   webhookId?: string
   brandName?: string
   returnUrl?: string
@@ -35,6 +36,32 @@ export type PayPalRefund = {
   status?: string
   amount?: { currency_code?: string; value?: string }
   links?: Array<{ href?: string; rel?: string; method?: string }>
+}
+
+export type PayPalVaultSetupToken = {
+  id?: string
+  status?: string
+  customer?: {
+    id?: string
+  }
+  links?: Array<{ href?: string; rel?: string; method?: string }>
+}
+
+export type PayPalUserIdToken = {
+  access_token?: string
+  id_token?: string
+  expires_in?: number
+}
+
+export type PayPalVaultPaymentToken = {
+  id?: string
+  payment_source?: {
+    paypal?: {
+      email_address?: string
+      payer_id?: string
+      name?: { given_name?: string; surname?: string }
+    }
+  }
 }
 
 export type PayPalWebhookEvent = {
