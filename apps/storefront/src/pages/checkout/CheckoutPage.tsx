@@ -82,6 +82,11 @@ type CheckoutPageProps = {
   onCartUpdated: (cart: StoreCart | null) => void
 }
 
+type CachedPaymentRecovery = {
+  cacheKey: string
+  recovery: BuyerPaymentRecovery
+}
+
 const fallbackSettings: BuyerStoreSettings = {
   storeId: "default_store",
   brandName: "CiiVerse",
@@ -152,6 +157,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
   const placeOrderInFlightRef = useRef(false)
   const recoveredCompletionAttemptRef = useRef("")
   const expiredAttemptRefreshRef = useRef("")
+  const paymentRecoveryCacheRef = useRef<Record<string, CachedPaymentRecovery>>({})
 
   const applyShippingOption = async (cartId: string, optionId: string) => {
     const generation = ++shippingSelectGenerationRef.current
@@ -223,6 +229,36 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     Number.isFinite(platformCheckoutIndex) &&
     Number.isFinite(platformCheckoutCount) &&
     platformCheckoutCount > 0
+  const paymentCacheKey = cart
+    ? [
+        checkoutStoreId,
+        cart.id,
+        cart.currencyCode,
+        Number.isFinite(cart.total) ? cart.total : "pending",
+        requiresShippingMethod ? selectedShippingOptionId : "no_shipping",
+        shippingMethodSaved ? "shipping_saved" : "shipping_waiting",
+      ].join(":")
+    : ""
+
+  const clearPaymentRecoveryCache = () => {
+    paymentRecoveryCacheRef.current = {}
+  }
+
+  const cachePaymentRecovery = (providerId: string, recovery: BuyerPaymentRecovery) => {
+    if (!paymentCacheKey) return
+    paymentRecoveryCacheRef.current[providerId] = {
+      cacheKey: paymentCacheKey,
+      recovery,
+    }
+  }
+
+  const restoreCachedPaymentRecovery = (providerId: string) => {
+    const cached = paymentRecoveryCacheRef.current[providerId]
+    if (!cached || cached.cacheKey !== paymentCacheKey) return false
+    setPaymentRecovery(cached.recovery)
+    setPaymentSession(cached.recovery.paymentSession)
+    return true
+  }
 
   useEffect(() => {
     let active = true
@@ -391,6 +427,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     setSelectedShippingOptionId("")
     setShippingMethodSaved(false)
     setShippingError(undefined)
+    clearPaymentRecoveryCache()
     setPaymentSession(null)
     setPaymentRecovery(null)
     setPaymentError(undefined)
@@ -398,6 +435,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
 
   useEffect(() => {
     if (!cart?.id || !auth.customer || !selectedPaymentProviderId) return
+    if ((stripeSelected || paypalSelected) && (!requiresShippingMethod || shippingMethodSaved)) return
     let active = true
     void reserveCheckoutPayment(cart.id, selectedPaymentProviderId, { storeId: checkoutStoreId })
       .then((recovery) => {
@@ -412,7 +450,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     return () => {
       active = false
     }
-  }, [auth.customer, cart?.id, checkoutStoreId, selectedPaymentProviderId])
+  }, [auth.customer, cart?.id, checkoutStoreId, paypalSelected, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripeSelected])
 
   useEffect(() => {
     if ((!stripeSelected && !paypalSelected) || !cart || (requiresShippingMethod && !shippingMethodSaved)) {
@@ -425,6 +463,11 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     if (stripeSelected && !isValidStripePublishableKey(stripePublishableKey)) {
       setPaymentSession(null)
       setPaymentError("VITE_STRIPE_PK must be configured with a Stripe publishable key (pk_test_ or pk_live_).")
+      return
+    }
+    if (restoreCachedPaymentRecovery(selectedPaymentProviderId)) {
+      setPaymentPreparing(false)
+      setPaymentError(undefined)
       return
     }
     let active = true
@@ -443,6 +486,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     void initializeSession()
       .then((recovery) => {
         if (!active) return
+        cachePaymentRecovery(selectedPaymentProviderId, recovery)
         setPaymentRecovery(recovery)
         setPaymentSession(recovery.paymentSession)
         if (recovery.paymentAttempt.recoveryAction === "completed" && recovery.orderId) {
@@ -460,7 +504,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       })
       .finally(() => { if (active) setPaymentPreparing(false) })
     return () => { active = false }
-  }, [cart?.id, cart?.total, checkoutStoreId, paypalSelected, platformCheckoutActive, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
+  }, [cart?.id, cart?.total, checkoutStoreId, paypalSelected, paymentCacheKey, platformCheckoutActive, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
 
   useEffect(() => {
     if (recoveryAction !== "expired" || !cart?.id || !auth.customer) return
@@ -503,6 +547,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       expiredAttemptRefreshRef.current = refreshKey
       void initializeCartPaymentRecovery(cart.id, selectedPaymentProviderId, { storeId: checkoutStoreId })
         .then((recovery) => {
+          cachePaymentRecovery(selectedPaymentProviderId, recovery)
           setPaymentRecovery(recovery)
           setPaymentSession(recovery.paymentSession)
         })
@@ -727,6 +772,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     setAddressError(undefined)
     setShippingError(undefined)
     setShippingMethodSaved(false)
+    clearPaymentRecoveryCache()
     setPaymentSession(null)
     setPaymentError(undefined)
     skipAddressResetRef.current = true
@@ -943,6 +989,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       if (propagateCompleteError && cart && isStripeProviderId(providerId)) {
         try {
           const recovery = await initializeCartPaymentRecovery(cart.id, providerId, { storeId: checkoutStoreId })
+          cachePaymentRecovery(providerId, recovery)
           setPaymentRecovery(recovery)
           setPaymentSession(recovery.paymentSession)
         } catch (recoveryError) {
@@ -1131,8 +1178,10 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
                 onProviderChange={(providerId) => {
                   if (providerId === selectedPaymentProviderId) return
                   setSelectedPaymentProviderId(providerId)
-                  setPaymentSession(null)
-                  setPaymentRecovery(null)
+                  if (!restoreCachedPaymentRecovery(providerId)) {
+                    setPaymentSession(null)
+                    setPaymentRecovery(null)
+                  }
                   setPaymentError(undefined)
                 }}
                 session={paymentSession}
