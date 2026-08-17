@@ -24,8 +24,8 @@ const createProvider = () => {
 
 describe("PayPal sandbox payment provider", () => {
   it("formats Medusa amounts for PayPal without binary float drift", () => {
-    expect(decimalAmount(1250, "usd")).toBe("12.50")
-    expect(decimalAmount({ value: "1250" }, "usd")).toBe("12.50")
+    expect(decimalAmount(12.5, "usd")).toBe("12.50")
+    expect(decimalAmount({ value: "12.5" }, "usd")).toBe("12.50")
     expect(decimalAmount(1250, "jpy")).toBe("1250")
   })
 
@@ -173,7 +173,7 @@ describe("PayPal sandbox payment provider", () => {
     })
 
     const result = await provider.updatePayment({
-      amount: 2000,
+      amount: 20,
       currency_code: "usd",
       data: { paypal_order_id: "PAYPAL_ORDER_1", medusa_payment_session_id: "payses_1" },
       context: { idempotency_key: "attempt_1" },
@@ -195,7 +195,7 @@ describe("PayPal sandbox payment provider", () => {
     })
 
     await client.updateOrder("PAYPAL_ORDER_1", {
-      amount: 2200,
+      amount: 22,
       currencyCode: "usd",
       customId: "payses_1",
       customIdExists: false,
@@ -236,7 +236,7 @@ describe("PayPal sandbox payment provider", () => {
     })
 
     await client.createOrder({
-      amount: 4400,
+      amount: 44,
       currencyCode: "usd",
       referenceId: "cpa_1",
       customId: "payses_1",

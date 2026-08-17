@@ -5,7 +5,7 @@ jest.mock("../lib/store-coupons", () => ({
   buildCheckoutDiscountBreakdown: (...args: unknown[]) => mockBuildCheckoutDiscountBreakdown(...args),
 }))
 
-jest.mock("@medusajs/medusa/core-flows", () => ({
+jest.mock("@medusajs/core-flows", () => ({
   refreshPaymentCollectionForCartWorkflow: jest.fn(() => ({
     run: mockRefreshPaymentCollectionRun,
   })),

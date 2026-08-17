@@ -25,8 +25,12 @@ import {
 import { ensureCartPaymentReady, findCartPaymentSession, readCartPaymentCollectionId } from "../../../../../lib/ensure-cart-payment-ready"
 import { CHECKOUT_PAYMENT_ATTEMPTS_MODULE } from "../../../../../modules/checkout-payment-attempts"
 import type CheckoutPaymentAttemptsModuleService from "../../../../../modules/checkout-payment-attempts/service"
-import { getConfiguredPayPalClient, isPayPalResourceNotFoundError } from "../../../../../modules/paypal/client"
-import { isStripeResourceNotFoundError, stripeApiRequest } from "../../../../../lib/stripe-client"
+import { decimalAmount, getConfiguredPayPalClient, isPayPalResourceNotFoundError } from "../../../../../modules/paypal/client"
+import { isStripeResourceNotFoundError } from "../../../../../lib/stripe-client"
+import {
+  PaymentAmountMismatchError,
+  assertStripePaymentIntentAmount,
+} from "../../../../../lib/payment-amount-contract"
 
 type AuthenticatedRequest = MedusaRequest & {
   auth_context?: {
@@ -49,15 +53,6 @@ type AttemptService = CheckoutPaymentAttemptsModuleService & {
 }
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
-const PAYPAL_ZERO_DECIMAL_CURRENCIES = new Set(["bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf"])
-
-const paypalAmountValue = (amount: unknown, currencyCode: string) => {
-  const numeric = typeof amount === "number" ? amount : Number(amount)
-  if (!Number.isFinite(numeric) || numeric < 0) throw new Error("Payment session amount is invalid.")
-  const digits = PAYPAL_ZERO_DECIMAL_CURRENCIES.has(currencyCode.toLowerCase()) ? 0 : 2
-  return (numeric / 10 ** digits).toFixed(digits)
-}
-
 const isMissingExternalPaymentResource = (error: unknown) =>
   isPayPalResourceNotFoundError(error) || isStripeResourceNotFoundError(error)
 
@@ -369,7 +364,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       } else {
         const existingOrder = await client.retrieveOrder(paypalOrderId)
         const purchaseUnit = existingOrder.purchase_units?.[0]
-        const expectedAmount = paypalAmountValue(session.amount, session.currency_code)
+        const expectedAmount = decimalAmount(session.amount, session.currency_code)
         const currentAmount = purchaseUnit?.amount?.value
         const currentCurrency = purchaseUnit?.amount?.currency_code?.toUpperCase()
         if (
@@ -455,7 +450,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     if (session?.id && isStripeProviderId(providerId)) {
       const paymentIntentId = readPaymentAttemptPaymentIntentId(session)
       const amount = Number(session.amount)
-      if (paymentIntentId && Number.isSafeInteger(amount) && amount > 0) {
+      if (paymentIntentId && Number.isFinite(amount) && amount > 0) {
         try {
           const currentIntent = await readStripePaymentIntentForAttempt(req.scope, {
             ...attempt,
@@ -464,20 +459,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           if (currentIntent?.status === "canceled") {
             await replaceMissingExternalPayment()
           }
-          // Medusa's Stripe provider expects a major-unit amount and multiplies it
-          // by 100. This application stores Medusa cart/payment amounts in minor
-          // units, so correct an unconfirmed PaymentIntent before exposing its
-          // client secret. A succeeded PaymentIntent must never be modified while
-          // the checkout page is recovering its order.
-          if (
-            currentIntent?.status !== "canceled" &&
-            currentIntent?.amount !== amount &&
-            ["requires_payment_method", "requires_confirmation", "requires_action"].includes(currentIntent?.status ?? "")
-          ) {
-            await stripeApiRequest(`/payment_intents/${paymentIntentId}`, {
-              method: "POST",
-              idempotencyKey: `checkout-stripe-amount:${session.id}:${amount}`,
-              params: { amount },
+          if (currentIntent?.status !== "canceled") {
+            assertStripePaymentIntentAmount({
+              expectedMajor: amount,
+              currencyCode: session.currency_code ?? "usd",
+              intentAmountMinor: currentIntent?.amount,
+              intentCurrency: currentIntent?.currency,
             })
           }
         } catch (error) {
@@ -611,6 +598,11 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   } catch (error) {
     if (error instanceof CartStoreAccessError) {
       return res.status(403).json({
+        error: { code: error.code, message: error.message },
+      })
+    }
+    if (error instanceof PaymentAmountMismatchError) {
+      return res.status(400).json({
         error: { code: error.code, message: error.message },
       })
     }

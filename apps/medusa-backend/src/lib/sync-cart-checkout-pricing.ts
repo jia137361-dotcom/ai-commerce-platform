@@ -1,10 +1,18 @@
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
-import { refreshPaymentCollectionForCartWorkflow } from "@medusajs/medusa/core-flows"
+import * as coreFlows from "@medusajs/core-flows"
 import { buildCheckoutDiscountBreakdown } from "./store-coupons"
 import { moneyEquals, normalizeMajor } from "./money"
 
 export const CHECKOUT_DISCOUNT_ADJUSTMENT_CODE = "citigoo-checkout-discount"
+
+// Medusa 2.17 exposes this workflow at runtime, but omits it from the package's
+// resolved top-level declaration barrel.
+const refreshPaymentCollectionForCartWorkflow = (coreFlows as typeof coreFlows & {
+  refreshPaymentCollectionForCartWorkflow: (container: MedusaContainer) => {
+    run: (input: { input: { cart_id: string } }) => Promise<unknown>
+  }
+}).refreshPaymentCollectionForCartWorkflow
 
 type CheckoutLine = {
   id?: string | null

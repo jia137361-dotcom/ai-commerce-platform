@@ -21,6 +21,10 @@ jest.mock("@medusajs/core-flows", () => ({
 }))
 
 jest.mock("../modules/paypal/client", () => ({
+  decimalAmount: (amount: unknown, currencyCode: string) => {
+    const digits = currencyCode.toLowerCase() === "jpy" ? 0 : 2
+    return Number(amount).toFixed(digits)
+  },
   getConfiguredPayPalClient: () => ({
     retrieveOrder: mockRetrievePayPalOrder,
     createOrder: mockCreatePayPalOrder,
@@ -152,13 +156,13 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     mockEnsureCartPaymentReady.mockResolvedValue(undefined)
     mockReadCartPaymentCollectionId.mockResolvedValue("paycol_1")
     mockReadPaymentAttemptPaymentIntentId.mockReturnValue("pi_1")
-    mockReadStripePaymentIntentForAttempt.mockResolvedValue({ id: "pi_1", status: "requires_payment_method" })
+    mockReadStripePaymentIntentForAttempt.mockResolvedValue({ id: "pi_1", status: "requires_payment_method", amount: 1243, currency: "usd" })
     mockStripeApiRequest.mockResolvedValue({ id: "pi_1", amount: 1243 })
     mockFindCartPaymentSession.mockResolvedValue({
       id: "ps_1",
       provider_id: "pp_stripe_stripe",
       status: "pending",
-      amount: 1243,
+      amount: 12.43,
       currency_code: "usd",
       data: {
         id: "pi_1",
@@ -195,15 +199,30 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
         client_secret: "pi_1_secret_test",
       },
     })
-    expect(mockStripeApiRequest).toHaveBeenCalledWith("/payment_intents/pi_1", {
-      method: "POST",
-      idempotencyKey: "checkout-stripe-amount:ps_1:1243",
-      params: { amount: 1243 },
+    expect(mockStripeApiRequest).not.toHaveBeenCalled()
+  })
+
+  it("rejects a Stripe PaymentIntent whose provider amount is 100x too large", async () => {
+    mockReadStripePaymentIntentForAttempt.mockResolvedValue({
+      id: "pi_1",
+      status: "requires_payment_method",
+      amount: 124300,
+      currency: "usd",
     })
+    const { req } = createReq()
+    const res = createRes()
+
+    await recoverPayment(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.body).toEqual({
+      error: expect.objectContaining({ code: "PAYMENT_AMOUNT_MISMATCH" }),
+    })
+    expect(JSON.stringify(res.body)).not.toContain("pi_1_secret_test")
   })
 
   it("does not alter a succeeded Stripe PaymentIntent while recovering its order", async () => {
-    mockReadStripePaymentIntentForAttempt.mockResolvedValue({ id: "pi_1", status: "succeeded", amount: 1243 })
+    mockReadStripePaymentIntentForAttempt.mockResolvedValue({ id: "pi_1", status: "succeeded", amount: 1243, currency: "usd" })
     const { req } = createReq()
     const res = createRes()
 
@@ -434,7 +453,7 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     mockReadAttemptPaymentSession.mockResolvedValue({
       id: "ps_paypal",
       provider_id: "pp_paypal_paypal",
-      amount: 18044,
+      amount: 180.44,
       currency_code: "hkd",
       data: { paypal_order_id: "PAYPAL_ORDER_1" },
     })
@@ -454,7 +473,7 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     await recoverPayment(req, res)
 
     expect(mockUpdatePayPalOrder).toHaveBeenCalledWith("PAYPAL_ORDER_1", expect.objectContaining({
-      amount: 18044,
+      amount: 180.44,
       currencyCode: "hkd",
       referenceId: "cpa_1",
     }))

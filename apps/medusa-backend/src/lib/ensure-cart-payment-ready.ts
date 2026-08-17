@@ -7,6 +7,7 @@ import {
   createPaymentSessionsWorkflow,
 } from "@medusajs/medusa/core-flows"
 import { syncCartCheckoutPricing } from "./sync-cart-checkout-pricing"
+import { assertInternalPaymentAmounts } from "./payment-amount-contract"
 
 const PROCESSABLE_STATUSES = new Set([
   "pending",
@@ -25,18 +26,31 @@ export type PaymentSessionRow = {
   data?: Record<string, unknown> | null
 }
 
+type PaymentCollectionSnapshot = {
+  id: string
+  amount?: unknown
+  currency_code?: string | null
+}
+
+async function readCartPaymentCollection(
+  container: MedusaContainer,
+  cartId: string
+): Promise<PaymentCollectionSnapshot | null> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = (await query.graph({
+    entity: "cart",
+    fields: ["id", "payment_collection.id", "payment_collection.amount", "payment_collection.currency_code"],
+    filters: { id: cartId },
+  })) as { data: Array<{ payment_collection?: PaymentCollectionSnapshot | null }> }
+
+  return data[0]?.payment_collection?.id ? data[0].payment_collection : null
+}
+
 export async function readCartPaymentCollectionId(
   container: MedusaContainer,
   cartId: string
 ): Promise<string | null> {
-  const query = container.resolve(ContainerRegistrationKeys.QUERY)
-  const { data } = (await query.graph({
-    entity: "cart",
-    fields: ["id", "payment_collection.id"],
-    filters: { id: cartId },
-  })) as { data: Array<{ payment_collection?: { id?: string } | null }> }
-
-  return data[0]?.payment_collection?.id ?? null
+  return (await readCartPaymentCollection(container, cartId))?.id ?? null
 }
 
 export async function listPaymentSessions(
@@ -77,18 +91,6 @@ export async function findCartPaymentSession(
   return selectPaymentSessionForProvider(sessions, providerId)
 }
 
-function hasProcessableSessionForProvider(
-  sessions: PaymentSessionRow[],
-  providerId: string
-): boolean {
-  return sessions.some(
-    (s) =>
-      typeof s.status === "string" &&
-      PROCESSABLE_STATUSES.has(s.status) &&
-      s.provider_id === providerId
-  )
-}
-
 /**
  * completeCartWorkflow 要求购物车已有 payment_collection，且存在可处理的 payment session。
  */
@@ -106,15 +108,17 @@ export async function ensureCartPaymentReady(
     `checkout-payment-session:${cartId}:${providerId}`,
     async () => {
       const cartModule = container.resolve(Modules.CART)
-      await syncCartCheckoutPricing(container, cartId)
+      const pricing = await syncCartCheckoutPricing(container, cartId)
 
-      let paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
+      let paymentCollection = await readCartPaymentCollection(container, cartId)
+      let paymentCollectionId = paymentCollection?.id ?? null
 
       if (!paymentCollectionId) {
         await createPaymentCollectionForCartWorkflow(container).run({
           input: { cart_id: cartId },
         })
-        paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
+        paymentCollection = await readCartPaymentCollection(container, cartId)
+        paymentCollectionId = paymentCollection?.id ?? null
       }
 
       if (!paymentCollectionId) {
@@ -122,7 +126,19 @@ export async function ensureCartPaymentReady(
       }
 
       const sessions = await listPaymentSessions(container, paymentCollectionId)
-      if (hasProcessableSessionForProvider(sessions, providerId)) {
+      const processableSession = selectPaymentSessionForProvider(
+        sessions.filter((session) => PROCESSABLE_STATUSES.has(session.status ?? "")),
+        providerId
+      )
+      if (processableSession) {
+        assertInternalPaymentAmounts({
+          cartTotal: pricing.payableTotal,
+          collectionAmount: paymentCollection?.amount,
+          sessionAmount: processableSession.amount,
+          currencyCode: pricing.currencyCode,
+          collectionCurrency: paymentCollection?.currency_code,
+          sessionCurrency: processableSession.currency_code,
+        })
         return
       }
 
@@ -155,6 +171,21 @@ export async function ensureCartPaymentReady(
               : undefined,
           context: {},
         },
+      })
+
+      paymentCollection = await readCartPaymentCollection(container, cartId)
+      const createdSession = selectPaymentSessionForProvider(
+        await listPaymentSessions(container, paymentCollectionId),
+        providerId
+      )
+      if (!createdSession) throw new Error("Failed to create payment session for cart")
+      assertInternalPaymentAmounts({
+        cartTotal: pricing.payableTotal,
+        collectionAmount: paymentCollection?.amount,
+        sessionAmount: createdSession.amount,
+        currencyCode: pricing.currencyCode,
+        collectionCurrency: paymentCollection?.currency_code,
+        sessionCurrency: createdSession.currency_code,
       })
 
       // PayPal's Medusa-session/attempt metadata is attached by the payment

@@ -9,6 +9,7 @@ import type {
   PayPalVaultSetupToken,
   PayPalWebhookEvent,
 } from "./types"
+import { currencyExponent, normalizeMajor } from "../../lib/money"
 
 const REQUEST_TIMEOUT_MS = 20_000
 
@@ -42,11 +43,8 @@ const numericAmount = (amount: unknown): number => {
 export const decimalAmount = (amount: unknown, currencyCode: string) => {
   const numeric = numericAmount(amount)
   if (!Number.isFinite(numeric) || numeric < 0) throw new Error("Invalid PayPal amount")
-  const zeroDecimal = new Set(["bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf"])
-  const digits = zeroDecimal.has(currencyCode.toLowerCase()) ? 0 : 2
-  // Medusa Payment Collection amounts are stored in the currency's minor
-  // unit. PayPal Orders expects a major-unit decimal string.
-  return (numeric / 10 ** digits).toFixed(digits)
+  const digits = currencyExponent(currencyCode)
+  return normalizeMajor(numeric, currencyCode).toFixed(digits)
 }
 
 export const isPayPalResourceNotFoundError = (error: unknown) => {
