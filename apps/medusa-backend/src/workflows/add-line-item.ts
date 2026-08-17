@@ -193,7 +193,7 @@ const addLineItemStep = createStep(
         ? linkedProduct.price
         : 19.99
     const cartCurrencyCode = cart.currency_code || "usd"
-    const convertedUnitPrice = Math.round(convertUsdPriceToMarketCurrency(linkedPrice, cartCurrencyCode) * 100)
+    const convertedUnitPrice = convertUsdPriceToMarketCurrency(linkedPrice, cartCurrencyCode)
     const priceSetId = await ensureVariantHasPriceSet(container, {
       variantId: input.variant_id,
       amount: convertedUnitPrice,

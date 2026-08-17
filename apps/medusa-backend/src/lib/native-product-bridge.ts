@@ -134,7 +134,7 @@ async function createNativeBridgeProduct(
       await syncBridgeVariant(container, nativeVariant.id, product, existing.productId)
       await ensureVariantHasPriceSet(container, {
         variantId: nativeVariant.id,
-        amount: Math.max(1, Math.round((row?.price ?? price) * 100)),
+        amount: Math.max(0.01, Math.round((row?.price ?? price) * 100) / 100),
         currencyCode: BRIDGE_PRICE_CURRENCY,
       })
     }
@@ -185,7 +185,7 @@ async function createNativeBridgeProduct(
               options: variantOptionSchema.rowOptions(row),
               prices: [
                 {
-                  amount: Math.max(1, Math.round(row.price * 100)),
+                  amount: Math.max(0.01, Math.round(row.price * 100) / 100),
                   currency_code: BRIDGE_PRICE_CURRENCY,
                 },
               ],
@@ -209,7 +209,7 @@ async function createNativeBridgeProduct(
     await syncBridgeVariant(container, createdVariantId, product, nativeProduct.id)
     await ensureVariantHasPriceSet(container, {
       variantId: createdVariantId,
-      amount: Math.max(1, Math.round((rows[index]?.price ?? price) * 100)),
+      amount: Math.max(0.01, Math.round((rows[index]?.price ?? price) * 100) / 100),
       currencyCode: BRIDGE_PRICE_CURRENCY,
     })
   }

@@ -7,6 +7,7 @@ import { buildShareChannels, buildShareText } from "./share-channels"
 import { resolveStoreAssetUrl } from "./store-media-url"
 import { toEnglishCategoryLabel } from "./supplier-category-label"
 import { readPayPalOrderId } from "./paypal-payment-session"
+import { normalizeMedusaCartMoney } from "./cart-money"
 import {
   getBuyerStoreId,
   getDefaultBuyerStoreId,
@@ -1048,13 +1049,6 @@ const readNumber = (value: number | string | null | undefined): number | undefin
   return Number.isFinite(numeric) ? numeric : undefined
 }
 
-/** Medusa cart / payment amounts are stored in minor units (cents). Convert to dollars. */
-const fromCartMinorUnits = (value: number | string | null | undefined): number | undefined => {
-  if (value == null || value === "") return undefined
-  const numeric = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(numeric) ? numeric / 100 : undefined
-}
-
 const readString = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined)
 
 const resolveOrderItemThumbnailUrl = (thumbnail?: string | null) => {
@@ -1291,8 +1285,8 @@ const normalizeShare = (payload: ApiShare, product: StoreProduct): BuyerShareInf
 
 const normalizeCartLineItem = (item: ApiCartLineItem): CartLineItem => {
   const quantity = Math.max(1, Math.floor(item.quantity ?? 1))
-  const rawUnitPrice = fromCartMinorUnits(item.unit_price)
-  const rawTotal = fromCartMinorUnits(item.total)
+  const rawUnitPrice = normalizeMedusaCartMoney(item.unit_price)
+  const rawTotal = normalizeMedusaCartMoney(item.total)
   const unitPrice = rawUnitPrice ?? (rawTotal != null ? rawTotal / quantity : 0)
   const total = rawTotal ?? (rawUnitPrice != null ? rawUnitPrice * quantity : 0)
   return {
@@ -1328,8 +1322,8 @@ const normalizeCartShippingAddress = (address?: ApiCartAddress | null) => {
 
 const normalizeCart = (cart: ApiCart): StoreCart => {
   const items = (cart.items ?? []).map(normalizeCartLineItem)
-  const rawSubtotal = fromCartMinorUnits(cart.subtotal)
-  const rawTotal = fromCartMinorUnits(cart.total)
+  const rawSubtotal = normalizeMedusaCartMoney(cart.subtotal)
+  const rawTotal = normalizeMedusaCartMoney(cart.total)
   const derivedSubtotalAvailable = items.length > 0 && items.every((item) => item.hasTotal)
   const subtotal = rawSubtotal ?? (derivedSubtotalAvailable ? items.reduce((sum, item) => sum + item.total, 0) : 0)
   const total = rawTotal ?? subtotal

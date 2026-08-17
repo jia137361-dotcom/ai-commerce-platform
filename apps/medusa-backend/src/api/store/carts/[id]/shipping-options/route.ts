@@ -13,10 +13,10 @@ import {
   quoteS2bShippingForCart,
 } from "../../../../../lib/s2bdiy/quote-s2b-shipping-for-cart"
 import { convertUsdPriceToMarketCurrency } from "../../../../../lib/product-regions"
+import { majorToProviderMinor, normalizeMajor } from "../../../../../lib/money"
 
-/** Medusa calculated_amount / S2B amount_minor → major USD for storefront MoneyText. */
-const minorToMajor = (value: number | null | undefined) =>
-  value == null || !Number.isFinite(value) ? null : Math.round(value) / 100
+const medusaMajor = (value: number | null | undefined, currencyCode: string) =>
+  value == null || !Number.isFinite(value) ? null : normalizeMajor(value, currencyCode)
 
 type ShippingOptionResult = {
   id?: string
@@ -126,21 +126,18 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     const shipping_options = (result as ShippingOptionResult[]).map((option) => {
-      const medusaMinor =
+      const medusaAmount =
         option.amount ?? option.calculated_price?.calculated_amount ?? null
       const amountMajor = s2bQuote
         ? convertUsdPriceToMarketCurrency(s2bQuote.amountUsd, currency_code ?? "usd")
-        : minorToMajor(typeof medusaMinor === "number" ? medusaMinor : null)
+        : medusaMajor(typeof medusaAmount === "number" ? medusaAmount : null, currency_code ?? "usd")
       return {
         id: option.id,
         name: option.name,
-        // Storefront expects major USD (e.g. 1.46), not minor cents (146).
         amount: amountMajor,
-        amount_minor: s2bQuote
-          ? Math.round(amountMajor * 100)
-          : typeof medusaMinor === "number"
-            ? Math.round(medusaMinor)
-            : null,
+        amount_minor: amountMajor == null
+          ? null
+          : majorToProviderMinor(amountMajor, currency_code ?? "usd"),
         currency_code,
         provider_id: option.provider_id ?? null,
         service_zone_id: option.service_zone_id ?? null,

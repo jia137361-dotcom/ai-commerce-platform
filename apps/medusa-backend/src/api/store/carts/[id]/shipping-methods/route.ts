@@ -116,7 +116,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         await cartModule.updateShippingMethods([
           {
             id: shippingMethodId,
-            amount: Math.round(localizedAmount * 100),
+            amount: Math.round(localizedAmount * 100) / 100,
             data: {
               pricing_source: s2bQuote.source,
               s2b_amount_usd: s2bQuote.amountUsd,

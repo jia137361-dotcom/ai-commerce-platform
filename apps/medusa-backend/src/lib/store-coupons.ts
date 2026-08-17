@@ -381,7 +381,7 @@ export async function resolveCartMerchandiseMajor(
     total?: number | null
     metadata?: Record<string, unknown> | null
   }>
-  const merchandiseMinor = items.reduce((sum, item) => {
+  const merchandiseMajor = items.reduce((sum, item) => {
     const qty = Math.max(1, asNumber(item.quantity, 1))
     const line =
       asNumber(item.subtotal) ||
@@ -389,7 +389,7 @@ export async function resolveCartMerchandiseMajor(
       asNumber(item.unit_price) * qty
     return sum + line
   }, 0)
-  const shippingMinor = ((cart.shipping_methods ?? []) as Array<{ amount?: number | null }>).reduce(
+  const shippingMajor = ((cart.shipping_methods ?? []) as Array<{ amount?: number | null }>).reduce(
     (sum, method) => sum + asNumber(method.amount),
     0
   )
@@ -403,8 +403,8 @@ export async function resolveCartMerchandiseMajor(
       : {}
 
   return {
-    merchandiseMajor: Math.round(merchandiseMinor) / 100,
-    shippingMajor: Math.round(shippingMinor) / 100,
+    merchandiseMajor: Math.round(merchandiseMajor * 100) / 100,
+    shippingMajor: Math.round(shippingMajor * 100) / 100,
     currencyCode: cart.currency_code ?? "usd",
     productIds,
     metadata,

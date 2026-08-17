@@ -1,5 +1,6 @@
 import {
   applyCouponToCart,
+  buildCheckoutDiscountBreakdown,
   clearCouponFromCart,
   computeCouponDiscount,
   computePlanDiscount,
@@ -10,6 +11,33 @@ import { STORE_COUPONS_MODULE } from "../modules/store-coupons"
 import { Modules } from "@medusajs/framework/utils"
 
 describe("store coupon pricing", () => {
+  it("calculates Medusa major-unit cart totals without dividing by 100", async () => {
+    const cartService = {
+      retrieveCart: jest.fn().mockResolvedValue({
+        id: "cart_major",
+        currency_code: "hkd",
+        customer_id: null,
+        metadata: { store_id: "store_1" },
+        items: [{ product_id: "prod_1", unit_price: 233.92, quantity: 1 }],
+        shipping_methods: [{ amount: 5 }],
+      }),
+    }
+    const container = {
+      resolve: (key: string) => {
+        if (key === Modules.CART) return cartService
+        throw new Error(`Unexpected dependency: ${key}`)
+      },
+    }
+
+    await expect(buildCheckoutDiscountBreakdown(container as never, "cart_major")).resolves.toMatchObject({
+      merchandise_subtotal: 233.92,
+      shipping_total: 5,
+      discount_total: 0,
+      payable_total: 238.92,
+      currency_code: "hkd",
+    })
+  })
+
   it("formats no-threshold and threshold labels", () => {
     expect(formatCouponCondition({ discount_amount: 1, min_subtotal: 0 })).toEqual({
       amountLabel: "$1",

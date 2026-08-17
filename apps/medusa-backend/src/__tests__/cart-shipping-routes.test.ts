@@ -101,7 +101,7 @@ describe("GET /store/carts/:cart_id/shipping-options", () => {
           provider_id: "manual",
           service_zone_id: "serzo_1",
           shipping_profile_id: "sp_1",
-          calculated_price: { calculated_amount: 1200 },
+          calculated_price: { calculated_amount: 12 },
         },
       ],
     })
