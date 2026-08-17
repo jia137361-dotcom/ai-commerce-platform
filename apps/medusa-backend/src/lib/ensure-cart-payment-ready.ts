@@ -6,6 +6,7 @@ import {
   createPaymentCollectionForCartWorkflow,
   createPaymentSessionsWorkflow,
 } from "@medusajs/medusa/core-flows"
+import { syncCartCheckoutPricing } from "./sync-cart-checkout-pricing"
 
 const PROCESSABLE_STATUSES = new Set([
   "pending",
@@ -105,6 +106,7 @@ export async function ensureCartPaymentReady(
     `checkout-payment-session:${cartId}:${providerId}`,
     async () => {
       const cartModule = container.resolve(Modules.CART)
+      await syncCartCheckoutPricing(container, cartId)
 
       let paymentCollectionId = await readCartPaymentCollectionId(container, cartId)
 
