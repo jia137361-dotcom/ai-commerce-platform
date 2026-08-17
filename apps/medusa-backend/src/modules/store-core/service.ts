@@ -21,6 +21,8 @@ import StoreMessage from "./models/store-message"
 import PlatformOperator from "./models/platform-operator"
 import PlatformAuditEvent from "./models/platform-audit-event"
 import ProductFavorite from "./models/product-favorite"
+import BuyerWalletLedger from "./models/buyer-wallet-ledger"
+import BuyerWalletWithdrawal from "./models/buyer-wallet-withdrawal"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -45,6 +47,8 @@ class StoreCoreModuleService extends MedusaService({
   PlatformOperator,
   PlatformAuditEvent,
   ProductFavorite,
+  BuyerWalletLedger,
+  BuyerWalletWithdrawal,
 }) {}
 
 export default StoreCoreModuleService

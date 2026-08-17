@@ -6,6 +6,7 @@ import { CheckoutPage } from "./pages/checkout/CheckoutPage"
 import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
 import { PlatformCheckoutPage } from "./pages/checkout/PlatformCheckoutPage"
 import { AccountHomePage } from "./pages/account/AccountHomePage"
+import { AccountWalletPage } from "./pages/account/AccountWalletPage"
 import { AccountProfilePage } from "./pages/account/AccountProfilePage"
 import { RegisterPage } from "./pages/account/RegisterPage"
 import { SignInPage } from "./pages/account/SignInPage"
@@ -219,6 +220,8 @@ function App() {
     page = <ForgotPasswordPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/account/reset-password")) {
     page = <ResetPasswordPage cartCount={cartCount} />
+  } else if (location.pathname.startsWith("/account/wallet")) {
+    page = <AccountWalletPage cartCount={cartCount} />
   } else if (
     (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[]).some(
       (slug) => location.pathname === `/account/${slug}`

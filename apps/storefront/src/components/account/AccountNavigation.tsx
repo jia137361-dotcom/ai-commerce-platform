@@ -24,6 +24,7 @@ export function AccountNavigation({
         <a href="/account">Overview</a>
         <a href="/account/profile">Profile</a>
         <a href="/account/orders">Orders</a>
+        <a href="/account/wallet">Wallet</a>
         <a href="/plans">Plans &amp; AI credits</a>
         <a href="/orders/lookup">Find an order</a>
         <span className="buyer-account-nav-label">Settings</span>

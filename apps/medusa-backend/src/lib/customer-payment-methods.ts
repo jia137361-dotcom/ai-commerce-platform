@@ -90,6 +90,15 @@ const readStoredPayPalVaultPaymentMethods = (metadata?: Record<string, unknown> 
   })
 }
 
+export const resolvePayPalPayoutEmailFromMetadata = (metadata?: Record<string, unknown> | null) => {
+  const methods = readStoredPayPalVaultPaymentMethods(metadata)
+  const defaultId = typeof metadata?.[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY] === "string"
+    ? metadata[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY]
+    : null
+  const selected = methods.find((method) => method.id === defaultId) ?? methods[0]
+  return selected?.email?.trim().toLowerCase() || null
+}
+
 const normalizePayPalVaultPaymentMethod = (
   method: StoredPayPalVaultPaymentMethod,
   defaultPaymentMethodId?: string | null

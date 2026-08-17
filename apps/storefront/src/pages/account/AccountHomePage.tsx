@@ -38,6 +38,7 @@ export function AccountHomePage({ cartCount }: { cartCount: number }) {
                 <Button href="/account/profile" variant="secondary">
                   View profile
                 </Button>
+                <Button href="/account/wallet" variant="secondary">View wallet</Button>
               </div>
             </Card>
             <AccountPlanCard />

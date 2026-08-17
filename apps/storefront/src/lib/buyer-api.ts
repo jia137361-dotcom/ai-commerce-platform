@@ -930,6 +930,23 @@ const config = {
 export const getStripePublishableKey = () => readEnv("VITE_STRIPE_PK")
 export const getPayPalClientId = () => readEnv("VITE_PAYPAL_CLIENT_ID")
 
+export type BuyerWalletBalance = { currency_code: string; amount: number; amount_minor: number; withdrawal_supported: boolean }
+export type BuyerWalletEntry = { id: string; type: string; amount: number; amount_minor: number; currency_code: string; status: string; affects_balance: boolean; description: string | null; created_at: string }
+export type BuyerWalletWithdrawal = { id: string; request_id: string | null; amount: number; amount_minor: number; currency_code: string; status: string; paypal_email_masked: string | null; provider_batch_id: string | null; error_message: string | null; created_at: string }
+export type BuyerWallet = {
+  store_id: string
+  customer_id: string
+  preferred_currency: string | null
+  paypal_email_masked: string | null
+  paypal_account_bound: boolean
+  payout_mode: "disabled" | "mock" | "sandbox"
+  minimum_withdrawal: number
+  withdrawal_fee: number
+  balances: BuyerWalletBalance[]
+  ledger: BuyerWalletEntry[]
+  withdrawals: BuyerWalletWithdrawal[]
+}
+
 export const getAiWorkerPublicBase = () => config.aiWorkerPublicBase
 
 export const getBuyerCartStorageKey = (storeId = getBuyerStoreId(), identity = "guest:anonymous") =>
@@ -4037,5 +4054,21 @@ export const fetchS2bProductDetail = async (s2bProductId: number | string): Prom
       color_name: string
     }>
   }>(`/store/design-sessions/product-detail/${encodeURIComponent(String(s2bProductId))}`)
+  return payload
+}
+
+export const fetchBuyerWallet = async (): Promise<BuyerWallet> => {
+  const payload = await apiFetch<{ wallet: BuyerWallet }>("/store/customers/me/wallet")
+  return payload.wallet
+}
+
+export const createBuyerWalletWithdrawal = async (amount: number, currencyCode: string, requestId: string) => {
+  const payload = await apiFetch<{ withdrawal: BuyerWalletWithdrawal; wallet: BuyerWallet }>(
+    "/store/customers/me/wallet/withdrawals",
+    {
+      method: "POST",
+      body: JSON.stringify({ amount, currency_code: currencyCode.toLowerCase(), request_id: requestId }),
+    }
+  )
   return payload
 }
