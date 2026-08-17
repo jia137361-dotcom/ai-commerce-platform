@@ -260,7 +260,8 @@ const applyUpdates = async (connection: SqlConnection) => {
     `${CART_GUARD_CTE} update cart_shipping_method sm set raw_amount = ${convertedRawAmountSql("sm", "raw_amount", "amount", currencyFactorSql("c"))}, amount = sm.amount / ${currencyFactorSql("c")}, updated_at = now() from convertible_carts cc, cart c where cc.id = sm.cart_id and c.id = sm.cart_id and sm.deleted_at is null`,
     `${CART_GUARD_CTE} update payment_collection pc set raw_amount = ${convertedRawAmountSql("pc", "raw_amount", "amount", currencyFactorSql("pc"))}, amount = pc.amount / ${currencyFactorSql("pc")}, updated_at = now() from cart_payment_collection cpc, convertible_carts cc where cpc.payment_collection_id = pc.id and cpc.deleted_at is null and cc.id = cpc.cart_id and pc.deleted_at is null`,
     `${CART_GUARD_CTE} update payment_session ps set raw_amount = ${convertedRawAmountSql("ps", "raw_amount", "amount", currencyFactorSql("ps"))}, amount = ps.amount / ${currencyFactorSql("ps")}, status = 'canceled', updated_at = now() from payment_collection pc, cart_payment_collection cpc, convertible_carts cc where pc.id = ps.payment_collection_id and pc.deleted_at is null and cpc.payment_collection_id = pc.id and cpc.deleted_at is null and cc.id = cpc.cart_id and ps.deleted_at is null`,
-    `${CART_GUARD_CTE} update checkout_payment_attempt attempt set payment_collection_id = null, payment_session_id = null, provider_payment_id = null, status = 'created', last_error = 'Payment session reset by canonical money migration.', expires_at = null, updated_at = now() from convertible_carts cc where cc.id = attempt.cart_id and attempt.deleted_at is null`,
+    `${CART_GUARD_CTE} update checkout_payment_attempt attempt set payment_collection_id = null, payment_session_id = null, provider_payment_id = null, status = 'expired', last_error = 'Payment session reset by canonical money migration.', expires_at = now(), updated_at = now() from convertible_carts cc where cc.id = attempt.cart_id and attempt.deleted_at is null`,
+    `${CART_GUARD_CTE} update checkout_payment_attempt attempt set status = 'created', expires_at = now() + interval '15 minutes', updated_at = now() from convertible_carts cc where cc.id = attempt.cart_id and attempt.deleted_at is null and attempt.id = (select latest.id from checkout_payment_attempt latest where latest.cart_id = attempt.cart_id and latest.deleted_at is null order by latest.created_at desc, latest.id desc limit 1)`,
   ]
   let appliedRows = 0
   for (const sql of statements) {
@@ -301,7 +302,7 @@ export const runMedusaMoneyMajorUnitMigration = async (
 
 export default async function migrateMedusaMoneyMajorUnits({ container }: MedusaExecArgs) {
   const mode = parseLegacyMoneyMigrationMode(
-    process.argv.slice(2).filter((argument) => argument.startsWith("--"))
+    process.argv.slice(2).filter((argument) => argument === "apply" || argument.startsWith("--"))
   )
   const connection = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as SqlConnection
   const report = await runMedusaMoneyMajorUnitMigration(connection, mode)

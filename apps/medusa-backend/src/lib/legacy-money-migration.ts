@@ -86,9 +86,9 @@ export type LegacyMoneyMigrationMode = "dry-run" | "apply"
 
 export const parseLegacyMoneyMigrationMode = (argv: string[]): LegacyMoneyMigrationMode => {
   for (const argument of argv) {
-    if (argument !== "--apply") {
+    if (argument !== "--apply" && argument !== "apply") {
       throw new Error(`Unknown migration argument: ${argument}`)
     }
   }
-  return argv.includes("--apply") ? "apply" : "dry-run"
+  return argv.includes("--apply") || argv.includes("apply") ? "apply" : "dry-run"
 }

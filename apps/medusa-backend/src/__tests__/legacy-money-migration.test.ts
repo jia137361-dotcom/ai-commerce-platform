@@ -74,6 +74,7 @@ describe("legacy minor-unit migration protection", () => {
   test("defaults to dry-run and requires an explicit apply flag", () => {
     expect(parseLegacyMoneyMigrationMode([])).toBe("dry-run")
     expect(parseLegacyMoneyMigrationMode(["--apply"])).toBe("apply")
+    expect(parseLegacyMoneyMigrationMode(["apply"])).toBe("apply")
     expect(() => parseLegacyMoneyMigrationMode(["--force"])).toThrow("Unknown migration argument")
   })
 })
