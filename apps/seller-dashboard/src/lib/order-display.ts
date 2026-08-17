@@ -27,14 +27,14 @@ export const formatSupplierLabel = (
   return "PrintPro (pending push)"
 }
 
-/** Backend payment, refund, and payout values are stored in minor units. */
-export const formatMinorMoney = (amount: number | null | undefined, currencyCode?: string | null) => {
+/** Backend Medusa payment, refund, and payout values use major units. */
+export const formatOrderMoney = (amount: number | null | undefined, currencyCode?: string | null) => {
   const currency = currencyCode?.trim().toUpperCase() || "USD"
-  const minor = typeof amount === "number" && Number.isFinite(amount) ? amount : 0
+  const major = typeof amount === "number" && Number.isFinite(amount) ? amount : 0
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(minor / 100)
+  }).format(major)
 }

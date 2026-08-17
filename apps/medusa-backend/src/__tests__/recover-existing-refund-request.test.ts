@@ -18,7 +18,7 @@ const argv = [
   "--order-id", "order_1",
   "--expected-payment-collection-id", "pay_col_1",
   "--expected-paypal-capture-id", "CAPTURE_1",
-  "--expected-amount", "4400",
+  "--expected-amount", "44",
   "--expected-currency", "usd",
   "--correlation-id", "corr_1",
 ]
@@ -37,7 +37,7 @@ const baseRequest = (overrides: Record<string, unknown> = {}) => ({
   store_id: "store_1",
   customer_id: "cus_1",
   status: "auto_review",
-  requested_amount: 4400,
+  requested_amount: 44,
   currency_code: "usd",
   payment_provider_id: "pp_paypal_paypal",
   external_refund_id: null,
@@ -62,8 +62,8 @@ const baseOrder = (overrides: Record<string, unknown> = {}) => ({
       id: "pay_1",
       status: "captured",
       provider_id: "pp_paypal_paypal",
-      amount: 4400,
-      raw_amount: { value: "4400", precision: 20 },
+      amount: 44,
+      raw_amount: { value: "44", precision: 20 },
       currency_code: "usd",
       captured_at: "now",
       data: {
@@ -73,8 +73,8 @@ const baseOrder = (overrides: Record<string, unknown> = {}) => ({
       captures: [{
         id: "cap_1",
         status: "completed",
-        amount: 4400,
-        raw_amount: { value: "4400", precision: 20 },
+        amount: 44,
+        raw_amount: { value: "44", precision: 20 },
         data: { paypal_capture_id: "CAPTURE_1" },
       }],
       refunds: [],
@@ -128,7 +128,7 @@ describe("recover-existing-refund-request script", () => {
       orderId: "order_1",
       expectedPaymentCollectionId: "pay_col_1",
       expectedPayPalCaptureId: "CAPTURE_1",
-      expectedAmount: 4400,
+      expectedAmount: 44,
       expectedCurrency: "usd",
       correlationId: "corr_1",
       execute: true,
@@ -212,7 +212,7 @@ describe("recover-existing-refund-request script", () => {
             ...collection,
             payments: [{
               ...payment,
-              refunds: [{ id: "refund_1", amount: 4400, status: "completed" }],
+              refunds: [{ id: "refund_1", amount: 44, status: "completed" }],
             }],
           }],
         }),
@@ -237,12 +237,12 @@ describe("recover-existing-refund-request script", () => {
     fixture.query.graph.mockResolvedValueOnce({ data: [baseOrder({
       payment_collections: [{
         ...(baseOrder().payment_collections as Array<Record<string, unknown>>)[0],
-        refunded_amount: 4400,
-        raw_refunded_amount: { value: "4400", precision: 20 },
+        refunded_amount: 44,
+        raw_refunded_amount: { value: "44", precision: 20 },
         payments: [{
           ...(((baseOrder().payment_collections as Array<Record<string, unknown>>)[0].payments as Array<Record<string, unknown>>)[0]),
           data: { paypal_refund_id: "REFUND_1", paypal_refund_status: "completed" },
-          refunds: [{ id: "refund_1", amount: 4400, status: "completed" }],
+          refunds: [{ id: "refund_1", amount: 44, status: "completed" }],
         }],
       }],
     })] })
@@ -256,14 +256,14 @@ describe("recover-existing-refund-request script", () => {
       refundRequestId: "brr_1",
       orderId: "order_1",
       storeId: "store_1",
-      amount: 4400,
+      amount: 44,
     }))
     expect(result).toMatchObject({
       recovery_result: "completed",
       provider_idempotency_key: "brr_1",
       external_refund_id: "REFUND_1",
       medusa_refund_row_count: 1,
-      refunded_amount: 4400,
+      refunded_amount: 44,
       remaining_refundable_amount: 0,
     })
   })
@@ -304,7 +304,7 @@ describe("recover-existing-refund-request script", () => {
     })
 
     await client.refundCapture("CAPTURE_1", {
-      amount: 4400,
+      amount: 44,
       currencyCode: "usd",
       requestId: "brr_1",
     })

@@ -5,7 +5,7 @@ import { apiFetch } from "../../lib/api-client"
 import {
   formatCustomerLabel,
   formatPaymentLabel,
-  formatMinorMoney,
+  formatOrderMoney,
   formatSupplierLabel,
 } from "../../lib/order-display"
 import { useToast } from "../../components/ToastProvider"
@@ -259,7 +259,7 @@ export function OrderFulfillmentPage() {
                         <p className="font-medium capitalize">{request.reason.replaceAll("_", " ")}</p>
                         <Badge label={request.status} />
                       </div>
-                      <p className="mt-2 text-sm text-slate-600">Requested: {formatMinorMoney(request.requested_amount, request.currency_code)}</p>
+                      <p className="mt-2 text-sm text-slate-600">Requested: {formatOrderMoney(request.requested_amount, request.currency_code)}</p>
                       <p className="mt-1 text-xs text-slate-500">Policy: {request.policy_result?.replaceAll("_", " ") ?? "manual review"}{request.decision_type ? ` · ${request.decision_type.replaceAll("_", " ")}` : ""}</p>
                       {request.decision_reason ? <p className="mt-1 text-xs text-slate-500">{request.decision_reason}</p> : null}
                       {request.external_refund_id ? <p className="mt-1 text-xs text-slate-500">Refund reference: {request.external_refund_id}</p> : null}
@@ -270,7 +270,7 @@ export function OrderFulfillmentPage() {
                             className="w-36"
                             type="number"
                             min="0.01"
-                            max={eligibleAmount / 100}
+                            max={eligibleAmount}
                             step="0.01"
                             placeholder="Partial amount"
                             value={partialAmounts[request.id] ?? ""}
@@ -330,7 +330,7 @@ export function OrderFulfillmentPage() {
                   <span className="text-slate-500">Seller settlement:</span>
                   <Badge label={payoutStatus.replaceAll("_", " ")} />
                 </p>
-                {payoutAmount != null ? <p className="mt-1 text-xs text-slate-500">{formatMinorMoney(payoutAmount, payoutCurrency)}</p> : null}
+                {payoutAmount != null ? <p className="mt-1 text-xs text-slate-500">{formatOrderMoney(payoutAmount, payoutCurrency)}</p> : null}
                 {payoutError ? <p className="mt-1 text-xs text-red-600">{payoutError}</p> : null}
                 {payoutStatus === "not_released" ? <p className="mt-1 text-xs text-slate-500">Settlement is released after the buyer confirms receipt.</p> : null}
                 {(["not_released", "pending_account", "failed"] as string[]).includes(payoutStatus) ? (

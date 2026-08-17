@@ -1,9 +1,8 @@
 import {
-  buyerOrderTotalsToMajor,
   enrichOrderWithSummaryTotals,
-  minorMoneyToMajor,
   readOrderMoney,
   resolveBuyerOrderTotals,
+  resolveBuyerOrderTotalsForStorefront,
 } from "../lib/buyer-order-totals"
 
 describe("buyer-order-totals", () => {
@@ -12,87 +11,12 @@ describe("buyer-order-totals", () => {
       resolveBuyerOrderTotals({
         summary: {
           totals: {
-            subtotal: 2499,
-            shipping_total: 500,
-            total: 2999,
-            current_order_total: 2999,
+            subtotal: 24.99,
+            shipping_total: 5,
+            total: 29.99,
+            current_order_total: 29.99,
           },
         },
-      })
-    ).toEqual({
-      subtotal: 2499,
-      shippingTotal: 500,
-      discountTotal: 0,
-      taxTotal: 0,
-      total: 2999,
-    })
-  })
-
-  it("prefers line item subtotal over unreliable graph order root totals", () => {
-    expect(
-      resolveBuyerOrderTotals({
-        subtotal: 500,
-        shipping_total: 500,
-        total: 500,
-        items: [{ unit_price: 2499, quantity: 1 }],
-        summary: { totals: { current_order_total: 2999 } },
-      })
-    ).toEqual({
-      subtotal: 2499,
-      shippingTotal: 500,
-      discountTotal: 0,
-      taxTotal: 0,
-      total: 2999,
-    })
-  })
-
-  it("computes total as subtotal + shipping - discount + tax", () => {
-    expect(
-      resolveBuyerOrderTotals({
-        items: [{ unit_price: 2000, quantity: 1 }],
-        shipping_total: 500,
-        discount_total: 200,
-        tax_total: 100,
-      })
-    ).toEqual({
-      subtotal: 2000,
-      shippingTotal: 500,
-      discountTotal: 200,
-      taxTotal: 100,
-      total: 2400,
-    })
-  })
-
-  it("falls back to line items when order totals are missing", () => {
-    expect(
-      resolveBuyerOrderTotals({
-        items: [
-          { unit_price: 2499, quantity: 1 },
-          { subtotal: 1000, quantity: 2 },
-        ],
-      })
-    ).toEqual({
-      subtotal: 3499,
-      shippingTotal: null,
-      discountTotal: 0,
-      taxTotal: 0,
-      total: 3499,
-    })
-  })
-
-  it("reads nested money objects", () => {
-    expect(readOrderMoney({ numeric: 2125 })).toBe(2125)
-    expect(readOrderMoney({ value: "500" })).toBe(500)
-  })
-
-  it("converts minor units to major units for storefront responses", () => {
-    expect(
-      buyerOrderTotalsToMajor({
-        subtotal: 2499,
-        shippingTotal: 500,
-        discountTotal: 0,
-        taxTotal: 0,
-        total: 2999,
       })
     ).toEqual({
       subtotal: 24.99,
@@ -101,24 +25,99 @@ describe("buyer-order-totals", () => {
       taxTotal: 0,
       total: 29.99,
     })
-    expect(minorMoneyToMajor(500)).toBe(5)
+  })
+
+  it("prefers line item subtotal over unreliable graph order root totals", () => {
+    expect(
+      resolveBuyerOrderTotals({
+        subtotal: 5,
+        shipping_total: 5,
+        total: 5,
+        items: [{ unit_price: 24.99, quantity: 1 }],
+        summary: { totals: { current_order_total: 29.99 } },
+      })
+    ).toEqual({
+      subtotal: 24.99,
+      shippingTotal: 5,
+      discountTotal: 0,
+      taxTotal: 0,
+      total: 29.99,
+    })
+  })
+
+  it("computes total as subtotal + shipping - discount + tax", () => {
+    expect(
+      resolveBuyerOrderTotals({
+        items: [{ unit_price: 20, quantity: 1 }],
+        shipping_total: 5,
+        discount_total: 2,
+        tax_total: 1,
+      })
+    ).toEqual({
+      subtotal: 20,
+      shippingTotal: 5,
+      discountTotal: 2,
+      taxTotal: 1,
+      total: 24,
+    })
+  })
+
+  it("falls back to line items when order totals are missing", () => {
+    expect(
+      resolveBuyerOrderTotals({
+        currency_code: "usd",
+        items: [
+          { unit_price: 24.99, quantity: 1 },
+          { subtotal: 10, quantity: 2 },
+        ],
+      })
+    ).toEqual({
+      subtotal: 34.99,
+      shippingTotal: null,
+      discountTotal: 0,
+      taxTotal: 0,
+      total: 34.99,
+    })
+  })
+
+  it("reads nested money objects", () => {
+    expect(readOrderMoney({ numeric: 21.25 })).toBe(21.25)
+    expect(readOrderMoney({ value: "5" })).toBe(5)
+  })
+
+  it("returns canonical major units unchanged for storefront responses", () => {
+    expect(
+      resolveBuyerOrderTotalsForStorefront({
+        subtotal: 24.99,
+        shipping_total: 5,
+        discountTotal: 0,
+        taxTotal: 0,
+        total: 29.99,
+      })
+    ).toEqual({
+      subtotal: 24.99,
+      shippingTotal: 5,
+      discountTotal: 0,
+      taxTotal: 0,
+      total: 29.99,
+    })
   })
 
   it("ignores zero graph line subtotals when unit price is present", () => {
     expect(
       resolveBuyerOrderTotals({
-        subtotal: 500,
-        shipping_total: 500,
-        total: 500,
-        items: [{ unit_price: 2499, quantity: 1, subtotal: 0, total: 0 }],
-        summary: { totals: { current_order_total: 2999, shipping_total: 500 } },
+        subtotal: 5,
+        shipping_total: 5,
+        total: 5,
+        items: [{ unit_price: 24.99, quantity: 1, subtotal: 0, total: 0 }],
+        summary: { totals: { current_order_total: 29.99, shipping_total: 5 } },
       })
     ).toEqual({
-      subtotal: 2499,
-      shippingTotal: 500,
+      subtotal: 24.99,
+      shippingTotal: 5,
       discountTotal: 0,
       taxTotal: 0,
-      total: 2999,
+      total: 29.99,
     })
   })
 
@@ -126,11 +125,11 @@ describe("buyer-order-totals", () => {
     const graph = jest.fn(async () => ({
       data: [
         {
-          subtotal: 500,
-          shipping_total: 500,
-          total: 500,
-          summary: { totals: { current_order_total: 2999, shipping_total: 500 } },
-          items: [{ id: "item_1", unit_price: 2499, quantity: 1, subtotal: 0, total: 0 }],
+          subtotal: 5,
+          shipping_total: 5,
+          total: 5,
+          summary: { totals: { current_order_total: 29.99, shipping_total: 5 } },
+          items: [{ id: "item_1", unit_price: 24.99, quantity: 1, subtotal: 0, total: 0 }],
         },
       ],
     }))
@@ -139,15 +138,15 @@ describe("buyer-order-totals", () => {
       "order_1",
       {
         id: "order_1",
-        items: [{ id: "item_1", unit_price: 2499, quantity: 1 }],
+        items: [{ id: "item_1", unit_price: 24.99, quantity: 1 }],
       }
     )
     expect(resolveBuyerOrderTotals(enriched)).toEqual({
-      subtotal: 2499,
-      shippingTotal: 500,
+      subtotal: 24.99,
+      shippingTotal: 5,
       discountTotal: 0,
       taxTotal: 0,
-      total: 2999,
+      total: 29.99,
     })
   })
 })

@@ -8,7 +8,7 @@ import { Button } from "../../components/ui/Button"
 import { Badge } from "../../components/ui/Badge"
 import { Input } from "../../components/ui/Input"
 import { canReviewRefund, parsePartialRefundAmount } from "./refund-review-state"
-import { formatMinorMoney } from "../../lib/order-display"
+import { formatOrderMoney } from "../../lib/order-display"
 
 type RefundRequest = {
   id: string
@@ -81,7 +81,7 @@ export function RefundRequestsPage() {
                       <p className="mt-1 text-xs text-slate-500">Fulfillment: {request.fulfillment_status ?? "unknown"}</p>
                       <p className="mt-1 text-xs text-slate-500">Policy: {request.policy_result?.replaceAll("_", " ") ?? "manual review"}</p>
                     </td>
-                    <td className="px-4 py-4">{formatMinorMoney(amount, currency)}</td>
+                    <td className="px-4 py-4">{formatOrderMoney(amount, currency)}</td>
                     <td className="px-4 py-4"><Badge label={request.status} /><p className="mt-1 text-xs text-slate-500">{request.payment_provider_id ?? "Provider pending"}</p></td>
                     <td className="px-4 py-4 text-right">
                       {canReviewRefund(request.status) ? (
@@ -90,7 +90,7 @@ export function RefundRequestsPage() {
                             aria-label={`Partial refund amount for ${request.id}`}
                             type="number"
                             min="0.01"
-                            max={amount / 100}
+                            max={amount}
                             step="0.01"
                             placeholder="Partial amount"
                             value={partialAmounts[request.id] ?? ""}

@@ -1,4 +1,5 @@
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
+import { normalizeMajor } from "./money"
 
 export type BuyerOrderTotals = {
   subtotal: number | null
@@ -7,8 +8,6 @@ export type BuyerOrderTotals = {
   taxTotal: number | null
   total: number | null
 }
-
-export const MINOR_UNIT_FACTOR = 100
 
 const TOTAL_FIELD_ALIASES: Record<keyof BuyerOrderTotals, string[]> = {
   subtotal: ["subtotal", "item_subtotal", "items_total", "item_total"],
@@ -41,17 +40,6 @@ export const readOrderMoney = (value: unknown): number | null => {
   }
   return null
 }
-
-export const minorMoneyToMajor = (value: number | null | undefined): number | null =>
-  value == null || !Number.isFinite(value) ? null : value / MINOR_UNIT_FACTOR
-
-export const buyerOrderTotalsToMajor = (totals: BuyerOrderTotals): BuyerOrderTotals => ({
-  subtotal: minorMoneyToMajor(totals.subtotal),
-  shippingTotal: minorMoneyToMajor(totals.shippingTotal),
-  discountTotal: minorMoneyToMajor(totals.discountTotal),
-  taxTotal: minorMoneyToMajor(totals.taxTotal),
-  total: minorMoneyToMajor(totals.total),
-})
 
 const readTotalsBucket = (
   bucket: Record<string, unknown> | null | undefined,
@@ -218,18 +206,25 @@ export const resolveBuyerOrderTotals = (order: Record<string, unknown>): BuyerOr
     recordedTotal,
   })
 
+  const currencyCode =
+    typeof order.currency_code === "string" && order.currency_code.trim()
+      ? order.currency_code
+      : null
+  const normalize = (value: number | null) =>
+    value == null || !currencyCode ? value : normalizeMajor(value, currencyCode)
+
   return {
-    subtotal,
-    shippingTotal,
-    discountTotal,
-    taxTotal,
-    total,
+    subtotal: normalize(subtotal),
+    shippingTotal: normalize(shippingTotal),
+    discountTotal: normalize(discountTotal),
+    taxTotal: normalize(taxTotal),
+    total: normalize(total),
   }
 }
 
 export const resolveBuyerOrderTotalsForStorefront = (
   order: Record<string, unknown>
-): BuyerOrderTotals => buyerOrderTotalsToMajor(resolveBuyerOrderTotals(order))
+): BuyerOrderTotals => resolveBuyerOrderTotals(order)
 
 const mergeOrderItems = (
   fallbackItems: unknown,

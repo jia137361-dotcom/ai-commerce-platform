@@ -94,6 +94,25 @@ describe("auth email delivery", () => {
     expect(resetPayload.subject).toBe("Reset your Ciiverse password")
   })
 
+  it("renders Medusa order amounts as canonical major units", async () => {
+    process.env.AUTH_EMAIL_DELIVERY_MODE = "resend"
+    process.env.RESEND_API_KEY = "re_test_key"
+    process.env.EMAIL_FROM = "Ciiverse <onboarding@resend.dev>"
+    const { sendOrderConfirmation } = await loadEmailModule()
+
+    await sendOrderConfirmation({
+      to: "buyer@example.com",
+      orderId: "order_1",
+      items: [{ title: "T-shirt", quantity: 1, price: 16.68 }],
+      total: 21.68,
+      currency: "usd",
+    })
+
+    const payload = mockSendEmail.mock.calls[0][0]
+    expect(payload.html).toContain("USD 16.68")
+    expect(payload.html).toContain("USD 21.68")
+  })
+
   it("safely handles provider errors without logging code or API key", async () => {
     process.env.AUTH_EMAIL_DELIVERY_MODE = "resend"
     process.env.RESEND_API_KEY = "re_sensitive_key"

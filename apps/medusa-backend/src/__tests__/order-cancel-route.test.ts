@@ -61,7 +61,7 @@ const authorizedOrder = {
     {
       id: "paycol_1",
       status: "authorized",
-      authorized_amount: 2125,
+      authorized_amount: 21.25,
       captured_amount: 0,
       completed_at: null,
       payments: [{ id: "pay_1", status: "authorized", captured_at: null, captures: [] }],
@@ -330,7 +330,7 @@ describe("POST /store/customers/me/orders/:id/cancel", () => {
             id: "paycol_1",
             status: "completed",
             completed_at: "2026-06-18T08:00:00.000Z",
-            authorized_amount: 2125,
+            authorized_amount: 21.25,
             captured_amount: 0,
             payments: [{ id: "pay_1", status: "authorized", captured_at: null, captures: [] }],
             payment_sessions: [{ status: "authorized" }],

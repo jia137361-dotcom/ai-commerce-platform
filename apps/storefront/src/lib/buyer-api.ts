@@ -2470,8 +2470,8 @@ const normalizeRefundCapability = (
 }
 
 /**
- * Read a dollar amount from order detail API response.
- * The backend (buyer-order-totals.ts) already converts cents→dollars via minorMoneyToMajor.
+ * Read a major-unit amount from the order detail API response.
+ * Medusa and the backend API already use canonical major units.
  * This function just validates and normalizes the value.
  * Returns null for null/undefined/NaN.
  */

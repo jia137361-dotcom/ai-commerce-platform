@@ -6,7 +6,7 @@ import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
 import type { BuyerRefundRequestRecord } from "../lib/order-refund-request"
 import { executeApprovedRefund } from "../lib/refund-execution"
 import {
-  normalizeMinorUnitAmount,
+  normalizeMajorUnitAmount,
   resolveRefundPaymentContext,
 } from "../lib/refund-payment-context"
 import { getConfiguredPayPalClient } from "../modules/paypal/client"
@@ -94,7 +94,7 @@ export function parseRecoverExistingRefundRequestArgs(argv = process.argv.slice(
     orderId: requireFlag(argv, "--order-id"),
     expectedPaymentCollectionId: requireFlag(argv, "--expected-payment-collection-id"),
     expectedPayPalCaptureId: requireFlag(argv, "--expected-paypal-capture-id"),
-    expectedAmount: normalizeMinorUnitAmount(requireFlag(argv, "--expected-amount")),
+    expectedAmount: normalizeMajorUnitAmount(requireFlag(argv, "--expected-amount")),
     expectedCurrency: requireFlag(argv, "--expected-currency").toLowerCase(),
     correlationId: requireFlag(argv, "--correlation-id"),
     execute: argv.includes("--execute"),
@@ -121,7 +121,7 @@ const first = <T>(items: T[]) => {
 const sumAmounts = (rows: Array<{ raw_amount?: unknown; amount?: unknown }>) =>
   rows.reduce((sum, row) => {
     const value = row.raw_amount ?? row.amount
-    return sum + normalizeMinorUnitAmount(value)
+    return sum + normalizeMajorUnitAmount(value)
   }, 0)
 
 const isCompletedRefund = (row: { status?: unknown }) => {
@@ -188,7 +188,7 @@ const loadRuntimeState = async (
   const captures = (payment?.captures as Array<Record<string, unknown>> | undefined) ?? []
   const capturedAmount = sumAmounts(captures)
   const refundedAmount = sumAmounts(refunds)
-  const collectionRefundedAmount = normalizeMinorUnitAmount(
+  const collectionRefundedAmount = normalizeMajorUnitAmount(
     collection.raw_refunded_amount ?? collection.refunded_amount ?? 0
   )
   const dataRecord = payment?.data && typeof payment.data === "object"
@@ -235,7 +235,7 @@ const assertPreflight = async (
   const request = await loadRequest(container, args)
   assertEqual(request.order_id, args.orderId, "ORDER_ID_MISMATCH", "order ID")
   assertEqual(request.status, "auto_review", "REFUND_REQUEST_STATUS_MISMATCH", "refund request status")
-  assertEqual(normalizeMinorUnitAmount(request.requested_amount), args.expectedAmount, "REQUESTED_AMOUNT_MISMATCH", "requested amount")
+  assertEqual(normalizeMajorUnitAmount(request.requested_amount), args.expectedAmount, "REQUESTED_AMOUNT_MISMATCH", "requested amount")
   assertEqual(String(request.currency_code ?? "").toLowerCase(), args.expectedCurrency, "REQUEST_CURRENCY_MISMATCH", "request currency")
   assertEqual(request.payment_provider_id, PROVIDER_ID, "PAYMENT_PROVIDER_MISMATCH", "payment provider")
   assertEqual(Number(request.attempt_count ?? 0), 0, "PROVIDER_ATTEMPT_COUNT_MISMATCH", "provider attempt count")
@@ -308,11 +308,11 @@ const buildResult = (
   ...(providerCallState ? { provider_call_state: providerCallState } : {}),
 })
 
-const isSuccessfulCompletion = (result: RecoveryResult) =>
+const isSuccessfulCompletion = (result: RecoveryResult, expectedAmount: number) =>
   Boolean(result.external_refund_id) &&
   COMPLETED_PROVIDER_STATUSES.has(normalizeStatus(result.provider_refund_status)) &&
   result.medusa_refund_row_count === 1 &&
-  result.refunded_amount === 4400 &&
+  result.refunded_amount === expectedAmount &&
   result.remaining_refundable_amount === 0
 
 const redact = (value: string, env: EnvLike = process.env) => {
@@ -372,7 +372,7 @@ export async function runRecoverExistingRefundRequest({
 
   const postState = await loadRuntimeState(container, args)
   const result = buildResult("execute", args, executed, postState, "completed")
-  if (isSuccessfulCompletion(result)) return result
+  if (isSuccessfulCompletion(result, args.expectedAmount)) return result
 
   const providerCallState = classifyAfterExecution(executed, postState)
   return {

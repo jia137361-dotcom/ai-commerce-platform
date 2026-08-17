@@ -19,13 +19,13 @@ const paidStripeOrder = {
   id: "order_1",
   display_id: 8,
   currency_code: "usd",
-  total: 2999,
+  total: 29.99,
   metadata: { store_id: "default_store", payment_status: "paid" },
   payment_collections: [{
     status: "completed",
-    captured_amount: 2999,
+    captured_amount: 29.99,
     currency_code: "usd",
-    payments: [{ status: "captured", captured_at: "2026-06-24T00:00:00.000Z", amount: 2999 }],
+    payments: [{ status: "captured", captured_at: "2026-06-24T00:00:00.000Z", amount: 29.99 }],
     payment_sessions: [{ provider_id: "pp_stripe_stripe", status: "captured", data: { id: "pi_123" } }],
   }],
 }
@@ -82,6 +82,7 @@ describe("releaseSellerPayout", () => {
     const result = await releaseSellerPayout(scope as never, "order_1", "buyer_confirm")
     expect(result.status).toBe("completed")
     expect(result.transfer_id).toBe("tr_123")
+    expect(result.amount).toBe(29.99)
     expect(stripeApiRequest).toHaveBeenCalledWith(
       "/transfers",
       expect.objectContaining({

@@ -147,25 +147,19 @@ const normalizeCurrency = (value: unknown) => normalizeString(value).toLowerCase
 const isObject = (value: unknown): value is JsonRecord =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value)
 
-export function normalizeMinorUnitAmount(value: unknown): number {
+export function normalizeMajorUnitAmount(value: unknown): number {
   if (typeof value === "number") {
-    if (
-      !Number.isFinite(value) ||
-      !Number.isSafeInteger(value)
-    ) {
-      fail("PAYMENT_AMOUNT_INVALID", "Amount must be a safe integer minor-unit value")
+    if (!Number.isFinite(value)) {
+      fail("PAYMENT_AMOUNT_INVALID", "Amount must be a finite major-unit value")
     }
     return value
   }
 
   if (typeof value === "string") {
     const trimmed = value.trim()
-    if (!/^-?\d+$/.test(trimmed)) {
-      fail("PAYMENT_AMOUNT_INVALID", "Amount string must be an integer minor-unit value")
-    }
     const parsed = Number(trimmed)
-    if (!Number.isSafeInteger(parsed)) {
-      fail("PAYMENT_AMOUNT_INVALID", "Amount string is outside the safe integer range")
+    if (!trimmed || !Number.isFinite(parsed)) {
+      fail("PAYMENT_AMOUNT_INVALID", "Amount string must be a finite major-unit value")
     }
     return parsed
   }
@@ -181,16 +175,16 @@ export function normalizeMinorUnitAmount(value: unknown): number {
     if (!supportedKeys || candidate === undefined) {
       fail("PAYMENT_AMOUNT_INVALID", "Amount object shape is not supported")
     }
-    return normalizeMinorUnitAmount(candidate)
+    return normalizeMajorUnitAmount(candidate)
   }
 
-  fail("PAYMENT_AMOUNT_INVALID", "Amount is not a supported minor-unit value")
+  fail("PAYMENT_AMOUNT_INVALID", "Amount is not a supported major-unit value")
 }
 
 const amountFrom = (record: { raw_amount?: unknown; amount?: unknown }) => {
   const raw = record.raw_amount
-  if (raw !== undefined && raw !== null) return normalizeMinorUnitAmount(raw)
-  return normalizeMinorUnitAmount(record.amount)
+  if (raw !== undefined && raw !== null) return normalizeMajorUnitAmount(raw)
+  return normalizeMajorUnitAmount(record.amount)
 }
 
 const captureAmount = (capture: CaptureRecord) => amountFrom(capture)
@@ -488,7 +482,7 @@ export async function resolveRefundPaymentContext({
 
   const amount = requestedAmount === undefined || requestedAmount === null
     ? null
-    : normalizeMinorUnitAmount(requestedAmount)
+    : normalizeMajorUnitAmount(requestedAmount)
   if (amount !== null) {
     if (amount <= 0) {
       fail("PAYMENT_AMOUNT_INVALID", "Requested amount must be greater than zero")

@@ -18,15 +18,15 @@ const validPayment = (overrides: Record<string, unknown> = {}) => ({
   id: "pay_1",
   provider_id: "pp_paypal_paypal",
   status: "captured",
-  amount: 4400,
-  raw_amount: { value: "4400", precision: 20 },
+  amount: 44,
+  raw_amount: { value: "44", precision: 20 },
   currency_code: "usd",
   captured_at: "2026-08-02T00:00:00.000Z",
   data: { paypal_order_id: "ORDER_1" },
   captures: [{
     id: "cap_row_1",
     status: "completed",
-    amount: 4400,
+    amount: 44,
     data: { paypal_capture_id: "CAPTURE_1" },
   }],
   refunds: [],
@@ -71,7 +71,7 @@ const resolve = (order: Record<string, unknown>, overrides: Record<string, unkno
   resolveRefundPaymentContext({
     container: createResolverContainer(order).container as never,
     orderId: "order_1",
-    requestedAmount: 4400,
+    requestedAmount: 44,
     requestedCurrency: "usd",
     expectedProviderId: "pp_paypal_paypal",
     ...overrides,
@@ -98,13 +98,14 @@ describe("refund payment context resolver", () => {
       payment_collection_status: "completed",
       payment_id: "pay_1",
       provider_id: "pp_paypal_paypal",
-      payment_amount: 4400,
-      captured_amount: 4400,
+      payment_amount: 44,
+      captured_amount: 44,
       refunded_amount: 0,
-      remaining_refundable_amount: 4400,
+      remaining_refundable_amount: 44,
       payment_session_id: "payses_1",
       paypal_order_id: "ORDER_1",
       paypal_capture_id: "CAPTURE_1",
+      provider_payment_id: "CAPTURE_1",
       capture_count: 1,
       refund_count: 0,
     })
@@ -134,7 +135,7 @@ describe("refund payment context resolver", () => {
       payment_collections: [validCollection({
         payments: [
           validPayment({ id: "pay_1" }),
-          validPayment({ id: "pay_2", captures: [{ amount: 4400, data: { paypal_capture_id: "CAPTURE_2" } }] }),
+          validPayment({ id: "pay_2", captures: [{ amount: 44, data: { paypal_capture_id: "CAPTURE_2" } }] }),
         ],
       })],
     })), "PAYMENT_AMBIGUOUS")
@@ -162,8 +163,8 @@ describe("refund payment context resolver", () => {
       payment_collections: [validCollection({
         payments: [validPayment({
           captures: [
-            { amount: 2200, data: { paypal_capture_id: "CAPTURE_1" } },
-            { amount: 2200, data: { paypal_capture_id: "CAPTURE_2" } },
+            { amount: 22, data: { paypal_capture_id: "CAPTURE_1" } },
+            { amount: 22, data: { paypal_capture_id: "CAPTURE_2" } },
           ],
         })],
       })],
@@ -173,7 +174,7 @@ describe("refund payment context resolver", () => {
   it("rejects a missing PayPal capture ID", async () => {
     await expectCode(resolve(validOrder({
       payment_collections: [validCollection({
-        payments: [validPayment({ captures: [{ amount: 4400, data: {} }] })],
+        payments: [validPayment({ captures: [{ amount: 44, data: {} }] })],
       })],
     })), "PAYPAL_CAPTURE_ID_MISSING")
   })
@@ -183,7 +184,7 @@ describe("refund payment context resolver", () => {
       payment_collections: [validCollection({
         payments: [validPayment({
           data: { paypal_capture_id: "CAPTURE_1" },
-          captures: [{ amount: 4400, data: { paypal_capture_id: "CAPTURE_2" } }],
+          captures: [{ amount: 44, data: { paypal_capture_id: "CAPTURE_2" } }],
         })],
       })],
     })), "PAYPAL_CAPTURE_ID_CONFLICT")
@@ -193,18 +194,20 @@ describe("refund payment context resolver", () => {
     await expectCode(resolve(validOrder({ currency_code: "eur" })), "PAYMENT_CURRENCY_MISMATCH")
   })
 
-  it("rejects malformed amount", async () => {
-    await expectCode(resolve(validOrder(), { requestedAmount: "44.00" }), "PAYMENT_AMOUNT_INVALID")
+  it("accepts a major-unit decimal string", async () => {
+    await expect(resolve(validOrder(), { requestedAmount: "44.00" })).resolves.toMatchObject({
+      captured_amount: 44,
+    })
   })
 
   it("rejects requested amount above remaining", async () => {
-    await expectCode(resolve(validOrder(), { requestedAmount: 4401 }), "REFUND_AMOUNT_EXCEEDS_REMAINING")
+    await expectCode(resolve(validOrder(), { requestedAmount: 44.01 }), "REFUND_AMOUNT_EXCEEDS_REMAINING")
   })
 
   it("rejects already fully refunded payment", async () => {
     await expectCode(resolve(validOrder({
       payment_collections: [validCollection({
-        payments: [validPayment({ refunds: [{ amount: 4400 }] })],
+        payments: [validPayment({ refunds: [{ amount: 44 }] })],
       })],
     })), "PAYMENT_ALREADY_FULLY_REFUNDED")
   })
@@ -212,12 +215,12 @@ describe("refund payment context resolver", () => {
   it("resolves a valid partially refunded payment", async () => {
     await expect(resolve(validOrder({
       payment_collections: [validCollection({
-        payments: [validPayment({ refunds: [{ amount: 1500 }] })],
+        payments: [validPayment({ refunds: [{ amount: 15 }] })],
       })],
-    }), { requestedAmount: 2900 })).resolves.toMatchObject({
-      captured_amount: 4400,
-      refunded_amount: 1500,
-      remaining_refundable_amount: 2900,
+    }), { requestedAmount: 29 })).resolves.toMatchObject({
+      captured_amount: 44,
+      refunded_amount: 15,
+      remaining_refundable_amount: 29,
       refund_count: 1,
     })
   })
@@ -285,7 +288,7 @@ describe("refund payment context integration guards", () => {
       refundRequestId: "brr_1",
       orderId: "order_1",
       storeId: "default_store",
-      amount: 4400,
+      amount: 44,
     })).rejects.toMatchObject({ code: "PAYMENT_COLLECTION_NOT_FOUND" })
     expect(paymentModule.retrievePayment).not.toHaveBeenCalled()
     expect(paymentModule.updatePayment).not.toHaveBeenCalled()
@@ -296,7 +299,7 @@ describe("refund payment context integration guards", () => {
     const { container, query } = createResolverContainer(validOrder())
     const result = await runInspectRefundPaymentContext({
       container: container as never,
-      argv: ["--order-id", "order_1", "--amount", "4400", "--currency", "usd"],
+      argv: ["--order-id", "order_1", "--amount", "44", "--currency", "usd"],
       env: { NODE_ENV: "development" },
     })
     expect(result.payment_id).toBe("pay_1")

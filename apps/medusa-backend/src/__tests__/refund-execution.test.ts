@@ -163,7 +163,7 @@ describe("approved refund execution", () => {
     expect(mockRefundWorkflowRun).not.toHaveBeenCalled()
     expect(mockStripeApiRequest).toHaveBeenCalledWith(
       "/refunds",
-      expect.objectContaining({ params: { payment_intent: "pi_1", amount: 20 } })
+      expect.objectContaining({ params: { payment_intent: "pi_1", amount: 2000 } })
     )
     expect(result).toMatchObject({
       status: "refunded",

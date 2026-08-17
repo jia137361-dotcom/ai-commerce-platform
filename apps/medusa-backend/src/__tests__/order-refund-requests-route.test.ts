@@ -43,13 +43,13 @@ const capturedOrder = {
   customer_id: "cus_a",
   status: "pending",
   currency_code: "usd",
-  total: 2125,
+  total: 21.25,
   metadata: { store_id: "default_store", payment_status: "paid", mc_fulfillment_status: "none" },
   payment_collections: [{
     id: "paycol_1",
     status: "completed",
     completed_at: "2026-06-19T00:00:00.000Z",
-    captured_amount: 2125,
+    captured_amount: 21.25,
     payments: [{ id: "pay_1", status: "captured", captured_at: "2026-06-19T00:00:00.000Z", captures: [] }],
     payment_sessions: [{ status: "captured" }],
   }],
@@ -58,15 +58,15 @@ const capturedOrder = {
 
 const paypalCapturedOrder = {
   ...capturedOrder,
-  id: "order_paypal_4400",
+  id: "order_paypal_44",
   customer_id: "cus_paypal",
-  total: 4400,
+  total: 44,
   metadata: { ...capturedOrder.metadata, store_id: "paypal_store", payment_status: "paid" },
   payment_collections: [{
     ...capturedOrder.payment_collections[0],
     id: "pay_col_paypal",
-    captured_amount: 4400,
-    payments: [{ id: "pay_paypal", provider_id: "pp_paypal_paypal", status: "captured", captured_at: "2026-08-01T00:00:00.000Z", captures: [{ amount: 4400, captured_at: "2026-08-01T00:00:00.000Z" }] }],
+    captured_amount: 44,
+    payments: [{ id: "pay_paypal", provider_id: "pp_paypal_paypal", status: "captured", captured_at: "2026-08-01T00:00:00.000Z", captures: [{ amount: 44, captured_at: "2026-08-01T00:00:00.000Z" }] }],
   }],
 }
 
@@ -77,7 +77,7 @@ const authorizedOrder = {
     id: "paycol_1",
     status: "authorized",
     completed_at: null,
-    authorized_amount: 2125,
+    authorized_amount: 21.25,
     captured_amount: 0,
     payments: [{ id: "pay_1", status: "authorized", captured_at: null, captures: [] }],
     payment_sessions: [{ status: "authorized" }],
@@ -91,7 +91,7 @@ const requestRecord = {
   customer_id: "cus_a",
   store_id: "default_store",
   currency_code: "usd",
-  requested_amount: 2125,
+  requested_amount: 21.25,
   approved_amount: null,
   reason: "Ordered by mistake",
   note: null,
@@ -270,7 +270,7 @@ describe("buyer refund request routes", () => {
     expect(mockExecuteApprovedRefund).not.toHaveBeenCalled()
   })
 
-  it("resolves a captured 4400 PayPal order for its authenticated owner", async () => {
+  it("resolves a captured 44.00 PayPal order for its authenticated owner", async () => {
     const { req, refundService } = createReq({
       authCustomerId: "cus_paypal",
       headers: { "x-publishable-api-key": "pk_test", "x-store-id": "paypal_store" },
@@ -280,7 +280,7 @@ describe("buyer refund request routes", () => {
     await POST(req, res)
     expect(res.status).toHaveBeenCalledWith(201)
     expect(refundService.createBuyerRefundRequests).toHaveBeenCalledWith(expect.objectContaining({
-      requested_amount: 4400,
+      requested_amount: 44,
       payment_provider_id: "pp_paypal_paypal",
     }))
   })
@@ -295,13 +295,13 @@ describe("buyer refund request routes", () => {
       customer_id: "cus_a",
       store_id: "default_store",
       currency_code: "usd",
-      requested_amount: 2125,
+      requested_amount: 21.25,
       status: "auto_review",
       provider_status: "not_connected",
       metadata: { scope: "full_order" },
     }))
     expect(res.body).toMatchObject({
-      refund_request: { status: "refunded", requested_amount: 2125, currency_code: "usd" },
+      refund_request: { status: "refunded", requested_amount: 21.25, currency_code: "usd" },
     })
     expect(mockExecuteApprovedRefund).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(res.body)).not.toContain("must-not-leak")
@@ -316,7 +316,7 @@ describe("buyer refund request routes", () => {
         payment_collections: [{
           ...authorizedOrder.payment_collections[0],
           currency_code: "usd",
-          authorized_amount: 2125,
+          authorized_amount: 21.25,
           captured_amount: 0,
         }],
       },
@@ -381,14 +381,14 @@ describe("buyer refund request routes", () => {
     const { req, refundService } = createReq({
       order: {
         ...capturedOrder,
-        total: 2000,
-        payment_collections: [{ ...capturedOrder.payment_collections[0], captured_amount: 2125 }],
+        total: 20,
+        payment_collections: [{ ...capturedOrder.payment_collections[0], captured_amount: 21.25 }],
       },
     })
     const res = createRes()
     await POST(req, res)
     expect(refundService.createBuyerRefundRequests).toHaveBeenCalledWith(
-      expect.objectContaining({ requested_amount: 2000, currency_code: "usd" })
+      expect.objectContaining({ requested_amount: 20, currency_code: "usd" })
     )
   })
 
@@ -401,7 +401,7 @@ describe("buyer refund request routes", () => {
         payment_collections: [{
           ...capturedOrder.payment_collections[0],
           currency_code: "eur",
-          captured_amount: 2250,
+          captured_amount: 22.5,
         }],
       },
     })
@@ -411,7 +411,7 @@ describe("buyer refund request routes", () => {
 
     expect(res.status).toHaveBeenCalledWith(201)
     expect(refundService.createBuyerRefundRequests).toHaveBeenCalledWith(
-      expect.objectContaining({ requested_amount: 2250, currency_code: "eur", status: "auto_review" })
+      expect.objectContaining({ requested_amount: 22.5, currency_code: "eur", status: "auto_review" })
     )
   })
 
@@ -431,7 +431,7 @@ describe("buyer refund request routes", () => {
             id: "pay_1",
             status: "captured",
             captured_at: "2026-06-19T00:00:00.000Z",
-            amount: 2250,
+            amount: 22.5,
             currency_code: "usd",
             captures: [],
           }],
@@ -445,7 +445,7 @@ describe("buyer refund request routes", () => {
 
     expect(res.status).toHaveBeenCalledWith(201)
     expect(refundService.createBuyerRefundRequests).toHaveBeenCalledWith(
-      expect.objectContaining({ requested_amount: 2250, currency_code: "usd" })
+      expect.objectContaining({ requested_amount: 22.5, currency_code: "usd" })
     )
   })
 

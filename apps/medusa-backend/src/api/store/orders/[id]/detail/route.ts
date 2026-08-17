@@ -2,7 +2,7 @@ import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { assertOrderBelongsToCurrentStore, readOrderStoreId } from "../../../../../lib/order-store-context"
 import { OrderStoreAccessError } from "../../../../../lib/order-store-error"
-import { enrichOrderWithSummaryTotals, minorMoneyToMajor, readOrderMoney, resolveBuyerOrderTotalsForStorefront } from "../../../../../lib/buyer-order-totals"
+import { enrichOrderWithSummaryTotals, readOrderMoney, resolveBuyerOrderTotalsForStorefront } from "../../../../../lib/buyer-order-totals"
 import {
   ORDER_META_COUPON_DISCOUNT,
   ORDER_META_PLAN_DISCOUNT,
@@ -91,12 +91,12 @@ const hasAuthenticatedMismatch = (req: MedusaRequest, order: DetailOrder) => {
 const readNumber = (value: unknown): number | null => readOrderMoney(value)
 
 const normalizeItem = (item: OrderLineItem) => {
-  const unitPriceMinor = readNumber(item.unit_price)
+  const unitPrice = readNumber(item.unit_price)
   const quantity = readNumber(item.quantity) ?? 0
-  const subtotalMinor =
+  const subtotal =
     readNumber(item.subtotal) ??
     readNumber(item.total) ??
-    (unitPriceMinor != null ? unitPriceMinor * quantity : null)
+    (unitPrice != null ? unitPrice * quantity : null)
   const metadata = item.metadata ?? null
   const mcProductId =
     metadata && typeof metadata.mc_product_id === "string" ? metadata.mc_product_id : null
@@ -109,8 +109,8 @@ const normalizeItem = (item: OrderLineItem) => {
     variant_title: item.variant_title ?? null,
     thumbnail: resolveOrderLineItemThumbnail(item),
     quantity,
-    unit_price: minorMoneyToMajor(unitPriceMinor),
-    subtotal: minorMoneyToMajor(subtotalMinor),
+    unit_price: unitPrice,
+    subtotal,
     metadata,
   }
 }

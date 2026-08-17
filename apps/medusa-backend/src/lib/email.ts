@@ -1,5 +1,6 @@
 import { Resend } from "resend"
 import { getAuthEmailDeliveryMode } from "./buyer-auth-policy"
+import { currencyExponent, normalizeMajor } from "./money"
 
 let resendClient: Resend | null = null
 
@@ -96,10 +97,12 @@ export async function sendOrderConfirmation(input: {
 }): Promise<EmailResult> {
   const label = input.displayId != null ? `#${input.displayId}` : input.orderId
   const currency = (input.currency || "usd").toUpperCase()
+  const formatAmount = (value: number) =>
+    normalizeMajor(value, currency).toFixed(currencyExponent(currency))
   const itemRows = input.items
     .map(
       (item) =>
-        `<tr><td style="padding:8px;border-bottom:1px solid #eee">${item.title}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${item.quantity}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${currency} ${(item.price / 100).toFixed(2)}</td></tr>`
+        `<tr><td style="padding:8px;border-bottom:1px solid #eee">${item.title}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${item.quantity}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${currency} ${formatAmount(item.price)}</td></tr>`
     )
     .join("")
 
@@ -113,7 +116,7 @@ export async function sendOrderConfirmation(input: {
   <table style="width:100%;border-collapse:collapse;margin:20px 0">
     <thead><tr style="background:#f5f5f5"><th style="padding:8px;text-align:left">Item</th><th style="padding:8px;text-align:center">Qty</th><th style="padding:8px;text-align:right">Price</th></tr></thead>
     <tbody>${itemRows}</tbody>
-    <tfoot><tr style="font-weight:bold;border-top:2px solid #333"><td style="padding:8px" colspan="2">Total</td><td style="padding:8px;text-align:right">${currency} ${(input.total / 100).toFixed(2)}</td></tr></tfoot>
+    <tfoot><tr style="font-weight:bold;border-top:2px solid #333"><td style="padding:8px" colspan="2">Total</td><td style="padding:8px;text-align:right">${currency} ${formatAmount(input.total)}</td></tr></tfoot>
   </table>
   <p style="color:#666">Order ID: ${input.orderId}</p>
   <p style="color:#666">You can track your order status in your account.</p>

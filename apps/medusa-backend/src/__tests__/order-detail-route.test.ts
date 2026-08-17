@@ -34,18 +34,18 @@ const order = {
       title: "Printed item",
       variant_title: "Default",
       quantity: 1,
-      unit_price: 2125,
-      subtotal: 2125,
+      unit_price: 21.25,
+      subtotal: 21.25,
       metadata: { color: "black", size: "M" },
     },
   ],
   shipping_address: null,
   billing_address: null,
-  subtotal: 2125,
+  subtotal: 21.25,
   shipping_total: 0,
   discount_total: 0,
   tax_total: 0,
-  total: 2125,
+  total: 21.25,
 }
 
 const createRes = (): MockRes => {
@@ -133,7 +133,7 @@ describe("GET /store/orders/:order_id/detail", () => {
         items: [{
           ...order.items[0],
           subtotal: null,
-          unit_price: 2499,
+          unit_price: 24.99,
         }],
       },
     })
@@ -141,10 +141,10 @@ describe("GET /store/orders/:order_id/detail", () => {
       data: [{
         summary: {
           totals: {
-            subtotal: 2499,
-            shipping_total: 500,
-            total: 2999,
-            current_order_total: 2999,
+            subtotal: 24.99,
+            shipping_total: 5,
+            total: 29.99,
+            current_order_total: 29.99,
           },
         },
       }],
@@ -268,7 +268,7 @@ describe("GET /store/orders/:order_id/detail", () => {
         status: "completed",
         completed_at: "2026-06-16T07:17:27.482Z",
         currency_code: "usd",
-        captured_amount: 2125,
+        captured_amount: 21.25,
         payments: [{ id: "pay_1", captured_at: "2026-06-16T07:17:27.482Z", captures: [] }],
         payment_sessions: [{ status: "captured" }],
       }],
@@ -290,7 +290,7 @@ describe("GET /store/orders/:order_id/detail", () => {
       refund_request: {
         allowed: true,
         code: null,
-        requested_amount: 2125,
+        requested_amount: 21.25,
         currency_code: "usd",
         open_request: null,
       },
@@ -304,7 +304,7 @@ describe("GET /store/orders/:order_id/detail", () => {
       payment_collections: [{
         id: "paycol_1",
         status: "authorized",
-        authorized_amount: 2125,
+        authorized_amount: 21.25,
         captured_amount: 0,
         completed_at: null,
         payments: [{ id: "pay_1", status: "authorized", captured_at: null, captures: [] }],

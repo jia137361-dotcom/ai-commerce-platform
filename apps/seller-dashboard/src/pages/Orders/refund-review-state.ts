@@ -7,11 +7,10 @@ export const REVIEWABLE_REFUND_STATUSES = new Set([
   "refund_failed",
 ])
 
-export const parsePartialRefundAmount = (value: string, eligibleAmountMinor: number) => {
-  const amountMajor = Number(value)
-  const amountMinor = Math.round(amountMajor * 100)
-  return Number.isFinite(amountMajor) && amountMinor > 0 && amountMinor <= eligibleAmountMinor
-    ? amountMinor
+export const parsePartialRefundAmount = (value: string, eligibleAmount: number) => {
+  const amount = Math.round(Number(value) * 100) / 100
+  return Number.isFinite(amount) && amount > 0 && amount <= eligibleAmount
+    ? amount
     : null
 }
 

@@ -16,6 +16,7 @@ import { readPaymentAttemptPaymentIntentId } from "./checkout-payment-attempts"
 import { STORE_CORE_MODULE } from "../modules/store-core"
 import type StoreCoreModuleService from "../modules/store-core/service"
 import { createStoreNotification } from "./notifications"
+import { majorToProviderMinor, normalizeMajor } from "./money"
 
 export type SellerPayoutStatus =
   | "completed"
@@ -89,8 +90,53 @@ type StripeChargeForTransfer = {
 }
 
 type StripeBalanceTransactionForTransfer = {
-  amount?: number | null
   currency?: string | null
+}
+
+const readAmount = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  if (value && typeof value === "object") {
+    const candidate = value as { value?: unknown; numeric?: unknown }
+    return readAmount(candidate.value ?? candidate.numeric)
+  }
+  return 0
+}
+
+const resolveCapturedPayout = (order: CancellationOrder) => {
+  const orderCurrencyValue = (order as CancellationOrder & { currency_code?: unknown }).currency_code
+  const orderCurrency = typeof orderCurrencyValue === "string" ? orderCurrencyValue.toLowerCase() : null
+  for (const collection of order.payment_collections ?? []) {
+    const currency = typeof collection.currency_code === "string"
+      ? collection.currency_code.toLowerCase()
+      : orderCurrency
+    const collectionCaptured = readAmount((collection as Record<string, unknown>).captured_amount)
+    if (collectionCaptured > 0 && currency) {
+      return { amount: normalizeMajor(collectionCaptured, currency), currency }
+    }
+    for (const payment of collection.payments ?? []) {
+      const paymentCurrency = typeof payment.currency_code === "string"
+        ? payment.currency_code.toLowerCase()
+        : currency
+      const captures = payment.captures ?? []
+      const captured = captures.reduce(
+        (sum, capture) => sum + readAmount(capture.amount ?? capture.raw_amount),
+        0
+      )
+      const paymentCaptured = captured > 0
+        ? captured
+        : payment.captured_at
+          ? readAmount(payment.amount ?? payment.raw_amount)
+          : 0
+      if (paymentCaptured > 0 && paymentCurrency) {
+        return { amount: normalizeMajor(paymentCaptured, paymentCurrency), currency: paymentCurrency }
+      }
+    }
+  }
+  return null
 }
 
 const readLatestChargeId = (intent: StripePaymentIntentForTransfer) => {
@@ -121,11 +167,10 @@ const resolveOrderStripeCharge = async (order: CancellationOrder) => {
       const balanceTransaction = await stripeApiRequest<StripeBalanceTransactionForTransfer>(
         `/balance_transactions/${balanceTransactionId}`
       )
-      const amount = Number(balanceTransaction.amount)
       const currency = typeof balanceTransaction.currency === "string"
         ? balanceTransaction.currency.toLowerCase()
         : null
-      if (Number.isFinite(amount) && amount > 0 && currency) return { id: chargeId, amount: Math.round(amount), currency }
+      if (currency) return { id: chargeId, currency }
     }
   }
   return null
@@ -231,7 +276,17 @@ export async function releaseSellerPayout(
     return result
   }
 
-  let sourceTransaction: { id: string; amount: number; currency: string } | null = null
+  const capturedPayout = resolveCapturedPayout(order)
+  if (!capturedPayout) {
+    const result: SellerPayoutResult = {
+      status: "failed",
+      error: "Captured payment amount is unavailable for this order; seller payout was not created.",
+    }
+    await persistPayoutMetadata(container, orderId, metadata, result)
+    return result
+  }
+
+  let sourceTransaction: { id: string; currency: string } | null = null
   try {
     sourceTransaction = await resolveOrderStripeCharge(order)
   } catch (error) {
@@ -250,15 +305,26 @@ export async function releaseSellerPayout(
     await persistPayoutMetadata(container, orderId, metadata, result)
     return result
   }
+  if (sourceTransaction.currency !== capturedPayout.currency) {
+    const result: SellerPayoutResult = {
+      status: "failed",
+      error: "Stripe charge currency does not match the captured order payment.",
+    }
+    await persistPayoutMetadata(container, orderId, metadata, result)
+    return result
+  }
 
   try {
+    const transferAmountMinor = majorToProviderMinor(
+      capturedPayout.amount,
+      capturedPayout.currency
+    )
     const transfer = await stripeApiRequest<{ id: string }>("/transfers", {
       method: "POST",
-      idempotencyKey: `seller_payout_${orderId}_${stripeAccountId}_${sourceTransaction.id}_${sourceTransaction.currency}_${sourceTransaction.amount}`,
+      idempotencyKey: `seller_payout_${orderId}_${stripeAccountId}_${sourceTransaction.id}_${capturedPayout.currency}_${transferAmountMinor}`,
       params: {
-        // Stripe requires source_transaction transfers to match the original settlement transaction.
-        amount: sourceTransaction.amount,
-        currency: sourceTransaction.currency,
+        amount: transferAmountMinor,
+        currency: capturedPayout.currency,
         destination: stripeAccountId,
         source_transaction: sourceTransaction.id,
         transfer_group: `order_${orderId}`,
@@ -271,8 +337,8 @@ export async function releaseSellerPayout(
     const result: SellerPayoutResult = {
       status: "completed",
       transfer_id: transfer.id,
-      amount: sourceTransaction.amount,
-      currency_code: sourceTransaction.currency,
+      amount: capturedPayout.amount,
+      currency_code: capturedPayout.currency,
     }
     await persistPayoutMetadata(container, orderId, metadata, result)
 
@@ -281,12 +347,12 @@ export async function releaseSellerPayout(
         store_id: storeId,
         type: "order_paid",
         title: "订单款项已到账",
-        body: `订单 ${order.display_id != null ? `#${order.display_id}` : orderId} 买家确认收货后，${sourceTransaction.currency.toUpperCase()} ${(sourceTransaction.amount / 100).toFixed(2)} 已转入您的 Stripe 收款账号。`,
+        body: `订单 ${order.display_id != null ? `#${order.display_id}` : orderId} 买家确认收货后，${capturedPayout.currency.toUpperCase()} ${capturedPayout.amount.toFixed(2)} 已转入您的 Stripe 收款账号。`,
         metadata: {
           order_id: orderId,
           payout_status: "completed",
           transfer_id: transfer.id,
-          amount: sourceTransaction.amount,
+          amount: capturedPayout.amount,
         },
       })
     } catch {

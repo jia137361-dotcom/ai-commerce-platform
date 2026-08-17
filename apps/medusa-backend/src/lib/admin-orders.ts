@@ -318,13 +318,9 @@ const readOrderNumeric = (value: unknown): number | null => {
   return null
 }
 
-/**
- * Convert a Medusa minor-unit (cents) amount to major units (dollars).
- * Medusa always stores order totals in cents — no heuristic needed.
- */
 const normalizeMoney = (value: number | null): number | null => {
   if (value == null || !Number.isFinite(value)) return null
-  return value / 100
+  return value
 }
 
 export { normalizeMoney }

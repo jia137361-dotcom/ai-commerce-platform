@@ -11,6 +11,7 @@ import { stripeApiRequest } from "./stripe-client"
 import {
   ORDER_META_SELLER_PAYOUT_TRANSFER_ID,
 } from "./order-custom-metadata"
+import { majorToProviderMinor } from "./money"
 
 type RefundRequestService = {
   listBuyerRefundRequests: (filters: Record<string, unknown>, config?: Record<string, unknown>) => Promise<BuyerRefundRequestRecord[]>
@@ -85,13 +86,15 @@ const executeStripeRefund = async (input: {
   container: MedusaContainer
   paymentIntentId: string
   amount: number
+  currencyCode: string
   refundRequestId: string
   orderId: string
 }) => {
+  const providerAmount = majorToProviderMinor(input.amount, input.currencyCode)
   const refund = await stripeApiRequest<{ id?: string; status?: string }>("/refunds", {
     method: "POST",
     idempotencyKey: `refund-request:${input.refundRequestId}`,
-    params: { payment_intent: input.paymentIntentId, amount: input.amount },
+    params: { payment_intent: input.paymentIntentId, amount: providerAmount },
   })
   if (!refund.id) throw new Error("Stripe did not return a refund ID")
 
@@ -104,7 +107,7 @@ const executeStripeRefund = async (input: {
     await stripeApiRequest(`/transfers/${transferId}/reversals`, {
       method: "POST",
       idempotencyKey: `refund-transfer-reversal:${input.refundRequestId}`,
-      params: { amount: input.amount },
+      params: { amount: providerAmount },
     })
   }
   return refund
@@ -198,6 +201,7 @@ export async function executeApprovedRefund(input: {
           container: input.container,
           paymentIntentId: paymentContext.provider_payment_id,
           amount,
+          currencyCode: paymentContext.currency_code,
           refundRequestId: request.id,
           orderId: input.orderId,
         })
