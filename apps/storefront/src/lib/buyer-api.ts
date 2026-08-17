@@ -1,4 +1,5 @@
 import { resolveStorePolicyDisplay } from "@ai-commerce/shared-types"
+import type { PaymentIntent } from "@stripe/stripe-js"
 import { type CartLineItem, type StoreCart, type StoreProduct } from "./mock-data"
 import { normalizeBuyerProduct, type BuyerProductApiInput } from "./buyer-product"
 import { buildShipmentTrackingEvents } from "./buyer-tracking-events"
@@ -2167,7 +2168,7 @@ export const payCartWithSavedPaymentMethod = async (
   return storeScopedFetch<{
     provider_id?: string
     payment_intent_id?: string
-    payment_intent_status?: string
+    payment_intent_status?: PaymentIntent.Status
     client_secret?: string
     payment_method_id?: string
     payment_method_label?: string

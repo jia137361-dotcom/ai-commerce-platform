@@ -230,8 +230,6 @@ export function EditDraftPage() {
         : []
     setSupportedRegionIds(savedRegionIds)
     setSelectedImageUrls(readStringArray(p.metadata?.image_urls))
-    const productWithSupplier = p as NormalizedProduct & { supplier_details?: { english?: { produce_country?: string | null } | null } | null }
-    setShipFromCountry(p.ship_from_country ?? productWithSupplier.supplier_details?.english?.produce_country ?? "")
 
     const savedVariants = toVariantRows(p.variants, Number(p.price ?? 0) || 0)
     if (savedVariants.length) {

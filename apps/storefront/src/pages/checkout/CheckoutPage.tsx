@@ -1044,21 +1044,22 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     let paymentMethodLabel: string | undefined
     try {
       const method = savedPaymentMethods.find((item) => item.id === paymentMethodId)
-      const paid = method?.provider === "paypal"
-        ? await payCartWithSavedPayPalPaymentMethod(cart.id, paymentMethodId, {
+      if (method?.provider === "paypal") {
+        const paid = await payCartWithSavedPayPalPaymentMethod(cart.id, paymentMethodId, {
             storeId: checkoutStoreId,
             providerId: selectedPaymentProviderId,
           })
-        : await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
+        paymentMethodLabel = paid.payment_method_label
+      } else {
+        const paid = await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
             storeId: checkoutStoreId,
             providerId: selectedPaymentProviderId,
           })
-      if (method?.provider !== "paypal") {
         if (!paid.client_secret) throw new Error("Saved card payment is not ready because Stripe did not return a client secret.")
         const stripe = await getStripePromise(stripePublishableKey)
         if (!stripe) throw new Error("Unable to load Stripe for saved-card payment.")
         let confirmation = paid.payment_intent_status === "requires_action"
-          ? await stripe.handleNextAction(paid.client_secret)
+          ? await stripe.handleNextAction({ clientSecret: paid.client_secret })
           : await stripe.confirmCardPayment(paid.client_secret, {
               payment_method: paymentMethodId,
               return_url: `${window.location.origin}/checkout`,
@@ -1066,7 +1067,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
         // Stripe normally handles this inside confirmCardPayment. Keep an
         // explicit fallback for intents restored from an interrupted checkout.
         if (!confirmation.error && confirmation.paymentIntent?.status === "requires_action") {
-          confirmation = await stripe.handleNextAction(paid.client_secret)
+          confirmation = await stripe.handleNextAction({ clientSecret: paid.client_secret })
         }
         if (confirmation.error) throw new Error(confirmation.error.message || "Saved-card payment failed.")
         let savedCardStatus = confirmation.paymentIntent?.status
@@ -1081,8 +1082,8 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
         if (!savedCardStatus || !["succeeded", "processing", "requires_capture"].includes(savedCardStatus)) {
           throw new Error("Saved-card payment did not complete.")
         }
+        paymentMethodLabel = paid.payment_method_label
       }
-      paymentMethodLabel = paid.payment_method_label
     } catch (reason) {
       setCompleteError(reason instanceof Error ? reason.message : "Unable to pay with saved card.")
       setPlacingOrder(false)
