@@ -1,4 +1,4 @@
-import type { CompleteCartResponse } from "../../lib/buyer-api"
+import type { BuyerPaymentRecovery, CompleteCartResponse } from "../../lib/buyer-api"
 import type { StoreCart } from "../../lib/mock-data"
 
 type CheckoutCompletionInput = {
@@ -7,6 +7,20 @@ type CheckoutCompletionInput = {
   bindCustomer: (cartId: string) => Promise<StoreCart>
   saveContact: (cart: StoreCart) => Promise<StoreCart>
   complete: (cartId: string) => Promise<CompleteCartResponse>
+}
+
+export const completedRecoveryResult = (
+  recovery: BuyerPaymentRecovery,
+  fallbackStoreId: string
+): CompleteCartResponse | null => {
+  const orderId = recovery.orderId ?? recovery.paymentAttempt.completedOrderId
+  if (recovery.paymentAttempt.recoveryAction !== "completed" || !orderId) return null
+  return {
+    orderId,
+    storeId: recovery.paymentAttempt.storeId ?? fallbackStoreId,
+    paymentProviderId: recovery.paymentAttempt.providerId ?? undefined,
+    paymentStatus: "paid",
+  }
 }
 
 export async function completeGuestCheckoutOrder(input: {

@@ -32,6 +32,7 @@ import {
   normalizePayPalOrderStatus,
   normalizeStripePaymentIntentStatus,
   readActiveCheckoutPaymentAttempt,
+  readLatestCheckoutPaymentAttempt,
   readPayPalOrderId,
   readPayPalCaptureStatus,
   readStripePaymentIntentForAttempt,
@@ -46,6 +47,10 @@ import {
   redeemAppliedCouponOnOrder,
 } from "../../../../../lib/store-coupons"
 import { getConfiguredPayPalClient } from "../../../../../modules/paypal/client"
+import {
+  PaymentAmountMismatchError,
+  assertStripePaymentIntentAmount,
+} from "../../../../../lib/payment-amount-contract"
 
 const DEFAULT_PAYMENT_PROVIDER = "pp_system_default"
 const isStripeProvider = (providerId: string) => providerId.startsWith("pp_stripe_")
@@ -76,6 +81,7 @@ type AuthenticatedRequest = MedusaRequest & {
 type CompleteCart = CartWithPaymentCollection & {
   customer_id?: string | null
   total?: number | string | null
+  currency_code?: string | null
   shipping_address?: unknown | null
   shipping_methods?: unknown[] | null
   items?: Array<{ requires_shipping?: boolean | null }> | null
@@ -92,9 +98,6 @@ const readAuthCustomerId = (req: MedusaRequest) =>
   (req as AuthenticatedRequest).auth_context?.actor_id
 
 const ORDER_META_CHECKOUT_CART_ID = "checkout_cart_id"
-
-const isAlreadyCompletedError = (message: string) =>
-  /already.*complet|cart.*complet/i.test(message)
 
 const listCandidateOrdersForCart = async (
   orderModule: {
@@ -315,6 +318,24 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     let paymentMethodLabel: string | null = null
+    const latestAttempt = await readLatestCheckoutPaymentAttempt(req.scope, { cartId, storeId })
+    if (
+      latestAttempt?.completed_order_id &&
+      latestAttempt.cart_id === cartId &&
+      latestAttempt.store_id === storeId &&
+      (!cart.customer_id || !latestAttempt.customer_id || latestAttempt.customer_id === cart.customer_id)
+    ) {
+      const attemptOrder = (await orderModule.retrieveOrder(latestAttempt.completed_order_id)) as CompleteOrder
+      return res.status(200).json(buildCompleteResponse({
+        order: attemptOrder,
+        cart,
+        cartId,
+        storeId,
+        providerId: latestAttempt.provider_id ?? providerId,
+        paymentMethodLabel,
+        alreadyCompleted: true,
+      }))
+    }
     const alreadyCompletedOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
     if (alreadyCompletedOrder) {
       await updateCheckoutPaymentAttempt(req, {
@@ -351,14 +372,23 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         store_id: storeId,
         provider_id: providerId,
       }, stripeSession)
-      const cartTotal = Number(cart.total)
-      if (paymentIntent && Number.isSafeInteger(paymentIntent.amount) && Number.isSafeInteger(cartTotal) && paymentIntent.amount !== cartTotal) {
-        return res.status(409).json({
-          error: {
-            code: "STRIPE_PAYMENT_AMOUNT_MISMATCH",
-            message: "Checkout total changed. Refresh checkout before confirming payment.",
-          },
-        })
+      if (paymentIntent) {
+        try {
+          assertStripePaymentIntentAmount({
+            expectedMajor: cart.total,
+            currencyCode: cart.currency_code ?? stripeSession.currency_code ?? "usd",
+            intentAmountMinor: paymentIntent.amount,
+            intentCurrency: paymentIntent.currency,
+          })
+        } catch (error) {
+          if (!(error instanceof PaymentAmountMismatchError)) throw error
+          return res.status(409).json({
+            error: {
+              code: "STRIPE_PAYMENT_AMOUNT_MISMATCH",
+              message: "Checkout total changed. Refresh checkout before confirming payment.",
+            },
+          })
+        }
       }
       try {
         paymentMethodLabel = await resolvePaymentMethodLabelFromClientSecret(clientSecret)
@@ -390,8 +420,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       result = workflowResult.result as { id?: string }
     } catch (workflowError) {
       const existingOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
-      const message = readWorkflowErrorMessage(workflowError)
-      if (existingOrder && isAlreadyCompletedError(message)) {
+      if (existingOrder) {
         await updateCheckoutPaymentAttempt(req, {
           cartId,
           storeId,
@@ -420,7 +449,14 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     const orderId = result.id as string
+    if (!orderId) throw new Error("Complete cart succeeded without an order id")
     let completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+    await updateCheckoutPaymentAttempt(req, {
+      cartId,
+      storeId,
+      status: "completed",
+      orderId,
+    })
 
     if (cart.customer_id) {
       if (completedOrder.customer_id && completedOrder.customer_id !== cart.customer_id) {
@@ -446,122 +482,134 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       }
     }
 
-    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
-    const { data: cartPaymentRows } = (await query.graph({
-      entity: "cart",
-      fields: ["payment_collection.id"],
-      filters: { id: cartId },
-    })) as { data: Array<{ payment_collection?: { id?: string } | null }> }
-    const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
+    const runPostComplete = async () => {
+      const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+      const { data: cartPaymentRows } = (await query.graph({
+        entity: "cart",
+        fields: ["payment_collection.id"],
+        filters: { id: cartId },
+      })) as { data: Array<{ payment_collection?: { id?: string } | null }> }
+      const paymentCollectionId = cartPaymentRows[0]?.payment_collection?.id ?? null
 
-    await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
-    completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
-    await orderModule.updateOrders(orderId, {
-      metadata: {
-        ...(completedOrder.metadata ?? {}),
-        [ORDER_META_CHECKOUT_CART_ID]: cartId,
-      },
-    } as never)
-    completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
-    try {
-      const discount = await redeemAppliedCouponOnOrder(req.scope, {
-        cartId,
-        orderId,
-        customerId: authCustomerId ?? cart.customer_id ?? null,
-        storeId,
-      })
-      if (discount.discount_total > 0 || discount.applied_coupon) {
+      await setOrderPostCompletePendingMetadata(req.scope, orderId, storeId)
+      completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+      await orderModule.updateOrders(orderId, {
+        metadata: {
+          ...(completedOrder.metadata ?? {}),
+          [ORDER_META_CHECKOUT_CART_ID]: cartId,
+        },
+      } as never)
+      completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+      try {
+        const discount = await redeemAppliedCouponOnOrder(req.scope, {
+          cartId,
+          orderId,
+          customerId: authCustomerId ?? cart.customer_id ?? null,
+          storeId,
+        })
+        if (discount.discount_total > 0 || discount.applied_coupon) {
+          const existingMeta = (completedOrder.metadata ?? {}) as Record<string, unknown>
+          await orderModule.updateOrders(orderId, {
+            metadata: {
+              ...existingMeta,
+              [ORDER_META_COUPON_DISCOUNT]: discount.coupon_discount,
+              [ORDER_META_PLAN_DISCOUNT]: discount.plan_discount,
+              discount_total_major: discount.discount_total,
+              payable_total_major: discount.payable_total,
+              ...(discount.applied_coupon
+                ? { [ORDER_META_APPLIED_COUPON]: discount.applied_coupon }
+                : {}),
+            },
+          } as never)
+          completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+        }
+      } catch (error) {
+        console.warn("[checkout-complete] unable to redeem coupon / plan discount", error)
+      }
+      try {
+        await publishBuyerDesignsFromOrder(req.scope, { orderId, storeId })
+      } catch (error) {
+        console.warn("[checkout-complete] unable to publish buyer designs", error)
+      }
+      if (
+        body.platform_checkout_id &&
+        typeof body.platform_checkout_index === "number" &&
+        typeof body.platform_checkout_count === "number"
+      ) {
+        await applyPlatformCheckoutMetadata(req.scope, orderId, {
+          platform_checkout_id: body.platform_checkout_id.trim(),
+          platform_checkout_index: body.platform_checkout_index,
+          platform_checkout_count: body.platform_checkout_count,
+        })
+        completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+      }
+      if (paymentMethodLabel) {
         const existingMeta = (completedOrder.metadata ?? {}) as Record<string, unknown>
         await orderModule.updateOrders(orderId, {
-          metadata: {
-            ...existingMeta,
-            [ORDER_META_COUPON_DISCOUNT]: discount.coupon_discount,
-            [ORDER_META_PLAN_DISCOUNT]: discount.plan_discount,
-            discount_total_major: discount.discount_total,
-            payable_total_major: discount.payable_total,
-            ...(discount.applied_coupon
-              ? { [ORDER_META_APPLIED_COUPON]: discount.applied_coupon }
-              : {}),
-          },
+          metadata: { ...existingMeta, payment_method_label: paymentMethodLabel },
         } as never)
         completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
       }
-    } catch (error) {
-      console.warn("[checkout-complete] unable to redeem coupon / plan discount", error)
-    }
-    try {
-      await publishBuyerDesignsFromOrder(req.scope, { orderId, storeId })
-    } catch (error) {
-      console.warn("[checkout-complete] unable to publish buyer designs", error)
-    }
-    if (
-      body.platform_checkout_id &&
-      typeof body.platform_checkout_index === "number" &&
-      typeof body.platform_checkout_count === "number"
-    ) {
-      await applyPlatformCheckoutMetadata(req.scope, orderId, {
-        platform_checkout_id: body.platform_checkout_id.trim(),
-        platform_checkout_index: body.platform_checkout_index,
-        platform_checkout_count: body.platform_checkout_count,
+      await seedFulfillmentOrderIfMissing(req.scope, {
+        orderId,
+        storeId,
+        paymentCollectionId,
       })
-      completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
-    }
-    if (paymentMethodLabel) {
-      const existingMeta = (completedOrder.metadata ?? {}) as Record<string, unknown>
-      await orderModule.updateOrders(orderId, {
-        metadata: { ...existingMeta, payment_method_label: paymentMethodLabel },
-      } as never)
-      completedOrder = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
-    }
-    await seedFulfillmentOrderIfMissing(req.scope, {
-      orderId,
-      storeId,
-      paymentCollectionId,
-    })
-    await syncFulfillmentPayloadFromOrder(req.scope, orderId)
+      await syncFulfillmentPayloadFromOrder(req.scope, orderId)
 
-    if (!providerDefersPaidUntilCapture(providerId)) {
-      await markOrderPaidAndFulfillmentWaiting(req.scope, orderId, "non_stripe_provider_after_complete")
-      if (isS2bdiyEnabled()) {
-        try {
-          await pushOrderToS2bdiy(req.scope, orderId)
-        } catch (error) {
-          console.error("S2BDIY push after complete failed:", error)
+      if (!providerDefersPaidUntilCapture(providerId)) {
+        await markOrderPaidAndFulfillmentWaiting(req.scope, orderId, "non_stripe_provider_after_complete")
+        if (isS2bdiyEnabled()) {
+          try {
+            await pushOrderToS2bdiy(req.scope, orderId)
+          } catch (error) {
+            console.error("S2BDIY push after complete failed:", error)
+          }
         }
+      } else {
+        await syncPaidIfPaymentAlreadyCaptured(req.scope, orderId, paymentCollectionId)
       }
-    } else {
-      await syncPaidIfPaymentAlreadyCaptured(req.scope, orderId, paymentCollectionId)
+
+      const finalizedOrder = await orderModule.retrieveOrder(orderId)
+      if (readOrderStoreId(finalizedOrder) !== storeId) {
+        throw new Error("Completed order store_id could not be persisted")
+      }
+      if (cart.customer_id && (finalizedOrder as CompleteOrder).customer_id !== cart.customer_id) {
+        throw new Error("Completed order customer_id does not match the checkout cart customer")
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[checkout-complete] after complete", {
+          cart_id: cartId,
+          auth_customer_id: authCustomerId ?? null,
+          cart_customer_id_before_complete: cart.customer_id ?? null,
+          address_present: addressPresent,
+          shipping_method_count: shippingMethodCount,
+          order_id: finalizedOrder.id,
+          order_customer_id_after_complete: (finalizedOrder as CompleteOrder).customer_id ?? null,
+          order_store_id: readOrderStoreId(finalizedOrder),
+        })
+      }
+      return finalizedOrder as CompleteOrder
     }
 
-    const order = await orderModule.retrieveOrder(orderId)
-    if (readOrderStoreId(order) !== storeId) {
-      throw new Error("Completed order store_id could not be persisted")
-    }
-    if (cart.customer_id && (order as CompleteOrder).customer_id !== cart.customer_id) {
-      throw new Error("Completed order customer_id does not match the checkout cart customer")
-    }
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[checkout-complete] after complete", {
+    let order: CompleteOrder
+    try {
+      order = await runPostComplete()
+    } catch (error) {
+      console.error("[checkout-complete] post-complete processing failed", {
         cart_id: cartId,
-        auth_customer_id: authCustomerId ?? null,
-        cart_customer_id_before_complete: cart.customer_id ?? null,
-        address_present: addressPresent,
-        shipping_method_count: shippingMethodCount,
-        order_id: order.id,
-        order_customer_id_after_complete: (order as CompleteOrder).customer_id ?? null,
-        order_store_id: readOrderStoreId(order),
+        order_id: orderId,
+        message: formatPaymentAttemptError(error),
       })
+      try {
+        order = (await orderModule.retrieveOrder(orderId)) as CompleteOrder
+      } catch {
+        order = completedOrder
+      }
     }
-
-    await updateCheckoutPaymentAttempt(req, {
-      cartId,
-      storeId,
-      status: "completed",
-      orderId,
-    })
 
     res.status(200).json(buildCompleteResponse({
-      order: order as CompleteOrder,
+      order,
       cart,
       cartId,
       storeId,

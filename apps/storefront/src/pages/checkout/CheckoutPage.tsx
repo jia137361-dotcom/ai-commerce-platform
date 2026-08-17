@@ -52,12 +52,13 @@ import {
   type BuyerCustomerAddressInput,
   type BuyerOrderSummary,
   type CheckoutPricingBreakdown,
+  type CompleteCartResponse,
 } from "../../lib/buyer-api"
 import { buildSettingsStoreHref } from "../../lib/storefront-links"
 import { isBuyerEmailVerified } from "../../lib/buyer-preferences"
 import { getStripePromise } from "../../lib/stripe-loader"
 import type { StoreCart } from "../../lib/mock-data"
-import { completeCheckoutOrder, completeGuestCheckoutOrder } from "./checkout-action"
+import { completeCheckoutOrder, completeGuestCheckoutOrder, completedRecoveryResult } from "./checkout-action"
 import { resolveCheckoutState } from "./checkout-state"
 import { getBuyerCartIdentity, resolveBuyerCartStorageId } from "../../lib/buyer-cart-storage"
 import { registerStoreCart, unregisterStoreCart } from "../../lib/buyer-platform-cart"
@@ -505,15 +506,14 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       }
     }
     void initializeSession()
-      .then((recovery) => {
+      .then(async (recovery) => {
         if (!active) return
         cachePaymentRecovery(selectedPaymentProviderId, recovery)
         setPaymentRecovery(recovery)
         setPaymentSession(recovery.paymentSession)
-        if (recovery.paymentAttempt.recoveryAction === "completed" && recovery.orderId) {
-          const successParams = new URLSearchParams({ order_id: recovery.orderId })
-          if (platformCheckoutActive) successParams.set("platform_checkout", "1")
-          window.location.assign(`/checkout/success?${successParams.toString()}`)
+        const recoveredResult = completedRecoveryResult(recovery, checkoutStoreId)
+        if (recoveredResult) {
+          await finalizeCheckoutSuccess(recoveredResult, selectedPaymentProviderId)
         }
       })
       .catch((value) => {
@@ -882,6 +882,86 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     })
   }, [auth.customer, cart?.id, loading, selectedSavedAddress])
 
+  async function finalizeCheckoutSuccess(
+    result: CompleteCartResponse,
+    providerId: string,
+    stripePaymentMethodLabel?: string
+  ) {
+    if (!cart) return
+    const storeId = checkoutStoreId
+    const successPayload = {
+      order_id: result.orderId,
+      display_id: result.displayId,
+      currency_code: result.currencyCode ?? cart.currencyCode,
+      orderId: result.orderId,
+      displayId: result.displayId,
+      email: result.email ?? null,
+      total: result.total ?? (cart.hasTotal === false ? undefined : cart.total),
+      currencyCode: result.currencyCode ?? cart.currencyCode,
+      paymentProviderId: result.paymentProviderId ?? providerId,
+      paymentMethodLabel: stripePaymentMethodLabel ?? result.paymentMethodLabel ?? undefined,
+      paymentStatus: result.paymentStatus,
+      platformCheckoutId: platformCheckoutActive ? platformCheckoutId : undefined,
+      platformCheckoutIndex: platformCheckoutActive ? platformCheckoutIndex : undefined,
+      platformCheckoutCount: platformCheckoutActive ? platformCheckoutCount : undefined,
+      storeId,
+    }
+
+    const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
+    const splitKey = `citigoo:${storeId}:split_checkout`
+    const splitRaw =
+      window.sessionStorage.getItem(splitKey) ??
+      window.localStorage.getItem(splitKey)
+    let split: { sourceCartId?: string; checkoutCartId?: string; selectedLineIds?: string[] } | null = null
+    if (splitRaw) {
+      try {
+        split = JSON.parse(splitRaw) as {
+          sourceCartId?: string
+          checkoutCartId?: string
+          selectedLineIds?: string[]
+        }
+      } catch (parseError) {
+        console.warn("[checkout] invalid split checkout payload", parseError)
+        window.sessionStorage.removeItem(splitKey)
+        window.localStorage.removeItem(splitKey)
+      }
+    }
+    if (split?.checkoutCartId === cart.id && split.sourceCartId) {
+      const failedLineIds: string[] = []
+      for (const lineId of split.selectedLineIds ?? []) {
+        try {
+          await deleteCartLineItem(split.sourceCartId, lineId)
+        } catch (cleanupError) {
+          failedLineIds.push(lineId)
+          console.warn("[checkout] unable to remove purchased source line", {
+            line_id: lineId,
+            cleanupError,
+          })
+        }
+      }
+      if (failedLineIds.length) {
+        const remainingSplit = JSON.stringify({ ...split, selectedLineIds: failedLineIds })
+        window.localStorage.setItem(splitKey, remainingSplit)
+        window.sessionStorage.setItem(splitKey, remainingSplit)
+        registerStoreCart(window.localStorage, cartIdentity, storeId, split.sourceCartId)
+      } else {
+        registerStoreCart(window.localStorage, cartIdentity, storeId, split.sourceCartId)
+        window.sessionStorage.removeItem(splitKey)
+        window.localStorage.removeItem(splitKey)
+      }
+    } else {
+      unregisterStoreCart(window.localStorage, cartIdentity, storeId)
+    }
+    window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
+    if (platformCheckoutActive) {
+      markPlatformCheckoutOrderComplete(storeId, result.orderId)
+    }
+    onCartUpdated(null)
+    const successParams = new URLSearchParams({ order_id: result.orderId })
+    if (platformCheckoutActive) successParams.set("platform_checkout", "1")
+    window.location.assign(`/checkout/success?${successParams.toString()}`)
+  }
+
   const handlePlaceOrder = async (
     providerId = selectedPaymentProviderId,
     propagateCompleteError = false,
@@ -922,90 +1002,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
         console.warn("[checkout] complete cart returned an order without email", result)
       }
 
-      const storeId = checkoutStoreId
-      const successPayload = {
-        order_id: result.orderId,
-        display_id: result.displayId,
-        currency_code: result.currencyCode ?? cart.currencyCode,
-        orderId: result.orderId,
-        displayId: result.displayId,
-        email: result.email ?? null,
-        total: result.total ?? (cart.hasTotal === false ? undefined : cart.total),
-        currencyCode: result.currencyCode ?? cart.currencyCode,
-        paymentProviderId: result.paymentProviderId ?? providerId,
-        paymentMethodLabel: stripePaymentMethodLabel ?? result.paymentMethodLabel ?? undefined,
-        paymentStatus: result.paymentStatus,
-        platformCheckoutId: platformCheckoutActive ? platformCheckoutId : undefined,
-        platformCheckoutIndex: platformCheckoutActive ? platformCheckoutIndex : undefined,
-        platformCheckoutCount: platformCheckoutActive ? platformCheckoutCount : undefined,
-        storeId,
-      }
-
-      const cartIdentity = getBuyerCartIdentity(auth.customer?.id, window.localStorage)
-      const splitKey = `citigoo:${storeId}:split_checkout`
-      const splitRaw =
-        window.sessionStorage.getItem(splitKey) ??
-        window.localStorage.getItem(splitKey)
-      let split: { sourceCartId?: string; checkoutCartId?: string; selectedLineIds?: string[] } | null = null
-      if (splitRaw) {
-        try {
-          split = JSON.parse(splitRaw) as {
-            sourceCartId?: string
-            checkoutCartId?: string
-            selectedLineIds?: string[]
-          }
-        } catch (parseError) {
-          console.warn("[checkout] invalid split checkout payload", parseError)
-          window.sessionStorage.removeItem(splitKey)
-          window.localStorage.removeItem(splitKey)
-        }
-      }
-      if (split?.checkoutCartId === cart.id && split.sourceCartId) {
-        const failedLineIds: string[] = []
-        for (const lineId of split.selectedLineIds ?? []) {
-          try {
-            await deleteCartLineItem(split.sourceCartId, lineId)
-          } catch (cleanupError) {
-            failedLineIds.push(lineId)
-            console.warn("[checkout] unable to remove purchased source line", {
-              line_id: lineId,
-              cleanupError,
-            })
-          }
-        }
-        if (failedLineIds.length) {
-          // Keep split state so a later refresh can retry cleanup without losing source cart.
-          window.localStorage.setItem(
-            splitKey,
-            JSON.stringify({
-              ...split,
-              selectedLineIds: failedLineIds,
-            })
-          )
-          window.sessionStorage.setItem(
-            splitKey,
-            JSON.stringify({
-              ...split,
-              selectedLineIds: failedLineIds,
-            })
-          )
-          registerStoreCart(window.localStorage, cartIdentity, storeId, split.sourceCartId)
-        } else {
-          registerStoreCart(window.localStorage, cartIdentity, storeId, split.sourceCartId)
-          window.sessionStorage.removeItem(splitKey)
-          window.localStorage.removeItem(splitKey)
-        }
-      } else {
-        unregisterStoreCart(window.localStorage, cartIdentity, storeId)
-      }
-      window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
-      if (platformCheckoutActive) {
-        markPlatformCheckoutOrderComplete(storeId, result.orderId)
-      }
-      onCartUpdated(null)
-      const successParams = new URLSearchParams({ order_id: result.orderId })
-      if (platformCheckoutActive) successParams.set("platform_checkout", "1")
-      window.location.assign(`/checkout/success?${successParams.toString()}`)
+      await finalizeCheckoutSuccess(result, providerId, stripePaymentMethodLabel)
     } catch (completeErrorValue) {
       if (propagateCompleteError && cart && isStripeProviderId(providerId)) {
         try {

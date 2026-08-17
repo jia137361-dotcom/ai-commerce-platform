@@ -276,6 +276,30 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     })
   })
 
+  it("returns a completed attempt instead of creating a new payment attempt", async () => {
+    mockReadLatestCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_completed",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      provider_id: "pp_stripe_stripe",
+      completed_order_id: "order_1",
+      status: "completed",
+      expires_at: new Date(Date.now() - 60_000),
+    })
+    const { req, attemptService } = createReq()
+    const res = createRes()
+
+    await recoverPayment(req, res)
+
+    expect(attemptService.createCheckoutPaymentAttempts).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      status: "completed",
+      order_id: "order_1",
+      payment_attempt: { recovery_action: "completed" },
+    })
+  })
+
   it("does not revive an already expired reservation on a later refresh", async () => {
     mockReadLatestCheckoutPaymentAttempt.mockResolvedValue({
       id: "cpa_expired",

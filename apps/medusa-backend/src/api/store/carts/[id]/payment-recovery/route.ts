@@ -208,6 +208,17 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     let attempt = await readActiveCheckoutPaymentAttempt(req.scope, { cartId, storeId })
     if (!attempt) {
       const latestAttempt = await readLatestCheckoutPaymentAttempt(req.scope, { cartId, storeId })
+      if (latestAttempt?.completed_order_id) {
+        const completedAttempt = latestAttempt.status === "completed"
+          ? latestAttempt
+          : await patchAttempt(service, latestAttempt, { status: "completed" })
+        return res.status(200).json(buildResponse({
+          cartId,
+          attempt: completedAttempt,
+          status: "completed",
+          orderId: latestAttempt.completed_order_id,
+        }))
+      }
       if (latestAttempt?.status === "expired") {
         return res.status(200).json(buildResponse({
           cartId,

@@ -11,6 +11,7 @@ const mockMarkOrderPaidAndFulfillmentWaiting = jest.fn()
 const mockSyncPaidIfPaymentAlreadyCaptured = jest.fn()
 const mockResolvePaymentMethodLabelFromClientSecret = jest.fn()
 const mockReadActiveCheckoutPaymentAttempt = jest.fn()
+const mockReadLatestCheckoutPaymentAttempt = jest.fn()
 const mockReadStripePaymentIntentForAttempt = jest.fn()
 const mockRetrievePayPalOrder = jest.fn()
 const mockUpdateCheckoutPaymentAttempts = jest.fn()
@@ -51,6 +52,7 @@ jest.mock("../lib/checkout-payment-attempts", () => ({
   normalizePayPalOrderStatus: (status?: string) => status === "COMPLETED" ? "payment_succeeded" : "awaiting_payment",
   normalizeStripePaymentIntentStatus: (status?: string) => status === "succeeded" ? "payment_succeeded" : "awaiting_payment",
   readActiveCheckoutPaymentAttempt: (...args: unknown[]) => mockReadActiveCheckoutPaymentAttempt(...args),
+  readLatestCheckoutPaymentAttempt: (...args: unknown[]) => mockReadLatestCheckoutPaymentAttempt(...args),
   readPayPalOrderId: (session?: { data?: { paypal_order_id?: string } }) => session?.data?.paypal_order_id ?? null,
   readPayPalCaptureStatus: (order?: { purchase_units?: Array<{ payments?: { captures?: Array<{ status?: string }> } }> }) => order?.purchase_units?.[0]?.payments?.captures?.[0]?.status ?? null,
   readStripePaymentIntentForAttempt: (...args: unknown[]) => mockReadStripePaymentIntentForAttempt(...args),
@@ -107,7 +109,8 @@ const createReq = ({
   shippingMethods = [],
   paymentProviderId,
   listedOrders = [],
-  orderMetadata = {},
+  orderMetadata = { store_id: "default_store" },
+  cartTotal = 12.43,
 }: {
   authCustomerId?: string | null
   cartCustomerId?: string | null
@@ -119,6 +122,7 @@ const createReq = ({
   paymentProviderId?: string
   listedOrders?: Array<Record<string, unknown>>
   orderMetadata?: Record<string, unknown>
+  cartTotal?: number
 } = {}) => {
   let order = {
     id: "order_1",
@@ -137,6 +141,7 @@ const createReq = ({
       shipping_address: shippingAddress,
       shipping_methods: shippingMethods,
       metadata: { store_id: "default_store" },
+      total: cartTotal,
     })),
   }
   const orderModule = {
@@ -193,6 +198,7 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     mockFindCartPaymentSession.mockResolvedValue(null)
     mockResolvePaymentMethodLabelFromClientSecret.mockResolvedValue(null)
     mockReadActiveCheckoutPaymentAttempt.mockResolvedValue(null)
+    mockReadLatestCheckoutPaymentAttempt.mockResolvedValue(null)
     mockReadStripePaymentIntentForAttempt.mockResolvedValue(null)
     mockRetrievePayPalOrder.mockResolvedValue({ id: "PAYPAL_ORDER_1", status: "CREATED" })
     mockUpdateCheckoutPaymentAttempts.mockResolvedValue({})
@@ -226,6 +232,47 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
       cart_customer_id: "cus_a",
       order_customer_id: "cus_a",
     })
+  })
+
+  it("returns the created order when optional fulfillment setup fails", async () => {
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_1",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      status: "payment_succeeded",
+    })
+    mockSeedFulfillmentOrderIfMissing.mockRejectedValueOnce(new Error("supplier setup unavailable"))
+    const { req } = createReq()
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockUpdateCheckoutPaymentAttempts).toHaveBeenCalledWith(expect.objectContaining({
+      id: "cpa_1",
+      status: "completed",
+      completed_order_id: "order_1",
+    }))
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({ status: "completed", order_id: "order_1" })
+  })
+
+  it("recovers an order created by a workflow that subsequently throws", async () => {
+    mockCompleteRun.mockRejectedValueOnce(new Error("post-commit workflow hook failed"))
+    const { req, orderModule } = createReq()
+    orderModule.listOrders
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: "order_1",
+        customer_id: "cus_a",
+        email: "buyer@example.com",
+        metadata: { store_id: "default_store", checkout_cart_id: "cart_1" },
+      }])
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({ status: "completed", order_id: "order_1", already_completed: true })
   })
 
   it("applies trusted cart customer_id when complete workflow omits order.customer_id", async () => {
@@ -347,6 +394,25 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
       order_id: "order_1",
       already_completed: true,
     })
+  })
+
+  it("returns the attempt-linked order when checkout metadata was not persisted", async () => {
+    mockReadLatestCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_completed",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      customer_id: "cus_a",
+      completed_order_id: "order_1",
+      status: "completed",
+    })
+    const { req } = createReq({ listedOrders: [] })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({ status: "completed", order_id: "order_1", already_completed: true })
   })
 
   it("preserves existing metadata when adding a Stripe payment method label", async () => {
@@ -505,5 +571,28 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
 
     expect(mockCompleteRun).toHaveBeenCalledTimes(1)
     expect(res.status).toHaveBeenCalledWith(200)
+  })
+
+  it("rejects Stripe completion when the PaymentIntent is 100x the cart total", async () => {
+    mockFindCartPaymentSession.mockResolvedValue({
+      provider_id: "pp_stripe_stripe",
+      status: "pending",
+      currency_code: "usd",
+      data: { client_secret: "pi_test_secret_123" },
+    })
+    mockReadStripePaymentIntentForAttempt.mockResolvedValue({
+      id: "pi_test",
+      status: "requires_payment_method",
+      amount: 124300,
+      currency: "usd",
+    })
+    const { req } = createReq({ paymentProviderId: "pp_stripe_stripe", cartTotal: 12.43 })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(409)
+    expect(res.body).toMatchObject({ error: { code: "STRIPE_PAYMENT_AMOUNT_MISMATCH" } })
   })
 })

@@ -62,6 +62,7 @@ export const isTerminalCheckoutPaymentAttemptStatus = (status?: string | null) =
   Boolean(status && TERMINAL_ATTEMPT_STATUSES.has(status as CheckoutPaymentAttemptStatus))
 
 export const isCheckoutPaymentAttemptExpired = (attempt: CheckoutPaymentAttemptRecord, now = Date.now()) => {
+  if (attempt.completed_order_id || isTerminalCheckoutPaymentAttemptStatus(attempt.status)) return false
   const expiresAt = typeof attempt.expires_at === "string" ? Date.parse(attempt.expires_at) : attempt.expires_at instanceof Date ? attempt.expires_at.getTime() : NaN
   if (!Number.isFinite(expiresAt)) return false
   return expiresAt <= now
