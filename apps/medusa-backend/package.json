@@ -25,6 +25,7 @@
     "shipping:bootstrap": "medusa exec ./src/scripts/bootstrap-market-shipping.ts",
     "stripe:region:setup": "medusa exec ./src/scripts/enable-stripe-region.ts",
     "paypal:region:setup": "medusa exec ./src/scripts/enable-paypal-region.ts",
+    "money:migrate-major": "medusa exec ./src/scripts/migrate-medusa-money-major-units.ts",
     "pay-paypal:e2e:setup": "medusa exec ./src/scripts/pay-paypal-e2e-setup.ts",
     "pay-paypal:http-smoke": "node ./src/scripts/pay-paypal-http-smoke.mjs",
     "pay-paypal:live-e2e": "node ./src/scripts/pay-paypal-live-e2e.mjs",
