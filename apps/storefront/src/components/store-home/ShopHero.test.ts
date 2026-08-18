@@ -32,4 +32,13 @@ describe("ShopHero", () => {
     expect(html).not.toContain("url(&quot;")
     expect(html).toContain('href="/marketplace"')
   })
+
+  it("starts AI design directly instead of linking to standalone product selection", () => {
+    const html = renderHero({
+      brandName: "Seller Studio",
+    })
+
+    expect(html).toContain('href="/ai-design"')
+    expect(html).not.toContain('href="/trends"')
+  })
 })

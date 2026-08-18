@@ -118,7 +118,7 @@ const messages = {
     myDesignsDescription:
       "Your design bag — save and keep editing here. When you order a design, it moves into Cart for quantity, shipping, and payment.",
     myDesignsLoading: "Loading your designs…",
-    myDesignsEmpty: "No saved designs yet. Start from Product selection — ordered designs will appear in Cart.",
+    myDesignsEmpty: "No saved designs yet. Start from AI design — ordered designs will appear in Cart.",
     myDesignsContinue: "Continue editing",
     myDesignsRemove: "Remove",
   },
@@ -231,7 +231,7 @@ const messages = {
     myDesignsTitle: "我的设计",
     myDesignsDescription: "作品库：在这里保存并继续编辑。下单后会进入 Cart，再选数量、运费并支付。",
     myDesignsLoading: "正在加载设计…",
-    myDesignsEmpty: "还没有保存的设计。先去选品开做——下单后会出现在购物车里。",
+    myDesignsEmpty: "还没有保存的设计。先去 AI design 开做——下单后会出现在购物车里。",
     myDesignsContinue: "继续编辑",
     myDesignsRemove: "移除",
   },

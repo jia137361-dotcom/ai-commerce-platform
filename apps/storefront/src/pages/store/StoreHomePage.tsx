@@ -396,7 +396,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           isFallback={!settings.bannerUrl}
           announcement={settings.announcement}
           description={settings.description}
-          studioHref="/trends"
+          studioHref="/ai-design"
           shopHref={`${storeHref}#products`}
         />
         <StoreIdentity settings={settings} />
@@ -463,7 +463,7 @@ export function StoreHomePage({ cartCount, storeSlug }: StoreHomePageProps) {
           isFallback={!settings.bannerUrl}
           announcement={settings.announcement}
           description={settings.description}
-          studioHref="/trends"
+          studioHref="/ai-design"
           shopHref={`${storeHref}#products`}
         />
         <StoreIdentity settings={settings} />

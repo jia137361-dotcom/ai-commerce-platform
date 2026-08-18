@@ -13,7 +13,6 @@ export function StoreSubNav({ className, storeHref = "/marketplace" }: StoreSubN
   return (
     <nav className={["buyer-store-subnav", className].filter(Boolean).join(" ")} aria-label="Main navigation">
       <a href={storeHref}>Shop</a>
-      <a href="/trends">Product selection</a>
       <a href="/ai-design">{t("navAiDesign")}</a>
       <a href={howItWorksHref}>{t("navHowItWorks")}</a>
       <a href="/my-designs">My Designs</a>

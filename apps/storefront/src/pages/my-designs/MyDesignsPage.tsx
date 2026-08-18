@@ -196,8 +196,8 @@ export function MyDesignsPage({ cartCount, onCartUpdated }: MyDesignsPageProps) 
       {!loading && !designs.length ? (
         <div className="buyer-my-designs-empty">
           <p>{t("myDesignsEmpty")}</p>
-          <a className="buyer-ui-button buyer-ui-button--primary" href="/trends">
-            Product selection
+          <a className="buyer-ui-button buyer-ui-button--primary" href="/ai-design">
+            AI design
           </a>
         </div>
       ) : null}

@@ -12,8 +12,8 @@ export function FeatureMenuPanel({ onClose }: FeatureMenuPanelProps) {
       <a href="/my-designs" onClick={onClose}>
         My Designs
       </a>
-      <a href="/trends" onClick={onClose}>
-        Product selection
+      <a href="/account/orders" onClick={onClose}>
+        Orders
       </a>
     </div>
   )

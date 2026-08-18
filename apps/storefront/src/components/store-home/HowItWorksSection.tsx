@@ -4,7 +4,7 @@ type HowItWorksSectionProps = {
   studioHref?: string
 }
 
-export function HowItWorksSection({ studioHref = "/trends" }: HowItWorksSectionProps) {
+export function HowItWorksSection({ studioHref = "/ai-design" }: HowItWorksSectionProps) {
   const { t } = useBuyerLocale()
 
   return (

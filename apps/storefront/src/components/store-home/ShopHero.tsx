@@ -16,7 +16,7 @@ export function ShopHero({
   isFallback = false,
   announcement,
   description,
-  studioHref = "/trends",
+  studioHref = "/ai-design",
   shopHref = "/marketplace",
 }: ShopHeroProps) {
   const { t } = useBuyerLocale()

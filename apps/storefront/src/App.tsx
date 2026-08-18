@@ -24,7 +24,6 @@ import { OrderLookupPage } from "./pages/orders/OrderLookupPage"
 import { ProductDetailPage } from "./pages/product/ProductDetailPage"
 import { SearchPage } from "./pages/search/SearchPage"
 import { CategoriesPage } from "./pages/categories/CategoriesPage"
-import { TrendsPage } from "./pages/trends/TrendsPage"
 import { DesignerPage } from "./pages/design/DesignerPage"
 import { AiDesignPage } from "./pages/ai-design/AiDesignPage"
 import { MyDesignsPage } from "./pages/my-designs/MyDesignsPage"
@@ -147,7 +146,9 @@ function App() {
 
   useEffect(() => {
     if (location.pathname === "/studio" || location.pathname.startsWith("/studio/")) {
-      navigateBuyer(`/trends${location.search}${location.hash}`, { replace: true })
+      navigateBuyer(`/store${location.search}${location.hash}`, { replace: true })
+    } else if (location.pathname === "/trends" || location.pathname.startsWith("/trends/")) {
+      navigateBuyer(`/store${location.search}${location.hash}`, { replace: true })
     } else if (location.pathname === "/saved" || location.pathname.startsWith("/saved/")) {
       // Legacy favorites URL → My Designs (buyer design drafts).
       navigateBuyer(`/my-designs${location.search}${location.hash}`, { replace: true })
@@ -170,8 +171,8 @@ function App() {
       />
     )
   } else if (location.pathname === "/studio" || location.pathname.startsWith("/studio/")) {
-    // Legacy product-selection URL; effect above rewrites to /trends.
-    page = <TrendsPage cartCount={cartCount} />
+    // Legacy product-selection URL; effect above rewrites to /store.
+    page = <StoreHomePage cartCount={cartCount} />
   } else if (location.pathname === "/my-designs" || location.pathname.startsWith("/my-designs/")) {
     page = <MyDesignsPage cartCount={cartCount} onCartUpdated={onCartUpdated} />
   } else if (location.pathname === "/ai-design" || location.pathname.startsWith("/ai-design/")) {
@@ -184,7 +185,7 @@ function App() {
   } else if (location.pathname.startsWith("/categories")) {
     page = <CategoriesPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/trends")) {
-    page = <TrendsPage cartCount={cartCount} />
+    page = <StoreHomePage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/search")) {
     page = <SearchPage cartCount={cartCount} />
   } else if (location.pathname === "/saved" || location.pathname.startsWith("/saved/")) {

@@ -3545,24 +3545,27 @@ button.buyer-shop-product-customize:disabled,
 }
 
 .buyer-store-topbar--temu {
-  grid-template-columns: auto auto auto 1fr auto;
+  grid-template-columns: auto minmax(180px, 220px) auto minmax(0, 1fr) auto;
   min-height: 64px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .buyer-store-topbar--temu .buyer-store-ship {
-  min-width: 118px;
+  width: 100%;
+  max-width: 220px;
   border-right: 1px solid #d9e0ea;
   padding-right: 18px;
 }
 
 .buyer-store-topbar--temu .buyer-store-ship select {
+  width: 100%;
+  max-width: 160px;
   border: 0;
   background: transparent;
   color: #111827;
   font-size: 14px;
   font-weight: 800;
-  padding: 0;
+  padding: 0 24px 0 0;
   outline: none;
 }
 
@@ -4651,5 +4654,4 @@ button.buyer-shop-product-customize:disabled,
     grid-template-columns: minmax(0, 1fr);
   }
 }
-
 

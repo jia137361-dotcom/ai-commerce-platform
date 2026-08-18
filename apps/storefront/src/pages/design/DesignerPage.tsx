@@ -556,7 +556,7 @@ export function DesignerPage({ productId, cartCount, onCartUpdated }: DesignerPa
           <nav className="buyer-product-breadcrumb" aria-label="Breadcrumb">
             <a href="/store">Store</a>
             <span>/</span>
-            <a href="/trends">Product selection</a>
+            <a href="/ai-design">AI design</a>
             <span>/</span>
             <span>Editor</span>
           </nav>
