@@ -16,6 +16,8 @@ export type BuyerOrderDisplayStatus =
   | "reviewed"
   | "completed"
   | "refunding"
+  | "partially_refunded"
+  | "refunded"
 
 const PAID_STATUSES = new Set(["paid", "captured", "payment_recorded_as_paid"])
 
@@ -39,8 +41,12 @@ export const resolveBuyerOrderDisplayStatus = (input: {
   reviewEligible?: boolean
   reviewCompleted?: boolean
   returnIntent?: boolean
+  refundStatus?: string | null
 }): BuyerOrderDisplayStatus => {
   if (input.status === "cancelled") return "cancelled"
+  if (input.refundStatus === "refunded" || input.refundStatus === "processed") return "refunded"
+  if (input.refundStatus === "partially_refunded") return "partially_refunded"
+  if (input.refundStatus) return "refunding"
   if (input.returnIntent) return "refunding"
   if (!isPaidOrder(input.paymentStatus ?? "")) return "unpaid"
 
@@ -70,6 +76,10 @@ export const buyerOrderDisplayStatusLabel = (status: BuyerOrderDisplayStatus) =>
       return "Completed"
     case "refunding":
       return "Refund in progress"
+    case "partially_refunded":
+      return "Partially refunded"
+    case "refunded":
+      return "Refunded"
     default:
       return "Processing"
   }
@@ -85,6 +95,7 @@ export const matchesBuyerOrderBucket = (input: {
   reviewEligible?: boolean
   reviewedOrderIds?: Set<string>
   returnOrderIds?: Set<string>
+  returnStatusesByOrderId?: Map<string, string>
 }) => {
   const {
     bucket,
@@ -96,6 +107,7 @@ export const matchesBuyerOrderBucket = (input: {
     reviewEligible = false,
     reviewedOrderIds = new Set(),
     returnOrderIds = new Set(),
+    returnStatusesByOrderId = new Map(),
   } = input
 
   if (bucket === "all" || !bucket) return true
@@ -114,7 +126,7 @@ export const matchesBuyerOrderBucket = (input: {
     )
   }
   if (bucket === "returns") {
-    return Boolean(orderId) && returnOrderIds.has(orderId)
+    return Boolean(orderId) && (returnOrderIds.has(orderId) || returnStatusesByOrderId.has(orderId))
   }
   return true
 }

@@ -148,7 +148,12 @@ const safeOrderShape = (order: CustomerOrder) => ({
   keys: Object.keys(order),
 })
 
-const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<string>(), returnOrderIds = new Set<string>()) => {
+const normalizeOrderSummary = (
+  order: CustomerOrder,
+  reviewedOrderIds = new Set<string>(),
+  returnOrderIds = new Set<string>(),
+  returnStatusesByOrderId = new Map<string, string>()
+) => {
   const metadata = order.metadata ?? null
   const items = order.items ?? []
   const paymentStatus = metadata?.[ORDER_META_PAYMENT_STATUS] ?? null
@@ -172,6 +177,7 @@ const normalizeOrderSummary = (order: CustomerOrder, reviewedOrderIds = new Set<
     reviewEligible,
     reviewCompleted,
     returnIntent: Boolean(order.id) && returnOrderIds.has(order.id!),
+    refundStatus: order.id ? returnStatusesByOrderId.get(order.id) : null,
   })
 
   return {
@@ -464,6 +470,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
 
     let reviewedOrderIds = new Set<string>()
     let returnOrderIds = new Set<string>()
+    let returnStatusesByOrderId = new Map<string, string>()
     try {
       const storeCore = req.scope.resolve(STORE_CORE_MODULE) as any
       const reviews = platformScope
@@ -475,6 +482,14 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
         ? await refunds.listBuyerRefundRequests({ customer_id: customerId })
         : await refunds.listBuyerRefundRequests({ customer_id: customerId, store_id: storeId })
       returnOrderIds = new Set(requests.map((request: any) => request.order_id).filter(Boolean))
+      for (const request of requests) {
+        if (typeof request.order_id !== "string" || typeof request.status !== "string") continue
+        const existing = returnStatusesByOrderId.get(request.order_id)
+        const nextStatus = request.status.toLowerCase()
+        if (!existing || ["refunded", "processed", "partially_refunded"].includes(nextStatus)) {
+          returnStatusesByOrderId.set(request.order_id, nextStatus)
+        }
+      }
     } catch {
       // Optional aggregates remain empty if a module is unavailable.
     }
@@ -506,6 +521,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
               !reviewedOrderIds.has(order.id!),
             reviewedOrderIds,
             returnOrderIds,
+            returnStatusesByOrderId,
           })
         )
       : mergedOrders
@@ -571,7 +587,7 @@ export const GET = async (req: MedusaRequest, res: MedusaResponse) => {
     }
 
     return res.status(200).json({
-      orders: pageWithImages.map((order) => normalizeOrderSummary(order, reviewedOrderIds, returnOrderIds)),
+      orders: pageWithImages.map((order) => normalizeOrderSummary(order, reviewedOrderIds, returnOrderIds, returnStatusesByOrderId)),
       count: bucketed.length,
       limit,
       offset,

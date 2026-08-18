@@ -4,14 +4,12 @@ export type OrderHistoryFilter = {
   bucket?: string
 }
 
-/** Design tabs (页面分析): All / Unpaid / Shipped·Sent / Delivered·Used / Refund / Reviews */
 export const orderHistoryFilters: OrderHistoryFilter[] = [
-  { key: "all", label: "All" },
   { key: "unpaid", label: "Unpaid", bucket: "unpaid" },
-  { key: "packing", label: "Shipped / Sent", bucket: "packing" },
-  { key: "awaiting_receipt", label: "Delivered / Used", bucket: "awaiting_receipt" },
+  { key: "packing", label: "To ship", bucket: "packing" },
+  { key: "awaiting_receipt", label: "To receive", bucket: "awaiting_receipt" },
+  { key: "reviews", label: "To review", bucket: "reviews" },
   { key: "returns", label: "Refund / After-sales", bucket: "returns" },
-  { key: "reviews", label: "Reviews", bucket: "reviews" },
 ]
 
 export function OrderHistoryTabs({
