@@ -7,7 +7,6 @@ type ProductDetailTabsProps = {
 const TABS: Array<{ id: ProductDetailTabsProps["active"]; label: string }> = [
   { id: "item", label: "Item" },
   { id: "size", label: "Size" },
-  { id: "package", label: "Package" },
   { id: "review", label: "Review" },
   { id: "detail", label: "Detail" },
   { id: "recommend", label: "Recommend" },

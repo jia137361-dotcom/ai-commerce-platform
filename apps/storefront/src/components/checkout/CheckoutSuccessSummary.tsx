@@ -76,13 +76,6 @@ export function CheckoutSuccessSummary({
           </Button>
           <Button href={detailHref}>View order</Button>
         </div>
-        {info.displayId || info.total != null ? (
-          <p className="buyer-checkout-success-meta">
-            {info.displayId ? `Order #${info.displayId}` : null}
-            {info.displayId && info.total != null ? " · " : null}
-            {info.total != null ? formatBuyerMoney(info.total, info.currencyCode ?? undefined) : null}
-          </p>
-        ) : null}
       </Card>
 
       {recs.length ? (

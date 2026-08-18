@@ -259,6 +259,19 @@
   gap: 14px;
 }
 
+.buyer-product-choice-group { border: 0; margin: 0; padding: 0; }
+.buyer-product-choice-group legend,
+.buyer-product-default-shipping > span { color: var(--buyer-text-muted); font-size: 12px; font-weight: 750; }
+.buyer-product-choice-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.buyer-product-choice-buttons button,
+.buyer-supplier-tabs button { min-height: 38px; border: 1px solid var(--buyer-border); border-radius: var(--buyer-radius-button); background: var(--buyer-surface); padding: 8px 16px; color: var(--buyer-text-primary); cursor: pointer; }
+.buyer-product-choice-buttons button[aria-pressed="true"],
+.buyer-supplier-tabs button[aria-selected="true"] { border-color: var(--buyer-primary); color: var(--buyer-primary); box-shadow: 0 0 0 1px var(--buyer-primary); }
+.buyer-product-choice-buttons button:disabled { cursor: not-allowed; opacity: .45; }
+.buyer-product-default-shipping { display: grid; grid-template-columns: auto auto; gap: 5px 12px; border-top: 1px solid var(--buyer-border); border-bottom: 1px solid var(--buyer-border); padding: 14px 0; }
+.buyer-product-default-shipping strong { color: var(--buyer-primary); text-align: right; }
+.buyer-product-default-shipping small { grid-column: 1 / -1; color: var(--buyer-text-muted); }
+
 .buyer-product-split-options .buyer-ui-field {
   margin: 0;
 }
@@ -884,6 +897,16 @@
   letter-spacing: 0;
 }
 
+.buyer-product-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--buyer-primary);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
 .buyer-product-page .buyer-product-score {
   min-height: 24px;
   color: var(--buyer-warning);
@@ -960,7 +983,19 @@
 .buyer-product-page .buyer-product-add-button {
   width: 100%;
   min-height: 48px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 800;
 }
+
+.buyer-product-page .buyer-product-add-button--secondary {
+  border: 1px solid var(--buyer-primary);
+  background: var(--buyer-surface);
+  color: var(--buyer-primary);
+}
+
+.buyer-product-page .buyer-product-add-button--secondary:hover { background: var(--buyer-primary-soft, #fff4ed); }
+.buyer-product-page .buyer-product-add-button:not(.buyer-product-add-button--secondary) { box-shadow: 0 8px 18px rgba(245, 92, 28, .2); }
 
 .buyer-product-checkout-note {
   margin: -8px 0 0;
@@ -1016,11 +1051,42 @@
 
 .buyer-product-details-section {
   display: grid;
-  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
-  gap: 48px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 32px;
   align-items: start;
   padding: 64px 0;
   border-bottom: 1px solid var(--buyer-border);
+}
+
+.buyer-product-description > div:last-child {
+  color: var(--buyer-text-secondary, #5f6368);
+  line-height: 1.7;
+}
+
+.buyer-product-description > div:last-child p {
+  margin: 0 0 0.9rem;
+}
+
+.buyer-product-description > div:last-child p:last-child {
+  margin-bottom: 0;
+}
+
+.buyer-product-description > div:last-child h1,
+.buyer-product-description > div:last-child h2,
+.buyer-product-description > div:last-child h3,
+.buyer-product-description > div:last-child h4,
+.buyer-product-description > div:last-child h5,
+.buyer-product-description > div:last-child h6 {
+  margin: 0 0 0.9rem;
+  color: var(--buyer-text-primary);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.buyer-product-description > div:last-child ul,
+.buyer-product-description > div:last-child ol {
+  margin: 0 0 0.9rem;
+  padding-left: 1.5rem;
 }
 
 .buyer-product-details-section > div > p:first-child,
@@ -1061,6 +1127,86 @@
 
 .buyer-product-details-section dl > div:last-child {
   border-bottom: 0;
+}
+
+.buyer-supplier-specifications {
+  display: grid;
+  gap: 28px;
+}
+
+.buyer-supplier-tabs { display: flex; flex-wrap: wrap; gap: 10px; }
+.buyer-supplier-specifications section[hidden] { display: none; }
+.buyer-supplier-description-content { margin-top: 24px; color: var(--buyer-text-secondary, #5f6368); line-height: 1.7; }
+.buyer-supplier-description-content h1,
+.buyer-supplier-description-content h2,
+.buyer-supplier-description-content h3,
+.buyer-supplier-description-content h4 { margin: 0 0 .9rem; color: var(--buyer-text-primary); font-size: 15px; }
+
+.buyer-supplier-specifications section {
+  border-top: 1px solid var(--buyer-border);
+  padding-top: 24px;
+}
+
+.buyer-supplier-specifications h3 {
+  margin: 0 0 14px;
+  color: var(--buyer-text-primary);
+  font-size: 18px;
+}
+
+.buyer-supplier-basic-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .buyer-supplier-basic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.buyer-supplier-basic-grid > div {
+  border-bottom: 1px solid var(--buyer-border);
+  padding: 10px 0;
+}
+
+.buyer-supplier-basic-grid dt {
+  color: var(--buyer-text-muted);
+  font-size: 12px;
+}
+
+.buyer-supplier-basic-grid dd {
+  margin: 4px 0 0;
+  color: var(--buyer-text-primary);
+  font-weight: 700;
+}
+
+.buyer-supplier-specification-table-wrap {
+  overflow-x: auto;
+}
+
+.buyer-supplier-specification-table {
+  min-width: 560px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.buyer-supplier-specification-table th,
+.buyer-supplier-specification-table td {
+  border: 1px solid var(--buyer-border);
+  padding: 12px 14px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.buyer-supplier-specification-table th {
+  background: var(--buyer-surface-muted);
+  color: var(--buyer-text-primary);
+  font-weight: 750;
+}
+
+.buyer-supplier-specification-table td {
+  color: var(--buyer-text-muted);
 }
 
 .buyer-product-details-section dt {
@@ -1722,9 +1868,25 @@ button.buyer-ai-studio-editor-link {
 
 .buyer-product-add-button--secondary {
   margin-top: 10px;
-  background: transparent;
-  border: 1px solid #d1d5db;
-  color: #111827;
+  background: #ea580c;
+  border: 1px solid #ea580c;
+  color: #fff;
+}
+
+.buyer-product-page .buyer-product-add-button,
+.buyer-product-page .buyer-product-add-button--secondary {
+  min-height: 52px;
+  border-radius: 10px;
+  background: #ea580c;
+  border: 1px solid #ea580c;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(234, 88, 12, .2);
+}
+
+.buyer-product-page .buyer-product-add-button:hover:not(:disabled),
+.buyer-product-page .buyer-product-add-button--secondary:hover:not(:disabled) {
+  background: #c2410c;
+  border-color: #c2410c;
 }
 
 .buyer-product-sticky-bar {

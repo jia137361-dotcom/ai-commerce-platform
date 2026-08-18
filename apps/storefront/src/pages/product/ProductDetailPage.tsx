@@ -9,7 +9,6 @@ import { ProductPurchasePanel } from "../../components/product-detail/ProductPur
 import { ProductReviewSection } from "../../components/product-detail/ProductReviewSection"
 import { ProductStoreCard } from "../../components/product-detail/ProductStoreCard"
 import { ProductDetailPopups } from "../../components/product-detail/ProductDetailPopups"
-import { StickyDesignBar } from "../../components/product-detail/StickyDesignBar"
 import { StoreTopBar } from "../../components/store-home/StoreTopBar"
 import { StoreFooter } from "../../components/layout/StoreFooter"
 import {
@@ -438,9 +437,6 @@ export function ProductDetailPage({ productId, cartCount, onCartUpdated }: Produ
               onSubmitted={() => setLoadVersion((version) => version + 1)}
             />
           </div>
-          {designHref ? (
-            <StickyDesignBar amount={product.numericPrice} designHref={designHref} disabled={!product.hasDesigner} />
-          ) : null}
         </>
       ) : null}
     </PageShell>

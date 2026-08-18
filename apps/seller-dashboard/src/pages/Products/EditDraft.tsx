@@ -12,7 +12,8 @@ import { useToast } from "../../components/ToastProvider"
 import { Badge } from "../../components/ui/Badge"
 import { Button } from "../../components/ui/Button"
 import { Card } from "../../components/ui/Card"
-import { Input, Label, Textarea } from "../../components/ui/Input"
+import { Input, Label } from "../../components/ui/Input"
+import { ProductDescriptionEditor } from "../../components/products/ProductDescriptionEditor"
 import { Modal } from "../../components/ui/Modal"
 import { Skeleton } from "../../components/ui/EmptyState"
 import { ProductEditorPanel } from "../../components/ProductEditorPanel"
@@ -20,6 +21,7 @@ import { CategoryTreePicker } from "../../components/CategoryTreePicker"
 import { TranslateButton } from "../../components/TranslateButton"
 import { getSellerStoreId } from "../../lib/seller-store-id"
 import { fileToBase64 } from "../../lib/file-to-base64"
+import { buildSupplierImageOptions, mergeSelectedSupplierImages, type SupplierImageOption } from "../../lib/s2b-supplier-images"
 import type { NormalizedProduct, ProductRegionSummary, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type SupplierVariant = {
@@ -190,6 +192,8 @@ export function EditDraftPage() {
   const [showCustomizeEditor, setShowCustomizeEditor] = useState(false)
   const [selectedImageUrls, setSelectedImageUrls] = useState<string[]>([])
   const [imageUploading, setImageUploading] = useState(false)
+  const [supplierImagePickerOpen, setSupplierImagePickerOpen] = useState(false)
+  const [selectedSupplierImageUrls, setSelectedSupplierImageUrls] = useState<string[]>([])
   const imageInputRef = useRef<HTMLInputElement>(null)
 
   const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
@@ -343,7 +347,7 @@ export function EditDraftPage() {
   const supplierDetails = (product as (NormalizedProduct & { supplier_details?: {
     supplier_product_code?: string | null
     purchase_price?: number | null
-    english?: {
+      english?: {
       english_name?: string | null
       english_description?: string | null
       english_material?: string | null
@@ -355,11 +359,22 @@ export function EditDraftPage() {
       sizes?: Array<{ id: string; name: string }>
       views?: Array<{ id: string; name: string }>
       produce_country?: string | null
-      warehouse?: string | null
-    } | null
+        warehouse?: string | null
+        basic_details?: Array<{ label: string; value: string }>
+        size_chart?: { columns: string[]; rows: Array<Record<string, string>> } | null
+        packaging_specs?: { columns: string[]; rows: Array<Record<string, string>> } | null
+        official_images?: Array<{ url: string; color_name?: string | null }>
+      } | null
     variants?: Array<Record<string, unknown>>
     print_specs?: Array<Record<string, unknown>>
   } }))?.supplier_details
+  const englishSupplierDetails = supplierDetails?.english
+
+  const supplierImageOptions: SupplierImageOption[] = buildSupplierImageOptions(
+    s2bColorImages.map((entry) => ({ colorName: entry.colorName, images: entry.images })),
+    supplierDetails?.english?.official_images?.map((image) => ({ url: image.url, colorName: image.color_name })) ?? [],
+  )
+  const supplierImageUrlSet = new Set(supplierImageOptions.map((option) => option.url))
 
   useEffect(() => {
     if (!previewOptions.length) return
@@ -647,9 +662,16 @@ export function EditDraftPage() {
     }
   }
 
-  const restoreSupplierImages = () => {
-    const urls = Array.from(new Set(s2bColorImages.flatMap((entry) => entry.images)))
-    if (urls.length) setSelectedImageUrls(urls)
+  const openSupplierImagePicker = () => {
+    setSelectedSupplierImageUrls(selectedImageUrls.filter((url) => supplierImageUrlSet.has(url)))
+    setSupplierImagePickerOpen(true)
+  }
+
+  const applySupplierImageSelection = () => {
+    setSelectedImageUrls((current) =>
+      mergeSelectedSupplierImages(current, selectedSupplierImageUrls, Array.from(supplierImageUrlSet))
+    )
+    setSupplierImagePickerOpen(false)
   }
 
   const variantColors = Array.from(new Set(variants.map((variant) => variant.color).filter(Boolean)))
@@ -987,6 +1009,36 @@ export function EditDraftPage() {
               {supplierDetails.english.views?.length ? <div><dt className="text-slate-500">Print views</dt><dd>{supplierDetails.english.views.map((item) => item.name).join(", ")}</dd></div> : null}
                 {supplierDetails.print_specs?.length ? <div><dt className="text-slate-500">Print areas</dt><dd>{supplierDetails.print_specs.map((item) => `${String(item.print_file_width ?? item.design_area_width ?? "?")} × ${String(item.print_file_height ?? item.design_area_height ?? "?")} px`).join(", ")}</dd></div> : null}
               </dl>
+              {supplierDetails.english.basic_details?.length ? (
+                <div className="mt-5 border-t border-slate-200 pt-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Basic information</h3>
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                    {supplierDetails.english.basic_details.map((item) => <div key={item.label}><dt className="text-slate-500">{item.label}</dt><dd>{item.value}</dd></div>)}
+                  </dl>
+                </div>
+              ) : null}
+              {englishSupplierDetails?.size_chart?.rows.length ? (
+                <div className="mt-5 border-t border-slate-200 pt-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Size information</h3>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="min-w-full text-left text-xs">
+                      <thead><tr>{englishSupplierDetails.size_chart.columns.map((column) => <th key={column} className="border-b px-2 py-2 font-semibold text-slate-500">{column}</th>)}</tr></thead>
+                      <tbody>{englishSupplierDetails.size_chart.rows.map((row, index) => <tr key={index}>{englishSupplierDetails.size_chart!.columns.map((column) => <td key={column} className="border-b px-2 py-2">{row[column] || "-"}</td>)}</tr>)}</tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+              {englishSupplierDetails?.packaging_specs?.rows.length ? (
+                <div className="mt-5 border-t border-slate-200 pt-4">
+                  <h3 className="text-sm font-semibold text-slate-900">Packaging specifications</h3>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="min-w-full text-left text-xs">
+                      <thead><tr>{englishSupplierDetails.packaging_specs.columns.map((column) => <th key={column} className="border-b px-2 py-2 font-semibold text-slate-500">{column}</th>)}</tr></thead>
+                      <tbody>{englishSupplierDetails.packaging_specs.rows.map((row, index) => <tr key={index}>{englishSupplierDetails.packaging_specs!.columns.map((column) => <td key={column} className="border-b px-2 py-2">{row[column] || "-"}</td>)}</tr>)}</tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
               {(supplierDetails.english.images?.length || supplierDetails.english.blank_design_images?.length) ? <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">{[...(supplierDetails.english.images ?? []), ...(supplierDetails.english.blank_design_images ?? [])].map((url, index) => <img key={`${url}-${index}`} src={url} alt={`Supplier image ${index + 1}`} className="aspect-square rounded object-cover" />)}</div> : null}
             </Card>
           ) : null}
@@ -1024,19 +1076,17 @@ export function EditDraftPage() {
                 />
               )}
             </div>
-            <Textarea
-              className="mt-1"
-              rows={5}
+            <ProductDescriptionEditor
               value={description}
               disabled={isArchived}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
             />
           </div>
-          {previewOptions.length || (isOwnProduct && !isArchived) ? (
+          {previewOptions.length || (!isArchived && (isOwnProduct || isS2bSupplierProduct)) ? (
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label>Publish image preview</Label>
-                {isOwnProduct && !isArchived ? (
+                {!isArchived ? (
                   <div>
                     <input
                       ref={imageInputRef}
@@ -1086,9 +1136,9 @@ export function EditDraftPage() {
                   Upload product images before publishing.
                 </div>
               )}
-              {isS2bSupplierProduct && s2bColorImages.length ? (
-                <Button type="button" variant="outline" className="mt-2" onClick={restoreSupplierImages}>
-                  Restore supplier images
+              {isS2bSupplierProduct && supplierImageOptions.length ? (
+                <Button type="button" variant="outline" className="mt-2" onClick={openSupplierImagePicker}>
+                  Select supplier images
                 </Button>
               ) : null}
             </div>
@@ -1539,6 +1589,54 @@ export function EditDraftPage() {
           ) : null}
         </Card>
       </form>
+
+      <Modal
+        open={supplierImagePickerOpen}
+        title="Select supplier images"
+        onClose={() => setSupplierImagePickerOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSupplierImagePickerOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={applySupplierImageSelection}>
+              Use selected ({selectedSupplierImageUrls.length})
+            </Button>
+          </>
+        }
+      >
+        <div className="grid max-h-[min(60vh,520px)] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
+          {supplierImageOptions.map((option) => {
+            const selected = selectedSupplierImageUrls.includes(option.url)
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={`relative overflow-hidden rounded-lg border-2 text-left transition ${
+                  selected ? "border-brand ring-2 ring-brand/30" : "border-slate-200 hover:border-brand/50"
+                }`}
+                onClick={() => {
+                  setSelectedSupplierImageUrls((current) =>
+                    selected ? current.filter((url) => url !== option.url) : [...current, option.url]
+                  )
+                }}
+                aria-pressed={selected}
+              >
+                <img src={option.url} alt={option.label} className="aspect-square w-full object-cover" />
+                <span className="block truncate px-2 py-1 text-xs text-slate-600">{option.label}</span>
+                <span
+                  className={`absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold ${
+                    selected ? "bg-emerald-500 text-white" : "bg-white/90 text-slate-400"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {selected ? "✓" : "○"}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </Modal>
 
       <Modal
         open={confirmArchive}

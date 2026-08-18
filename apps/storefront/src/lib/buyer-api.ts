@@ -1731,6 +1731,23 @@ export const fetchProductDetail = async (
   }
 }
 
+export type BuyerProductShippingQuote = {
+  amountUsd: number
+  currencyCode: string
+  logisticsName?: string | null
+  dayFrom?: number | null
+  dayTo?: number | null
+}
+
+export const fetchProductShippingQuote = async (productId: string, input: { countryCode?: string; sizeId?: string; quantity?: number; storeId?: string }) => {
+  const params = new URLSearchParams({ country: input.countryCode ?? "us", quantity: String(input.quantity ?? 1) })
+  if (input.sizeId) params.set("size_id", input.sizeId)
+  const payload = await storeScopedFetch<{ quote?: { amount_usd?: number; currency_code?: string; logistics_name?: string | null; day_from?: number | null; day_to?: number | null } }>(`/store/products/${encodeURIComponent(productId)}/shipping-quote?${params.toString()}`, {}, { storeId: input.storeId })
+  const quote = payload.quote
+  if (!quote || typeof quote.amount_usd !== "number") throw new Error("Shipping quote unavailable")
+  return { amountUsd: quote.amount_usd, currencyCode: quote.currency_code ?? "usd", logisticsName: quote.logistics_name, dayFrom: quote.day_from, dayTo: quote.day_to } satisfies BuyerProductShippingQuote
+}
+
 export const fetchProductReviews = async (productId: string): Promise<LoadResult<BuyerReviewsSummary>> => {
   try {
     const payload = await apiFetch<ApiReviews>(`/store/products/${encodeURIComponent(productId)}/reviews`)

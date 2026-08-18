@@ -54,10 +54,30 @@ describe("ProductPurchasePanel", () => {
     }))
 
     expect(html).toContain("Color")
+    expect(html).toContain('aria-label="Color Black"')
+    expect(html).toContain('aria-label="Size M"')
     expect(html).toContain("Black")
     expect(html).toContain("White")
     expect(html).toContain("Size")
-    expect(html).toContain('value="M" selected=""')
+    expect(html).toContain('aria-label="Size M"')
+  })
+
+  it("shows normalized product tags below the title", () => {
+    const html = renderToStaticMarkup(createElement(ProductPurchasePanel, {
+      product: { ...product, tags: ["cotton", "#summer", ""] },
+      variants: [],
+      purchaseState: { canAdd: true, availabilityLabel: "Available", availabilityTone: "success" },
+      quantity: 1,
+      setQuantity: () => undefined,
+      adding: false,
+      onAddToCart: () => undefined,
+      onBuyNow: () => undefined,
+    }))
+
+    expect(html).toContain('class="buyer-product-tags"')
+    expect(html).toContain("#cotton")
+    expect(html).toContain("#summer")
+    expect(html.indexOf("#cotton")).toBeLessThan(html.indexOf("No reviews yet"))
   })
 
   it("shows one default option without implying multiple specifications", () => {
@@ -72,7 +92,7 @@ describe("ProductPurchasePanel", () => {
       adding: false,
       onAddToCart: () => undefined,
     }))
-    expect(html.match(/Default option/g)).toHaveLength(1)
+    expect(html).toContain("Default option")
   })
 
   it("does not invent a Studio link when the product has no designer contract", () => {

@@ -65,6 +65,10 @@ export type SupplierProductDetails = {
   warehouse?: string | null
   variants: Array<Record<string, unknown>>
   printSpecs: Array<Record<string, unknown>>
+  basicDetails?: Array<{ label: string; value: string }>
+  sizeChart?: { columns: string[]; rows: Array<Record<string, string>> } | null
+  packagingSpecs?: { columns: string[]; rows: Array<Record<string, string>> } | null
+  officialImages?: Array<{ url: string; colorName?: string | null }>
 }
 
 export type BuyerProductVariant = {
@@ -80,6 +84,8 @@ export type BuyerProductVariant = {
   optionValue?: string | null
   imageUrl?: string | null
   price?: number | null
+  supplierSizeId?: string | null
+  supplierColorId?: string | null
 }
 
 export type CartLineItem = {

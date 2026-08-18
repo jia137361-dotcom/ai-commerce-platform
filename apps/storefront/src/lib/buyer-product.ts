@@ -17,6 +17,8 @@ export type BuyerProductApiVariant = {
   allow_backorder?: boolean | null
   prices?: Array<{ amount?: number }>
   price?: number | string | null
+  supplier_size_id?: string | number | null
+  supplier_color_id?: string | number | null
 }
 
 export type BuyerProductApiInput = {
@@ -82,6 +84,10 @@ export type BuyerProductApiInput = {
       warehouse?: string | null
       variants?: Array<Record<string, unknown>>
       print_areas?: Array<Record<string, unknown>>
+      basic_details?: Array<{ label: string; value: string }>
+      size_chart?: { columns: string[]; rows: Array<Record<string, string>> } | null
+      packaging_specs?: { columns: string[]; rows: Array<Record<string, string>> } | null
+      official_images?: Array<{ url: string; color_name?: string | null }>
     } | null
     variants?: Array<Record<string, unknown>>
     print_specs?: Array<Record<string, unknown>>
@@ -140,6 +146,8 @@ export const normalizeBuyerProductVariants = (product: BuyerProductApiInput): Bu
       optionValue,
       imageUrl: variant.image_url ?? null,
       price: Number.isFinite(numericPrice) ? numericPrice : null,
+      supplierSizeId: variant.supplier_size_id != null ? String(variant.supplier_size_id) : null,
+      supplierColorId: variant.supplier_color_id != null ? String(variant.supplier_color_id) : null,
     }]
   })
 
@@ -194,9 +202,13 @@ export const normalizeBuyerProduct = (product: BuyerProductApiInput, index = 0):
         produceArea: english.produce_area,
         produceCountry: english.produce_country,
         warehouse: english.warehouse,
-        variants: product.supplier_details?.variants ?? english.variants ?? [],
-        printSpecs: product.supplier_details?.print_specs ?? english.print_areas ?? [],
-      }
+      variants: product.supplier_details?.variants ?? english.variants ?? [],
+      printSpecs: product.supplier_details?.print_specs ?? english.print_areas ?? [],
+      basicDetails: english.basic_details ?? [],
+      sizeChart: english.size_chart ?? null,
+      packagingSpecs: english.packaging_specs ?? null,
+      officialImages: (english.official_images ?? []).map((image) => ({ url: image.url, colorName: image.color_name })),
+    }
     : undefined
 
   return {

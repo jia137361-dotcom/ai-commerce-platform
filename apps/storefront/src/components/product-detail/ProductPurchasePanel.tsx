@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react"
 import type { BuyerProductVariant, StoreProduct } from "../../lib/mock-data"
+import { readBuyerDisplayPreferences } from "../../lib/buyer-display-preferences"
 import type { ProductPurchaseState } from "../../pages/product/product-detail-state"
-import { formatProductRegionNames } from "../../pages/product/product-regions"
 import type { BuyerShareInfo } from "../../lib/buyer-api"
 import { ProductSharePanel } from "./ProductSharePanel"
 import { Button } from "../ui/Button"
@@ -65,8 +66,17 @@ export function ProductPurchasePanel({
 }: ProductPurchasePanelProps) {
   const { displayCurrencyCode } = useBuyerDisplayPreferences()
   const reviewCount = product.reviewCount ?? 0
-  const editorHref = designHref ?? (product.id ? `/design/${encodeURIComponent(product.id)}` : undefined)
+  const editorHref = designHref ?? (product.hasDesigner && product.id ? `/design/${encodeURIComponent(product.id)}` : undefined)
   const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) ?? variants[0]
+  const [shippingQuote, setShippingQuote] = useState<{ amountUsd: number; logisticsName?: string | null; dayFrom?: number | null; dayTo?: number | null } | null>(null)
+  useEffect(() => {
+    if (!product.basicProductId || !selectedVariant) return
+    let active = true
+    void import("../../lib/buyer-api").then(({ fetchProductShippingQuote }) => fetchProductShippingQuote(product.id, { countryCode: readBuyerDisplayPreferences().countryCode, sizeId: selectedVariant.supplierSizeId ?? undefined, storeId: product.storeId }))
+      .then((quote) => { if (active) setShippingQuote(quote) })
+      .catch(() => { if (active) setShippingQuote(null) })
+    return () => { active = false }
+  }, [product.basicProductId, product.id, product.storeId, selectedVariant?.supplierSizeId, quantity])
   const purchasePrice = selectedVariant?.price ?? product.numericPrice
   const colorOptions = uniqueOptionValues(variants.map((variant) => variant.color))
   const sizeOptionsForSelectedColor = uniqueOptionValues(
@@ -78,6 +88,13 @@ export function ProductPurchasePanel({
   const customOptionLabel = customOptionTypes.length === 1 ? customOptionTypes[0] : "Option"
   const customOptionValues = uniqueOptionValues(variants.map((variant) => variant.optionValue))
   const hasCustomOptions = customOptionValues.length > 0
+  const productTags = Array.from(
+    new Set(
+      (product.tags ?? [])
+        .map((tag) => tag.trim().replace(/^#+/, ""))
+        .filter(Boolean)
+    )
+  )
   const canSplitOptions = variants.length > 1 && (colorOptions.length > 1 || sizeOptionsForSelectedColor.length > 1)
   const changeSplitOption = (next: { color?: string; size?: string }) => {
     const currentColor = next.color ?? selectedVariant?.color ?? colorOptions[0]
@@ -109,6 +126,11 @@ export function ProductPurchasePanel({
         </div>
       </div>
       <h1>{product.title}</h1>
+      {productTags.length ? (
+        <div className="buyer-product-tags" aria-label="Product tags">
+          {productTags.map((tag) => <span key={tag}>#{tag}</span>)}
+        </div>
+      ) : null}
       <div className="buyer-product-score">
         {product.averageRating != null ? (
           <>
@@ -127,6 +149,11 @@ export function ProductPurchasePanel({
         unavailableLabel="Price unavailable"
         className="buyer-product-price"
       />
+      <div className="buyer-product-default-shipping">
+        <span>Default shipping</span>
+        {shippingQuote ? <strong>{convertDisplayAmount(shippingQuote.amountUsd, "usd", displayCurrencyCode).toFixed(2)} {displayCurrencyCode.toUpperCase()}</strong> : <strong>Calculated at checkout</strong>}
+        {shippingQuote?.logisticsName ? <small>{shippingQuote.logisticsName}{shippingQuote.dayFrom != null ? ` · ${shippingQuote.dayFrom}-${shippingQuote.dayTo ?? shippingQuote.dayFrom} days` : ""}</small> : <small>Final amount depends on destination address and shipping method.</small>}
+      </div>
 
       {hasCustomOptions ? (
         <SelectField label={customOptionLabel} value={selectedVariantId ?? ""} onChange={(event) => onVariantChange(event.target.value)}>
@@ -139,35 +166,25 @@ export function ProductPurchasePanel({
       ) : canSplitOptions ? (
         <div className="buyer-product-split-options">
           {colorOptions.length ? (
-            <SelectField
-              label="Color"
-              value={selectedVariant?.color ?? colorOptions[0] ?? ""}
-              onChange={(event) => changeSplitOption({ color: event.target.value })}
-            >
-              {colorOptions.map((color) => (
-                <option key={color} value={color}>
-                  {color}
-                </option>
-              ))}
-            </SelectField>
+            <fieldset className="buyer-product-choice-group">
+              <legend>Color</legend>
+              <div className="buyer-product-choice-buttons">
+                {colorOptions.map((color) => (
+                  <button key={color} type="button" aria-label={`Color ${color}`} aria-pressed={selectedVariant?.color === color} onClick={() => changeSplitOption({ color })}>{color}</button>
+                ))}
+              </div>
+            </fieldset>
           ) : null}
           {sizeOptionsForSelectedColor.length ? (
-            <SelectField
-              label="Size"
-              value={selectedVariant?.size ?? sizeOptionsForSelectedColor[0] ?? ""}
-              onChange={(event) => changeSplitOption({ size: event.target.value })}
-            >
-              {sizeOptionsForSelectedColor.map((size) => {
-                const variantForSize = variants.find(
-                  (variant) => (!selectedVariant?.color || variant.color === selectedVariant.color) && variant.size === size
-                )
-                return (
-                  <option key={size} value={size} disabled={variantForSize?.isPurchasable === false}>
-                    {size}
-                  </option>
-                )
-              })}
-            </SelectField>
+            <fieldset className="buyer-product-choice-group">
+              <legend>Size</legend>
+              <div className="buyer-product-choice-buttons">
+                {sizeOptionsForSelectedColor.map((size) => {
+                  const variantForSize = variants.find((variant) => (!selectedVariant?.color || variant.color === selectedVariant.color) && variant.size === size)
+                  return <button key={size} type="button" aria-label={`Size ${size}`} aria-pressed={selectedVariant?.size === size} disabled={variantForSize?.isPurchasable === false} onClick={() => changeSplitOption({ size })}>{size}</button>
+                })}
+              </div>
+            </fieldset>
           ) : null}
         </div>
       ) : variants.length > 1 ? (
@@ -183,7 +200,9 @@ export function ProductPurchasePanel({
           <strong>Option</strong>
           <span>{variants[0].title || "Default option"}</span>
         </div>
-      ) : variants.length === 1 ? null : (
+      ) : variants.length === 1 ? (
+        <div className="buyer-product-option-unavailable"><strong>Option</strong><span>Default option</span></div>
+      ) : (
         <div className="buyer-product-option-unavailable">
           <strong>Option</strong>
           <span>Visual selector only — variant contract pending backend options.</span>
@@ -209,12 +228,6 @@ export function ProductPurchasePanel({
           {addNotice.message}
           {addNotice.tone === "success" ? <a href="/cart">View cart</a> : null}
         </p>
-      ) : null}
-
-      {editorHref ? (
-        <a href={editorHref} className="buyer-product-design-primary">
-          Design now
-        </a>
       ) : null}
 
       <Button
@@ -261,9 +274,6 @@ export function ProductPurchasePanel({
       {requiresSignIn ? (
         <p className="buyer-product-checkout-note">Browsing is open to everyone. Sign in before adding this option to your cart.</p>
       ) : null}
-      <p className="buyer-product-checkout-note">
-        Available for purchase in: <strong>{formatProductRegionNames(product.supportedRegions)}</strong>.
-      </p>
       {share ? <ProductSharePanel share={share} source="backend" compact /> : null}
       <p className="buyer-product-checkout-note">Taxes and delivery options are confirmed during checkout.</p>
     </Card>

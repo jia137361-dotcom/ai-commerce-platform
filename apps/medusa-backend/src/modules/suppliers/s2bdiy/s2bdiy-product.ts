@@ -51,6 +51,10 @@ export type S2bdiyEnglishProductInfo = {
   warehouse: string | null
   variants: Array<Record<string, unknown>>
   print_areas: Array<Record<string, unknown>>
+  basic_details: Array<{ label: string; value: string }>
+  size_chart: { columns: string[]; rows: Array<Record<string, string>> } | null
+  packaging_specs: { columns: string[]; rows: Array<Record<string, string>> } | null
+  official_images: Array<{ url: string; color_name: string | null }>
 }
 
 const englishText = (value: unknown): string | null =>
@@ -95,6 +99,129 @@ export function normalizeS2bdiyEnglishProduct(
     const name = englishName(item)
     return id != null && name ? [{ id: String(id), name }] : []
   })
+  const scalar = (value: unknown): string | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return String(value)
+    return englishText(value)
+  }
+  const sizeNameById = new Map(
+    list("sizes").flatMap((item) => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {}
+      const id = row.id == null ? null : String(row.id)
+      const name = englishName(item) ?? scalar(row.name)
+      return id && name ? [[id, name] as const] : []
+    })
+  )
+  const sizeAttributeLabels: Record<string, string> = {
+    "合适身高": "Suitable height",
+    "衣长": "Body length",
+    "胸宽": "Chest width",
+    "建议体重": "Recommended weight",
+  }
+  const itemRows = list("items").map((item) => {
+    const row = item && typeof item === "object" ? item as Record<string, unknown> : {}
+    const sizeId = row.size_id == null ? null : String(row.size_id)
+    return {
+      Size: sizeNameById.get(sizeId ?? "") ?? sizeId ?? "",
+      Weight: scalar(row.weight) ?? "",
+      Length: scalar(row.length) ?? "",
+      Width: scalar(row.width) ?? "",
+      Height: scalar(row.height) ?? "",
+    }
+  }).filter((row) => Object.values(row).some(Boolean))
+  const table = (
+    value: unknown,
+    aliases: Array<[string, string]>,
+    fallback: Array<Record<string, string>>,
+  ) => {
+    const source = Array.isArray(value) ? value : fallback
+    const rows = source.flatMap((item) => {
+      if (!item || typeof item !== "object") return []
+      const sourceRow = item as Record<string, unknown>
+      const normalized = Object.fromEntries(
+        aliases.flatMap(([key, label]) => {
+          const value = scalar(sourceRow[key] ?? sourceRow[label])
+          return value ? [[label, value]] : []
+        })
+      ) as Record<string, string>
+      return Object.keys(normalized).length ? [normalized] : []
+    })
+    if (!rows.length) return null
+    return {
+      columns: aliases.map(([, label]) => label).filter((label) => rows.some((row) => row[label])),
+      rows,
+    }
+  }
+  const basicDetails = [
+    ["Product", englishText(product.en_name)],
+    ["Product code", scalar(product.code)],
+    ["Product number", scalar(product.id)],
+    ["Material", englishText(product.en_product_material_text)],
+    ["Technology", englishText(product.en_product_technology_text)],
+    ["Production area", englishText(product.produce_area_text) ?? scalar(product.produce_area)],
+    ["Production country", englishText(product.produce_country_text) ?? englishText(product.produce_country)],
+    ["Warehouse", englishText(product.warehouse_name)],
+    ["Delivery", englishText(product.deliver_goods_text)],
+  ].flatMap(([label, value]) => value ? [{ label, value }] : [])
+  const officialImages = Array.isArray(product.product_show_images)
+    ? product.product_show_images.flatMap((block) => {
+      if (!block || typeof block !== "object") return []
+      const row = block as Record<string, unknown>
+      const colorName = englishText(row.color_name) ?? englishText(row.tone)
+      return Array.isArray(row.images)
+        ? row.images.flatMap((image) => {
+          const url = imageUrl(image)
+          return url ? [{ url, color_name: colorName }] : []
+        })
+        : []
+    })
+    : []
+  const sizeAliases: Array<[string, string]> = [
+    ["size", "Size"], ["size_name", "Size"], ["weight", "Weight"],
+    ["length", "Length"], ["width", "Width"], ["height", "Height"],
+    ["chest", "Chest"], ["bust", "Bust"], ["body_length", "Body length"],
+  ]
+  const packagingAliases: Array<[string, string]> = [
+    ["size", "Size"], ["size_name", "Size"], ["length", "Length"],
+    ["width", "Width"], ["height", "Height"], ["volume", "Volume"],
+    ["weight", "Weight"], ["max_qty", "Max quantity"],
+  ]
+  const liveSizeRows = list("attr_values").flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const row = item as Record<string, unknown>
+    const sizeId = row.size_id == null ? null : String(row.size_id)
+    const size = englishText(row.size_name) ?? sizeNameById.get(sizeId ?? "") ?? sizeId
+    if (!size || !Array.isArray(row.attr_value)) return []
+    const attributes = row.attr_value.reduce<Record<string, string>>((result, attribute) => {
+      if (!attribute || typeof attribute !== "object") return result
+      const source = attribute as Record<string, unknown>
+      const sourceLabel = englishText(source.attr_name_en) ?? englishText(source.attr_name)
+      const label = sourceLabel ? sizeAttributeLabels[sourceLabel] ?? sourceLabel : null
+      const value = scalar(source.attr_value)
+      if (label && value) result[label] = value
+      return result
+    }, {})
+    return Object.keys(attributes).length ? [{ Size: size, ...attributes }] : []
+  })
+  const livePackagingRows = list("size_specifications").flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const row = item as Record<string, unknown>
+    const sizeId = row.size_id == null ? null : String(row.size_id)
+    const size = englishText(row.size_name) ?? sizeNameById.get(sizeId ?? "") ?? sizeId
+    if (!size) return []
+    const weight = scalar(row.weight)
+    const length = scalar(row.length)
+    const width = scalar(row.width)
+    const height = scalar(row.height)
+    const volume = scalar(row.volume)
+    return [{
+      Size: size,
+      ...(weight ? { Weight: `${weight} kg` } : {}),
+      ...(length ? { Length: `${length} cm` } : {}),
+      ...(width ? { Width: `${width} cm` } : {}),
+      ...(height ? { Height: `${height} cm` } : {}),
+      ...(volume ? { Volume: `${volume} cm³` } : {}),
+    }]
+  })
 
   return {
     english_name: englishText(product.en_name),
@@ -115,6 +242,14 @@ export function normalizeS2bdiyEnglishProduct(
     warehouse: englishText(product.warehouse_name),
     variants: list("items").filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")),
     print_areas: list("print_areas").filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")),
+    basic_details: basicDetails,
+    size_chart: liveSizeRows.length
+      ? { columns: ["Size", ...Object.keys(liveSizeRows.reduce<Record<string, string>>((columns, row) => { Object.keys(row).forEach((key) => { columns[key] = key }); return columns }, {})).filter((key) => key !== "Size")], rows: liveSizeRows }
+      : table(product.size_chart ?? product.size_table ?? product.size_info, sizeAliases, itemRows),
+    packaging_specs: livePackagingRows.length
+      ? { columns: ["Size", "Weight", "Length", "Width", "Height", "Volume"].filter((key) => livePackagingRows.some((row) => key in row)), rows: livePackagingRows }
+      : table(product.packaging_specs ?? product.package_specs ?? product.packing_specs, packagingAliases, itemRows),
+    official_images: officialImages,
   }
 }
 
