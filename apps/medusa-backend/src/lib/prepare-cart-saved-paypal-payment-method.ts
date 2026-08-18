@@ -1,9 +1,14 @@
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { createPaymentSessionsWorkflow } from "@medusajs/medusa/core-flows"
-import { assertCartBelongsToCurrentStore } from "./assert-cart-store"
-import { readCartPaymentCollectionId, listPaymentSessions } from "./ensure-cart-payment-ready"
+import { assertCartBelongsToCurrentStore, readCartStoreId } from "./assert-cart-store"
+import { findCartPaymentSession, readCartPaymentCollectionId, listPaymentSessions } from "./ensure-cart-payment-ready"
 import { resolvePayPalVaultPaymentMethod } from "./customer-payment-methods"
+import {
+  normalizePayPalOrderStatus,
+  readPayPalOrderId,
+  syncActiveCheckoutPaymentAttemptSession,
+} from "./checkout-payment-attempts"
 
 const PAYPAL_PROVIDER_ID = "pp_paypal_paypal"
 
@@ -46,6 +51,20 @@ export async function prepareCartWithSavedPayPalPaymentMethod(
       data: { paypal_vault_id: method.vault_id },
       context: {},
     },
+  })
+
+  const session = await findCartPaymentSession(container, input.cartId, providerId)
+  const sessionData = session?.data ?? null
+  const paypalStatus = typeof sessionData?.paypal_status === "string" ? sessionData.paypal_status : null
+  const captureStatus = typeof sessionData?.paypal_capture_status === "string" ? sessionData.paypal_capture_status : null
+  await syncActiveCheckoutPaymentAttemptSession(container, {
+    cartId: input.cartId,
+    storeId: readCartStoreId(cart),
+    providerId,
+    paymentCollectionId,
+    paymentSessionId: session?.id ?? null,
+    providerPaymentId: readPayPalOrderId(session),
+    status: normalizePayPalOrderStatus(paypalStatus, captureStatus),
   })
 
   return { providerId, paymentMethodLabel: method.label || "PayPal account" }

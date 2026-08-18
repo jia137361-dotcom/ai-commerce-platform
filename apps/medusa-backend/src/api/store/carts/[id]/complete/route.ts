@@ -137,6 +137,28 @@ const findCompletedOrderForCart = async (
   }) ?? null
 }
 
+const findOrderLinkedToCart = async (
+  req: MedusaRequest,
+  orderModule: { retrieveOrder: (id: string) => Promise<CompleteOrder> },
+  cart: CompleteCart,
+  storeId: string,
+  cartId: string
+): Promise<CompleteOrder | null> => {
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = (await query.graph({
+    entity: "order_cart",
+    fields: ["cart_id", "order_id"],
+    filters: { cart_id: cartId },
+  })) as { data: Array<{ cart_id?: string | null; order_id?: string | null }> }
+  const orderId = data.find((row) => row.cart_id === cartId)?.order_id
+  if (!orderId) return null
+
+  const order = await orderModule.retrieveOrder(orderId)
+  if (readOrderStoreId(order) !== storeId) return null
+  if (cart.customer_id && order.customer_id && order.customer_id !== cart.customer_id) return null
+  return order
+}
+
 const buildCompleteResponse = (input: {
   order: CompleteOrder
   cart: CompleteCart
@@ -212,7 +234,10 @@ const providerPaymentWasSuccessful = async (
       return normalizeStripePaymentIntentStatus(intent?.status) === "payment_succeeded"
     }
     if (isPayPalProviderId(providerId)) {
-      const paypalOrderId = attempt?.provider_payment_id ?? readPayPalOrderId(session)
+      // Saved-account checkout replaces the Medusa session after the attempt
+      // was reserved. The current session therefore wins over stale attempt
+      // metadata; the attempt remains the fallback if the session was lost.
+      const paypalOrderId = readPayPalOrderId(session) ?? attempt?.provider_payment_id
       const client = getConfiguredPayPalClient()
       if (!paypalOrderId || !client) return false
       const order = await client.retrieveOrder(paypalOrderId)
@@ -319,15 +344,16 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
 
     let paymentMethodLabel: string | null = null
     const latestAttempt = await readLatestCheckoutPaymentAttempt(req.scope, { cartId, storeId })
+    let recoveredOrder: CompleteOrder | null = null
     if (
       latestAttempt?.completed_order_id &&
       latestAttempt.cart_id === cartId &&
       latestAttempt.store_id === storeId &&
       (!cart.customer_id || !latestAttempt.customer_id || latestAttempt.customer_id === cart.customer_id)
     ) {
-      const attemptOrder = (await orderModule.retrieveOrder(latestAttempt.completed_order_id)) as CompleteOrder
+      recoveredOrder = (await orderModule.retrieveOrder(latestAttempt.completed_order_id)) as CompleteOrder
       return res.status(200).json(buildCompleteResponse({
-        order: attemptOrder,
+        order: recoveredOrder,
         cart,
         cartId,
         storeId,
@@ -336,26 +362,40 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         alreadyCompleted: true,
       }))
     }
-    const alreadyCompletedOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
-    if (alreadyCompletedOrder) {
+    if (!recoveredOrder) {
+      recoveredOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
+      if (recoveredOrder) {
+        await updateCheckoutPaymentAttempt(req, {
+          cartId,
+          storeId,
+          status: "completed",
+          orderId: recoveredOrder.id,
+        })
+        return res.status(200).json(buildCompleteResponse({
+          order: recoveredOrder,
+          cart,
+          cartId,
+          storeId,
+          providerId,
+          paymentMethodLabel,
+          alreadyCompleted: true,
+        }))
+      }
+    }
+    if (!recoveredOrder) {
+      recoveredOrder = await findOrderLinkedToCart(req, orderModule, cart, storeId, cartId)
+    }
+    let alreadyCompleted = Boolean(recoveredOrder)
+    if (recoveredOrder) {
       await updateCheckoutPaymentAttempt(req, {
         cartId,
         storeId,
         status: "completed",
-        orderId: alreadyCompletedOrder.id,
+        orderId: recoveredOrder.id,
       })
-      return res.status(200).json(buildCompleteResponse({
-        order: alreadyCompletedOrder,
-        cart,
-        cartId,
-        storeId,
-        providerId,
-        paymentMethodLabel,
-        alreadyCompleted: true,
-      }))
     }
 
-    if (isStripeProvider(providerId)) {
+    if (!recoveredOrder && isStripeProvider(providerId)) {
       const stripeSession = await findCartPaymentSession(req.scope, cartId, providerId)
       const clientSecret = stripeSession?.data?.client_secret
       if (!stripeSession || typeof clientSecret !== "string" || !clientSecret.startsWith("pi_")) {
@@ -375,7 +415,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       if (paymentIntent) {
         try {
           assertStripePaymentIntentAmount({
-            expectedMajor: cart.total,
+            expectedMajor: stripeSession.amount ?? cart.total,
             currencyCode: cart.currency_code ?? stripeSession.currency_code ?? "usd",
             intentAmountMinor: paymentIntent.amount,
             intentCurrency: paymentIntent.currency,
@@ -395,57 +435,53 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       } catch (error) {
         console.warn("[checkout-complete] unable to resolve Stripe payment method label", error)
       }
-    } else {
+    } else if (!recoveredOrder) {
       // Reuse the active attempt's external PayPal order when Medusa only lost
       // a processable session row. Creating a second PayPal order after the
       // buyer already approved the first one leaves checkout unrecoverable.
       let existingProviderPaymentId: string | undefined
       if (isPayPalProviderId(providerId)) {
         const attempt = await readActiveCheckoutPaymentAttempt(req.scope, { cartId, storeId })
-        if (attempt?.provider_id === providerId && attempt.provider_payment_id) {
-          existingProviderPaymentId = attempt.provider_payment_id
-        } else {
-          const session = await findCartPaymentSession(req.scope, cartId, providerId)
-          existingProviderPaymentId = readPayPalOrderId(session) ?? undefined
-        }
+        const session = await findCartPaymentSession(req.scope, cartId, providerId)
+        existingProviderPaymentId = readPayPalOrderId(session) ??
+          (attempt?.provider_id === providerId ? attempt.provider_payment_id ?? undefined : undefined)
       }
       await ensureCartPaymentReady(req.scope, cartId, providerId, existingProviderPaymentId)
     }
 
-    let result: { id?: string }
-    try {
-      const workflowResult = await completeCartWorkflow(req.scope).run({
-        input: { id: cartId },
-      })
-      result = workflowResult.result as { id?: string }
-    } catch (workflowError) {
-      const existingOrder = await findCompletedOrderForCart(orderModule, cart, storeId, cartId)
-      if (existingOrder) {
+    let result: { id?: string } = recoveredOrder ? { id: recoveredOrder.id } : {}
+    if (!recoveredOrder) {
+      try {
+        const workflowResult = await completeCartWorkflow(req.scope).run({
+          input: { id: cartId },
+        })
+        result = workflowResult.result as { id?: string }
+      } catch (workflowError) {
+        const existingOrder =
+          await findCompletedOrderForCart(orderModule, cart, storeId, cartId) ??
+          await findOrderLinkedToCart(req, orderModule, cart, storeId, cartId)
+        if (existingOrder) {
+          result = { id: existingOrder.id }
+          recoveredOrder = existingOrder
+          alreadyCompleted = true
+        } else {
+          if (await providerPaymentWasSuccessful(req, cartId, storeId, providerId)) {
+            await updateCheckoutPaymentAttempt(req, {
+              cartId,
+              storeId,
+              status: "order_completion_failed",
+              error: workflowError,
+            })
+          }
+          throw workflowError
+        }
         await updateCheckoutPaymentAttempt(req, {
           cartId,
           storeId,
           status: "completed",
           orderId: existingOrder.id,
         })
-        return res.status(200).json(buildCompleteResponse({
-          order: existingOrder,
-          cart,
-          cartId,
-          storeId,
-          providerId,
-          paymentMethodLabel,
-          alreadyCompleted: true,
-        }))
       }
-      if (await providerPaymentWasSuccessful(req, cartId, storeId, providerId)) {
-        await updateCheckoutPaymentAttempt(req, {
-          cartId,
-          storeId,
-          status: "order_completion_failed",
-          error: workflowError,
-        })
-      }
-      throw workflowError
     }
 
     const orderId = result.id as string
@@ -615,7 +651,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       storeId,
       providerId,
       paymentMethodLabel,
-      alreadyCompleted: false,
+      alreadyCompleted,
     }))
   } catch (error: unknown) {
     if (error instanceof CartStoreAccessError) {

@@ -76,6 +76,7 @@ const buildStoreCheckoutHref = (
 export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
   const auth = useBuyerAuth()
   const [successInfo] = useState(() => readSuccessInfo())
+  const [showCompletionStatus, setShowCompletionStatus] = useState(Boolean(successInfo?.orderId))
   const platformSession = useMemo(() => readPlatformCheckoutSession(), [])
   const platformCheckoutActive = Boolean(
     new URLSearchParams(window.location.search).get("platform_checkout") ||
@@ -97,6 +98,12 @@ export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
   )
 
   useEffect(() => {
+    if (!successInfo?.orderId) return
+    const timeout = window.setTimeout(() => setShowCompletionStatus(false), 900)
+    return () => window.clearTimeout(timeout)
+  }, [successInfo?.orderId])
+
+  useEffect(() => {
     if (platformCheckoutActive && allPlatformComplete) {
       clearPlatformCheckoutSession()
     }
@@ -111,6 +118,16 @@ export function CheckoutSuccessPage({ cartCount }: CheckoutSuccessPageProps) {
       cartCount={cartCount}
       storeHref={storeHref}
     >
+      {showCompletionStatus ? (
+        <div className="buyer-checkout-completion-backdrop" role="status" aria-live="polite">
+          <div className="buyer-checkout-completion-dialog">
+            <div className="buyer-checkout-completion-spinner" aria-hidden="true" />
+            <strong>Payment confirmed</strong>
+            <p>Preparing your order details...</p>
+            <small>Please wait a moment.</small>
+          </div>
+        </div>
+      ) : null}
       {successInfo?.orderId ? (
         <>
           <CheckoutSuccessSummary info={successInfo} isAuthenticated={Boolean(auth.customer)} />

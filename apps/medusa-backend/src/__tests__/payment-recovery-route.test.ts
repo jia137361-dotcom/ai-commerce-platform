@@ -14,6 +14,7 @@ const mockRetrievePayPalOrder = jest.fn()
 const mockCreatePayPalOrder = jest.fn()
 const mockUpdatePayPalOrder = jest.fn()
 const mockIsCheckoutPaymentAttemptExpired = jest.fn()
+const mockReadPayPalCaptureStatus = jest.fn()
 const mockStripeApiRequest = jest.fn()
 
 jest.mock("@medusajs/core-flows", () => ({
@@ -41,7 +42,12 @@ jest.mock("../lib/checkout-payment-attempts", () => ({
   isCheckoutPaymentAttemptExpired: (...args: unknown[]) => mockIsCheckoutPaymentAttemptExpired(...args),
   isPayPalProviderId: (providerId?: string | null) => Boolean(providerId?.startsWith("pp_paypal_")),
   isStripeProviderId: (providerId?: string | null) => Boolean(providerId?.startsWith("pp_stripe_")),
-  normalizePayPalOrderStatus: () => "awaiting_payment",
+  normalizePayPalOrderStatus: (status?: string | null, captureStatus?: string | null) => {
+    if (captureStatus === "COMPLETED") return "payment_succeeded"
+    if (captureStatus === "PENDING") return "payment_processing"
+    if (status === "APPROVED") return "requires_action"
+    return status === "COMPLETED" ? "payment_processing" : "awaiting_payment"
+  },
   normalizeStripePaymentIntentStatus: (status?: string | null) =>
     status === "succeeded" ? "payment_succeeded" : status === "processing" ? "payment_processing" : "awaiting_payment",
   readActiveCheckoutPaymentAttempt: (...args: unknown[]) => mockReadActiveCheckoutPaymentAttempt(...args),
@@ -49,7 +55,7 @@ jest.mock("../lib/checkout-payment-attempts", () => ({
   readAttemptPaymentSession: (...args: unknown[]) => mockReadAttemptPaymentSession(...args),
   readPayPalOrderId: (session?: { data?: Record<string, unknown> | null }) =>
     typeof session?.data?.paypal_order_id === "string" ? session.data.paypal_order_id : null,
-  readPayPalCaptureStatus: () => null,
+  readPayPalCaptureStatus: (...args: unknown[]) => mockReadPayPalCaptureStatus(...args),
   readPaymentAttemptPaymentIntentId: (...args: unknown[]) => mockReadPaymentAttemptPaymentIntentId(...args),
   readStripePaymentIntentForAttempt: (...args: unknown[]) => mockReadStripePaymentIntentForAttempt(...args),
 }))
@@ -89,8 +95,8 @@ const createRes = (): MockRes => {
   return res as MockRes
 }
 
-const createReq = () => {
-  let attemptRecord: Record<string, unknown> | null = null
+const createReq = (initialAttemptRecord: Record<string, unknown> | null = null) => {
+  let attemptRecord: Record<string, unknown> | null = initialAttemptRecord
   const cartModule = {
     retrieveCart: jest.fn(async () => ({
       id: "cart_1",
@@ -150,6 +156,7 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockIsCheckoutPaymentAttemptExpired.mockReturnValue(false)
+    mockReadPayPalCaptureStatus.mockReturnValue(null)
     mockReadActiveCheckoutPaymentAttempt.mockResolvedValue(null)
     mockReadLatestCheckoutPaymentAttempt.mockResolvedValue(null)
     mockReadAttemptPaymentSession.mockResolvedValue(null)
@@ -273,6 +280,85 @@ describe("POST /store/carts/:id/payment-recovery Stripe readiness", () => {
     expect(res.body).toMatchObject({
       status: "expired",
       payment_attempt: { id: "cpa_expired", recovery_action: "expired" },
+    })
+  })
+
+  it("reconciles a latest expired Stripe attempt before returning expired", async () => {
+    mockReadLatestCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_expired_paid",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      customer_id: "cus_1",
+      provider_id: "pp_stripe_stripe",
+      provider_payment_id: "pi_paid",
+      status: "expired",
+      expires_at: new Date(Date.now() - 60_000),
+    })
+    mockReadPaymentAttemptPaymentIntentId.mockReturnValue("pi_paid")
+    mockReadStripePaymentIntentForAttempt.mockResolvedValue({
+      id: "pi_paid",
+      status: "succeeded",
+      amount: 1243,
+      currency: "usd",
+    })
+    const { req } = createReq()
+    const res = createRes()
+
+    await recoverPayment(req, res)
+
+    expect(mockReadStripePaymentIntentForAttempt).toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      status: "payment_succeeded",
+      payment_attempt: {
+        id: "cpa_expired_paid",
+        provider_payment_id: "pi_paid",
+        recovery_action: "complete_order",
+      },
+    })
+  })
+
+  it("reconciles a latest expired PayPal attempt by provider id without a Medusa session", async () => {
+    const expiredAttempt = {
+      id: "cpa_expired_paypal_paid",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      customer_id: "cus_1",
+      provider_id: "pp_paypal_paypal",
+      provider_payment_id: "PAYPAL_CAPTURED",
+      status: "expired",
+      expires_at: new Date(Date.now() - 60_000),
+    }
+    mockReadLatestCheckoutPaymentAttempt.mockResolvedValue(expiredAttempt)
+    mockReadPayPalCaptureStatus.mockReturnValue("COMPLETED")
+    mockRetrievePayPalOrder.mockResolvedValue({
+      id: "PAYPAL_CAPTURED",
+      status: "COMPLETED",
+      purchase_units: [{ payments: { captures: [{ status: "COMPLETED" }] } }],
+    })
+    mockFindCartPaymentSession.mockResolvedValue({
+      id: "ps_recovered",
+      provider_id: "pp_paypal_paypal",
+      status: "captured",
+      amount: 12.43,
+      currency_code: "usd",
+      data: { paypal_order_id: "PAYPAL_CAPTURED" },
+    })
+    const { req } = createReq(expiredAttempt)
+    req.body = { provider_id: "pp_paypal_paypal" } as never
+    const res = createRes()
+
+    await recoverPayment(req, res)
+
+    expect(mockRetrievePayPalOrder).toHaveBeenCalledWith("PAYPAL_CAPTURED")
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({
+      status: "payment_succeeded",
+      payment_attempt: {
+        id: "cpa_expired_paypal_paid",
+        provider_payment_id: "PAYPAL_CAPTURED",
+        recovery_action: "complete_order",
+      },
     })
   })
 

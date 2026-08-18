@@ -5,6 +5,24 @@ import { formatStripePaymentMethodLabel, resolveStripePaymentMethodLabel } from 
 export const isStripeProviderId = (providerId?: string) => Boolean(providerId?.startsWith("pp_stripe_"))
 export const isPayPalProviderId = (providerId?: string) => Boolean(providerId?.startsWith("pp_paypal_"))
 
+export const shouldRecoverConfirmedPaymentAfterCompletionFailure = (
+  paymentWasConfirmed: boolean,
+  providerId?: string
+) => paymentWasConfirmed && (isStripeProviderId(providerId) || isPayPalProviderId(providerId))
+
+export const canReconcileStripeReturn = (input: {
+  hasReturnParams: boolean
+  cartId?: string
+  providerId?: string
+  requiresShippingMethod: boolean
+  shippingMethodSaved: boolean
+}) => Boolean(
+  input.hasReturnParams &&
+  input.cartId &&
+  isStripeProviderId(input.providerId) &&
+  (!input.requiresShippingMethod || input.shippingMethodSaved)
+)
+
 export const isValidStripePublishableKey = (publishableKey: string) =>
   (publishableKey.startsWith("pk_test_") || publishableKey.startsWith("pk_live_")) &&
   !/^pk_(test|live)_x+$/i.test(publishableKey) &&
@@ -39,7 +57,102 @@ export const chooseDefaultPaymentProvider = (
 export const hasValidStripeClientSecret = (session?: BuyerPaymentSession | null) =>
   Boolean(session?.clientSecret?.startsWith("pi_") && session.clientSecret.includes("_secret_"))
 
+export const buildStripeCheckoutReturnUrl = (input: {
+  origin: string
+  cartId: string
+  storeId?: string
+  platformCheckoutId?: string
+  platformCheckoutIndex?: number
+  platformCheckoutCount?: number
+}) => {
+  const url = new URL("/checkout", input.origin)
+  url.searchParams.set("cart_id", input.cartId)
+  if (input.storeId) url.searchParams.set("store", input.storeId)
+  if (input.platformCheckoutId) url.searchParams.set("platform_checkout_id", input.platformCheckoutId)
+  if (Number.isFinite(input.platformCheckoutIndex)) {
+    url.searchParams.set("platform_checkout_index", String(input.platformCheckoutIndex))
+  }
+  if (Number.isFinite(input.platformCheckoutCount)) {
+    url.searchParams.set("platform_checkout_count", String(input.platformCheckoutCount))
+  }
+  return url.toString()
+}
+
+const STRIPE_CHECKOUT_RETURN_CONTEXT_KEY = "citigoo:stripe_checkout_return_context"
+
+type StripeCheckoutReturnContext = {
+  cartId: string
+  storeId?: string
+}
+
+type StripeCheckoutReturnStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">
+
+export const persistStripeCheckoutReturnContext = (
+  returnUrl: string,
+  storage: StripeCheckoutReturnStorage
+) => {
+  try {
+    const url = new URL(returnUrl, typeof window === "undefined" ? "http://localhost" : window.location.origin)
+    const cartId = url.searchParams.get("cart_id")?.trim()
+    if (!cartId) return
+    const storeId = url.searchParams.get("store")?.trim() || undefined
+    storage.setItem(STRIPE_CHECKOUT_RETURN_CONTEXT_KEY, JSON.stringify({ cartId, storeId }))
+  } catch {
+    // A malformed return URL should still be handled by Stripe's normal error path.
+  }
+}
+
+export const readStripeCheckoutReturnContext = (
+  storage: StripeCheckoutReturnStorage
+): StripeCheckoutReturnContext | null => {
+  try {
+    const raw = storage.getItem(STRIPE_CHECKOUT_RETURN_CONTEXT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StripeCheckoutReturnContext>
+    if (typeof parsed.cartId !== "string" || !parsed.cartId.trim()) return null
+    return {
+      cartId: parsed.cartId.trim(),
+      storeId: typeof parsed.storeId === "string" && parsed.storeId.trim() ? parsed.storeId.trim() : undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
+export const clearStripeCheckoutReturnContext = (storage: StripeCheckoutReturnStorage) => {
+  storage.removeItem(STRIPE_CHECKOUT_RETURN_CONTEXT_KEY)
+}
+
 const COMPLETABLE_STRIPE_STATUSES = new Set(["succeeded", "processing", "requires_capture"])
+
+export async function completeSavedStripePaymentAuthentication(input: {
+  initialStatus?: string
+  clientSecret?: string
+  handleNextAction: (clientSecret: string) => Promise<{
+    error?: { message?: string } | null
+    paymentIntent?: { status?: string } | null
+  }>
+  finalizeConfirmation: () => Promise<string | undefined>
+}) {
+  let status = input.initialStatus
+  if (status && COMPLETABLE_STRIPE_STATUSES.has(status)) return status
+
+  if (status === "requires_action") {
+    if (!input.clientSecret) throw new Error("Saved card payment requires authentication but has no client secret.")
+    const result = await input.handleNextAction(input.clientSecret)
+    if (result.error) throw new Error(result.error.message || "Saved-card authentication failed.")
+    status = result.paymentIntent?.status
+  }
+
+  if (status === "requires_confirmation") {
+    status = await input.finalizeConfirmation()
+  }
+
+  if (!status || !COMPLETABLE_STRIPE_STATUSES.has(status)) {
+    throw new Error(`Saved-card payment did not complete${status ? ` (${status})` : ""}.`)
+  }
+  return status
+}
 
 export const STRIPE_ORDER_CREATION_FAILED_MESSAGE =
   "支付已确认，订单正在恢复。请不要再次付款；如订单稍后仍未显示，请联系支持。"

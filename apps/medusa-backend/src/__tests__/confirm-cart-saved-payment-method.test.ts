@@ -6,9 +6,11 @@ const mockFindCartPaymentSession = jest.fn()
 const mockEnsureStripeCustomerId = jest.fn()
 const mockListCustomerPaymentMethodRecords = jest.fn()
 const mockStripeApiRequest = jest.fn()
+const mockSyncActiveCheckoutPaymentAttemptSession = jest.fn()
 
 jest.mock("../lib/assert-cart-store", () => ({
   assertCartBelongsToCurrentStore: (...args: unknown[]) => mockAssertCartBelongsToCurrentStore(...args),
+  readCartStoreId: (cart: { metadata?: { store_id?: string } }) => cart.metadata?.store_id ?? "default_store",
 }))
 
 jest.mock("../lib/ensure-cart-payment-ready", () => ({
@@ -24,6 +26,12 @@ jest.mock("../lib/customer-payment-methods", () => ({
 
 jest.mock("../lib/stripe-client", () => ({
   stripeApiRequest: (...args: unknown[]) => mockStripeApiRequest(...args),
+}))
+
+jest.mock("../lib/checkout-payment-attempts", () => ({
+  normalizeStripePaymentIntentStatus: (status?: string) =>
+    status === "succeeded" ? "payment_succeeded" : status === "requires_action" ? "requires_action" : "awaiting_payment",
+  syncActiveCheckoutPaymentAttemptSession: (...args: unknown[]) => mockSyncActiveCheckoutPaymentAttemptSession(...args),
 }))
 
 import { confirmCartWithSavedPaymentMethod } from "../lib/confirm-cart-saved-payment-method"
@@ -94,6 +102,13 @@ describe("confirmCartWithSavedPaymentMethod", () => {
         return_url: "http://127.0.0.1:5174/checkout",
       },
     })
+    expect(mockSyncActiveCheckoutPaymentAttemptSession).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      cartId: "cart_1",
+      providerId: "pp_stripe_stripe",
+      paymentSessionId: "ps_1",
+      providerPaymentId: "pi_3155",
+      status: "requires_action",
+    }))
   })
 
   it("performs the final manual confirmation after Stripe.js completes 3DS", async () => {

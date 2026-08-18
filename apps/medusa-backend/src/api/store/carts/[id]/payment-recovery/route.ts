@@ -219,13 +219,9 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
           orderId: latestAttempt.completed_order_id,
         }))
       }
-      if (latestAttempt?.status === "expired") {
-        return res.status(200).json(buildResponse({
-          cartId,
-          attempt: latestAttempt,
-          status: "expired",
-        }))
-      }
+      // A locally expired row is not authoritative when an external payment
+      // ID exists. Reconcile the provider before returning a terminal state.
+      if (latestAttempt?.status === "expired") attempt = latestAttempt
     }
     let providerId = requestedProviderId || attempt?.provider_id || DEFAULT_PAYMENT_PROVIDER
 
@@ -284,15 +280,15 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       providerId = requestedProviderId
     }
 
-    if (attempt && isCheckoutPaymentAttemptExpired(attempt)) {
+    if (attempt && (attempt.status === "expired" || isCheckoutPaymentAttemptExpired(attempt))) {
       const existingSession = await readAttemptPaymentSession(req.scope, attempt)
       const existingIntent = isStripeProviderId(attempt.provider_id)
         ? await readStripePaymentIntentForAttempt(req.scope, attempt, existingSession)
         : null
       let existingPayPalOrder = null
-      if (isPayPalProviderId(attempt.provider_id) && existingSession) {
+      if (isPayPalProviderId(attempt.provider_id)) {
         try {
-          const paypalId = readPayPalOrderId(existingSession)
+          const paypalId = attempt.provider_payment_id ?? readPayPalOrderId(existingSession)
           const client = getConfiguredPayPalClient()
           existingPayPalOrder = paypalId && client ? await client.retrieveOrder(paypalId) : null
         } catch (error) {
@@ -311,6 +307,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
         attempt = await patchAttempt(service, attempt, {
           status: externalStatus,
           ...(existingIntent?.id ? { provider_payment_id: existingIntent.id } : {}),
+          ...(existingPayPalOrder?.id ? { provider_payment_id: existingPayPalOrder.id } : {}),
         })
         providerId = attempt.provider_id ?? providerId
       } else {

@@ -297,7 +297,7 @@ describe("GET /store/customers/me/orders", () => {
     })
   })
 
-  it("keeps expired checkout reservations visible but disables recovery", async () => {
+  it("keeps expired checkout reservations visible without mutating payment state", async () => {
     const attemptsService = {
       listCheckoutPaymentAttempts: jest.fn(async () => [
         {
@@ -333,11 +333,7 @@ describe("GET /store/customers/me/orders", () => {
 
     await getCustomerOrders(req, res)
 
-    expect(attemptsService.updateCheckoutPaymentAttempts).toHaveBeenCalledWith({
-      id: "cpa_expired",
-      status: "expired",
-      last_error: "Payment window expired.",
-    })
+    expect(attemptsService.updateCheckoutPaymentAttempts).not.toHaveBeenCalled()
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.body).toMatchObject({
       count: 1,

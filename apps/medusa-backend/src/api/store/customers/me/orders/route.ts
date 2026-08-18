@@ -303,7 +303,6 @@ type CheckoutPaymentAttemptService = CheckoutPaymentAttemptsModuleService & {
     filters: Record<string, unknown>,
     config?: Record<string, unknown>
   ) => Promise<CheckoutPaymentAttemptRecord[]>
-  updateCheckoutPaymentAttempts: (input: Record<string, unknown>) => Promise<unknown>
 }
 
 const isPayableReservationStatus = (status?: string | null) =>
@@ -338,14 +337,6 @@ const loadCheckoutReservationSummaries = async (
     const expired = attempt.status === "expired" || isCheckoutPaymentAttemptExpired(attempt)
     const reservationStatus = expired ? "expired" : attempt.status ?? "created"
     if (!isDisplayableReservationStatus(reservationStatus)) continue
-
-    if (expired && attempt.status !== "expired") {
-      await service.updateCheckoutPaymentAttempts({
-        id: attempt.id,
-        status: "expired",
-        last_error: attempt.last_error ?? "Payment window expired.",
-      })
-    }
 
     try {
       const cart = await cartModule.retrieveCart(attempt.cart_id!, {

@@ -202,6 +202,38 @@ export async function readActiveCheckoutPaymentAttempt(
   return attempts.find((attempt) => isActiveCheckoutPaymentAttemptStatus(attempt.status ?? null)) ?? null
 }
 
+export async function syncActiveCheckoutPaymentAttemptSession(
+  container: MedusaContainer,
+  input: {
+    cartId: string
+    storeId: string
+    providerId: string
+    paymentCollectionId: string | null
+    paymentSessionId: string | null
+    providerPaymentId: string | null
+    status: CheckoutPaymentAttemptStatus | string
+  }
+) {
+  const attempt = await readActiveCheckoutPaymentAttempt(container, {
+    cartId: input.cartId,
+    storeId: input.storeId,
+  })
+  if (!attempt || attempt.provider_id !== input.providerId) return null
+
+  const service = container.resolve(CHECKOUT_PAYMENT_ATTEMPTS_MODULE) as CheckoutPaymentAttemptsModuleService & {
+    updateCheckoutPaymentAttempts: (input: Record<string, unknown>) => Promise<CheckoutPaymentAttemptRecord[] | CheckoutPaymentAttemptRecord>
+  }
+  const updated = await service.updateCheckoutPaymentAttempts({
+    id: attempt.id,
+    payment_collection_id: input.paymentCollectionId,
+    payment_session_id: input.paymentSessionId,
+    provider_payment_id: input.providerPaymentId,
+    status: input.status,
+    last_error: null,
+  })
+  return (Array.isArray(updated) ? updated[0] : updated) as CheckoutPaymentAttemptRecord
+}
+
 export async function readLatestCheckoutPaymentAttempt(
   container: MedusaContainer,
   input: { cartId: string; storeId: string }

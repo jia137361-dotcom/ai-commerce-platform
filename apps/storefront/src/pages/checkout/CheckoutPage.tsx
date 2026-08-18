@@ -71,10 +71,17 @@ import { isCheckoutCountryCode, shippingUnavailableMessage } from "./checkout-co
 import { collectReorderLinesFromSummary } from "../orders/order-history-display"
 import {
   chooseDefaultPaymentProvider,
+  buildStripeCheckoutReturnUrl,
+  canReconcileStripeReturn,
+  clearStripeCheckoutReturnContext,
+  completeSavedStripePaymentAuthentication,
   hasValidStripeClientSecret,
   isPayPalProviderId,
   isStripeProviderId,
   isValidStripePublishableKey,
+  persistStripeCheckoutReturnContext,
+  readStripeCheckoutReturnContext,
+  shouldRecoverConfirmedPaymentAfterCompletionFailure,
   STRIPE_ORDER_CREATION_FAILED_MESSAGE,
 } from "./checkout-payment"
 import { savedAddressToCheckout, cartShippingAddressToCheckout, hasPersistedCartShippingAddress, type CartShippingAddress } from "./checkout-saved-address"
@@ -221,8 +228,16 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
   const { canPlaceOrder } = checkoutState
   const selectedShippingOption = shippingOptions.find((option) => option.id === selectedShippingOptionId)
   const checkoutSearchParams = useMemo(() => new URLSearchParams(window.location.search), [])
-  const checkoutStoreId = checkoutSearchParams.get("store")?.trim() || getScopedBuyerStoreId()
-  const checkoutCartIdParam = checkoutSearchParams.get("cart_id")?.trim() || ""
+  const hasStripeReturnParams = Boolean(
+    checkoutSearchParams.get("payment_intent")?.trim() &&
+    checkoutSearchParams.get("payment_intent_client_secret")?.trim()
+  )
+  const pendingStripeReturnContext = hasStripeReturnParams
+    ? readStripeCheckoutReturnContext(window.localStorage)
+    : null
+  const pendingStripeReturnCartId = pendingStripeReturnContext?.cartId || ""
+  const checkoutStoreId = checkoutSearchParams.get("store")?.trim() || pendingStripeReturnContext?.storeId || getScopedBuyerStoreId()
+  const checkoutCartIdParam = checkoutSearchParams.get("cart_id")?.trim() || pendingStripeReturnContext?.cartId || ""
   const platformCheckoutId = checkoutSearchParams.get("platform_checkout_id")?.trim() || ""
   const platformCheckoutIndex = Number(checkoutSearchParams.get("platform_checkout_index"))
   const platformCheckoutCount = Number(checkoutSearchParams.get("platform_checkout_count"))
@@ -231,6 +246,22 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     Number.isFinite(platformCheckoutIndex) &&
     Number.isFinite(platformCheckoutCount) &&
     platformCheckoutCount > 0
+  const stripeCheckoutReturnUrl = cart
+    ? buildStripeCheckoutReturnUrl({
+        origin: window.location.origin,
+        cartId: cart.id,
+        storeId: checkoutStoreId,
+        platformCheckoutId: platformCheckoutActive ? platformCheckoutId : undefined,
+        platformCheckoutIndex: platformCheckoutActive ? platformCheckoutIndex : undefined,
+        platformCheckoutCount: platformCheckoutActive ? platformCheckoutCount : undefined,
+      })
+    : `${window.location.origin}/checkout`
+
+  useEffect(() => {
+    if (!cart || !stripeSelected) return
+    persistStripeCheckoutReturnContext(stripeCheckoutReturnUrl, window.localStorage)
+  }, [cart?.id, stripeCheckoutReturnUrl, stripeSelected])
+
   const paymentCacheKey = cart
     ? [
         checkoutStoreId,
@@ -312,7 +343,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
         const loaded = await fetchCart(cartId, { storeId: checkoutStoreId })
         if (!active) return
         let activeCart = loaded
-        if (auth.customer) {
+        if (auth.customer && !hasStripeReturnParams) {
           try {
             activeCart = await attachCustomerToCart(loaded.id, { storeId: checkoutStoreId })
           } catch (attachError) {
@@ -396,6 +427,12 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
           setSelectedShippingOptionId(firstAvailable)
           if (!shipping.requiresShippingMethod) {
             setShippingMethodSaved(true)
+          } else if (hasStripeReturnParams) {
+            // The successful Stripe return already had a shipping method when
+            // the PaymentIntent was created. Re-selecting it here would make
+            // Medusa refresh the payment collection and cancel the succeeded
+            // PaymentIntent, which is forbidden by Stripe.
+            setShippingMethodSaved(true)
           } else if (firstAvailable && hasPersistedCartShippingAddress(cartShippingAddress)) {
             try {
               await applyShippingOption(activeCart.id, firstAvailable)
@@ -435,7 +472,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     return () => {
       active = false
     }
-  }, [auth.customer?.id, checkoutCartIdParam, loadVersion, onCartUpdated])
+  }, [auth.customer?.id, checkoutCartIdParam, hasStripeReturnParams, loadVersion, onCartUpdated])
 
   useEffect(() => {
     if (skipAddressResetRef.current) {
@@ -482,6 +519,10 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       }
       return
     }
+    // A 3DS redirect is reconciled by the dedicated return-flow poller below.
+    // The normal initializer can otherwise observe the provider before Stripe
+    // has finished updating the PaymentIntent and leave the page waiting.
+    if (hasStripeReturnParams) return
     if (stripeSelected && !isValidStripePublishableKey(stripePublishableKey)) {
       setPaymentSession(null)
       setPaymentError("VITE_STRIPE_PK must be configured with a Stripe publishable key (pk_test_ or pk_live_).")
@@ -525,7 +566,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       })
       .finally(() => { if (active) setPaymentPreparing(false) })
     return () => { active = false }
-  }, [cart?.id, cart?.total, checkoutStoreId, paypalSelected, paymentCacheKey, platformCheckoutActive, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
+  }, [cart?.id, cart?.total, checkoutStoreId, hasStripeReturnParams, paypalSelected, paymentCacheKey, platformCheckoutActive, requiresShippingMethod, selectedPaymentProviderId, shippingMethodSaved, stripePublishableKey, stripeSelected])
 
   useEffect(() => {
     if (recoveryAction !== "expired" || !cart?.id || !auth.customer) return
@@ -873,14 +914,14 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
   }
 
   useEffect(() => {
-    if (!cart?.id || !auth.customer || !selectedSavedAddress || loading) return
+    if (hasStripeReturnParams || !cart?.id || !auth.customer || !selectedSavedAddress || loading) return
     const applyKey = `${cart.id}:${selectedSavedAddress.id}`
     if (autoAppliedAddressRef.current === applyKey) return
     autoAppliedAddressRef.current = applyKey
     void applySavedAddressToCheckout(selectedSavedAddress).catch((reason) => {
       console.warn("[checkout] unable to auto-apply default delivery address", reason)
     })
-  }, [auth.customer, cart?.id, loading, selectedSavedAddress])
+  }, [auth.customer, cart?.id, hasStripeReturnParams, loading, selectedSavedAddress])
 
   async function finalizeCheckoutSuccess(
     result: CompleteCartResponse,
@@ -953,13 +994,20 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
       unregisterStoreCart(window.localStorage, cartIdentity, storeId)
     }
     window.sessionStorage.setItem(`citigoo:${storeId}:checkout_success`, JSON.stringify(successPayload))
+    clearStripeCheckoutReturnContext(window.localStorage)
     if (platformCheckoutActive) {
       markPlatformCheckoutOrderComplete(storeId, result.orderId)
     }
     onCartUpdated(null)
     const successParams = new URLSearchParams({ order_id: result.orderId })
     if (platformCheckoutActive) successParams.set("platform_checkout", "1")
-    window.location.assign(`/checkout/success?${successParams.toString()}`)
+    const successHref = `/checkout/success?${successParams.toString()}`
+    console.info("[checkout] payment completed; navigating to success", {
+      order_id: result.orderId,
+      cart_id: cart.id,
+      href: successHref,
+    })
+    window.location.replace(successHref)
   }
 
   const handlePlaceOrder = async (
@@ -1004,14 +1052,14 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
 
       await finalizeCheckoutSuccess(result, providerId, stripePaymentMethodLabel)
     } catch (completeErrorValue) {
-      if (propagateCompleteError && cart && isStripeProviderId(providerId)) {
+      if (cart && shouldRecoverConfirmedPaymentAfterCompletionFailure(propagateCompleteError, providerId)) {
         try {
           const recovery = await initializeCartPaymentRecovery(cart.id, providerId, { storeId: checkoutStoreId })
           cachePaymentRecovery(providerId, recovery)
           setPaymentRecovery(recovery)
           setPaymentSession(recovery.paymentSession)
         } catch (recoveryError) {
-          console.error("[checkout] unable to refresh confirmed Stripe payment", recoveryError)
+          console.error("[checkout] unable to refresh confirmed payment", recoveryError)
         }
       }
       const message = propagateCompleteError
@@ -1036,6 +1084,70 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     void handlePlaceOrder(selectedPaymentProviderId)
   }, [cart, paymentRecovery?.paymentAttempt.id, recoveryAction, selectedPaymentProviderId])
 
+  useEffect(() => {
+    const stripeReturnProviderId = paymentProviders.find((provider) =>
+      provider.isStripe || isStripeProviderId(provider.id)
+    )?.id
+    if (!stripeReturnProviderId) return
+    if (!canReconcileStripeReturn({
+      hasReturnParams: hasStripeReturnParams,
+      cartId: pendingStripeReturnCartId,
+      providerId: stripeReturnProviderId,
+      requiresShippingMethod,
+      shippingMethodSaved,
+    }) || !cart) return
+
+    let active = true
+    let timer: number | undefined
+    let attempts = 0
+
+    const reconcile = async () => {
+      try {
+        const recovery = await initializeCartPaymentRecovery(cart.id, stripeReturnProviderId, {
+          storeId: checkoutStoreId,
+        })
+        if (!active) return
+        setPaymentRecovery(recovery)
+        setPaymentSession(recovery.paymentSession)
+        const recoveredResult = completedRecoveryResult(recovery, checkoutStoreId)
+        if (recoveredResult) {
+          await finalizeCheckoutSuccess(recoveredResult, stripeReturnProviderId)
+          return
+        }
+
+        if (recovery.paymentAttempt.recoveryAction === "complete_order") {
+          const result = await completeCart(cart.id, {
+            paymentProviderId: stripeReturnProviderId,
+            storeId: checkoutStoreId,
+          })
+          if (!result.orderId) throw new Error("Payment completed without an order.")
+          await finalizeCheckoutSuccess(result, stripeReturnProviderId)
+          return
+        }
+
+        attempts += 1
+        if (attempts < 20 && active) timer = window.setTimeout(() => void reconcile(), 1000)
+      } catch (reason) {
+        if (!active) return
+        attempts += 1
+        if (attempts < 20) {
+          timer = window.setTimeout(() => void reconcile(), 1000)
+        } else {
+          setCompleteError(reason instanceof Error ? reason.message : "Unable to verify the 3DS payment.")
+        }
+      }
+    }
+
+    void reconcile()
+    return () => {
+      active = false
+      if (timer) window.clearTimeout(timer)
+    }
+  // The return context is intentionally read once per checkout return. The
+  // completion callback closes over the cart loaded for this return.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart?.id, checkoutStoreId, hasStripeReturnParams, paymentProviders, pendingStripeReturnCartId, requiresShippingMethod, shippingMethodSaved])
+
   const handlePayWithSavedMethod = async (paymentMethodId: string) => {
     if (placeOrderInFlightRef.current || !cart || placingOrder || !canPlaceOrder) return
     placeOrderInFlightRef.current = true
@@ -1044,44 +1156,40 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     let paymentMethodLabel: string | undefined
     try {
       const method = savedPaymentMethods.find((item) => item.id === paymentMethodId)
+      if (!method) throw new Error("Saved payment method is no longer available.")
+      const methodProviderId = method.provider === "paypal"
+        ? paymentProviders.find((provider) => provider.isPayPal || isPayPalProviderId(provider.id))?.id
+        : paymentProviders.find((provider) => provider.isStripe || isStripeProviderId(provider.id))?.id
+      if (!methodProviderId) throw new Error("The saved payment provider is unavailable for this checkout.")
       if (method?.provider === "paypal") {
         const paid = await payCartWithSavedPayPalPaymentMethod(cart.id, paymentMethodId, {
             storeId: checkoutStoreId,
-            providerId: selectedPaymentProviderId,
+            providerId: methodProviderId,
           })
         paymentMethodLabel = paid.payment_method_label
       } else {
         const paid = await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
             storeId: checkoutStoreId,
-            providerId: selectedPaymentProviderId,
+            providerId: methodProviderId,
           })
         if (!paid.client_secret) throw new Error("Saved card payment is not ready because Stripe did not return a client secret.")
-        const stripe = await getStripePromise(stripePublishableKey)
-        if (!stripe) throw new Error("Unable to load Stripe for saved-card payment.")
-        let confirmation = paid.payment_intent_status === "requires_action"
-          ? await stripe.handleNextAction({ clientSecret: paid.client_secret })
-          : await stripe.confirmCardPayment(paid.client_secret, {
-              payment_method: paymentMethodId,
-              return_url: `${window.location.origin}/checkout`,
-            }, { handleActions: true })
-        // Stripe normally handles this inside confirmCardPayment. Keep an
-        // explicit fallback for intents restored from an interrupted checkout.
-        if (!confirmation.error && confirmation.paymentIntent?.status === "requires_action") {
-          confirmation = await stripe.handleNextAction({ clientSecret: paid.client_secret })
-        }
-        if (confirmation.error) throw new Error(confirmation.error.message || "Saved-card payment failed.")
-        let savedCardStatus = confirmation.paymentIntent?.status
-        if (savedCardStatus === "requires_confirmation") {
-          const finalized = await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
+        await completeSavedStripePaymentAuthentication({
+          initialStatus: paid.payment_intent_status,
+          clientSecret: paid.client_secret,
+          handleNextAction: async (clientSecret) => {
+            const stripe = await getStripePromise(stripePublishableKey)
+            if (!stripe) throw new Error("Unable to load Stripe for saved-card authentication.")
+            return stripe.handleNextAction({ clientSecret })
+          },
+          finalizeConfirmation: async () => {
+            const finalized = await payCartWithSavedPaymentMethod(cart.id, paymentMethodId, {
             storeId: checkoutStoreId,
-            providerId: selectedPaymentProviderId,
-            returnUrl: `${window.location.origin}/checkout`,
+            providerId: methodProviderId,
+            returnUrl: stripeCheckoutReturnUrl,
           })
-          savedCardStatus = finalized.payment_intent_status
-        }
-        if (!savedCardStatus || !["succeeded", "processing", "requires_capture"].includes(savedCardStatus)) {
-          throw new Error("Saved-card payment did not complete.")
-        }
+            return finalized.payment_intent_status
+          },
+        })
         paymentMethodLabel = paid.payment_method_label
       }
     } catch (reason) {
@@ -1092,7 +1200,11 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
     }
     setPlacingOrder(false)
     placeOrderInFlightRef.current = false
-    await handlePlaceOrder(selectedPaymentProviderId, true, paymentMethodLabel)
+    const method = savedPaymentMethods.find((item) => item.id === paymentMethodId)
+    const completedProviderId = method?.provider === "paypal"
+      ? paymentProviders.find((provider) => provider.isPayPal || isPayPalProviderId(provider.id))?.id
+      : paymentProviders.find((provider) => provider.isStripe || isStripeProviderId(provider.id))?.id
+    await handlePlaceOrder(completedProviderId ?? selectedPaymentProviderId, true, paymentMethodLabel)
   }
 
   const returnFromExpiredCheckout = () => {
@@ -1260,6 +1372,7 @@ export function CheckoutPage({ onCartUpdated }: CheckoutPageProps) {
                 }
                 onPayPalComplete={() => handlePlaceOrder(selectedPaymentProviderId, true)}
                 onPaymentError={(message) => setPaymentError(message || undefined)}
+                returnUrl={stripeCheckoutReturnUrl}
               />
               <CheckoutPaymentRecoveryBanner
                 attempt={paymentRecovery?.paymentAttempt ?? null}

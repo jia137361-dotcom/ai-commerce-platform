@@ -111,6 +111,8 @@ const createReq = ({
   listedOrders = [],
   orderMetadata = { store_id: "default_store" },
   cartTotal = 12.43,
+  omitCartTotal = false,
+  linkedOrderId = null,
 }: {
   authCustomerId?: string | null
   cartCustomerId?: string | null
@@ -123,6 +125,8 @@ const createReq = ({
   listedOrders?: Array<Record<string, unknown>>
   orderMetadata?: Record<string, unknown>
   cartTotal?: number
+  omitCartTotal?: boolean
+  linkedOrderId?: string | null
 } = {}) => {
   let order = {
     id: "order_1",
@@ -141,7 +145,7 @@ const createReq = ({
       shipping_address: shippingAddress,
       shipping_methods: shippingMethods,
       metadata: { store_id: "default_store" },
-      total: cartTotal,
+      ...(omitCartTotal ? {} : { total: cartTotal }),
     })),
   }
   const orderModule = {
@@ -163,9 +167,12 @@ const createReq = ({
     }),
   }
   const query = {
-    graph: jest.fn(async () => ({
-      data: [{ payment_collection: { id: "paycol_1" } }],
-    })),
+    graph: jest.fn(async (input: { entity?: string }) => {
+      if (input.entity === "order_cart") {
+        return { data: linkedOrderId ? [{ cart_id: "cart_1", order_id: linkedOrderId }] : [] }
+      }
+      return { data: [{ payment_collection: { id: "paycol_1" } }] }
+    }),
   }
   const req = {
     params: { id: "cart_1" },
@@ -372,6 +379,43 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     expect(res.status).toHaveBeenCalledWith(400)
   })
 
+  it("verifies the current saved-PayPal session before a stale attempt order id", async () => {
+    mockCompleteRun.mockRejectedValueOnce(new Error("Knex: Timeout acquiring a connection"))
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_1",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      provider_id: "pp_paypal_paypal",
+      provider_payment_id: "PAYPAL_STALE",
+      status: "awaiting_payment",
+    })
+    mockFindCartPaymentSession.mockResolvedValue({
+      id: "ps_paypal_current",
+      provider_id: "pp_paypal_paypal",
+      status: "captured",
+      data: { paypal_order_id: "PAYPAL_CAPTURED" },
+    })
+    mockRetrievePayPalOrder.mockImplementation(async (id: string) => {
+      if (id === "PAYPAL_STALE") throw Object.assign(new Error("INVALID_RESOURCE_ID"), { status: 404 })
+      return {
+        id: "PAYPAL_CAPTURED",
+        status: "COMPLETED",
+        purchase_units: [{ payments: { captures: [{ status: "COMPLETED" }] } }],
+      }
+    })
+    const { req } = createReq({ paymentProviderId: "pp_paypal_paypal" })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockRetrievePayPalOrder).toHaveBeenCalledWith("PAYPAL_CAPTURED")
+    expect(mockUpdateCheckoutPaymentAttempts).toHaveBeenCalledWith(expect.objectContaining({
+      id: "cpa_1",
+      status: "order_completion_failed",
+    }))
+    expect(res.status).toHaveBeenCalledWith(400)
+  })
+
   it("returns the original order when a retry repeats after the first response was lost", async () => {
     const { req } = createReq({
       listedOrders: [{
@@ -411,6 +455,41 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     await completeCart(req, res)
 
     expect(mockCompleteRun).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({ status: "completed", order_id: "order_1", already_completed: true })
+  })
+
+  it("recovers and post-processes the native order_cart order when custom linkage was not persisted", async () => {
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_paid",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      customer_id: "cus_a",
+      provider_id: "pp_stripe_stripe",
+      completed_order_id: null,
+      status: "payment_succeeded",
+    })
+    mockReadLatestCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_paid",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      customer_id: "cus_a",
+      provider_id: "pp_stripe_stripe",
+      completed_order_id: null,
+      status: "payment_succeeded",
+    })
+    const { req } = createReq({ listedOrders: [], linkedOrderId: "order_1" })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+    expect(mockUpdateCheckoutPaymentAttempts).toHaveBeenCalledWith(expect.objectContaining({
+      id: "cpa_paid",
+      status: "completed",
+      completed_order_id: "order_1",
+    }))
+    expect(mockSetOrderPostCompletePendingMetadata).toHaveBeenCalledWith(expect.anything(), "order_1", "default_store")
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.body).toMatchObject({ status: "completed", order_id: "order_1", already_completed: true })
   })
@@ -558,6 +637,35 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
     expect(res.status).toHaveBeenCalledWith(200)
   })
 
+  it("prefers the current saved-PayPal session over a stale attempt order id", async () => {
+    mockReadActiveCheckoutPaymentAttempt.mockResolvedValue({
+      id: "cpa_1",
+      cart_id: "cart_1",
+      store_id: "default_store",
+      provider_id: "pp_paypal_paypal",
+      provider_payment_id: "PAYPAL_STALE",
+      status: "awaiting_payment",
+    })
+    mockFindCartPaymentSession.mockResolvedValue({
+      id: "ps_saved_paypal",
+      provider_id: "pp_paypal_paypal",
+      status: "captured",
+      data: { paypal_order_id: "PAYPAL_VAULT_CURRENT" },
+    })
+    const { req } = createReq({ paymentProviderId: "pp_paypal_paypal" })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockEnsureCartPaymentReady).toHaveBeenCalledWith(
+      expect.anything(),
+      "cart_1",
+      "pp_paypal_paypal",
+      "PAYPAL_VAULT_CURRENT"
+    )
+    expect(res.status).toHaveBeenCalledWith(200)
+  })
+
   it("allows Stripe completion with an initialized official payment session", async () => {
     mockFindCartPaymentSession.mockResolvedValue({
       provider_id: "pp_stripe_stripe",
@@ -571,6 +679,33 @@ describe("POST /store/carts/:id/complete authenticated ownership", () => {
 
     expect(mockCompleteRun).toHaveBeenCalledTimes(1)
     expect(res.status).toHaveBeenCalledWith(200)
+  })
+
+  it("uses the persisted Stripe session amount when the cart module omits calculated total", async () => {
+    mockFindCartPaymentSession.mockResolvedValue({
+      provider_id: "pp_stripe_stripe",
+      status: "pending",
+      amount: 180.44,
+      currency_code: "hkd",
+      data: { client_secret: "pi_test_secret_123" },
+    })
+    mockReadStripePaymentIntentForAttempt.mockResolvedValue({
+      id: "pi_test",
+      status: "succeeded",
+      amount: 18044,
+      currency: "hkd",
+    })
+    const { req } = createReq({
+      paymentProviderId: "pp_stripe_stripe",
+      omitCartTotal: true,
+    })
+    const res = createRes()
+
+    await completeCart(req, res)
+
+    expect(mockCompleteRun).toHaveBeenCalledTimes(1)
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.body).toMatchObject({ status: "completed", order_id: "order_1" })
   })
 
   it("rejects Stripe completion when the PaymentIntent is 100x the cart total", async () => {

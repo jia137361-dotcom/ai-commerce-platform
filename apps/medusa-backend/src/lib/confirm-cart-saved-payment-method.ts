@@ -1,6 +1,11 @@
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { assertCartBelongsToCurrentStore } from "./assert-cart-store"
+import { readCartStoreId } from "./assert-cart-store"
+import {
+  normalizeStripePaymentIntentStatus,
+  syncActiveCheckoutPaymentAttemptSession,
+} from "./checkout-payment-attempts"
 import {
   ensureCartPaymentReady,
   findCartPaymentSession,
@@ -234,6 +239,17 @@ export async function confirmCartWithSavedPaymentMethod(
   if (!["succeeded", "processing", "requires_capture", "requires_action", "requires_confirmation"].includes(status)) {
     throw new Error(`Saved-card payment is not ready (${status || "unknown"})`)
   }
+
+  const paymentCollectionId = await readCartPaymentCollectionId(container, input.cartId)
+  await syncActiveCheckoutPaymentAttemptSession(container, {
+    cartId: input.cartId,
+    storeId: readCartStoreId(cart),
+    providerId,
+    paymentCollectionId,
+    paymentSessionId: session.id ?? null,
+    providerPaymentId: paymentIntent.id,
+    status: normalizeStripePaymentIntentStatus(status),
+  })
 
   return {
     provider_id: providerId,

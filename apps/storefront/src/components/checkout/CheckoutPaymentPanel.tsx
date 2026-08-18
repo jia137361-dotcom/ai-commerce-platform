@@ -32,6 +32,7 @@ type CheckoutPaymentPanelProps = {
   onPayPalComplete?: () => Promise<void>
   recoveryAction?: "confirm_payment" | "complete_order" | "wait" | "completed" | "expired"
   onPaymentError?: (message: string) => void
+  returnUrl?: string
 }
 
 export type StripeLifecycle =
@@ -82,6 +83,7 @@ export function CheckoutPaymentPanel({
   onPayPalComplete = async () => undefined,
   recoveryAction = "confirm_payment",
   onPaymentError,
+  returnUrl = typeof window === "undefined" ? "/checkout" : `${window.location.origin}/checkout`,
 }: CheckoutPaymentPanelProps) {
   const stripeSelected = isStripeProviderId(selectedProviderId)
   const paypalSelected = isPayPalProviderId(selectedProviderId)
@@ -347,6 +349,7 @@ export function CheckoutPaymentPanel({
                   placing={placing}
                   onComplete={onStripeComplete}
                   onLifecycleChange={handleStripeLifecycle}
+                  returnUrl={returnUrl}
                 />
               </Elements>
             )}

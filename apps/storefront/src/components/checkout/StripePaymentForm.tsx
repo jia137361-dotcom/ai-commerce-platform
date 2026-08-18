@@ -14,6 +14,7 @@ import {
 import {
   confirmStripePaymentAndComplete,
   confirmStripeWalletPaymentAndComplete,
+  persistStripeCheckoutReturnContext,
   StripePaymentConfirmedOrderRecoveryError,
 } from "../../pages/checkout/checkout-payment"
 import { Button } from "../ui/Button"
@@ -25,11 +26,13 @@ export function StripePaymentForm({
   placing,
   onComplete,
   onLifecycleChange,
+  returnUrl,
 }: {
   canSubmit: boolean
   placing: boolean
   onComplete: (paymentMethodLabel?: string) => Promise<void>
   onLifecycleChange?: (state: "elements_initializing" | "payment_element_ready" | "payment_element_error", message?: string) => void
+  returnUrl: string
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -88,6 +91,7 @@ export function StripePaymentForm({
     setConfirming(true)
     setError(undefined)
     try {
+      persistStripeCheckoutReturnContext(returnUrl, window.localStorage)
       const { error: submitError } = await elements.submit()
       if (submitError) {
         throw new Error(submitError.message || "Stripe payment confirmation failed.")
@@ -95,7 +99,7 @@ export function StripePaymentForm({
       await confirmStripePaymentAndComplete({
         stripe,
         elements,
-        returnUrl: `${window.location.origin}/checkout`,
+        returnUrl,
         complete: (paymentMethodLabel) => onComplete(paymentMethodLabel),
       })
     } catch (value) {
@@ -116,10 +120,11 @@ export function StripePaymentForm({
     setConfirming(true)
     setError(undefined)
     try {
+      persistStripeCheckoutReturnContext(returnUrl, window.localStorage)
       await confirmStripeWalletPaymentAndComplete({
         stripe,
         elements,
-        returnUrl: `${window.location.origin}/checkout`,
+        returnUrl,
         complete: (paymentMethodLabel) => onComplete(paymentMethodLabel),
       })
     } catch (value) {
