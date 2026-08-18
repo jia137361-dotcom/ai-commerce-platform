@@ -118,7 +118,7 @@ export async function getBuyerWallet(container: MedusaContainer, storeId: string
     paypal_email_masked: maskPayoutEmail(resolvePayPalPayoutEmailFromMetadata(customer.metadata)),
     paypal_account_bound: Boolean(resolvePayPalPayoutEmailFromMetadata(customer.metadata)),
     payout_mode: resolvePayPalPayoutMode(),
-    minimum_withdrawal: Number(process.env.WALLET_MIN_WITHDRAWAL_MAJOR ?? 1),
+    minimum_withdrawal: Number(process.env.WALLET_MIN_WITHDRAWAL_MAJOR ?? 5),
     withdrawal_fee: 0,
     balances,
     ledger: ledger.map(serializeLedger),
@@ -191,7 +191,7 @@ export async function requestBuyerWithdrawal(container: MedusaContainer, input: 
       throw new Error(`${currencyCode.toUpperCase()} is not supported by PayPal Payouts`)
     }
     const amountMinor = majorToMinor(input.amount, currencyCode)
-    const minimum = Number(process.env.WALLET_MIN_WITHDRAWAL_MAJOR ?? 1)
+    const minimum = Number(process.env.WALLET_MIN_WITHDRAWAL_MAJOR ?? 5)
     if (!Number.isFinite(input.amount) || input.amount < minimum || amountMinor <= 0) {
       throw new Error(`Minimum withdrawal is ${minimum} ${currencyCode.toUpperCase()}`)
     }

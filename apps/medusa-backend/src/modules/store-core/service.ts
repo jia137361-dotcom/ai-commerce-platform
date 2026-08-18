@@ -23,6 +23,9 @@ import PlatformAuditEvent from "./models/platform-audit-event"
 import ProductFavorite from "./models/product-favorite"
 import BuyerWalletLedger from "./models/buyer-wallet-ledger"
 import BuyerWalletWithdrawal from "./models/buyer-wallet-withdrawal"
+import ReferralProfile from "./models/referral-profile"
+import ReferralAttribution from "./models/referral-attribution"
+import ReferralCommission from "./models/referral-commission"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -49,6 +52,9 @@ class StoreCoreModuleService extends MedusaService({
   ProductFavorite,
   BuyerWalletLedger,
   BuyerWalletWithdrawal,
+  ReferralProfile,
+  ReferralAttribution,
+  ReferralCommission,
 }) {}
 
 export default StoreCoreModuleService

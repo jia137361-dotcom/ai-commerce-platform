@@ -15,6 +15,10 @@ export type PayPalOrder = {
   id: string
   status?: string
   intent?: string
+  payer?: {
+    payer_id?: string
+    email_address?: string
+  }
   purchase_units?: Array<{
     reference_id?: string
     custom_id?: string

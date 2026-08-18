@@ -12,6 +12,7 @@ import {
   ORDER_META_SELLER_PAYOUT_TRANSFER_ID,
 } from "./order-custom-metadata"
 import { majorToProviderMinor } from "./money"
+import { cancelReferralCommissionForOrder } from "./referral-program"
 
 type RefundRequestService = {
   listBuyerRefundRequests: (filters: Record<string, unknown>, config?: Record<string, unknown>) => Promise<BuyerRefundRequestRecord[]>
@@ -43,6 +44,26 @@ const isIndeterminateProviderError = (error: unknown) =>
 const updateRequest = async (service: RefundRequestService, id: string, patch: Record<string, unknown>) => {
   const result = await service.updateBuyerRefundRequests({ id, ...patch })
   return (Array.isArray(result) ? result[0] : result) as BuyerRefundRequestRecord
+}
+
+const completeRefund = async (
+  container: MedusaContainer,
+  service: RefundRequestService,
+  requestId: string,
+  orderId: string,
+  patch: Record<string, unknown>
+) => {
+  const request = await updateRequest(service, requestId, patch)
+  try {
+    await cancelReferralCommissionForOrder(container, orderId, "order_refund")
+  } catch (error) {
+    // The provider refund has already succeeded. Reconciliation will retry the
+    // affiliate reversal instead of turning a successful refund into an error.
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[refund-execution] referral commission reversal failed:", error)
+    }
+  }
+  return request
 }
 
 const loadRequest = async (
@@ -205,7 +226,7 @@ export async function executeApprovedRefund(input: {
           refundRequestId: request.id,
           orderId: input.orderId,
         })
-        return updateRequest(service, request.id, {
+        return completeRefund(input.container, service, request.id, input.orderId, {
           status: amount < remaining ? "partially_refunded" : "refunded",
           provider_status: String(stripeRefund.status ?? "succeeded").toLowerCase(),
           external_refund_id: stripeRefund.id,
@@ -261,7 +282,7 @@ export async function executeApprovedRefund(input: {
           failure_reason: "Refund provider reported a failed status.",
         })
       }
-      return updateRequest(service, request.id, {
+      return completeRefund(input.container, service, request.id, input.orderId, {
         status: amount < remaining ? "partially_refunded" : "refunded",
         provider_status: "completed",
         external_refund_id: providerRefundId,

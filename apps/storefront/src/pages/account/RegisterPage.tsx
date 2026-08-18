@@ -11,12 +11,14 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const auth = useBuyerAuth()
+  const referralCode = new URLSearchParams(window.location.search).get("ref")?.trim() ?? ""
 
   const submit = async (input: {
     email: string
     code: string
     password: string
     rememberMe: boolean
+    referralCode: string
   }) => {
     setLoading(true)
     setError(undefined)
@@ -27,6 +29,7 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
         password: input.password,
         rememberMe: input.rememberMe,
         acceptedTerms: true,
+        referralCode: input.referralCode,
       })
       window.location.assign(safeReturnTo("/account"))
     } catch (registerError) {
@@ -51,7 +54,7 @@ export function RegisterPage({ cartCount }: { cartCount: number }) {
               Sign up
             </a>
           </div>
-          <RegisterForm loading={loading} error={error} onSubmit={submit} />
+          <RegisterForm loading={loading} error={error} initialReferralCode={referralCode} onSubmit={submit} />
         </Card>
       </div>
     </AccountAuthLayout>

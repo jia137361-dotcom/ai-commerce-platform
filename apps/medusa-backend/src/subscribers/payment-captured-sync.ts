@@ -13,6 +13,7 @@ import type StoreCoreModuleService from "../modules/store-core/service"
 import { readOrderStoreId } from "../lib/order-store-context"
 import { notifyFulfillmentFailed, notifyOrderPaid } from "../lib/notifications"
 import { sendOrderConfirmation } from "../lib/email"
+import { createPendingReferralCommission } from "../lib/referral-program"
 
 async function resolveOrderIdFromPayment(
   container: MedusaContainer,
@@ -56,6 +57,14 @@ export default async function paymentCapturedSyncHandler({
   } catch (error) {
     await releaseWebhookDedupe(container, dedupeKey).catch(() => undefined)
     throw error
+  }
+
+  try {
+    await createPendingReferralCommission(container, orderId)
+  } catch (error) {
+    // Payment processing must not be rolled back by an affiliate bookkeeping failure.
+    // The reconciliation job will retry the commission transition.
+    console.error("Failed to create pending referral commission:", error)
   }
 
   try {

@@ -3,6 +3,7 @@ import { Modules } from "@medusajs/framework/utils"
 import { readOrderFulfillmentStatusMeta } from "../lib/order-custom-metadata"
 import { shouldAutoConfirmReceipt } from "../lib/order-receipt-confirmation"
 import { releaseSellerPayout } from "../lib/seller-order-payout"
+import { releaseReferralCommissionForOrder } from "../lib/referral-program"
 
 export default async function autoConfirmDeliveredOrdersJob(container: MedusaContainer) {
   const orderModule = container.resolve(Modules.ORDER)
@@ -25,6 +26,11 @@ export default async function autoConfirmDeliveredOrdersJob(container: MedusaCon
       await releaseSellerPayout(container, order.id, "auto_confirm")
     } catch (error) {
       console.error("[auto-confirm-delivered-orders] seller payout failed:", error)
+    }
+    try {
+      await releaseReferralCommissionForOrder(container, order.id)
+    } catch (error) {
+      console.error("[auto-confirm-delivered-orders] referral commission failed:", error)
     }
     updated += 1
   }

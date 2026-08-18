@@ -5,6 +5,7 @@ import { readOrderStoreId } from "../../../../../../../lib/order-store-context"
 import { canConfirmReceipt } from "../../../../../../../lib/buyer-order-display"
 import { resolveBuyerOrderFulfillmentStatus } from "../../../../../../../lib/order-custom-metadata"
 import { releaseSellerPayout } from "../../../../../../../lib/seller-order-payout"
+import { releaseReferralCommissionForOrder } from "../../../../../../../lib/referral-program"
 
 type AuthenticatedRequest = MedusaRequest & { auth_context?: { actor_id?: string } }
 
@@ -43,10 +44,18 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
     console.error("[confirm-received] seller payout failed:", error)
   }
 
+  let referralCommission = null
+  try {
+    referralCommission = await releaseReferralCommissionForOrder(req.scope, order.id)
+  } catch (error) {
+    console.error("[confirm-received] referral commission failed:", error)
+  }
+
   return res.json({
     order_id: order.id,
     status: "completed",
     confirmed_at: confirmedAt,
     seller_payout: sellerPayout,
+    referral_commission: referralCommission,
   })
 }

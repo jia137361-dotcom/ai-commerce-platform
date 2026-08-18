@@ -3,6 +3,7 @@ import { processPaymentWorkflow } from "@medusajs/core-flows"
 import { Modules, PaymentActions, PaymentWebhookEvents } from "@medusajs/framework/utils"
 import { releaseWebhookDedupe, tryRegisterWebhookDedupe } from "../../../../lib/webhook-dedupe"
 import { BUYER_REFUND_REQUESTS_MODULE } from "../../../../modules/buyer-refund-requests"
+import { cancelReferralCommissionForOrder } from "../../../../lib/referral-program"
 
 type RawRequest = MedusaRequest & { rawBody?: Buffer | string }
 
@@ -29,6 +30,7 @@ const reconcileRefundWebhook = async (req: MedusaRequest, event: Record<string, 
       approved_amount?: unknown
       eligible_amount?: unknown
       requested_amount?: unknown
+      order_id?: string
     }>>
     updateBuyerRefundRequests: (input: Record<string, unknown>) => Promise<unknown>
   }
@@ -52,6 +54,9 @@ const reconcileRefundWebhook = async (req: MedusaRequest, event: Record<string, 
       processed_at: ["refunded", "partially_refunded"].includes(nextStatus) ? new Date() : null,
       failed_at: nextStatus === "refund_failed" ? new Date() : null,
     })
+    if (["refunded", "partially_refunded"].includes(nextStatus) && match.order_id) {
+      await cancelReferralCommissionForOrder(req.scope, match.order_id, "order_refund")
+    }
   }
 }
 

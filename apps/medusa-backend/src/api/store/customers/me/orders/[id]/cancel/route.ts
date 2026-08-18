@@ -22,6 +22,7 @@ import type StoreCoreModuleService from "../../../../../../../modules/store-core
 import { getS2bdiyConfig, isS2bdiyEnabled } from "../../../../../../../modules/suppliers/s2bdiy/config"
 import { S2bdiyClient } from "../../../../../../../modules/suppliers/s2bdiy/s2bdiy-client"
 import { deleteS2bOrder } from "../../../../../../../modules/suppliers/s2bdiy/s2bdiy-order"
+import { cancelReferralCommissionForOrder } from "../../../../../../../lib/referral-program"
 
 type AuthenticatedRequest = MedusaRequest & {
   auth_context?: {
@@ -191,6 +192,12 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
       } catch (error) {
         console.error("[order-cancel] S2BDIY cancel failed (non-blocking):", error)
       }
+    }
+
+    try {
+      await cancelReferralCommissionForOrder(req.scope, orderId, "order_cancelled")
+    } catch (error) {
+      console.error("[order-cancel] referral commission cancellation failed (non-blocking):", error)
     }
 
     return res.status(200).json({
