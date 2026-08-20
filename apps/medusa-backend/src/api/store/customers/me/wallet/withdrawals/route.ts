@@ -11,7 +11,7 @@ export const POST = async (req: MedusaRequest, res: MedusaResponse) => {
   if (!(await assertBuyerEmailVerified(req, res, customerId))) return
   const body = (req.body ?? {}) as Record<string, unknown>
   const amount = Number(body.amount)
-  const currencyCode = typeof body.currency_code === "string" ? body.currency_code.trim().toLowerCase() : "hkd"
+  const currencyCode = typeof body.currency_code === "string" ? body.currency_code.trim().toLowerCase() : "usd"
   const requestId = typeof body.request_id === "string" ? body.request_id.trim() : ""
   if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
     return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "A withdrawal amount between 0 and 1,000,000 is required" } })

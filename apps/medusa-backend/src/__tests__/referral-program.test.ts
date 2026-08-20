@@ -75,6 +75,7 @@ describe("referral program rules", () => {
     }
     const ledger: Array<Record<string, any>> = []
     const storeCore = {
+      listReferralProgramSettings: jest.fn(async () => [{ id: "rfps_1", store_id: "store_1", first_order_rate_bps: 2_500, future_order_rate_bps: 800, attribution_months: 12 }]),
       listReferralCommissions: jest.fn(async (filters: Record<string, unknown>) => {
         if (filters.order_id && filters.order_id !== commission.order_id) return []
         return [commission]
@@ -105,6 +106,7 @@ describe("referral program rules", () => {
       discount_total: 0,
       payment_collections: [],
       created_at: new Date("2026-08-01T00:00:00.000Z"),
+      completed_at: new Date("2026-08-08T00:00:00.000Z"),
     }
     const container = {
       resolve: jest.fn((key: string) => {
@@ -118,6 +120,7 @@ describe("referral program rules", () => {
     await releaseReferralCommissionForOrder(container, order.id)
     expect(commission.status).toBe("released")
     expect(commission.commission_amount_minor).toBe(2_500)
+    expect(attribution.first_successful_order_at).toEqual(new Date("2026-08-08T00:00:00.000Z"))
     expect(ledger).toEqual(expect.arrayContaining([expect.objectContaining({
       type: "cashback_credit",
       amount_minor: 2_500,

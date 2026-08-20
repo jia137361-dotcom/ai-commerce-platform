@@ -1,5 +1,5 @@
 import { getConfiguredPayPalClient } from "../modules/paypal/client"
-import { minorToMajor, walletCurrencyDigits } from "./wallet-currency"
+import { majorToMinor, minorToMajor, walletCurrencyDigits } from "./wallet-currency"
 
 export type PayPalPayoutMode = "disabled" | "mock" | "sandbox"
 
@@ -12,7 +12,8 @@ type PayPalPayoutResponse = {
   items?: Array<{
     payout_item_id?: string
     transaction_status?: string
-    errors?: { message?: string }
+    payout_item_fee?: { currency?: string; value?: string }
+    errors?: { issue?: string; message?: string }
   }>
 }
 
@@ -36,18 +37,22 @@ const payoutValue = (amountMinor: number, currencyCode: string) =>
 
 export async function createPayPalPayout(input: {
   withdrawalId: string
+  attemptKey?: string
   receiverEmail: string
   amountMinor: number
   currencyCode: string
   note?: string
 }) {
   const mode = resolvePayPalPayoutMode()
+  const attemptKey = input.attemptKey || input.withdrawalId
   if (mode === "disabled") throw new Error("PayPal Payouts is not enabled")
   if (mode === "mock") {
     return {
       mode,
-      batchId: `MOCK-${input.withdrawalId}`,
-      itemId: `MOCK-ITEM-${input.withdrawalId}`,
+      batchId: `MOCK-${attemptKey}`,
+      itemId: `MOCK-ITEM-${attemptKey}`,
+      feeMinor: null,
+      feeCurrency: input.currencyCode.toLowerCase(),
       status: "paid" as const,
     }
   }
@@ -60,7 +65,7 @@ export async function createPayPalPayout(input: {
       method: "POST",
       body: JSON.stringify({
         sender_batch_header: {
-          sender_batch_id: input.withdrawalId.slice(0, 30),
+          sender_batch_id: attemptKey.slice(0, 30),
           email_subject: "Your CiiVerse cashback is on the way",
         },
         items: [{
@@ -70,16 +75,20 @@ export async function createPayPalPayout(input: {
             value: payoutValue(input.amountMinor, input.currencyCode),
             currency: input.currencyCode.toUpperCase(),
           },
-          sender_item_id: input.withdrawalId.slice(0, 30),
+          sender_item_id: attemptKey.slice(0, 30),
           note: input.note?.slice(0, 4000) || "CiiVerse cashback withdrawal",
         }],
       }),
     },
-    `wallet-payout:${input.withdrawalId}`
+    `wallet-payout:${attemptKey}`
   )
   const batchStatus = payload.batch_header?.batch_status?.toUpperCase()
   const item = payload.items?.[0]
   const itemStatus = item?.transaction_status?.toUpperCase()
+  const feeCurrency = item?.payout_item_fee?.currency?.toLowerCase() || null
+  const feeMinor = feeCurrency && item?.payout_item_fee?.value
+    ? majorToMinor(Number(item.payout_item_fee.value), feeCurrency)
+    : null
   const failed = batchStatus === "DENIED" || itemStatus === "FAILED" || itemStatus === "BLOCKED" || itemStatus === "RETURNED"
   if (failed) {
     throw new Error(item?.errors?.message || payload.batch_header?.errors?.message || "PayPal rejected the payout")
@@ -89,6 +98,8 @@ export async function createPayPalPayout(input: {
     mode,
     batchId: payload.batch_header?.payout_batch_id || null,
     itemId: item?.payout_item_id || null,
+    feeMinor,
+    feeCurrency,
     status: paid ? "paid" as const : "processing" as const,
   }
 }
@@ -103,11 +114,18 @@ export async function retrievePayPalPayout(batchId: string) {
   const batchStatus = payload.batch_header?.batch_status?.toUpperCase()
   const item = payload.items?.[0]
   const itemStatus = item?.transaction_status?.toUpperCase()
-  if (itemStatus === "SUCCESS") return { status: "paid" as const, itemId: item?.payout_item_id || null }
+  const feeCurrency = item?.payout_item_fee?.currency?.toLowerCase() || null
+  const feeMinor = feeCurrency && item?.payout_item_fee?.value
+    ? majorToMinor(Number(item.payout_item_fee.value), feeCurrency)
+    : null
+  if (itemStatus === "SUCCESS") return { status: "paid" as const, itemId: item?.payout_item_id || null, feeMinor, feeCurrency }
   if (["FAILED", "BLOCKED", "RETURNED", "REFUNDED", "REVERSED"].includes(itemStatus || "") || batchStatus === "DENIED") {
     return {
       status: "failed" as const,
       itemId: item?.payout_item_id || null,
+      feeMinor,
+      feeCurrency,
+      issue: item?.errors?.issue || null,
       error: item?.errors?.message || payload.batch_header?.errors?.message || "PayPal payout failed",
     }
   }

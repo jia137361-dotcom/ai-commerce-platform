@@ -10,7 +10,16 @@ import { createBuyerWalletWithdrawal, fetchBuyerWallet, formatBuyerMoney, type B
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
 
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-HK", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
-const statusLabel = (status: string) => status === "paid" || status === "completed" ? "Paid" : status === "processing" ? "Processing" : status === "failed" ? "Failed" : status === "available" ? "Available" : status
+const statusLabel = (status: string) => ({
+  paid: "Paid",
+  completed: "Paid",
+  processing: "Processing",
+  pending: "Pending merchant review",
+  approved: "Approved for monthly payout",
+  failed: "Failed",
+  rejected: "Rejected",
+  available: "Available",
+}[status] ?? status)
 
 function WalletPanel() {
   const [wallet, setWallet] = useState<BuyerWallet>()
@@ -33,8 +42,9 @@ function WalletPanel() {
   useEffect(() => { void load() }, [])
   useEffect(() => {
     if (!currencyCode && wallet?.balances.length) {
+      const payoutCurrency = wallet.balances.find((balance) => balance.currency_code === wallet.payout_currency_code)
       const preferred = wallet.balances.find((balance) => balance.currency_code === wallet.preferred_currency)
-      setCurrencyCode((preferred ?? wallet.balances[0]).currency_code)
+      setCurrencyCode((payoutCurrency ?? preferred ?? wallet.balances[0]).currency_code)
     }
   }, [currencyCode, wallet])
 
@@ -52,7 +62,7 @@ function WalletPanel() {
       const result = await createBuyerWalletWithdrawal(Number(amount), currencyCode, requestId)
       setWallet(result.wallet)
       setAmount("")
-      setMessage({ kind: "success", text: result.withdrawal.status === "paid" ? "Withdrawal completed." : "Withdrawal submitted to PayPal." })
+      setMessage({ kind: "success", text: "Withdrawal request submitted for merchant review." })
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to withdraw." })
     } finally {
@@ -76,10 +86,12 @@ function WalletPanel() {
       {wallet.paypal_account_bound ? <p className="buyer-wallet-paypal">PayPal account <strong>{wallet.paypal_email_masked}</strong></p> : <p className="buyer-wallet-paypal">Connect a PayPal account before requesting a withdrawal.</p>}
       <form className="buyer-wallet-withdraw-form" onSubmit={submit}>
         <label><span>Amount</span><input type="number" min={wallet.minimum_withdrawal} max={selectedBalance?.amount ?? 0} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={String(wallet.minimum_withdrawal)} required /></label>
-        <label><span>Currency</span><select value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value)} disabled={!wallet.balances.length}>{wallet.balances.map((balance) => <option key={balance.currency_code} value={balance.currency_code}>{balance.currency_code.toUpperCase()}</option>)}</select></label>
-        <Button type="submit" loading={submitting} disabled={!wallet.paypal_account_bound || wallet.payout_mode === "disabled" || !selectedBalance?.withdrawal_supported || Number(amount) < wallet.minimum_withdrawal}>Withdraw</Button>
+        <label><span>Currency</span><select value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value)} disabled>{wallet.balances.map((balance) => <option key={balance.currency_code} value={balance.currency_code}>{balance.currency_code.toUpperCase()}</option>)}</select></label>
+        <Button type="submit" loading={submitting} disabled={!wallet.paypal_account_bound || wallet.payout_mode === "disabled" || currencyCode !== wallet.payout_currency_code || !selectedBalance?.withdrawal_supported || Number(amount) < wallet.minimum_withdrawal}>Request withdrawal</Button>
       </form>
-      <div className="buyer-wallet-withdraw-meta"><span>Minimum {formatBuyerMoney(wallet.minimum_withdrawal, currencyCode || "hkd")}</span><span>Fee {formatBuyerMoney(wallet.withdrawal_fee, currencyCode || "hkd")}</span><span>Available {formatBuyerMoney(selectedBalance?.amount ?? 0, currencyCode || "hkd")}</span></div>
+      <div className="buyer-wallet-withdraw-meta"><span>Minimum {formatBuyerMoney(wallet.minimum_withdrawal, wallet.payout_currency_code)}</span><span>Estimated fee {wallet.withdrawal_fee_rate_percent}% (max {formatBuyerMoney(wallet.withdrawal_fee_cap, wallet.payout_currency_code)})</span><span>Available {formatBuyerMoney(selectedBalance?.amount ?? 0, currencyCode || wallet.payout_currency_code)}</span></div>
+      <p className="buyer-wallet-paypal">Merchant-approved requests are paid on the 20th each month ({wallet.payout_schedule.timezone}). Requests submitted after the settlement run roll into the next month.</p>
+      {currencyCode && currencyCode !== wallet.payout_currency_code ? <p className="buyer-account-error">PayPal withdrawals must use {wallet.payout_currency_code.toUpperCase()}.</p> : null}
       {selectedBalance && !selectedBalance.withdrawal_supported ? <p className="buyer-account-error">PayPal Payouts does not support {selectedBalance.currency_code.toUpperCase()}. Future credits should use a supported payout currency.</p> : null}
       {!wallet.paypal_account_bound ? <Button href="/account/payment-methods" variant="secondary">Connect PayPal</Button> : null}
       {message ? <p className={message.kind === "success" ? "buyer-account-success" : "buyer-account-error"} role="status">{message.text}</p> : null}
@@ -93,7 +105,7 @@ function WalletPanel() {
       })}</div> : <p className="buyer-wallet-empty-copy">No wallet activity.</p>}
     </Card>
 
-    {wallet.withdrawals.length ? <Card as="section" className="buyer-wallet-panel"><h2>Withdrawals</h2><div className="buyer-wallet-activity">{wallet.withdrawals.map((withdrawal) => <article key={withdrawal.id}><div><strong>{withdrawal.paypal_email_masked}</strong><span>{formatDate(withdrawal.created_at)}{withdrawal.error_message ? ` · ${withdrawal.error_message}` : ""}</span></div><div><strong>{formatBuyerMoney(withdrawal.amount, withdrawal.currency_code)}</strong><span>{statusLabel(withdrawal.status)}</span></div></article>)}</div></Card> : null}
+    {wallet.withdrawals.length ? <Card as="section" className="buyer-wallet-panel"><h2>Withdrawals</h2><div className="buyer-wallet-activity">{wallet.withdrawals.map((withdrawal) => <article key={withdrawal.id}><div><strong>{withdrawal.paypal_email_masked}</strong><span>{formatDate(withdrawal.created_at)}{withdrawal.error_message ? ` · ${withdrawal.error_message}` : ""}</span></div><div><strong>{formatBuyerMoney(withdrawal.payout_amount, withdrawal.currency_code)} payout{withdrawal.fee !== null ? ` · Fee ${formatBuyerMoney(withdrawal.fee, withdrawal.currency_code)}` : ""}</strong><span>{statusLabel(withdrawal.status)}</span></div></article>)}</div></Card> : null}
   </div>
 }
 

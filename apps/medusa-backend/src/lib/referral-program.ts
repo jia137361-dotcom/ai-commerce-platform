@@ -7,7 +7,7 @@ import type StoreCoreModuleService from "../modules/store-core/service"
 import { resolveBuyerOrderTotals } from "./buyer-order-totals"
 import { convertWalletAmount, majorToMinor, minorToMajor } from "./wallet-currency"
 import { readOrderStoreId } from "./order-store-context"
-import { resolvePayPalPayoutEmailFromMetadata } from "./customer-payment-methods"
+import { resolvePayPalPayerIdFromMetadata, resolvePayPalPayoutEmailFromMetadata } from "./customer-payment-methods"
 
 type Row = Record<string, any>
 type ReferralSource = "link" | "code" | "email" | "admin"
@@ -65,10 +65,74 @@ export const calculateReferralCommissionUsd = (input: {
   }
 }
 
-const addAttributionWindow = (date: Date) => {
+const addAttributionWindow = (date: Date, months = ATTRIBUTION_MONTHS) => {
   const next = new Date(date)
-  next.setUTCMonth(next.getUTCMonth() + ATTRIBUTION_MONTHS)
+  next.setUTCMonth(next.getUTCMonth() + months)
   return next
+}
+
+const serializeProgramSettings = (row: Row) => ({
+  first_order_rate_percent: Number(row.first_order_rate_bps) / 100,
+  future_order_rate_percent: Number(row.future_order_rate_bps) / 100,
+  future_order_months: Number(row.attribution_months),
+  currency_code: COMMISSION_CURRENCY,
+  minimum_payout: Number(process.env.WALLET_MIN_WITHDRAWAL_MAJOR ?? 5),
+  payout_schedule: "monthly_20_hkt",
+  eligible_amount_excludes: ["shipping", "tax", "import_fee", "export_fee", "coupon", "discount"],
+})
+
+export async function getReferralProgramSettings(container: MedusaContainer, storeId: string) {
+  const service = core(container)
+  const rows = await service.listReferralProgramSettings({ store_id: storeId }, { take: 1 }) as Row[]
+  if (rows[0]) return rows[0]
+  try {
+    return one(await service.createReferralProgramSettings({
+      store_id: storeId,
+      first_order_rate_bps: FIRST_ORDER_RATE_BPS,
+      future_order_rate_bps: FUTURE_ORDER_RATE_BPS,
+      attribution_months: ATTRIBUTION_MONTHS,
+      currency_code: COMMISSION_CURRENCY,
+      metadata: null,
+    })) as Row
+  } catch (error) {
+    const concurrent = await service.listReferralProgramSettings({ store_id: storeId }, { take: 1 }) as Row[]
+    if (concurrent[0]) return concurrent[0]
+    throw error
+  }
+}
+
+export async function getReferralProgram(container: MedusaContainer, storeId: string) {
+  const settings = await getReferralProgramSettings(container, storeId)
+  return {
+    name: "Customized Products",
+    description: "Custom-print products with AI-powered design and mockup services.",
+    ...serializeProgramSettings(settings),
+  }
+}
+
+export async function updateReferralProgramSettings(container: MedusaContainer, storeId: string, input: {
+  firstOrderRatePercent: number
+  futureOrderRatePercent: number
+  attributionMonths: number
+}) {
+  for (const [label, value] of [["First-order rate", input.firstOrderRatePercent], ["Future-order rate", input.futureOrderRatePercent]] as const) {
+    if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error(`${label} must be between 0 and 100`)
+  }
+  if (!Number.isInteger(input.attributionMonths) || input.attributionMonths < 1 || input.attributionMonths > 60) {
+    throw new Error("Attribution period must be between 1 and 60 months")
+  }
+  const service = core(container)
+  const current = await getReferralProgramSettings(container, storeId)
+  const updated = one(await service.updateReferralProgramSettings({
+    selector: { id: current.id },
+    data: {
+      first_order_rate_bps: Math.round(input.firstOrderRatePercent * 100),
+      future_order_rate_bps: Math.round(input.futureOrderRatePercent * 100),
+      attribution_months: input.attributionMonths,
+      metadata: { ...(current.metadata ?? {}), updated_at: new Date().toISOString() },
+    },
+  })) as Row
+  return serializeProgramSettings(updated)
 }
 
 const serializeProfile = (row: Row, storefrontUrl: string) => ({
@@ -94,6 +158,13 @@ const serializeCommission = (row: Row) => ({
   released_at: row.released_at ?? null,
   created_at: row.created_at,
 })
+
+const maskEmail = (email?: string | null) => {
+  const value = email?.trim()
+  if (!value || !value.includes("@")) return null
+  const [local, domain] = value.split("@")
+  return `${local.slice(0, 2)}${"*".repeat(Math.max(1, Math.min(6, local.length - 2)))}@${domain}`
+}
 
 export async function ensureReferralProfile(container: MedusaContainer, storeId: string, customerId: string) {
   const service = core(container)
@@ -132,17 +203,18 @@ export async function bindReferralCode(container: MedusaContainer, input: {
   const existing = await service.listReferralAttributions({
     store_id: input.storeId,
     referred_customer_id: input.referredCustomerId,
-  }, { take: 1 }) as Row[]
-  if (existing[0]) {
-    if (existing[0].referrer_customer_id === profile.customer_id) return { attribution: existing[0], idempotent: true }
+  }, { order: { attributed_at: "DESC" } }) as Row[]
+  const active = existing.find((row) => row.status === "active")
+  const activeExpiry = asDate(active?.expires_at)
+  if (active && activeExpiry && activeExpiry.getTime() <= Date.now()) {
+    await service.updateReferralAttributions({
+      selector: { id: active.id },
+      data: { status: "expired", metadata: { ...(active.metadata ?? {}), expired_at: new Date().toISOString() } },
+    })
+  } else if (active) {
+    if (active.referrer_customer_id === profile.customer_id) return { attribution: active, idempotent: true }
     throw new Error("This account already has a referral attribution")
   }
-
-  const commissionRows = await service.listReferralCommissions({
-    store_id: input.storeId,
-    referred_customer_id: input.referredCustomerId,
-  }, { take: 1 }) as Row[]
-  if (commissionRows[0]) throw new Error("A referral code cannot be added after referred orders exist")
 
   const created = one(await service.createReferralAttributions({
     store_id: input.storeId,
@@ -200,28 +272,36 @@ async function hasSuccessfulRefund(container: MedusaContainer, orderId: string) 
   }
 }
 
-const payerEmailsFromOrder = (order: Record<string, any>) => {
+const payerIdentitiesFromOrder = (order: Record<string, any>) => {
   const emails = new Set<string>()
+  const payerIds = new Set<string>()
   for (const collection of order.payment_collections ?? []) {
     for (const payment of collection.payments ?? []) {
       const data = payment.data && typeof payment.data === "object" ? payment.data : {}
       for (const candidate of [data.paypal_payer_email, data.payer_email, data.email_address]) {
         if (typeof candidate === "string" && candidate.includes("@")) emails.add(candidate.trim().toLowerCase())
       }
+      for (const candidate of [data.paypal_payer_id, data.payer_id]) {
+        if (typeof candidate === "string" && candidate.trim()) payerIds.add(candidate.trim())
+      }
     }
   }
-  return emails
+  return { emails, payerIds }
 }
 
 async function hasMatchingPayPalIdentity(container: MedusaContainer, order: Record<string, any>, referrerCustomerId: string) {
-  const payerEmails = payerEmailsFromOrder(order)
-  if (!payerEmails.size) return false
+  const payer = payerIdentitiesFromOrder(order)
+  if (!payer.emails.size && !payer.payerIds.size) return false
   const customers = container.resolve(Modules.CUSTOMER) as {
     retrieveCustomer: (id: string) => Promise<{ metadata?: Record<string, unknown> | null }>
   }
   const referrer = await customers.retrieveCustomer(referrerCustomerId)
   const payoutEmail = resolvePayPalPayoutEmailFromMetadata(referrer.metadata)?.trim().toLowerCase()
-  return Boolean(payoutEmail && payerEmails.has(payoutEmail))
+  const payoutPayerId = resolvePayPalPayerIdFromMetadata(referrer.metadata)?.trim()
+  return Boolean(
+    (payoutEmail && payer.emails.has(payoutEmail)) ||
+    (payoutPayerId && payer.payerIds.has(payoutPayerId))
+  )
 }
 
 export async function createPendingReferralCommission(container: MedusaContainer, orderId: string) {
@@ -239,10 +319,19 @@ export async function createPendingReferralCommission(container: MedusaContainer
   }, { take: 1 }) as Row[]
   const attribution = attributions[0]
   if (!attribution) return { commission: null, idempotent: false }
+  const expiresAt = asDate(attribution.expires_at)
+  if (expiresAt && expiresAt.getTime() <= Date.now()) {
+    await service.updateReferralAttributions({
+      selector: { id: attribution.id },
+      data: { status: "expired", metadata: { ...(attribution.metadata ?? {}), expired_at: new Date().toISOString() } },
+    })
+    return { commission: null, idempotent: false }
+  }
 
   const previous = await service.listReferralCommissions({ attribution_id: attribution.id }) as Row[]
   const firstOrderEstimate = !previous.some((row) => !["order_cancelled", "order_refund", "cancelled", "expired", "reversed"].includes(String(row.status)))
-  const rateBps = firstOrderEstimate ? FIRST_ORDER_RATE_BPS : FUTURE_ORDER_RATE_BPS
+  const programSettings = await getReferralProgramSettings(container, storeId)
+  const rateBps = firstOrderEstimate ? Number(programSettings.first_order_rate_bps) : Number(programSettings.future_order_rate_bps)
   const amounts = calculateReferralCommissionUsd({
     eligibleAmount: calculateEligibleReferralAmount(order),
     orderCurrencyCode: orderCurrency(order),
@@ -375,18 +464,24 @@ export async function releaseReferralCommissionForOrder(container: MedusaContain
     .filter((row) => row.id !== commission!.id && row.status === "released")
     .sort((a, b) => (asDate(a.order_created_at)?.getTime() ?? 0) - (asDate(b.order_created_at)?.getTime() ?? 0))
   const isFirstOrder = previousReleased.length === 0
+  const completionAt = asDate(order.completed_at) ?? new Date()
+  const programSettings = await getReferralProgramSettings(container, commission.store_id)
   const firstOrderAt = isFirstOrder
-    ? orderCreatedAt
+    ? completionAt
     : asDate(attribution.first_successful_order_at) ?? asDate(previousReleased[0]?.order_created_at) ?? orderCreatedAt
-  const expiresAt = asDate(attribution.expires_at) ?? addAttributionWindow(firstOrderAt)
+  const expiresAt = asDate(attribution.expires_at) ?? addAttributionWindow(firstOrderAt, Number(programSettings.attribution_months))
   if (!isFirstOrder && orderCreatedAt.getTime() > expiresAt.getTime()) {
+    await service.updateReferralAttributions({
+      selector: { id: attribution.id },
+      data: { status: "expired", metadata: { ...(attribution.metadata ?? {}), expired_at: new Date().toISOString() } },
+    })
     return one(await service.updateReferralCommissions({
       selector: { id: commission.id },
       data: { status: "expired", commission_amount_minor: 0, rate_bps: 0, is_first_order: false, reason: "Referral earning window expired" },
     })) as Row
   }
 
-  const rateBps = isFirstOrder ? FIRST_ORDER_RATE_BPS : FUTURE_ORDER_RATE_BPS
+  const rateBps = isFirstOrder ? Number(programSettings.first_order_rate_bps) : Number(programSettings.future_order_rate_bps)
   const amounts = calculateReferralCommissionUsd({
     eligibleAmount: calculateEligibleReferralAmount(order),
     orderCurrencyCode: orderCurrency(order),
@@ -425,30 +520,53 @@ export async function releaseReferralCommissionForOrder(container: MedusaContain
 export async function getReferralDashboard(container: MedusaContainer, storeId: string, customerId: string) {
   const service = core(container)
   const profile = await ensureReferralProfile(container, storeId, customerId)
+  const programSettings = await getReferralProgramSettings(container, storeId)
   const commissions = await service.listReferralCommissions(
     { store_id: storeId, referrer_customer_id: customerId },
     { order: { order_created_at: "DESC" }, take: 100 }
   ) as Row[]
   const attributions = await service.listReferralAttributions({ store_id: storeId, referrer_customer_id: customerId }) as Row[]
+  for (const attribution of attributions) {
+    const expiry = asDate(attribution.expires_at)
+    if (attribution.status !== "active" || !expiry || expiry.getTime() > Date.now()) continue
+    await service.updateReferralAttributions({
+      selector: { id: attribution.id },
+      data: { status: "expired", metadata: { ...(attribution.metadata ?? {}), expired_at: new Date().toISOString() } },
+    })
+    attribution.status = "expired"
+  }
+  const referredIds = [...new Set(attributions.map((row) => String(row.referred_customer_id)).filter(Boolean))]
+  const customerService = container.resolve(Modules.CUSTOMER) as {
+    listCustomers: (filters: Record<string, unknown>, config?: Record<string, unknown>) => Promise<Array<{ id: string; email?: string | null; first_name?: string | null; last_name?: string | null }>>
+  }
+  const referredCustomers = referredIds.length
+    ? await customerService.listCustomers({ id: referredIds }, { select: ["id", "email", "first_name", "last_name"], take: referredIds.length })
+    : []
+  const referredById = new Map(referredCustomers.map((customer) => [customer.id, customer]))
   const sum = (status: string) => commissions.filter((row) => row.status === status).reduce((total, row) => total + Number(row.commission_amount_minor), 0)
   const storefrontUrl = process.env.STOREFRONT_URL || "http://127.0.0.1:5174"
   return {
     profile: serializeProfile(profile, storefrontUrl),
-    rules: {
-      first_order_rate_percent: 25,
-      future_order_rate_percent: 8,
-      future_order_months: ATTRIBUTION_MONTHS,
-      currency_code: COMMISSION_CURRENCY,
-      minimum_payout: Number(process.env.WALLET_MIN_WITHDRAWAL_MAJOR ?? 5),
-      payout_schedule: "monthly",
-      eligible_amount_excludes: ["shipping", "tax", "import_fee", "export_fee", "coupon", "discount"],
-    },
+    rules: serializeProgramSettings(programSettings),
     summary: {
       referred_customers: attributions.length,
       pending_amount: minorToMajor(sum("pending"), COMMISSION_CURRENCY),
       released_amount: minorToMajor(sum("released"), COMMISSION_CURRENCY),
       currency_code: COMMISSION_CURRENCY,
     },
+    referred_customers: attributions.map((attribution) => {
+      const customer = referredById.get(String(attribution.referred_customer_id))
+      const name = [customer?.first_name, customer?.last_name].filter(Boolean).join(" ")
+      return {
+        id: attribution.referred_customer_id,
+        display_name: name || "Referred customer",
+        email_masked: maskEmail(customer?.email),
+        status: attribution.status,
+        attributed_at: attribution.attributed_at,
+        first_successful_order_at: attribution.first_successful_order_at ?? null,
+        expires_at: attribution.expires_at ?? null,
+      }
+    }),
     commissions: commissions.map(serializeCommission),
   }
 }

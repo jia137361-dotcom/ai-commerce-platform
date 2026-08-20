@@ -135,6 +135,14 @@ function ReferralPanel() {
     </Card>
 
     <Card as="section" className="buyer-referral-card">
+      <h2>Friends referred</h2>
+      {dashboard.referred_customers.length ? <div className="buyer-referral-activity">{dashboard.referred_customers.map((customer) => <article key={`${customer.id}:${customer.attributed_at}`}>
+        <div><strong>{customer.display_name}</strong><span>{customer.email_masked ?? "Email hidden"} · Joined {formatDate(customer.attributed_at)}</span></div>
+        <div><strong>{customer.first_successful_order_at ? "Purchased" : "Registered"}</strong><span className={`buyer-referral-status buyer-referral-status--${customer.status}`}>{customer.status}</span></div>
+      </article>)}</div> : <p className="buyer-wallet-empty-copy">Friends who register with your link or code will appear here.</p>}
+    </Card>
+
+    <Card as="section" className="buyer-referral-card">
       <h2>Commission activity</h2>
       {dashboard.commissions.length ? <div className="buyer-referral-activity">{dashboard.commissions.map((commission) => <article key={commission.id}>
         <div><strong>{commission.order_display_id ? `Order #${commission.order_display_id}` : "Referred order"}</strong><span>{formatDate(commission.order_created_at)} · {commission.rate_percent}% rate</span></div>

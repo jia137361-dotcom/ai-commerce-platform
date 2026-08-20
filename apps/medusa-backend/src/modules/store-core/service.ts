@@ -26,6 +26,7 @@ import BuyerWalletWithdrawal from "./models/buyer-wallet-withdrawal"
 import ReferralProfile from "./models/referral-profile"
 import ReferralAttribution from "./models/referral-attribution"
 import ReferralCommission from "./models/referral-commission"
+import ReferralProgramSetting from "./models/referral-program-setting"
 
 class StoreCoreModuleService extends MedusaService({
   Store,
@@ -55,6 +56,7 @@ class StoreCoreModuleService extends MedusaService({
   ReferralProfile,
   ReferralAttribution,
   ReferralCommission,
+  ReferralProgramSetting,
 }) {}
 
 export default StoreCoreModuleService
