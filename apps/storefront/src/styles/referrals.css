@@ -1,0 +1,246 @@
+.buyer-affiliate-hero {
+  max-width: 780px;
+  margin: 18px auto 8px;
+  text-align: center;
+}
+
+.buyer-affiliate-eyebrow {
+  margin: 0 0 10px;
+  color: #236c4f;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.buyer-affiliate-hero h1 {
+  margin: 0;
+  font-size: clamp(34px, 6vw, 58px);
+  line-height: 1.02;
+}
+
+.buyer-affiliate-hero > p:last-child {
+  max-width: 680px;
+  margin: 20px auto 0;
+  color: var(--color-text-secondary);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.buyer-affiliate-program-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr);
+  gap: 28px;
+  max-width: 1040px;
+  margin: 36px auto 60px;
+}
+
+.buyer-affiliate-program-card,
+.buyer-affiliate-steps {
+  padding: clamp(24px, 4vw, 42px);
+}
+
+.buyer-affiliate-program-card {
+  display: grid;
+  gap: 22px;
+  border-top: 5px solid #238b5b;
+}
+
+.buyer-affiliate-program-card h2,
+.buyer-affiliate-program-card p,
+.buyer-affiliate-steps h2,
+.buyer-affiliate-steps p {
+  margin: 0;
+}
+
+.buyer-affiliate-program-card > p,
+.buyer-affiliate-benefit p,
+.buyer-affiliate-steps p {
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.buyer-affiliate-card-label {
+  color: #238b5b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.buyer-affiliate-benefit {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 12px;
+}
+
+.buyer-affiliate-benefit > span {
+  color: #238b5b;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.buyer-affiliate-benefit strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 18px;
+}
+
+.buyer-affiliate-exclusion {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f6f8f7;
+  font-size: 13px;
+}
+
+.buyer-affiliate-steps {
+  align-self: center;
+  border-radius: 14px;
+  background: #10261e;
+  color: #fff;
+}
+
+.buyer-affiliate-steps ol {
+  display: grid;
+  gap: 24px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.buyer-affiliate-steps li {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 14px;
+}
+
+.buyer-affiliate-steps li > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d9f4e7;
+  color: #10261e;
+  font-weight: 900;
+}
+
+.buyer-affiliate-steps p { margin-top: 5px; color: #c5d4ce; }
+
+.buyer-referral-content {
+  display: grid;
+  gap: var(--spacing-4);
+  min-width: 0;
+}
+
+.buyer-referral-card {
+  display: grid;
+  gap: 16px;
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.buyer-referral-card h1,
+.buyer-referral-card h2,
+.buyer-referral-card p { margin: 0; }
+
+.buyer-referral-overview header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.buyer-referral-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.buyer-referral-summary > div {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.buyer-referral-summary span,
+.buyer-referral-card small,
+.buyer-referral-activity span,
+.buyer-referral-qr span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.buyer-referral-summary strong { font-size: 22px; }
+
+.buyer-referral-email,
+.buyer-referral-copy-row,
+.buyer-referral-claim {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.buyer-referral-email input,
+.buyer-referral-copy-row input,
+.buyer-referral-claim input {
+  min-width: 0;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.buyer-referral-share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.buyer-referral-qr {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.buyer-referral-qr img { width: 112px; height: 112px; border: 1px solid var(--color-border); border-radius: 8px; }
+
+.buyer-referral-activity { display: grid; }
+
+.buyer-referral-activity article {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid var(--color-border);
+  padding: 14px 0;
+}
+
+.buyer-referral-activity article:first-child { border-top: 0; }
+.buyer-referral-activity article > div { display: grid; gap: 4px; }
+.buyer-referral-activity article > div:last-child { text-align: right; }
+.buyer-referral-status { font-weight: 700; }
+.buyer-referral-status--released { color: #1f6b3c !important; }
+.buyer-referral-status--order_cancelled,
+.buyer-referral-status--order_refund,
+.buyer-referral-status--cancelled { color: #a94343 !important; }
+
+@media (max-width: 760px) {
+  .buyer-affiliate-program-grid { grid-template-columns: 1fr; }
+  .buyer-referral-summary { grid-template-columns: 1fr; }
+  .buyer-referral-overview header,
+  .buyer-referral-activity article { align-items: stretch; flex-direction: column; }
+  .buyer-referral-activity article > div:last-child { text-align: left; }
+}
+
+@media (max-width: 520px) {
+  .buyer-referral-email,
+  .buyer-referral-copy-row,
+  .buyer-referral-claim { grid-template-columns: 1fr; }
+  .buyer-referral-email .buyer-ui-button,
+  .buyer-referral-copy-row .buyer-ui-button,
+  .buyer-referral-claim .buyer-ui-button { width: 100%; }
+}

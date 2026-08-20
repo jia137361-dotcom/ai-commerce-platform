@@ -23,15 +23,17 @@ import { safeReturnTo } from "../../pages/account/account-utils"
 type RegisterFormProps = {
   loading: boolean
   error?: string
+  initialReferralCode?: string
   onSubmit: (input: {
     email: string
     code: string
     password: string
     rememberMe: boolean
+    referralCode: string
   }) => Promise<void>
 }
 
-export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
+export function RegisterForm({ loading, error, initialReferralCode = "", onSubmit }: RegisterFormProps) {
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
   const [password, setPassword] = useState("")
@@ -45,6 +47,7 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
   const [googleEnabled, setGoogleEnabled] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [googleError, setGoogleError] = useState<string>()
+  const [referralCode, setReferralCode] = useState(initialReferralCode)
 
   useEffect(() => {
     if (!isGoogleAuthUiEnabled()) return
@@ -68,6 +71,7 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
       stashBuyerGoogleAuthContext({
         returnTo: safeReturnTo(),
         rememberMe,
+        referralCode,
       })
       const { location } = await startBuyerGoogleAuth({
         callbackUrl: resolveBuyerGoogleCallbackUrl(),
@@ -140,7 +144,7 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
           return
         }
         setValidation(undefined)
-        void onSubmit({ email, code: code.trim(), password, rememberMe })
+        void onSubmit({ email, code: code.trim(), password, rememberMe, referralCode: referralCode.trim() })
       }}
     >
       {(error || validation) && (
@@ -160,6 +164,13 @@ export function RegisterForm({ loading, error, onSubmit }: RegisterFormProps) {
         autoComplete="email"
       />
       <p className="buyer-auth-hint">{buyerAuthEmailHint}</p>
+      <FormField
+        label="Referral code (optional)"
+        value={referralCode}
+        onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+        placeholder="Enter a friend's code"
+        autoComplete="off"
+      />
       {codeSent ? (
         <>
           <FormField

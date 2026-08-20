@@ -7,6 +7,7 @@ import { CheckoutSuccessPage } from "./pages/checkout/CheckoutSuccessPage"
 import { PlatformCheckoutPage } from "./pages/checkout/PlatformCheckoutPage"
 import { AccountHomePage } from "./pages/account/AccountHomePage"
 import { AccountWalletPage } from "./pages/account/AccountWalletPage"
+import { AccountReferralPage } from "./pages/account/AccountReferralPage"
 import { AccountProfilePage } from "./pages/account/AccountProfilePage"
 import { RegisterPage } from "./pages/account/RegisterPage"
 import { SignInPage } from "./pages/account/SignInPage"
@@ -31,6 +32,7 @@ import { StoreHomePage } from "./pages/store/StoreHomePage"
 import { MarketplaceHomePage } from "./pages/marketplace/MarketplaceHomePage"
 import { AboutPage, CookiesPage, HelpPage, PrivacyPage, TermsPage } from "./pages/info/InfoPage"
 import { PlansPage } from "./pages/account/PlansPage"
+import { AffiliateProgramPage } from "./pages/referrals/AffiliateProgramPage"
 import { useBuyerAuth } from "./auth/useBuyerAuth"
 import { fetchPlatformCart, unregisterStoreCart } from "./lib/buyer-platform-cart"
 import { getBuyerCartIdentity } from "./lib/buyer-cart-storage"
@@ -223,6 +225,8 @@ function App() {
     page = <ResetPasswordPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/account/wallet")) {
     page = <AccountWalletPage cartCount={cartCount} />
+  } else if (location.pathname.startsWith("/account/referrals")) {
+    page = <AccountReferralPage cartCount={cartCount} />
   } else if (
     (["addresses", "payment-methods", "country-region", "currency", "coupons", "following"] as AccountSettingsSlug[]).some(
       (slug) => location.pathname === `/account/${slug}`
@@ -254,6 +258,10 @@ function App() {
     page = <AccountHomePage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/plans")) {
     page = <PlansPage cartCount={cartCount} />
+  } else if (location.pathname.startsWith("/affiliates/customized-products")) {
+    page = <AffiliateProgramPage cartCount={cartCount} intro />
+  } else if (location.pathname.startsWith("/affiliates")) {
+    page = <AffiliateProgramPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/help")) {
     page = <HelpPage cartCount={cartCount} />
   } else if (location.pathname.startsWith("/about")) {

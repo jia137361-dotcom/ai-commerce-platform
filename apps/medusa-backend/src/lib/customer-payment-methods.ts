@@ -77,6 +77,7 @@ type StoredPayPalVaultPaymentMethod = {
   vault_id: string
   label?: string
   email?: string
+  payer_id?: string
   created_at?: string
 }
 
@@ -97,6 +98,15 @@ export const resolvePayPalPayoutEmailFromMetadata = (metadata?: Record<string, u
     : null
   const selected = methods.find((method) => method.id === defaultId) ?? methods[0]
   return selected?.email?.trim().toLowerCase() || null
+}
+
+export const resolvePayPalPayerIdFromMetadata = (metadata?: Record<string, unknown> | null) => {
+  const methods = readStoredPayPalVaultPaymentMethods(metadata)
+  const defaultId = typeof metadata?.[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY] === "string"
+    ? metadata[PAYPAL_VAULT_DEFAULT_PAYMENT_METHOD_METADATA_KEY]
+    : null
+  const selected = methods.find((method) => method.id === defaultId) ?? methods[0]
+  return selected?.payer_id?.trim() || null
 }
 
 const normalizePayPalVaultPaymentMethod = (
@@ -278,12 +288,15 @@ export async function completePayPalVaultSetup(
   const stored = readStoredPayPalVaultPaymentMethods(customer.metadata)
   const existing = stored.find((method) => method.vault_id === token.id)
   const email = token.payment_source?.paypal?.email_address?.trim() || undefined
-  const record = existing ?? {
-    id: `paypal_${crypto.randomUUID()}`,
+  const payerId = token.payment_source?.paypal?.payer_id?.trim() || undefined
+  const record = {
+    ...(existing ?? {}),
+    id: existing?.id ?? `paypal_${crypto.randomUUID()}`,
     vault_id: token.id,
-    label: email ? `PayPal (${email})` : "PayPal account",
-    email,
-    created_at: new Date().toISOString(),
+    label: email ? `PayPal (${email})` : existing?.label ?? "PayPal account",
+    email: email ?? existing?.email,
+    payer_id: payerId ?? existing?.payer_id,
+    created_at: existing?.created_at ?? new Date().toISOString(),
   }
   const metadata = {
     ...(customer.metadata ?? {}),

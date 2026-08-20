@@ -1,4 +1,4 @@
-import { calculateWalletBalances } from "../lib/buyer-wallet"
+import { calculateWalletBalances, isHongKongSettlementDay } from "../lib/buyer-wallet"
 import { convertWalletAmount, majorToMinor, minorToMajor } from "../lib/wallet-currency"
 
 describe("wallet money", () => {
@@ -17,5 +17,11 @@ describe("wallet money", () => {
     const credit = { type: "cashback_credit", status: "available", currency_code: "hkd", amount_minor: 500 }
     expect(calculateWalletBalances([credit, { type: "withdrawal_debit", status: "processing", currency_code: "hkd", amount_minor: 200 }])).toEqual({ hkd: 300 })
     expect(calculateWalletBalances([credit, { type: "withdrawal_debit", status: "failed", currency_code: "hkd", amount_minor: 200 }])).toEqual({ hkd: 500 })
+  })
+
+  it("uses Hong Kong time for the monthly settlement day", () => {
+    expect(isHongKongSettlementDay(new Date("2026-08-19T16:00:00.000Z"))).toBe(true)
+    expect(isHongKongSettlementDay(new Date("2026-08-20T15:59:59.000Z"))).toBe(true)
+    expect(isHongKongSettlementDay(new Date("2026-08-20T16:00:00.000Z"))).toBe(false)
   })
 })

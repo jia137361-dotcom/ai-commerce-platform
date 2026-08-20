@@ -56,6 +56,8 @@ const sessionData = (order: PayPalOrder, existing: Record<string, unknown> | nul
     paypal_status: order.status ?? null,
     paypal_capture_id: capture?.id ?? existing?.paypal_capture_id ?? null,
     paypal_capture_status: capture?.status ?? null,
+    paypal_payer_id: order.payer?.payer_id ?? existing?.paypal_payer_id ?? null,
+    paypal_payer_email: order.payer?.email_address?.trim().toLowerCase() ?? existing?.paypal_payer_email ?? null,
     amount: readAmount(amount),
     currency: currencyCode.toLowerCase(),
     currency_code: currencyCode.toLowerCase(),

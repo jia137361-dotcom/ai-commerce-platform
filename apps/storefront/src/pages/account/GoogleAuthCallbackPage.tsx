@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { AccountAuthLayout } from "../../components/account/AccountAuthLayout"
 import { useBuyerPageSettings } from "../../lib/useBuyerPageSettings"
-import { completeBuyerGoogleCallback } from "../../lib/buyer-api"
+import { claimBuyerReferralCode, completeBuyerGoogleCallback } from "../../lib/buyer-api"
 import {
   acquireGoogleCallbackLock,
   clearBuyerGoogleAuthContext,
@@ -53,6 +53,9 @@ export function GoogleAuthCallbackPage({ cartCount }: { cartCount: number }) {
           query,
           rememberMe: context.rememberMe,
         })
+        if (context.referralCode) {
+          await claimBuyerReferralCode(context.referralCode, "link")
+        }
         completeGoogleCallbackLock(code)
         clearBuyerGoogleAuthContext()
         window.location.assign(context.returnTo || "/account")

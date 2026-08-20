@@ -2,6 +2,7 @@
 
 const RETURN_KEY = "citigoo:buyer_google_return_to"
 const REMEMBER_KEY = "citigoo:buyer_google_remember_me"
+const REFERRAL_KEY = "citigoo:buyer_google_referral_code"
 
 export const BUYER_GOOGLE_CALLBACK_PATH = "/auth/google/callback"
 
@@ -15,26 +16,31 @@ export const isGoogleAuthUiEnabled = () => {
 export const resolveBuyerGoogleCallbackUrl = () =>
   `${window.location.origin}${BUYER_GOOGLE_CALLBACK_PATH}`
 
-export const stashBuyerGoogleAuthContext = (input: { returnTo: string; rememberMe: boolean }) => {
+export const stashBuyerGoogleAuthContext = (input: { returnTo: string; rememberMe: boolean; referralCode?: string }) => {
   window.sessionStorage.setItem(RETURN_KEY, input.returnTo)
   window.sessionStorage.setItem(REMEMBER_KEY, input.rememberMe ? "1" : "0")
+  if (input.referralCode?.trim()) window.sessionStorage.setItem(REFERRAL_KEY, input.referralCode.trim())
+  else window.sessionStorage.removeItem(REFERRAL_KEY)
 }
 
 export const readBuyerGoogleAuthContext = () => {
   const returnTo = window.sessionStorage.getItem(RETURN_KEY)
   const rememberRaw = window.sessionStorage.getItem(REMEMBER_KEY)
+  const referralCode = window.sessionStorage.getItem(REFERRAL_KEY)?.trim()
   return {
     returnTo:
       returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") && !returnTo.includes("://")
         ? returnTo
         : "/account",
     rememberMe: rememberRaw !== "0",
+    ...(referralCode ? { referralCode } : {}),
   }
 }
 
 export const clearBuyerGoogleAuthContext = () => {
   window.sessionStorage.removeItem(RETURN_KEY)
   window.sessionStorage.removeItem(REMEMBER_KEY)
+  window.sessionStorage.removeItem(REFERRAL_KEY)
 }
 
 export const isSafeBuyerReturnPath = (value: string | null | undefined, fallback = "/account") => {

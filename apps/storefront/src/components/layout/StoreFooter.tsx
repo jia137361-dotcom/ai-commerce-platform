@@ -36,6 +36,7 @@ export function StoreFooter() {
         <a href="/orders/lookup">Order Tracking</a>
         <a href="/help">Help</a>
         <a href="/about">About</a>
+        <a href="/affiliates">Affiliate program</a>
         <a href="/store?tab=about">Shipping & Returns</a>
         <a href="/terms">Terms</a>
         <a href="/privacy">Privacy</a>

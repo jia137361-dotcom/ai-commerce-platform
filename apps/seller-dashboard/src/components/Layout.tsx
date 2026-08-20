@@ -14,7 +14,7 @@ const NAV: Array<{ to: string; label: string; end?: boolean }> = [
   { to: "/refund-requests", label: "Refunds" },
   { to: "/followers", label: "Followers" },
   { to: "/coupons", label: "Coupons" },
-  { to: "/cashback", label: "Cashback" },
+  { to: "/cashback", label: "Affiliate commissions" },
   { to: "/reviews", label: "Reviews" },
   { to: "/messages", label: "Inbox" },
   { to: "/settings", label: "Settings" },

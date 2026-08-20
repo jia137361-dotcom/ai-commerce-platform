@@ -673,6 +673,7 @@ export type BuyerRegisterInput = {
   code?: string
   rememberMe?: boolean
   acceptedTerms?: boolean
+  referralCode?: string
 }
 
 export type BuyerSignInInput = {
@@ -934,7 +935,7 @@ export const getPayPalClientId = () => readEnv("VITE_PAYPAL_CLIENT_ID")
 
 export type BuyerWalletBalance = { currency_code: string; amount: number; amount_minor: number; withdrawal_supported: boolean }
 export type BuyerWalletEntry = { id: string; type: string; amount: number; amount_minor: number; currency_code: string; status: string; affects_balance: boolean; description: string | null; created_at: string }
-export type BuyerWalletWithdrawal = { id: string; request_id: string | null; amount: number; amount_minor: number; currency_code: string; status: string; paypal_email_masked: string | null; provider_batch_id: string | null; error_message: string | null; created_at: string }
+export type BuyerWalletWithdrawal = { id: string; request_id: string | null; amount: number; amount_minor: number; payout_amount: number; payout_amount_minor: number; currency_code: string; status: string; fee: number | null; fee_minor: number | null; provider_fee: number | null; provider_fee_minor: number | null; paypal_email_masked: string | null; provider_batch_id: string | null; failure_kind: string | null; retry_count: number; error_message: string | null; approved_at: string | null; processing_at: string | null; paid_at: string | null; rejected_at: string | null; created_at: string }
 export type BuyerWallet = {
   store_id: string
   customer_id: string
@@ -942,11 +943,71 @@ export type BuyerWallet = {
   paypal_email_masked: string | null
   paypal_account_bound: boolean
   payout_mode: "disabled" | "mock" | "sandbox"
+  payout_currency_code: string
   minimum_withdrawal: number
   withdrawal_fee: number
+  withdrawal_fee_mode: "paypal_actual" | string
+  withdrawal_fee_rate_percent: number
+  withdrawal_fee_cap: number
+  payout_schedule: { timezone: string; day_of_month: number }
   balances: BuyerWalletBalance[]
   ledger: BuyerWalletEntry[]
   withdrawals: BuyerWalletWithdrawal[]
+}
+
+export type BuyerReferralCommission = {
+  id: string
+  order_id: string
+  order_display_id: number | null
+  eligible_amount: number
+  commission_amount: number
+  currency_code: string
+  rate_percent: number
+  is_first_order: boolean
+  status: "pending" | "released" | "order_cancelled" | "order_refund" | "cancelled" | "frozen" | "expired" | string
+  reason: string | null
+  order_created_at: string
+  released_at: string | null
+  created_at: string
+}
+
+export type BuyerReferralProgram = {
+  name: string
+  description: string
+  first_order_rate_percent: number
+  future_order_rate_percent: number
+  future_order_months: number
+  currency_code: string
+  minimum_payout: number
+  payout_schedule: string
+  eligible_amount_excludes: string[]
+}
+
+export type BuyerReferralDashboard = {
+  profile: {
+    id: string
+    referral_code: string
+    status: string
+    referral_link: string
+    created_at: string
+  }
+  rules: Omit<BuyerReferralProgram, "name" | "description">
+  summary: {
+    referred_customers: number
+    pending_amount: number
+    released_amount: number
+    currency_code: string
+  }
+  referred_customers: Array<{
+    id: string
+    display_name: string
+    email_masked: string | null
+    status: "active" | "expired" | "cancelled" | string
+    attributed_at: string
+    first_successful_order_at: string | null
+    expires_at: string | null
+  }>
+  commissions: BuyerReferralCommission[]
 }
 
 export const getAiWorkerPublicBase = () => config.aiWorkerPublicBase
@@ -2765,12 +2826,16 @@ export const registerCustomer = async (input: BuyerRegisterInput) => {
     if (!input.password) {
       throw new Error("Create a password after verifying your email.")
     }
-    return confirmBuyerLoginOtp({
+    const customer = await confirmBuyerLoginOtp({
       email,
       code: input.code,
       password: input.password,
       rememberMe: input.rememberMe,
     })
+    if (input.referralCode?.trim()) {
+      await claimBuyerReferralCode(input.referralCode, "link")
+    }
+    return customer
   }
   if (!input.password) {
     throw new Error("Enter a password or complete email verification.")
@@ -2813,14 +2878,23 @@ export const registerCustomer = async (input: BuyerRegisterInput) => {
       })
       if (!signedIn.token) throw new Error("Customer was created but session authentication did not return a token.")
       await createCustomerSession(signedIn.token)
-      return normalizeCustomer(payload.customer) ?? getCurrentCustomer()
+      const customer = normalizeCustomer(payload.customer) ?? await getCurrentCustomer()
+      if (input.referralCode?.trim()) {
+        await claimBuyerReferralCode(input.referralCode, "link")
+      }
+      return customer
     } catch (customerCreateError) {
       // A valid identity can already be attached to a customer if a prior
       // request completed after the browser was interrupted. Reuse that
       // account instead of reporting an irrecoverable registration failure.
       await createCustomerSession(auth.token)
       const existingCustomer = await getCurrentCustomer()
-      if (existingCustomer) return existingCustomer
+      if (existingCustomer) {
+        if (input.referralCode?.trim()) {
+          await claimBuyerReferralCode(input.referralCode, "link")
+        }
+        return existingCustomer
+      }
       throw customerCreateError
     }
   } catch {
@@ -4072,6 +4146,29 @@ export const fetchS2bProductDetail = async (s2bProductId: number | string): Prom
 export const fetchBuyerWallet = async (): Promise<BuyerWallet> => {
   const payload = await apiFetch<{ wallet: BuyerWallet }>("/store/customers/me/wallet")
   return payload.wallet
+}
+
+export const fetchReferralProgram = async (): Promise<BuyerReferralProgram> => {
+  const payload = await apiFetch<{ program: BuyerReferralProgram }>("/store/referrals/program")
+  return payload.program
+}
+
+export const fetchBuyerReferralDashboard = async (): Promise<BuyerReferralDashboard> => {
+  const payload = await apiFetch<{ referral: BuyerReferralDashboard }>("/store/customers/me/referrals")
+  return payload.referral
+}
+
+export const claimBuyerReferralCode = async (
+  referralCode: string,
+  source: "link" | "code" | "email" = "code"
+) => {
+  return apiFetch<{ attribution: { id: string; referral_code: string; status: string }; idempotent: boolean }>(
+    "/store/customers/me/referrals/claim",
+    {
+      method: "POST",
+      body: JSON.stringify({ referral_code: referralCode.trim(), source }),
+    }
+  )
 }
 
 export const createBuyerWalletWithdrawal = async (amount: number, currencyCode: string, requestId: string) => {
