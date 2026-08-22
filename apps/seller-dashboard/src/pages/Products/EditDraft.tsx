@@ -22,10 +22,16 @@ import { TranslateButton } from "../../components/TranslateButton"
 import { getSellerStoreId } from "../../lib/seller-store-id"
 import { fileToBase64 } from "../../lib/file-to-base64"
 import { buildSupplierImageOptions, mergeSelectedSupplierImages, type SupplierImageOption } from "../../lib/s2b-supplier-images"
+import {
+  renameVariantLabel,
+  resetVariantLabels,
+  type VariantLabelDimension,
+} from "../../lib/variant-labels"
 import type { NormalizedProduct, ProductRegionSummary, ProductVariantRow } from "@ai-commerce/shared-types"
 
 type SupplierVariant = {
   supplier_variant_id: string
+  external_supplier_variant_id?: string | null
   supplier_size_id?: string | null
   supplier_color_id?: string | null
   color?: string | null
@@ -39,6 +45,12 @@ type EditLocationState = {
   generation?: Record<string, unknown>
   jobId?: string
   aiReview?: boolean
+}
+
+type EditingVariantLabel = {
+  dimension: VariantLabelDimension
+  label: string
+  draft: string
 }
 
 const toVariantRows = (
@@ -194,6 +206,7 @@ export function EditDraftPage() {
   const [imageUploading, setImageUploading] = useState(false)
   const [supplierImagePickerOpen, setSupplierImagePickerOpen] = useState(false)
   const [selectedSupplierImageUrls, setSelectedSupplierImageUrls] = useState<string[]>([])
+  const [editingVariantLabel, setEditingVariantLabel] = useState<EditingVariantLabel | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
   const resolvedJobId = stateJobId ?? product?.ai_job_id ?? null
@@ -274,6 +287,27 @@ export function EditDraftPage() {
       product?.metadata?.synced_from_supplier === true ||
       product?.metadata?.import_source === "s2bdiy_supplier" ||
       product?.metadata?.import_source === "s2bdiy_csv")
+
+  const s2bVariantLabelDefaults = useMemo(() => {
+    const supplierProduct =
+      supplierData?.supplier_products.find(
+        (row) => row.supplier_product_id === product?.supplier_product_id
+      ) ?? supplierData?.supplier_products[0]
+    return Object.fromEntries(
+      (supplierProduct?.variants ?? []).flatMap((variant) => {
+        const labels = {
+          color: variant.color_name ?? variant.color ?? undefined,
+          size: variant.size_name ?? variant.size ?? undefined,
+        }
+        return [
+          [variant.supplier_variant_id, labels],
+          ...(variant.external_supplier_variant_id
+            ? [[variant.external_supplier_variant_id, labels]]
+            : []),
+        ]
+      })
+    )
+  }, [product?.supplier_product_id, supplierData])
 
   const s2bColorImages = readS2bColorImages(product?.metadata?.s2b_color_images)
   const s2bCategoryLabels = [
@@ -406,7 +440,14 @@ export function EditDraftPage() {
     const selectedImageSet = new Set(selectedImageUrls)
     const selectedColorImage = (color: string) =>
       s2bColorImages
-        .filter((entry) => entry.colorName === color)
+        .filter((entry) => {
+          if (entry.colorName === color) return true
+          return variants.some(
+            (variant) =>
+              variant.color === color &&
+              s2bVariantLabelDefaults[variant.supplier_variant_id]?.color === entry.colorName
+          )
+        })
         .flatMap((entry) => entry.images)
         .find((url) => selectedImageSet.has(url)) ?? null
     const normalizedVariants = variants.map((variant) => ({
@@ -622,6 +663,36 @@ export function EditDraftPage() {
     setVariants((current) => current.filter((_, rowIndex) => rowIndex !== index))
   }
 
+  const startVariantLabelEdit = (dimension: VariantLabelDimension, label: string) => {
+    if (isArchived) return
+    setEditingVariantLabel({ dimension, label, draft: label })
+  }
+
+  const cancelVariantLabelEdit = () => setEditingVariantLabel(null)
+
+  const commitVariantLabelEdit = () => {
+    if (!editingVariantLabel) return
+    const nextLabel = editingVariantLabel.draft.trim()
+    if (!nextLabel) {
+      toast.push("Variant label cannot be empty", "error")
+      return
+    }
+    setVariants((current) =>
+      renameVariantLabel(
+        current,
+        editingVariantLabel.dimension,
+        editingVariantLabel.label,
+        nextLabel
+      )
+    )
+    setEditingVariantLabel(null)
+  }
+
+  const resetVariantLabelDimension = (dimension: VariantLabelDimension) => {
+    setVariants((current) => resetVariantLabels(current, s2bVariantLabelDefaults, dimension))
+    setEditingVariantLabel(null)
+  }
+
   const uploadProductImages = async (files: FileList | null) => {
     if (!files?.length || !id) return
     const nextFiles = Array.from(files)
@@ -680,7 +751,14 @@ export function EditDraftPage() {
   const enabledSizes = new Set(variants.filter((variant) => variant.enabled !== false).map((variant) => variant.size))
   const imageUrlsForColor = (color: string) => {
     const fromMeta = s2bColorImages
-      .filter((entry) => entry.colorName === color)
+      .filter((entry) => {
+        if (entry.colorName === color) return true
+        return variants.some(
+          (variant) =>
+            variant.color === color &&
+            s2bVariantLabelDefaults[variant.supplier_variant_id]?.color === entry.colorName
+        )
+      })
       .flatMap((entry) => entry.images)
     const fromVariants = variants
       .filter((variant) => variant.color === color && variant.image_url)
@@ -1365,48 +1443,148 @@ export function EditDraftPage() {
               <div className="space-y-5 p-4">
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-900">Colors</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">Colors</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="px-2 py-1 text-[11px]"
+                        disabled={isArchived}
+                        onClick={() => resetVariantLabelDimension("color")}
+                      >
+                        Reset colors
+                      </Button>
+                    </div>
                     <span className="text-xs text-slate-500">{enabledColors.size} selected</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {variantColors.map((color) => {
                       const active = enabledColors.has(color)
                       const image = imageUrlsForColor(color)[0]
+                      const isEditing =
+                        editingVariantLabel?.dimension === "color" &&
+                        editingVariantLabel.label === color
                       return (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => toggleColor(color)}
-                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                            active ? "border-brand bg-brand-light text-brand" : "border-slate-200 bg-white text-slate-600"
-                          }`}
-                        >
-                          {image ? <img src={image} alt="" className="h-8 w-8 rounded object-cover" /> : null}
-                          <span>{color}</span>
-                        </button>
+                        <div key={color} className="inline-flex items-center gap-1 rounded-lg">
+                          {isEditing ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                autoFocus
+                                aria-label={`Edit color ${color}`}
+                                value={editingVariantLabel.draft}
+                                disabled={isArchived}
+                                onChange={(event) =>
+                                  setEditingVariantLabel((current) =>
+                                    current ? { ...current, draft: event.target.value } : current
+                                  )
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") commitVariantLabelEdit()
+                                  if (event.key === "Escape") cancelVariantLabelEdit()
+                                }}
+                                className="w-28"
+                              />
+                              <Button type="button" className="px-2 py-1 text-xs" onClick={commitVariantLabelEdit}>Save</Button>
+                              <Button type="button" variant="outline" className="px-2 py-1 text-xs" onClick={cancelVariantLabelEdit}>Cancel</Button>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => toggleColor(color)}
+                                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                                  active ? "border-brand bg-brand-light text-brand" : "border-slate-200 bg-white text-slate-600"
+                                }`}
+                              >
+                                {image ? <img src={image} alt="" className="h-8 w-8 rounded object-cover" /> : null}
+                                <span>{color}</span>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Edit color ${color}`}
+                                title="Edit label"
+                                disabled={isArchived}
+                                onClick={() => startVariantLabelEdit("color", color)}
+                                className="rounded p-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-brand disabled:opacity-40"
+                              >
+                                ✎
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )
                     })}
                   </div>
                 </div>
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-900">Sizes</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">Sizes</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="px-2 py-1 text-[11px]"
+                        disabled={isArchived}
+                        onClick={() => resetVariantLabelDimension("size")}
+                      >
+                        Reset sizes
+                      </Button>
+                    </div>
                     <span className="text-xs text-slate-500">{enabledSizes.size} selected</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {variantSizes.map((size) => {
                       const active = enabledSizes.has(size)
+                      const isEditing =
+                        editingVariantLabel?.dimension === "size" &&
+                        editingVariantLabel.label === size
                       return (
-                        <button
-                          key={size}
-                          type="button"
-                          onClick={() => toggleSize(size)}
-                          className={`rounded-lg border px-3 py-2 text-sm ${
-                            active ? "border-brand bg-brand-light text-brand" : "border-slate-200 bg-white text-slate-600"
-                          }`}
-                        >
-                          {size}
-                        </button>
+                        <div key={size} className="inline-flex items-center gap-1 rounded-lg">
+                          {isEditing ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                autoFocus
+                                aria-label={`Edit size ${size}`}
+                                value={editingVariantLabel.draft}
+                                disabled={isArchived}
+                                onChange={(event) =>
+                                  setEditingVariantLabel((current) =>
+                                    current ? { ...current, draft: event.target.value } : current
+                                  )
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") commitVariantLabelEdit()
+                                  if (event.key === "Escape") cancelVariantLabelEdit()
+                                }}
+                                className="w-28"
+                              />
+                              <Button type="button" className="px-2 py-1 text-xs" onClick={commitVariantLabelEdit}>Save</Button>
+                              <Button type="button" variant="outline" className="px-2 py-1 text-xs" onClick={cancelVariantLabelEdit}>Cancel</Button>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => toggleSize(size)}
+                                className={`rounded-lg border px-3 py-2 text-sm ${
+                                  active ? "border-brand bg-brand-light text-brand" : "border-slate-200 bg-white text-slate-600"
+                                }`}
+                              >
+                                {size}
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Edit size ${size}`}
+                                title="Edit label"
+                                disabled={isArchived}
+                                onClick={() => startVariantLabelEdit("size", size)}
+                                className="rounded p-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-brand disabled:opacity-40"
+                              >
+                                ✎
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )
                     })}
                   </div>
