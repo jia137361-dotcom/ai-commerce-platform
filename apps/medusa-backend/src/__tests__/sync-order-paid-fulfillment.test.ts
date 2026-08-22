@@ -3,8 +3,16 @@ import {
   markOrderPaidAndFulfillmentWaiting,
   seedFulfillmentOrderIfMissing,
   setOrderPostCompletePendingMetadata,
+  syncPaidIfPaymentAlreadyCaptured,
 } from "../lib/sync-order-paid-fulfillment"
 import { FULFILLMENT_ORDERS_MODULE } from "../modules/fulfillment-orders"
+import { createPendingReferralCommission } from "../lib/referral-program"
+
+jest.mock("../lib/referral-program", () => ({
+  createPendingReferralCommission: jest.fn(),
+}))
+
+const mockCreatePendingReferralCommission = createPendingReferralCommission as jest.MockedFunction<typeof createPendingReferralCommission>
 
 describe("setOrderPostCompletePendingMetadata", () => {
   it("merges store_id into order metadata without dropping existing fields", async () => {
@@ -39,6 +47,37 @@ describe("setOrderPostCompletePendingMetadata", () => {
 })
 
 describe("fulfillment order payment closure helpers", () => {
+  beforeEach(() => {
+    mockCreatePendingReferralCommission.mockReset()
+    mockCreatePendingReferralCommission.mockResolvedValue({ commission: null, idempotent: false })
+  })
+
+  it("creates a pending referral commission when payment capture is recovered after the event race", async () => {
+    const paymentModule = {
+      listPayments: jest.fn(async () => [{ captured_at: new Date(), captures: [] }]),
+    }
+    const orderModule = {
+      retrieveOrder: jest.fn(async () => ({ id: "order_1", metadata: {} })),
+      updateOrders: jest.fn(),
+    }
+    const foService = {
+      listFulfillmentOrders: jest.fn(async () => [{ id: "fo_1", status: "pending_capture" }]),
+      updateFulfillmentOrders: jest.fn(),
+    }
+    const container = {
+      resolve: jest.fn((key: string) => {
+        if (key === Modules.PAYMENT) return paymentModule
+        if (key === Modules.ORDER) return orderModule
+        if (key === FULFILLMENT_ORDERS_MODULE) return foService
+        throw new Error(`Unexpected dependency: ${key}`)
+      }),
+    }
+
+    await expect(syncPaidIfPaymentAlreadyCaptured(container as never, "order_1", "paycol_1")).resolves.toBe(true)
+
+    expect(mockCreatePendingReferralCommission).toHaveBeenCalledWith(container, "order_1")
+  })
+
   it("creates exactly one fulfillment order when payment collection exists and none is seeded", async () => {
     const foService = {
       listFulfillmentOrders: jest.fn(async () => []),

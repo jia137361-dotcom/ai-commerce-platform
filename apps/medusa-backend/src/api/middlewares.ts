@@ -1,4 +1,5 @@
 import { defineMiddlewares } from "@medusajs/framework/http"
+import { adminCorsMiddleware } from "../lib/http/admin-cors"
 import { stashStoreProductsShipFromQuery } from "../lib/http/store-products-ship-from-query"
 import { sellerPublicCorsMiddleware } from "../lib/http/seller-public-cors"
 import { enforceBuyerEmailAllowlistMiddleware } from "../lib/http/buyer-email-allowlist"
@@ -27,7 +28,7 @@ export default defineMiddlewares({
     },
     {
       matcher: "/admin/*",
-      middlewares: [sellerAdminGuardMiddleware],
+      middlewares: [adminCorsMiddleware, sellerAdminGuardMiddleware],
     },
     {
       matcher: "/store/*",

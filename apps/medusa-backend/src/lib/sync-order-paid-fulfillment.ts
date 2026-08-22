@@ -9,6 +9,7 @@ import {
   type OrderFulfillmentStatus,
   type OrderPaymentStatus,
 } from "./order-custom-metadata"
+import { createPendingReferralCommission } from "./referral-program"
 
 type PaymentModuleLike = {
   listPayments: (
@@ -174,5 +175,12 @@ export async function syncPaidIfPaymentAlreadyCaptured(
     return false
   }
   await markOrderPaidAndFulfillmentWaiting(container, orderId, "payment_capture_detected")
+  try {
+    await createPendingReferralCommission(container, orderId)
+  } catch (error) {
+    // Payment recovery must not fail after capture because referral bookkeeping
+    // can be reconciled independently on the next commission job run.
+    console.error("Failed to create recovered pending referral commission:", error)
+  }
   return true
 }

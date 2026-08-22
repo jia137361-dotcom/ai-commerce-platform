@@ -411,11 +411,14 @@ async function processBuyerWithdrawal(container: MedusaContainer, withdrawal: Wa
 export const isHongKongSettlementDay = (date = new Date()) =>
   new Date(date.getTime() + HKT_OFFSET_MS).getUTCDate() === 20
 
-export async function processMonthlyBuyerWithdrawals(container: MedusaContainer, input: { now?: Date; force?: boolean } = {}) {
+export async function processMonthlyBuyerWithdrawals(container: MedusaContainer, input: { now?: Date; force?: boolean; storeId?: string } = {}) {
   const now = input.now ?? new Date()
   if (!input.force && !isHongKongSettlementDay(now)) return { processed: 0, skipped: "outside_settlement_day", withdrawals: [] }
   const service = core(container)
-  const rows = await service.listBuyerWalletWithdrawals({}, { order: { approved_at: "ASC" }, take: 500 }) as WalletRow[]
+  const rows = await service.listBuyerWalletWithdrawals(
+    input.storeId ? { store_id: input.storeId } : {},
+    { order: { approved_at: "ASC" }, take: 500 }
+  ) as WalletRow[]
   const eligible = rows.filter((row) =>
     row.status === "approved" ||
     (row.status === "failed" && row.failure_kind === "platform" && Number(row.retry_count ?? 0) < MAX_AUTOMATIC_RETRIES)
